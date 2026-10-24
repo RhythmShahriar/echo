@@ -10,19 +10,21 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"sync"
 
+	"github.com/RhythmShahriar/echo/catcher"
 	"github.com/RhythmShahriar/echo/model"
 )
 
-// The hub's inbox survives restarts in <store>/inbox.jsonl: one record per
-// line, appended for every new message and again whenever one changes (the
-// last record of an ID wins). Opening the file drops a torn last line,
-// keeps the newest Keep messages and rewrites it compactly. The catcher's
-// own persistent inbox (C13) will do this for every Echo; the hub can move
-// to it then and keep only the site of each message here.
+// An earlier hub kept its inbox in <store>/inbox.jsonl, one record per
+// line with the site beside the message (the last record of an ID wins).
+// The hub now keeps it in the catcher's persistent inbox (<store>/inbox)
+// with the site on the message (Source.Site). migrate moves the old file
+// into it once.
 
-// record is one line of the inbox file.
+// legacyInbox is the earlier hub's inbox file in the store.
+const legacyInbox = "inbox.jsonl"
+
+// record is one line of the old inbox file.
 type record struct {
 	Site    string        `json:"site,omitempty"`
 	Message model.Message `json:"message"`
@@ -32,32 +34,26 @@ type record struct {
 // at 256 KiB a field), so a longer line is damage, not data.
 const maxRecord = 64 << 20
 
-type persister struct {
-	mu    sync.Mutex
-	path  string
-	f     *os.File
-	w     *bufio.Writer
-	lines int
-	keep  int
-	err   error // the first write error, reported by close
-}
-
-func openPersister(dir string, keep int) (*persister, []record, error) {
-	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return nil, nil, err
+// migrate adds the messages of an old inbox.jsonl in store to in, each
+// marked with its site, and removes the file. The messages keep their
+// IDs, times and runs. An inbox that already holds messages was migrated
+// before, so only the file goes then.
+func migrate(store string, in *catcher.Inbox) error {
+	path := filepath.Join(store, legacyInbox)
+	recs, err := load(path)
+	if err != nil || recs == nil {
+		return err
 	}
-	p := &persister{path: filepath.Join(dir, "inbox.jsonl"), keep: keep}
-	recs, err := load(p.path)
-	if err != nil {
-		return nil, nil, err
+	if len(in.List(catcher.Filter{})) == 0 {
+		for _, r := range recs {
+			m := r.Message
+			if m.Source.Site == "" {
+				m.Source.Site = r.Site
+			}
+			in.Add(m)
+		}
 	}
-	if len(recs) > keep {
-		recs = recs[len(recs)-keep:]
-	}
-	if err := p.write(recs); err != nil {
-		return nil, nil, err
-	}
-	return p, recs, nil
+	return os.Remove(path)
 }
 
 // load reads the file's records in the order their messages first
@@ -93,87 +89,4 @@ func load(path string) ([]record, error) {
 			return nil, err
 		}
 	}
-}
-
-// write replaces the file with recs (through a temporary file, so a crash
-// leaves the old one) and reopens it for appending.
-func (p *persister) write(recs []record) error {
-	tmp, err := os.CreateTemp(filepath.Dir(p.path), ".inbox-*")
-	if err != nil {
-		return err
-	}
-	defer func() { _ = os.Remove(tmp.Name()) }()
-	bw := bufio.NewWriter(tmp)
-	for _, r := range recs {
-		b, err := json.Marshal(r)
-		if err != nil {
-			_ = tmp.Close()
-			return err
-		}
-		_, _ = bw.Write(append(b, '\n'))
-	}
-	if err := bw.Flush(); err != nil {
-		_ = tmp.Close()
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		return err
-	}
-	if err := os.Chmod(tmp.Name(), 0o600); err != nil {
-		return err
-	}
-	if p.f != nil {
-		_ = p.w.Flush()
-		_ = p.f.Close()
-	}
-	if err := os.Rename(tmp.Name(), p.path); err != nil {
-		return err
-	}
-	f, err := os.OpenFile(p.path, os.O_WRONLY|os.O_APPEND, 0o600) //nolint:gosec // the hub's own store
-	if err != nil {
-		return err
-	}
-	p.f, p.w, p.lines = f, bufio.NewWriter(f), len(recs)
-	return nil
-}
-
-// append adds r and reports whether the file has grown to twice what is
-// kept, so it should be compacted.
-func (p *persister) append(r record) bool {
-	b, err := json.Marshal(r)
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	if err == nil {
-		_, err = p.w.Write(append(b, '\n'))
-	}
-	if err == nil {
-		err = p.w.Flush() // a line at a time, so a crash loses at most the last one
-	}
-	if err != nil && p.err == nil {
-		p.err = err
-	}
-	p.lines++
-	return p.lines > 2*p.keep
-}
-
-func (p *persister) rewrite(recs []record) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	if err := p.write(recs); err != nil && p.err == nil {
-		p.err = err
-	}
-}
-
-func (p *persister) close() error {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	if p.f == nil {
-		return p.err
-	}
-	err := p.w.Flush()
-	if cerr := p.f.Close(); err == nil {
-		err = cerr
-	}
-	p.f = nil
-	return errors.Join(p.err, err)
 }

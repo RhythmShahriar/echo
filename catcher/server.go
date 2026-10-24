@@ -642,7 +642,7 @@ func runeStart(v string, i int) int {
 // since (a time, or a duration back from now such as 10m) and q (a
 // search, see ParseQuery).
 func filterFrom(q url.Values) (Filter, error) {
-	f := Filter{Run: q.Get("run"), Action: q.Get("action"), Channel: model.Channel(q.Get("channel")), To: q.Get("to")}
+	f := Filter{Run: q.Get("run"), Action: q.Get("action"), Channel: model.Channel(q.Get("channel")), To: q.Get("to"), Site: q.Get("site")}
 	if v := q.Get("since"); v != "" {
 		if t, err := time.Parse(time.RFC3339Nano, v); err == nil {
 			f.Since = t

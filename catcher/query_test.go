@@ -108,7 +108,7 @@ func TestSiteMatchesWholeLabels(t *testing.T) {
 		{"shop", model.Source{Host: "shopping.test"}, false},
 		{"", model.Source{Host: "shop.test"}, false},
 	} {
-		if got := siteMatches(c.v, c.src); got != c.want {
+		if got := SiteMatches(c.v, c.src); got != c.want {
 			t.Errorf("site:%s on %+v = %v, want %v", c.v, c.src, got, c.want)
 		}
 	}

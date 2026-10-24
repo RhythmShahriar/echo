@@ -13,12 +13,16 @@
 // Each site posts with its own write token, which can only add captures;
 // reading needs the hub's read token, which sees every site and can filter
 // by one (GET /v1/messages?site=client-a). Action markers are kept per
-// site, so one site's run never claims another's mail. The inbox is an
-// append-only JSON Lines file in the store. TLS keeps the tokens off the
-// wire in clear.
+// site, so one site's run never claims another's mail. Every message
+// carries its site (Source.Site), so a search for site:client-a finds
+// only that site's mail, in the API and in Echo Inbox, which the read
+// token opens (/?token=<read token> once in a browser). The inbox is the
+// catcher's persistent one, kept in the store's inbox folder. TLS keeps
+// the tokens off the wire in clear.
 package hub
 
 import (
+	"bytes"
 	"crypto/rand"
 	"crypto/subtle"
 	"encoding/json"
@@ -26,13 +30,16 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/RhythmShahriar/echo/catcher"
-	"github.com/RhythmShahriar/echo/model"
+	"github.com/RhythmShahriar/echo/web"
 	"github.com/RhythmShahriar/echo/wire"
 )
 
@@ -46,23 +53,23 @@ type Options struct {
 	Version string
 }
 
-// Hub is the shared catcher: an http.Handler for the API and a source of
-// SMTP sinks, both checking tokens and recording which site sent what.
+// Hub is the shared catcher: an http.Handler for the API and Echo Inbox
+// and a source of SMTP sinks, both checking tokens and recording which
+// site sent what (each message's Source.Site).
 type Hub struct {
-	o       Options
-	Inbox   *catcher.Inbox
-	srv     *catcher.Server
-	inner   string // the catcher's own token, sent on requests the hub let through
-	persist *persister
+	o     Options
+	Inbox *catcher.Inbox
+	srv   *catcher.Server
+	ui    *web.UI
+	inner string // the catcher's own token, sent on requests the hub let through
 
-	mu     sync.Mutex
-	siteOf map[string]string // message ID to site ID
-	marks  map[string]mark   // the action in progress, by site ("" for every site)
+	mu    sync.Mutex
+	marks map[string]mark // the action in progress, by site ("" for every site)
 
-	// Captures run one at a time with cur set to the sending site, so the
-	// inbox callback (which has only the message) knows whose it is.
+	// Captures run one at a time, each with its site's action in
+	// progress as the inbox's only one, so one site's marker never tags
+	// another site's mail.
 	capture sync.Mutex
-	cur     string
 }
 
 // SiteHeader names the site an action marker from the read token is for.
@@ -73,77 +80,62 @@ const SiteHeader = "X-Echo-Site"
 // from its site is attributed to it.
 type mark struct{ run, action string }
 
+// InboxDir is the folder in the store the hub keeps its inbox in: the
+// catcher's persistent inbox, kept across restarts.
+const InboxDir = "inbox"
+
 // New opens the hub's store, loads the inbox kept there and returns the
-// hub. Close it to flush the inbox file.
+// hub. Close it to close the inbox. An inbox.jsonl an earlier hub kept in
+// the store is moved into the inbox once.
 func New(o Options) (*Hub, error) {
 	if o.Sites == nil {
 		return nil, errors.New("hub: no sites")
 	}
 	if o.Keep <= 0 {
-		o.Keep = 10000
+		o.Keep = catcher.DefaultKeep
 	}
-	h := &Hub{o: o, Inbox: catcher.NewInbox(o.Keep), siteOf: map[string]string{}, marks: map[string]mark{}}
-	p, recs, err := openPersister(o.Store, o.Keep)
+	if err := os.MkdirAll(o.Store, 0o700); err != nil {
+		return nil, err
+	}
+	inbox, err := catcher.OpenInbox(catcher.InboxOptions{Dir: filepath.Join(o.Store, InboxDir), Keep: o.Keep})
 	if err != nil {
 		return nil, err
 	}
-	h.persist = p
-	for _, r := range recs {
-		h.Inbox.Add(r.Message) // keeps the stored ID, time and run
-		h.siteOf[r.Message.ID] = r.Site
+	if err := migrate(o.Store, inbox); err != nil {
+		_ = inbox.Close()
+		return nil, err
 	}
-	// The hub checks the tokens, by site. The catcher behind it gets a
-	// token of its own that only the hub sends, so its loopback guard
-	// (Host and Origin) lets through what the hub already let in: the hub
-	// listens beyond loopback, under its own name.
+	h := &Hub{o: o, Inbox: inbox, marks: map[string]mark{}}
+	// The catcher knows each site's write token, so it marks what a site
+	// sends with the site (Source.Site, which site: searches) and lets it
+	// update only its own messages. The hub checks every token first; the
+	// catcher gets a token of its own, which only the hub sends on what it
+	// let in, so the catcher's loopback guard (Host and Origin) doesn't
+	// refuse the hub's own name.
 	h.inner = rand.Text()
-	h.srv = catcher.NewServer(h.Inbox, catcher.Config{Mode: o.Mode, Allow: o.Allow, Version: o.Version, Token: h.inner})
-	h.Inbox.OnAdd(h.added)
+	writes := map[string]string{}
+	for _, s := range o.Sites.Sites {
+		writes[s.token] = s.ID
+	}
+	h.srv = catcher.NewServer(inbox, catcher.Config{Mode: o.Mode, Allow: o.Allow, Version: o.Version, Token: h.inner, WriteTokens: writes})
+	h.ui = web.New(web.Options{Inbox: inbox, Mode: h.srv.Mode(), AnyHost: true})
+	inbox.OnAdd(h.ui.Notify)
 	return h, nil
 }
 
-// Close flushes and closes the inbox file.
-func (h *Hub) Close() error { return h.persist.close() }
+// Close ends Echo Inbox's event streams and closes the inbox.
+func (h *Hub) Close() error {
+	h.ui.Close()
+	return h.Inbox.Close()
+}
 
 // Mode is seal or observe.
 func (h *Hub) Mode() string { return h.srv.Mode() }
 
 // SiteOf returns the site that sent the message with id.
 func (h *Hub) SiteOf(id string) string {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	return h.siteOf[id]
-}
-
-// added keeps every new or changed message in the store. It runs inside a
-// capture, so cur is the site that sent it.
-func (h *Hub) added(m model.Message) {
-	h.mu.Lock()
-	site, ok := h.siteOf[m.ID]
-	if !ok {
-		site = h.cur
-		h.siteOf[m.ID] = site
-	}
-	h.mu.Unlock()
-	if h.persist.append(record{Site: site, Message: m}) {
-		h.compact()
-	}
-}
-
-// compact rewrites the inbox file from what the inbox holds now (after a
-// delete, or when the file has grown to twice what is kept).
-func (h *Hub) compact() {
-	ms := h.Inbox.List(catcher.Filter{})
-	h.mu.Lock()
-	recs := make([]record, 0, len(ms))
-	keep := make(map[string]string, len(ms))
-	for _, m := range ms {
-		recs = append(recs, record{Site: h.siteOf[m.ID], Message: m})
-		keep[m.ID] = h.siteOf[m.ID]
-	}
-	h.siteOf = keep
-	h.mu.Unlock()
-	h.persist.rewrite(recs)
+	m, _ := h.Inbox.Get(id)
+	return m.Source.Site
 }
 
 // as runs fn as a capture from site. The inbox's action in progress is
@@ -152,15 +144,15 @@ func (h *Hub) compact() {
 func (h *Hub) as(site string, fn func() error) error {
 	h.capture.Lock()
 	defer h.capture.Unlock()
-	h.cur = site
 	h.mu.Lock()
 	m, ok := h.marks[site]
 	if !ok {
 		m = h.marks[""]
 	}
 	h.mu.Unlock()
-	h.Inbox.Begin(m.run, m.action)
-	defer func() { h.cur = ""; h.Inbox.End() }()
+	if lease := h.Inbox.Begin(m.run, m.action); lease != "" {
+		defer h.Inbox.End(lease)
+	}
 	return fn()
 }
 
@@ -213,8 +205,20 @@ func (h *Hub) tokenSite(token string) string {
 	return who
 }
 
+// ServeHTTP serves the API to the read and write tokens, and Echo Inbox
+// to the read token: a browser opens /?token=<read token> once and keeps
+// it in a cookie (see browser).
 func (h *Hub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	switch who := h.tokenSite(r.Header.Get(wire.TokenHeader)); who {
+	tok := r.Header.Get(wire.TokenHeader)
+	if tok == "" && h.inboxUI(r) {
+		if h.browser(w, r) {
+			return
+		}
+		if c, err := r.Cookie(tokenCookie); err == nil {
+			tok = c.Value
+		}
+	}
+	switch who := h.tokenSite(tok); who {
 	case "":
 		http.Error(w, "missing or wrong "+wire.TokenHeader, http.StatusUnauthorized)
 	case "read":
@@ -239,30 +243,33 @@ func (h *Hub) write(site string, w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// captureHTTP hands a site's capture to the catcher with the site's own
+// write token, so the catcher reads the whole capture (wire 2 fields
+// included) and marks it with the site.
 func (h *Hub) captureHTTP(site string, w http.ResponseWriter, r *http.Request) {
-	var c wire.Capture
-	if err := json.NewDecoder(io.LimitReader(r.Body, 32<<20)).Decode(&c); err != nil {
-		http.Error(w, "bad capture: "+err.Error(), http.StatusBadRequest)
+	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, catcher.MaxCapture))
+	if err != nil {
+		http.Error(w, fmt.Sprintf("capture too large: Echo accepts up to %d MiB", catcher.MaxCapture>>20), http.StatusRequestEntityTooLarge)
 		return
 	}
 	// The after phase updates a message by ID: only the site that sent it
-	// may.
-	if c.ID != "" {
+	// may. The catcher refuses it too; this answers 403 rather than 400.
+	var c struct {
+		ID string `json:"id"`
+	}
+	if json.Unmarshal(body, &c) == nil && c.ID != "" {
 		if owner := h.SiteOf(c.ID); owner != "" && owner != site {
 			http.Error(w, "that message belongs to another site", http.StatusForbidden)
 			return
 		}
 	}
-	var d wire.Decision
-	err := h.as(site, func() (err error) {
-		d, err = h.srv.Capture(c)
-		return err
+	r = r.Clone(r.Context())
+	r.Body, r.ContentLength = io.NopCloser(bytes.NewReader(body)), int64(len(body))
+	r.Header.Set("Content-Type", "application/json")
+	_ = h.as(site, func() error {
+		h.srv.ServeHTTP(w, r)
+		return nil
 	})
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	writeJSON(w, http.StatusOK, d)
 }
 
 // read serves the read token: the whole API, plus the site filter and the
@@ -280,14 +287,50 @@ func (h *Hub) read(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		h.action(site, w, r)
-	case r.Method == http.MethodDelete:
-		h.pass(w, r)
-		h.compact() // deleted messages stay deleted after a restart
+	case h.inboxUI(r):
+		h.ui.ServeHTTP(w, r)
 	case r.Method == http.MethodPost && r.URL.Path == "/v1/capture":
 		http.Error(w, "the read token can't send captures; each site uses its own write token", http.StatusForbidden)
 	default:
 		h.pass(w, r)
 	}
+}
+
+// tokenCookie keeps the read token for a browser that opened Echo Inbox
+// with ?token= once.
+const tokenCookie = "echo_hub_token"
+
+// inboxUI reports whether r is for Echo Inbox: its page, its files and
+// the routes the page reads.
+func (h *Hub) inboxUI(r *http.Request) bool {
+	p := r.URL.Path
+	return p == "/" || strings.HasPrefix(p, "/assets/") || strings.HasPrefix(p, "/ui/")
+}
+
+// browser answers a GET for Echo Inbox that carries ?token=: the read
+// token is kept in an HttpOnly, same-site cookie and the browser is sent
+// to the address without it, so the token leaves the address bar and
+// the history. Any other token is refused. It reports whether it
+// answered r.
+func (h *Hub) browser(w http.ResponseWriter, r *http.Request) bool {
+	q := r.URL.Query()
+	if !q.Has("token") || (r.Method != http.MethodGet && r.Method != http.MethodHead) {
+		return false
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	if h.tokenSite(q.Get("token")) != "read" {
+		http.Error(w, "Echo Inbox needs the hub's read token: open /?token=<read token>", http.StatusUnauthorized)
+		return true
+	}
+	http.SetCookie(w, &http.Cookie{Name: tokenCookie, Value: q.Get("token"), Path: "/", HttpOnly: true,
+		SameSite: http.SameSiteStrictMode, Secure: r.TLS != nil})
+	q.Del("token")
+	back := url.URL{Path: r.URL.Path, RawQuery: q.Encode()}
+	if !strings.HasPrefix(back.Path, "/") || strings.HasPrefix(back.Path, "//") || strings.HasPrefix(back.Path, "/\\") {
+		back.Path = "/" // "//host" would send the browser to another site
+	}
+	http.Redirect(w, r, back.String(), http.StatusSeeOther)
+	return true
 }
 
 // pass hands a request the hub has let in to the catcher, with the
@@ -298,34 +341,29 @@ func (h *Hub) pass(w http.ResponseWriter, r *http.Request) {
 	h.srv.ServeHTTP(w, r)
 }
 
-// list is GET /v1/messages with the catcher's filters plus site.
+// list is GET /v1/messages: the catcher's, which takes site= (an exact
+// site ID) besides its own filters, paging and search (q=site:client-a). An unknown site is 404,
+// not an empty list, so a typo doesn't read as a quiet site.
 func (h *Hub) list(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
-	f := catcher.Filter{Run: q.Get("run"), Action: q.Get("action"), Channel: model.Channel(q.Get("channel")), To: q.Get("to")}
 	if s := q.Get("since"); s != "" {
-		t, err := time.Parse(time.RFC3339Nano, s)
-		if err != nil {
-			// Ignoring it would answer with every message, which a
-			// caller asking for recent mail would read as recent.
-			http.Error(w, fmt.Sprintf("since %q isn't an RFC 3339 time, like 2026-10-24T12:00:00Z", s), http.StatusBadRequest)
+		_, terr := time.Parse(time.RFC3339Nano, s)
+		d, derr := time.ParseDuration(s)
+		if terr != nil && (derr != nil || d <= 0) {
+			// The catcher ignores it, which would answer with every
+			// message; a caller asking for recent mail would read them
+			// as recent.
+			http.Error(w, fmt.Sprintf("since %q isn't an RFC 3339 time, like 2026-10-24T12:00:00Z, or a duration, like 2h", s), http.StatusBadRequest)
 			return
 		}
-		f.Since = t
 	}
-	site := q.Get("site")
-	if site != "" {
+	if site := q.Get("site"); site != "" {
 		if _, ok := h.o.Sites.Site(site); !ok {
 			http.Error(w, fmt.Sprintf("no site %q", site), http.StatusNotFound)
 			return
 		}
 	}
-	out := []model.Message{}
-	for _, m := range h.Inbox.List(f) {
-		if site == "" || h.SiteOf(m.ID) == site {
-			out = append(out, m)
-		}
-	}
-	writeJSON(w, http.StatusOK, out)
+	h.pass(w, r)
 }
 
 // SiteInfo is one row of GET /v1/sites.
@@ -345,7 +383,7 @@ func (h *Hub) sites(w http.ResponseWriter) {
 		out = append(out, row)
 	}
 	for _, m := range h.Inbox.List(catcher.Filter{}) {
-		if row := rows[h.SiteOf(m.ID)]; row != nil {
+		if row := rows[m.Source.Site]; row != nil {
 			row.Messages++
 			if m.At.After(row.Last) {
 				row.Last = m.At

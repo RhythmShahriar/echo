@@ -175,7 +175,7 @@ func (t term) match(m model.Message) bool {
 	case "subject":
 		return t.any(m.Subject)
 	case "site":
-		return siteMatches(t.value, m.Source)
+		return SiteMatches(t.value, m.Source)
 	case "channel":
 		return slices.Contains(strings.Split(t.value, ","), string(m.Channel))
 	case "action":
@@ -201,12 +201,12 @@ func (t term) any(vs ...string) bool {
 	return slices.ContainsFunc(vs, t.re.MatchString)
 }
 
-// siteMatches reports whether v names the site src came from: its ID or
+// SiteMatches reports whether v names the site src came from: its ID or
 // the site's name for itself (Source.Site, a hub ID or a home URL) or its
 // host, whole or by whole dot-separated labels, so that site:client-a
 // finds client-a and client-a.test but never client-ab, another site of
-// the same hub.
-func siteMatches(v string, src model.Source) bool {
+// the same hub. Echo Inbox's site: search uses it too.
+func SiteMatches(v string, src model.Source) bool {
 	v = strings.ToLower(strings.TrimSpace(v))
 	if v == "" {
 		return false

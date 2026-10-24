@@ -7,12 +7,12 @@
 package catcher
 
 import (
-	"maps"
 	"cmp"
 	"context"
 	"crypto/rand"
 	"errors"
 	"fmt"
+	"maps"
 	"slices"
 	"strings"
 	"sync"
@@ -608,6 +608,7 @@ type Filter struct {
 	Action  string
 	Channel model.Channel
 	To      string // substring of any recipient, case-insensitive
+	Site    string // exactly the site that sent it (Source.Site, a write token's site)
 	Since   time.Time
 	Q       Query // a search (see ParseQuery)
 }
@@ -617,6 +618,7 @@ func (f Filter) match(m model.Message) bool {
 	case f.Run != "" && m.Run != f.Run,
 		f.Action != "" && m.Action != f.Action && (m.Attribution != model.Late || m.LateFor != f.Action),
 		f.Channel != "" && m.Channel != f.Channel,
+		f.Site != "" && m.Source.Site != f.Site,
 		!f.Since.IsZero() && m.At.Before(f.Since):
 		return false
 	}

@@ -63,6 +63,9 @@ func (s *siteSession) Auth(string) (sasl.Server, error) {
 			return smtp.ErrAuthFailed
 		}
 		s.site = site
+		if ss, ok := s.Session.(catcher.SiteSetter); ok {
+			ss.SetSite(site)
+		}
 		return nil
 	}), nil
 }

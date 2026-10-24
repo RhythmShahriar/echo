@@ -57,9 +57,21 @@ func (b backend) NewSession(c *smtp.Conn) (smtp.Session, error) {
 type session struct {
 	s      *Server
 	client string
+	site   string // set by SetSite: the site whose write token logged in
 	from   string
 	to     []string
 }
+
+// SiteSetter is what the sink's sessions implement, so a backend that
+// wraps them and checks logins (the hub, up --sites) can mark what a
+// session captures with the site whose write token logged in, as a write
+// token does over HTTP.
+type SiteSetter interface {
+	SetSite(site string)
+}
+
+// SetSite marks what this session captures from now on as site's.
+func (s *session) SetSite(site string) { s.site = site }
 
 // AuthMechanisms and Auth accept any login, so a site configured for a
 // real SMTP provider can point at Echo unchanged.
@@ -96,8 +108,8 @@ func (s *session) Data(r io.Reader) error {
 	if len(e.To) == 0 && len(e.CC) == 0 {
 		e.To, e.BCC = s.to, nil
 	}
-	_, err = s.s.Capture(wire.Capture{Version: wire.Version, Kind: "email", Run: p.Headers[strings.ToLower(wire.RunHeader)],
-		Source: wire.Source{Via: "smtp", Host: s.client, Plugin: mailer(p.Headers)}, Email: e})
+	_, err = s.s.captureFor(wire.Capture{Version: wire.Version, Kind: "email", Run: p.Headers[strings.ToLower(wire.RunHeader)],
+		Source: wire.Source{Via: "smtp", Host: s.client, Plugin: mailer(p.Headers)}, Email: e}, extras{}, s.site)
 	return err
 }
 

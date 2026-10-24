@@ -8,6 +8,7 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/RhythmShahriar/echo/catcher"
 	"github.com/RhythmShahriar/echo/model"
 )
 
@@ -96,7 +97,7 @@ func (t term) match(m model.Message, f facts) bool {
 	case "status":
 		return strings.EqualFold(string(m.Status), t.value)
 	case "site":
-		return has(m.Source.Host)
+		return catcher.SiteMatches(t.value, m.Source)
 	case "check":
 		return slices.ContainsFunc(f.issues, func(i model.Issue) bool { return has(i.Check) })
 	case "has":

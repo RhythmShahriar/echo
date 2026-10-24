@@ -189,11 +189,11 @@ func cmdUp(s *session) int {
 		sink := catcher.NewSMTP(srv, cfg.SMTP)
 		smtpLine = cfg.SMTP + "  (point a mailer or sendmail_path here)"
 		if !loopback(cfg.SMTP) && token != "" {
-			passwords := []string{token}
+			passwords, siteOf := []string{token}, map[string]string(nil)
 			if sites != nil {
-				passwords = sites.tokens()
+				passwords, siteOf = sites.tokens(), sites.write
 			}
-			sink.Backend = tokenBackend{inner: sink.Backend, tokens: passwords}
+			sink.Backend = tokenBackend{inner: sink.Backend, tokens: passwords, sites: siteOf}
 			smtpLine = cfg.SMTP + "  (log in with any username and the token as the password)"
 		}
 		go func() { errs <- sink.Serve(sl) }()

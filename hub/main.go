@@ -55,8 +55,9 @@ sites.yaml:
       config: /srv/sites/client-a/.echo/config.yaml
       schedule: "Tue 02:00"
 
-Reading: GET /v1/messages?site=client-a, GET /v1/sites and the rest of
-Echo's API, with the read token in X-Echo-Token.
+Reading: GET /v1/messages?site=client-a (or q=site:client-a), GET /v1/sites
+and the rest of Echo's API, with the read token in X-Echo-Token. Echo Inbox
+is at /: open /?token=<read token> once in a browser.
 `
 
 // Main runs the hub until interrupted, for rhythm echo hub. It returns 0
@@ -156,6 +157,7 @@ func serve(ctx context.Context, h *Hub, listen, smtpAddr string, tlsCfg *tls.Con
 	fmt.Fprintf(stderr, "Echo hub (%s mode): %d sites, %d messages kept in %s\n", h.Mode(), len(h.o.Sites.Sites),
 		len(h.Inbox.List(catcher.Filter{})), storeDir)
 	fmt.Fprintf(stderr, "  API   %s://%s  (read token: %s)\n", scheme, ln.Addr(), h.o.Sites.ReadTokenEnv)
+	fmt.Fprintf(stderr, "  Inbox %s://%s/?token=<read token>  (open once in a browser)\n", scheme, ln.Addr())
 	stopSMTP := func() {}
 	if smtpAddr != "" && smtpAddr != "off" {
 		sl, err := net.Listen("tcp", smtpAddr)
@@ -194,6 +196,7 @@ func serve(ctx context.Context, h *Hub, listen, smtpAddr string, tlsCfg *tls.Con
 	}
 	sctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
+	h.ui.Close() // Shutdown waits for open event streams, which never end on their own
 	_ = api.Shutdown(sctx)
 	stopSMTP()
 	return code

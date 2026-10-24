@@ -51,3 +51,30 @@ func TestSMTPSinkBeyondLoopbackAsksForTheToken(t *testing.T) {
 		t.Errorf("got %d messages, want 2", len(got))
 	}
 }
+
+// TestSMTPSinkMarksTheSite: with up --sites, mail sent with a site's write
+// token as the password is marked with that site, as a capture is.
+func TestSMTPSinkMarksTheSite(t *testing.T) {
+	s := catcher.NewServer(catcher.NewInbox(100), catcher.Config{})
+	ln, err := net.Listen("tcp", "127.0.0.1:21344")
+	if err != nil {
+		t.Skip(err)
+	}
+	sink := catcher.NewSMTP(s, ln.Addr().String())
+	sink.Backend = tokenBackend{inner: sink.Backend, tokens: []string{"read-token", "write-a"}, sites: map[string]string{"write-a": "client-a"}}
+	go func() { _ = sink.Serve(ln) }()
+	defer func() { _ = sink.Close() }()
+	for _, tok := range []string{"write-a", "read-token"} {
+		if err := smtp.SendMail(ln.Addr().String(), sendmail.TokenAuth(tok), "a@example.test", []string{"b@example.test"},
+			[]byte("Subject: "+tok+"\r\n\r\nhello\r\n")); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got := map[string]string{}
+	for _, m := range s.Inbox.List(catcher.Filter{}) {
+		got[m.Subject] = m.Source.Site
+	}
+	if got["write-a"] != "client-a" || got["read-token"] != "" {
+		t.Errorf("sites: %v", got)
+	}
+}

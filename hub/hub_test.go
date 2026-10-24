@@ -24,6 +24,7 @@ import (
 	"github.com/RhythmShahriar/echo/catcher"
 	"github.com/RhythmShahriar/echo/client"
 	"github.com/RhythmShahriar/echo/model"
+	"github.com/RhythmShahriar/echo/web"
 	"github.com/RhythmShahriar/echo/wire"
 )
 
@@ -323,18 +324,15 @@ func TestPersist(t *testing.T) {
 	req.Header.Set(wire.TokenHeader, tokens["READ"])
 	req.Header.Set("Content-Type", "application/json")
 	h.ServeHTTP(httptest.NewRecorder(), req)
+	// Health names the store the hub really keeps.
+	if code, body := serveOne(t, h, http.MethodGet, "/v1/health", tokens["READ"]); code != http.StatusOK || !strings.Contains(body, `"store":"jsonl"`) {
+		t.Errorf("health: %d %s", code, body)
+	}
 	if err := h.Close(); err != nil {
 		t.Fatal(err)
 	}
-	// A crash in the middle of a write leaves half a line.
-	f, err := os.OpenFile(filepath.Join(store, "inbox.jsonl"), os.O_APPEND|os.O_WRONLY, 0o600)
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, _ = f.WriteString(`{"site":"client-a","message":{"id":"torn","subj`)
-	_ = f.Close()
-	if fi, err := os.Stat(filepath.Join(store, "inbox.jsonl")); err != nil || fi.Mode().Perm() != 0o600 {
-		t.Errorf("inbox file mode: %v %v", fi.Mode(), err)
+	if fi, err := os.Stat(filepath.Join(store, InboxDir)); err != nil || fi.Mode().Perm() != 0o700 {
+		t.Errorf("inbox folder: %v %v", fi, err)
 	}
 
 	h2 := newHub(t, store)
@@ -352,6 +350,133 @@ func TestPersist(t *testing.T) {
 	}
 }
 
+// serveOne makes one request to h directly and returns its answer.
+func serveOne(t *testing.T, h http.Handler, method, path, token string) (int, string) {
+	t.Helper()
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(method, path, nil)
+	if token != "" {
+		req.Header.Set(wire.TokenHeader, token)
+	}
+	h.ServeHTTP(rec, req)
+	return rec.Code, rec.Body.String()
+}
+
+// TestMigrateInboxFile: the inbox.jsonl an earlier hub kept moves into
+// the catcher's inbox once, each message marked with its site; a torn
+// last line is dropped and the file goes.
+func TestMigrateInboxFile(t *testing.T) {
+	store := t.TempDir()
+	at := time.Date(2026, 10, 1, 9, 0, 0, 0, time.UTC)
+	var lines []string
+	for _, r := range []record{
+		{Site: "client-a", Message: model.Message{ID: "m1", Channel: model.Email, Subject: "Old A", To: []string{"a@example.com"}, At: at}},
+		{Site: "client-ab", Message: model.Message{ID: "m2", Channel: model.Email, Subject: "Old AB", To: []string{"b@example.com"}, At: at}},
+		{Site: "client-a", Message: model.Message{ID: "m1", Channel: model.Email, Subject: "Old A", To: []string{"a@example.com"}, At: at,
+			Status: model.Sent}},
+	} {
+		b, _ := json.Marshal(r)
+		lines = append(lines, string(b))
+	}
+	data := strings.Join(lines, "\n") + "\n" + `{"site":"client-a","message":{"id":"torn","subj`
+	if err := os.WriteFile(filepath.Join(store, legacyInbox), []byte(data), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	h := newHub(t, store)
+	ms := h.Inbox.List(catcher.Filter{})
+	if len(ms) != 2 || ms[0].ID != "m1" || ms[0].Source.Site != "client-a" || ms[0].Status != model.Sent || ms[1].Source.Site != "client-ab" ||
+		!ms[0].At.Equal(at) {
+		t.Errorf("migrated: %+v", ms)
+	}
+	if _, err := os.Stat(filepath.Join(store, legacyInbox)); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("the old file is still there: %v", err)
+	}
+	_ = h.Close()
+	h2 := newHub(t, store)
+	defer func() { _ = h2.Close() }()
+	if n := len(h2.Inbox.List(catcher.Filter{})); n != 2 {
+		t.Errorf("after a restart: %d messages", n)
+	}
+}
+
+// TestSiteSearch: the hub marks what each site sends, so site: in a
+// search finds one site's mail and never a site whose ID only starts the
+// same; Echo Inbox opens with the read token and searches the same way.
+func TestSiteSearch(t *testing.T) {
+	dir := t.TempDir()
+	yaml := "read_token_env: READ\nsites:\n  - {id: client-a, token_env: TOKEN_A}\n  - {id: client-ab, token_env: TOKEN_B}\n"
+	if err := os.WriteFile(filepath.Join(dir, "sites.yaml"), []byte(yaml), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	sites, err := LoadSites(filepath.Join(dir, "sites.yaml"), getenv)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h, err := New(Options{Store: t.TempDir(), Sites: sites})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = h.Close() }()
+	srv := httptest.NewServer(h)
+	defer srv.Close()
+	do(t, http.MethodPost, srv.URL+"/v1/capture", tokens["TOKEN_A"], emailCapture("From A", "ann@example.com"))
+	do(t, http.MethodPost, srv.URL+"/v1/capture", tokens["TOKEN_B"], emailCapture("From AB", "bob@example.com"))
+	for _, path := range []string{"/v1/messages?q=site:client-a", "/v1/messages?site=client-a"} {
+		_, body := do(t, http.MethodGet, srv.URL+path, tokens["READ"], "")
+		if got := strings.Join(subjects(t, body), ","); got != "From A" {
+			t.Errorf("%s: %q", path, got)
+		}
+	}
+	_, body := do(t, http.MethodGet, srv.URL+"/v1/messages?q=site:client-a&limit=10", tokens["READ"], "")
+	if !strings.Contains(body, `"messages":[`) || strings.Contains(body, "From AB") {
+		t.Errorf("a page: %s", body)
+	}
+	// Echo Inbox: 401 without the read token, then ?token= once and the
+	// cookie carries it.
+	noRedirect := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	for _, tc := range []struct {
+		path string
+		want int
+	}{{"/", http.StatusUnauthorized}, {"/?token=" + tokens["TOKEN_A"], http.StatusUnauthorized}, {"/?token=" + tokens["READ"], http.StatusSeeOther}} {
+		resp, err := noRedirect.Get(srv.URL + tc.path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = resp.Body.Close()
+		if resp.StatusCode != tc.want {
+			t.Errorf("GET %s: %d, want %d", tc.path, resp.StatusCode, tc.want)
+		}
+		if tc.want != http.StatusSeeOther {
+			continue
+		}
+		if loc := resp.Header.Get("Location"); loc != "/" || len(resp.Cookies()) != 1 || !resp.Cookies()[0].HttpOnly {
+			t.Fatalf("redirect %q, cookies %v", loc, resp.Cookies())
+		}
+		cookie := resp.Cookies()[0]
+		get := func(path string) (int, string) {
+			req, _ := http.NewRequest(http.MethodGet, srv.URL+path, nil)
+			req.AddCookie(cookie)
+			got, err := http.DefaultClient.Do(req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer func() { _ = got.Body.Close() }()
+			b, _ := io.ReadAll(got.Body)
+			return got.StatusCode, string(b)
+		}
+		if code, b := get(web.PathMessages + "?q=site:client-a"); code != http.StatusOK || !strings.Contains(b, "From A") || strings.Contains(b, "From AB") {
+			t.Errorf("Inbox search: %d %s", code, b)
+		}
+		if code, b := get("/"); code != http.StatusOK || !strings.Contains(b, "<html") {
+			t.Errorf("Inbox page: %d %.80s", code, b)
+		}
+		// The cookie opens only Echo Inbox, not the API.
+		if code, _ := get("/v1/messages"); code != http.StatusUnauthorized {
+			t.Errorf("the cookie opened the API: %d", code)
+		}
+	}
+}
+
 func TestKeep(t *testing.T) {
 	store := t.TempDir()
 	sites, _ := LoadSites(writeSites(t, t.TempDir()), getenv)
@@ -366,10 +491,6 @@ func TestKeep(t *testing.T) {
 		})
 	}
 	_ = h.Close()
-	b, _ := os.ReadFile(filepath.Join(store, "inbox.jsonl"))
-	if n := bytes.Count(b, []byte("\n")); n > 4 {
-		t.Errorf("the file has %d records for 2 kept messages: it isn't compacted", n)
-	}
 	h2, err := New(Options{Store: store, Sites: sites, Keep: 2})
 	if err != nil {
 		t.Fatal(err)

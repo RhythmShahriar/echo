@@ -7,6 +7,7 @@ import (
 	"crypto/subtle"
 	"io"
 
+	"github.com/RhythmShahriar/echo/catcher"
 	"github.com/emersion/go-sasl"
 	"github.com/emersion/go-smtp"
 )
@@ -19,6 +20,7 @@ import (
 type tokenBackend struct {
 	inner  smtp.Backend
 	tokens []string
+	sites  map[string]string // up --sites: a write token's site, which marks what it sends
 }
 
 func (b tokenBackend) NewSession(c *smtp.Conn) (smtp.Session, error) {
@@ -26,7 +28,7 @@ func (b tokenBackend) NewSession(c *smtp.Conn) (smtp.Session, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &tokenSession{Session: s, tokens: b.tokens}, nil
+	return &tokenSession{Session: s, tokens: b.tokens, sites: b.sites}, nil
 }
 
 var errNeedAuth = &smtp.SMTPError{Code: 530, EnhancedCode: smtp.EnhancedCode{5, 7, 0},
@@ -35,6 +37,7 @@ var errNeedAuth = &smtp.SMTPError{Code: 530, EnhancedCode: smtp.EnhancedCode{5, 
 type tokenSession struct {
 	smtp.Session
 	tokens []string
+	sites  map[string]string
 	authed bool
 }
 
@@ -52,6 +55,11 @@ func (s *tokenSession) Auth(string) (sasl.Server, error) {
 			return smtp.ErrAuthFailed
 		}
 		s.authed = true
+		if site, found := s.sites[password]; found {
+			if ss, ok := s.Session.(catcher.SiteSetter); ok {
+				ss.SetSite(site)
+			}
+		}
 		return nil
 	}), nil
 }
