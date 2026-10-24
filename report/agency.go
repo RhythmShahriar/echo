@@ -19,6 +19,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"slices"
 	"strings"
 	"time"
@@ -237,7 +238,7 @@ func logoURL(b []byte) template.URL {
 	return template.URL("data:" + typ + ";base64," + base64.StdEncoding.EncodeToString(b)) //nolint:gosec // a sniffed image, base64 encoded
 }
 
-// ErrNoBrowser is returned by PDF when no Chrome or Chromium is on PATH.
+// ErrNoBrowser is returned by PDF when it finds no Chrome or Chromium.
 var ErrNoBrowser = errors.New("no Chrome or Chromium found on PATH: install one, or open the HTML report in a browser and print it to PDF")
 
 // browsers are the names Chrome and Chromium go by on PATH, most common
@@ -247,22 +248,56 @@ var browsers = []string{"google-chrome", "google-chrome-stable", "chromium", "ch
 // lookPath finds a program; tests replace it.
 var lookPath = exec.LookPath
 
+// installedBrowsers are where Chrome, Chromium and Edge install
+// themselves outside PATH: the macOS application bundles and the Windows
+// program folders. %VAR% is the environment variable's value. Tests
+// replace it.
+var installedBrowsers = func() []string {
+	switch runtime.GOOS {
+	case "darwin":
+		return []string{"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+			"/Applications/Chromium.app/Contents/MacOS/Chromium",
+			"/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge"}
+	case "windows":
+		var out []string
+		for _, root := range []string{os.Getenv("ProgramFiles"), os.Getenv("ProgramFiles(x86)"), os.Getenv("LocalAppData")} {
+			if root != "" {
+				out = append(out, filepath.Join(root, "Google", "Chrome", "Application", "chrome.exe"),
+					filepath.Join(root, "Microsoft", "Edge", "Application", "msedge.exe"))
+			}
+		}
+		return out
+	}
+	return nil
+}
+
+// findBrowser is the Chrome, Chromium or Edge PDF prints with: one on
+// PATH, else one installed where installedBrowsers looks. "" when none.
+func findBrowser() string {
+	for _, name := range browsers {
+		if p, err := lookPath(name); err == nil {
+			return p
+		}
+	}
+	for _, p := range installedBrowsers() {
+		if fi, err := os.Stat(p); err == nil && !fi.IsDir() {
+			return p
+		}
+	}
+	return ""
+}
+
 // pdfTimeout bounds one print: a page with no script and nothing remote
 // prints in a second or two, so a minute means Chrome hung.
 const pdfTimeout = time.Minute
 
-// PDF prints an HTML file to a PDF with headless Chrome or Chromium on
-// PATH, so Echo needs no PDF library. It returns ErrNoBrowser when there
+// PDF prints an HTML file to a PDF with headless Chrome or Chromium (on
+// PATH, or where macOS and Windows install it), so Echo needs no PDF
+// library. It returns ErrNoBrowser when there
 // is none. Chrome runs with a throwaway profile and background networking
 // off. The page itself loads nothing remote.
 func PDF(htmlPath, pdfPath string) error {
-	var bin string
-	for _, name := range browsers {
-		if p, err := lookPath(name); err == nil {
-			bin = p
-			break
-		}
-	}
+	bin := findBrowser()
 	if bin == "" {
 		return ErrNoBrowser
 	}

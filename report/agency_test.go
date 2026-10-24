@@ -171,9 +171,27 @@ func TestAgencyBrand(t *testing.T) {
 
 func TestPDFWithoutBrowser(t *testing.T) {
 	lookPath = func(string) (string, error) { return "", exec.ErrNotFound }
-	defer func() { lookPath = exec.LookPath }()
+	installed := installedBrowsers
+	installedBrowsers = func() []string { return []string{filepath.Join(t.TempDir(), "Google Chrome")} }
+	defer func() { lookPath, installedBrowsers = exec.LookPath, installed }()
 	if err := PDF("report.html", "report.pdf"); !errors.Is(err, ErrNoBrowser) {
 		t.Fatalf("PDF = %v, want ErrNoBrowser", err)
+	}
+}
+
+// TestBrowserOutsidePATH: Chrome in its macOS bundle or its Windows
+// program folder is found when nothing is on PATH.
+func TestBrowserOutsidePATH(t *testing.T) {
+	lookPath = func(string) (string, error) { return "", exec.ErrNotFound }
+	installed := installedBrowsers
+	defer func() { lookPath, installedBrowsers = exec.LookPath, installed }()
+	app := filepath.Join(t.TempDir(), "Google Chrome")
+	if err := os.WriteFile(app, nil, 0o700); err != nil { //nolint:gosec // a stand-in program
+		t.Fatal(err)
+	}
+	installedBrowsers = func() []string { return []string{filepath.Join(t.TempDir(), "missing"), app} }
+	if got := findBrowser(); got != app {
+		t.Errorf("findBrowser = %q, want %q", got, app)
 	}
 }
 
