@@ -760,6 +760,54 @@ func TestWatchShowsWhatArrivedWhileItStarted(t *testing.T) {
 	waitFor(t, func() bool { return strings.Contains(out.String(), "Sent while watch started") }, "the message sent while watch started")
 }
 
+// TestWatchShowsCapturesOfARun is the session the bug was reported from:
+// a connector POSTs captures tagged with a run to /v1/capture while that
+// run's action is open, and watch prints each one as it arrives.
+func TestWatchShowsCapturesOfARun(t *testing.T) {
+	t.Chdir(t.TempDir())
+	in := catcher.NewInbox(100)
+	srv := httptest.NewServer(catcher.NewServer(in, catcher.Config{Version: "test"}))
+	defer srv.Close()
+	c := client.New(srv.URL, "")
+	lease, err := c.BeginLease(context.Background(), "r1", "contact")
+	if err != nil {
+		t.Fatal(err)
+	}
+	watch, _ := lookup("watch")
+	p, err := parse(watch, []string{"--url", srv.URL, "--plain"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, errb := &syncBuffer{}, &syncBuffer{}
+	s := p.begin(out, errb)
+	ctx, cancel := context.WithCancel(context.Background())
+	s.ctx = ctx
+	done := make(chan int)
+	go func() { done <- cmdWatch(s) }()
+	defer func() {
+		cancel()
+		<-done
+		s.stop()
+	}()
+	waitFor(t, func() bool { return strings.Contains(errb.String(), "Watching") }, "the watch to start")
+	for i, subject := range []string{"New message from Jamie", "Thanks for getting in touch"} {
+		body := fmt.Sprintf(`{"v":1,"run":"r1:contact","kind":"email","source":{"via":"wordpress","hook":"wp_mail"},`+
+			`"email":{"from":"shop@shop.test","to":["owner%d@shop.test"],"subject":%q,"text":"Hi"}}`, i, subject)
+		resp, err := http.Post(srv.URL+"/v1/capture", "application/json", strings.NewReader(body)) //nolint:noctx // test
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("capture: %s", resp.Status)
+		}
+		waitFor(t, func() bool { return strings.Contains(out.String(), subject) }, subject)
+	}
+	if err := c.EndLease(context.Background(), lease); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestLRUForgetsTheOldest(t *testing.T) {
 	c := newLRU[model.Status](2)
 	c.put("a", model.Faked)
