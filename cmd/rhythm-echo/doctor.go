@@ -81,7 +81,7 @@ func cmdDoctor(s *session) int {
 		fail("Site", reason)
 	}
 	if live {
-		note("WordPress", "not checked: doctor sends canaries through the site, and this one is live")
+		note("WordPress", "not checked: doctor sends canaries through the site and this one is live")
 	} else if site != "" {
 		ping, err := s.wpPing(site)
 		switch {
@@ -146,8 +146,8 @@ func cmdDoctor(s *session) int {
 // config's production: list, or "" when it doesn't; live is false when
 // an entry only catches it by accident. It names the entry
 // and says only what Echo does about it today: http actions refuse a URL
-// that starts with an entry exactly as written, and command actions run
-// all the same. Replays never read the list; they send only to staging:
+// that starts with an entry exactly as written; command actions run all
+// the same. Replays never read the list; they send only to staging:
 // and local addresses. An entry that differs only in case, port or a
 // subdomain is not matched by the actions, so doctor says so rather
 // than promise a refusal. A prefix of another host's URL is matched,
@@ -168,15 +168,15 @@ func productionReason(cfg config.Config, site string) (reason string, live bool)
 		prefix, same := strings.HasPrefix(site, p) || strings.HasPrefix(withSlash, p), sameSite(site, p)
 		if prefix && !same {
 			// https://shop.example is a prefix of https://shop.example.staging.test.
-			return fmt.Sprintf("%s is another host, but it starts with production: entry %s, so its http actions are "+
+			return fmt.Sprintf("%s is another host but starts with production: entry %s, so its http actions are "+
 				"refused; end the entry with a / to match only that site", site, p), false
 		}
 		if prefix {
-			return fmt.Sprintf("%s is listed under production: (%s). http actions to it are refused, but command actions "+
+			return fmt.Sprintf("%s is listed under production: (%s). http actions to it are refused while command actions "+
 				"still run against it; point site: at a staging copy", site, p), true
 		}
 		if same {
-			return fmt.Sprintf("%s looks like production: entry %s, but actions match an entry exactly as written, "+
+			return fmt.Sprintf("%s looks like production: entry %s. Actions match an entry exactly as written, "+
 				"so they would run against it; point site: at a staging copy or write the entry as %s", site, p, site), true
 		}
 	}

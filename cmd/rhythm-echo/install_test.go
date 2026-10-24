@@ -144,8 +144,8 @@ func TestDoctorFailsOnAProductionSite(t *testing.T) {
 	}
 	write(shop.URL)
 	code, out, errOut := runCLI(t, "doctor", "--url", api.URL, "--plain")
-	want := "FAIL  Site: " + shop.URL + " is listed under production: (" + shop.URL + "). http actions to it are refused, " +
-		"but command actions still run against it"
+	want := "FAIL  Site: " + shop.URL + " is listed under production: (" + shop.URL + "). http actions to it are refused " +
+		"while command actions still run against it"
 	if code != exitFindings || !strings.Contains(out, want) {
 		t.Fatalf("doctor: %d\n%s\n%s", code, out, errOut)
 	}
@@ -155,7 +155,7 @@ func TestDoctorFailsOnAProductionSite(t *testing.T) {
 	// A listing actions wouldn't match is still a live site, said plainly.
 	write(strings.ToUpper(shop.URL))
 	if code, out, _ := runCLI(t, "doctor", "--url", api.URL, "--plain"); code != exitFindings ||
-		!strings.Contains(out, "looks like production: entry "+strings.ToUpper(shop.URL)+", but actions match an entry exactly as written") {
+		!strings.Contains(out, "looks like production: entry "+strings.ToUpper(shop.URL)+". Actions match an entry exactly as written") {
 		t.Errorf("case variant: %d\n%s", code, out)
 	}
 	// Another site in the list is no reason to fail.
@@ -173,7 +173,7 @@ func TestProductionReason(t *testing.T) {
 		"https://shop.example/shop":         "is listed under production:",
 		"HTTPS://SHOP.example":              "looks like production: entry https://shop.example",
 		"http://www.shop.example:8443":      "looks like production: entry",
-		"https://shop.example.staging.test": "is another host, but it starts with production: entry https://shop.example",
+		"https://shop.example.staging.test": "is another host but starts with production: entry https://shop.example",
 		"https://staging.example":           "",
 		"":                                  "",
 	} {
