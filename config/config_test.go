@@ -286,9 +286,9 @@ func TestActionIDsAreUniqueAndNotEmpty(t *testing.T) {
 	for in, want := range map[string]string{
 		"actions:\n  - name: Contact Form\n    command: x\n  - name: contact-form\n    command: y\n":               `line 4: action "contact-form" and action "Contact Form" (line 2) both get the ID action:contact-form; rename one`,
 		"actions:\n  - name: a\n    command: x\n  - name: b\n    command: x\n  - name: \" A! \"\n    command: y\n": `line 6: action " A! " and action "a" (line 2) both get the ID action:a; rename one`,
-		"actions:\n  - name: \"!!!\"\n    command: x\n":                                                            `line 2: action "!!!": needs a letter or digit from a to z or 0 to 9 in its name, so compare can tell it apart`,
+		"actions:\n  - name: \"!!!\"\n    command: x\n":                                                            `line 2: action "!!!": needs a letter or digit from a to z or 0 to 9 in its name, so compare can tell it apart; add one, like "!!! 1"`,
 		"actions:\n  - name: ok\n    command: x\n  - name: \"???\"\n    command: y\n":                              `line 4: action "???": needs a letter or digit`,
-		"actions:\n  - name: 注文\n    command: x\n":                                                                 `line 2: action "注文": needs a letter or digit`,
+		"actions:\n  - name: 注文\n    command: x\n":                                                                 `line 2: action "注文": needs a letter or digit from a to z or 0 to 9 in its name, so compare can tell it apart; add one, like "注文 1"`,
 	} {
 		_, err := Load(write(t, in))
 		if err == nil || !strings.Contains(err.Error(), want) {

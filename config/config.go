@@ -363,7 +363,7 @@ func (c Config) Validate() error {
 		case n != 1:
 			return fmt.Errorf("%saction %q: set exactly one of http, command or replay", at, a.Name)
 		case ActionID(a.Name) == actionPrefix:
-			return fmt.Errorf("%saction %q: needs a letter or digit from a to z or 0 to 9 in its name, so compare can tell it apart", at, a.Name)
+			return fmt.Errorf("%saction %q: needs a letter or digit from a to z or 0 to 9 in its name, so compare can tell it apart; add one, like %q", at, a.Name, a.Name+" 1")
 		}
 		if j, ok := ids[ActionID(a.Name)]; ok {
 			first := c.Actions[j].Name
