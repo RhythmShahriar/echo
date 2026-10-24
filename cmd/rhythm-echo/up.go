@@ -22,6 +22,7 @@ import (
 
 	"github.com/RhythmShahriar/echo/catcher"
 	"github.com/RhythmShahriar/echo/check"
+	"github.com/RhythmShahriar/echo/config"
 	"github.com/RhythmShahriar/echo/model"
 	"github.com/RhythmShahriar/echo/proxy"
 	"github.com/RhythmShahriar/echo/report"
@@ -236,8 +237,8 @@ func cmdUp(s *session) int {
 	if len(cfg.Allow) > 0 {
 		s.view.Step("Allowed", strings.Join(cfg.Allow, ", "))
 	}
-	if len(open) > 0 {
-		s.view.Step("Warning", "no token on "+strings.Join(open, ", ")+": anything on this private network can post to Echo and read what it caught (--private-network)")
+	for _, w := range openWarnings(open, cfg) {
+		s.view.Step("Warning", w)
 	}
 	if !s.o.quiet {
 		fmt.Fprintln(s.stderr, "\n  Waiting for messages. Ctrl+C to stop.")
@@ -256,6 +257,20 @@ func cmdUp(s *session) int {
 		fmt.Fprintf(s.stderr, "\nStopped. Captured %s this session.\n", tally)
 	}
 	return exitOK
+}
+
+// openWarnings are the banner's warnings for the addresses up serves
+// without a token (--private-network): anything on the network can post
+// and read, and an observing proxy there forwards for anyone.
+func openWarnings(open []string, cfg config.Config) []string {
+	if len(open) == 0 {
+		return nil
+	}
+	out := []string{"no token on " + strings.Join(open, ", ") + ": anything on this private network can post to Echo and read what it caught (--private-network)"}
+	if cfg.Mode == "observe" && slices.Contains(open, cfg.Proxy) {
+		out = append(out, "observing, the proxy on "+cfg.Proxy+" forwards for anything on this private network to any host it reaches; seal Echo or set a token")
+	}
+	return out
 }
 
 // cleanups is a stack of stop functions, run last first.

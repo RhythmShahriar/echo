@@ -12,6 +12,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -23,6 +24,7 @@ import (
 
 	"github.com/RhythmShahriar/echo/check"
 	"github.com/RhythmShahriar/echo/client"
+	"github.com/RhythmShahriar/echo/config"
 	"github.com/RhythmShahriar/echo/model"
 	"github.com/RhythmShahriar/echo/wire"
 )
@@ -399,5 +401,35 @@ func TestUpHelpListsItsNewFlags(t *testing.T) {
 	usage(&b)
 	if !strings.Contains(b.String(), "--private-network") {
 		t.Error("the main help lacks --private-network")
+	}
+}
+
+// TestAPIRefusesARebindingHostWithALogin: without a token the API still
+// answers only to loopback names when a login is set, as the catcher's
+// guard sits in front of it.
+func TestAPIRefusesARebindingHostWithALogin(t *testing.T) {
+	h := testLoginUp(t, "")
+	for _, path := range []string{"/v1/messages", "/api/v1/messages"} {
+		r := httptest.NewRequest(http.MethodGet, path, nil)
+		r.Host = "evil.example"
+		if w := serve(h, r); w.Code != http.StatusForbidden {
+			t.Errorf("%s with Host evil.example: %d, want 403", path, w.Code)
+		}
+	}
+}
+
+func TestOpenWarnings(t *testing.T) {
+	cfg := config.Default()
+	cfg.Proxy = "10.0.0.5:8026"
+	if w := openWarnings(nil, cfg); w != nil {
+		t.Errorf("nothing open: %q", w)
+	}
+	open := []string{"10.0.0.5:8025", "10.0.0.5:8026"}
+	if w := openWarnings(open, cfg); len(w) != 1 || !strings.HasPrefix(w[0], "no token on 10.0.0.5:8025, 10.0.0.5:8026: anything") {
+		t.Errorf("sealed: %q", w)
+	}
+	cfg.Mode = "observe"
+	if w := openWarnings(open, cfg); len(w) != 2 || w[1] != "observing, the proxy on 10.0.0.5:8026 forwards for anything on this private network to any host it reaches; seal Echo or set a token" {
+		t.Errorf("observing: %q", w)
 	}
 }
