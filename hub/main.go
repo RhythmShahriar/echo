@@ -308,7 +308,7 @@ func scheduleMain(ctx context.Context, args []string, stdout, stderr io.Writer, 
 		fmt.Fprintln(stderr, "rhythm echo schedule:", err)
 		return 3
 	}
-	o := WindowOptions{Store: *storeDir, Sites: chosen, URL: *url, Token: sites.readToken, HTTP: httpClient, After: *afterCmd,
+	o := WindowOptions{Store: *storeDir, Sites: chosen, URL: *url, Token: sites.readToken, HTTP: httpClient, After: *afterCmd, Hide: sites.SecretEnv(),
 		AfterTimeout: *afterTimeout, Snapshot: *snap, Version: Version, Now: now, Log: stdout}
 	for {
 		if !*runNow {

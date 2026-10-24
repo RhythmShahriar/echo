@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -231,5 +232,44 @@ func TestScheduleMain(t *testing.T) {
 	}
 	if !strings.Contains(errb, "Next window: Tue 27 Oct 02:00 UTC (in 64h0m0s)") || !strings.Contains(out, "client-a: couldn't compare") {
 		t.Errorf("output:\n%s%s", out, errb)
+	}
+}
+
+// TestAfterHidesTokens checks that the update command sees none of the
+// hub's tokens: not the read token, not its own site's, not another's.
+func TestAfterHidesTokens(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the stub update is a shell command")
+	}
+	dir := t.TempDir()
+	sites, err := LoadSites(writeSites(t, dir), getenv)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("READ", tokens["READ"])
+	t.Setenv("TOKEN_A", tokens["TOKEN_A"])
+	t.Setenv("TOKEN_B", tokens["TOKEN_B"])
+	t.Setenv("COPY_OF_READ", tokens["READ"]) // the same token under another name
+	t.Setenv("KEEP_ME", "visible")
+	a, _ := sites.Site("client-a")
+	if err := os.MkdirAll(a.ProjectDir(), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	var log bytes.Buffer
+	o := WindowOptions{Sites: []*Site{a}, URL: "http://" + hubAddr, Token: tokens["READ"], Hide: sites.SecretEnv(),
+		After: "env", AfterTimeout: 10 * time.Second, Log: &log}
+	if err := after(context.Background(), o, a); err != nil {
+		t.Fatal(err)
+	}
+	out := log.String()
+	for _, secret := range []string{tokens["READ"], tokens["TOKEN_A"], tokens["TOKEN_B"]} {
+		if strings.Contains(out, secret) {
+			t.Errorf("the update saw %q:\n%s", secret, out)
+		}
+	}
+	for _, want := range []string{"KEEP_ME=visible", "RHYTHM_ECHO_SITE=client-a", "RHYTHM_ECHO_URL=http://" + hubAddr} {
+		if !strings.Contains(out, want) {
+			t.Errorf("the update has no %s:\n%s", want, out)
+		}
 	}
 }

@@ -133,6 +133,16 @@ func (s *Sites) Select(list string) ([]*Site, error) {
 	return out, nil
 }
 
+// SecretEnv names the variables that hold the hub's tokens: the read
+// token's and every site's token_env.
+func (s *Sites) SecretEnv() []string {
+	names := []string{s.ReadTokenEnv}
+	for _, site := range s.Sites {
+		names = append(names, site.TokenEnv)
+	}
+	return names
+}
+
 // ProjectDir is the folder a site's --after command runs in: the one that
 // holds .echo/, or the config file's own folder.
 func (site *Site) ProjectDir() string {

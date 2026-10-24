@@ -117,6 +117,7 @@ type WindowOptions struct {
 	URL, Token   string        // the hub's API and its read token
 	HTTP         *http.Client  // nil: a default client (set one that trusts a self-signed hub)
 	After        string        // the update command, run with sh -c in each site's folder
+	Hide         []string      // variables After must not see: Sites.SecretEnv
 	AfterTimeout time.Duration // default 30 minutes
 	Snapshot     string        // compare with this snapshot; empty takes a fresh one before After
 	Version      string
@@ -286,6 +287,8 @@ func snapshot(ctx context.Context, st store.Store, o runner.Options) (string, er
 
 // after runs the update command in the site's folder. Its output goes to
 // the log; RHYTHM_ECHO_SITE and RHYTHM_ECHO_URL say which site and hub.
+// It never sees the hub's tokens: a plugin update in one client's site
+// runs that plugin's code, which must not read every client's mail.
 func after(ctx context.Context, o WindowOptions, site *Site) error {
 	ctx, cancel := context.WithTimeout(ctx, o.AfterTimeout)
 	defer cancel()
@@ -296,7 +299,7 @@ func after(ctx context.Context, o WindowOptions, site *Site) error {
 		cmd = exec.CommandContext(ctx, "sh", "-c", o.After) //nolint:gosec // the operator's own command
 	}
 	cmd.Dir = site.ProjectDir()
-	cmd.Env = append(os.Environ(), "RHYTHM_ECHO_SITE="+site.ID, "RHYTHM_ECHO_URL="+o.URL)
+	cmd.Env = append(childEnv(os.Environ(), o), "RHYTHM_ECHO_SITE="+site.ID, "RHYTHM_ECHO_URL="+o.URL)
 	w := &prefixWriter{w: o.Log, prefix: site.ID + ": "}
 	cmd.Stdout, cmd.Stderr = w, w
 	err := cmd.Run()
@@ -305,6 +308,37 @@ func after(ctx context.Context, o WindowOptions, site *Site) error {
 		return fmt.Errorf("still running after %s", o.AfterTimeout)
 	}
 	return err
+}
+
+// childEnv is env without the variables o.Hide names and without any
+// whose value is a token the hub holds, in case one is set twice.
+func childEnv(env []string, o WindowOptions) []string {
+	secret := map[string]bool{}
+	if o.Token != "" {
+		secret[o.Token] = true
+	}
+	for _, s := range o.Sites {
+		if s.token != "" {
+			secret[s.token] = true
+		}
+	}
+	out := make([]string, 0, len(env))
+	for _, kv := range env {
+		name, value, _ := strings.Cut(kv, "=")
+		if secret[value] || slices.ContainsFunc(o.Hide, func(h string) bool { return sameEnvName(h, name) }) {
+			continue
+		}
+		out = append(out, kv)
+	}
+	return out
+}
+
+// sameEnvName compares variable names as the OS does: Windows ignores case.
+func sameEnvName(a, b string) bool {
+	if runtime.GOOS == "windows" {
+		return strings.EqualFold(a, b)
+	}
+	return a == b
 }
 
 func verdict(c *model.Comparison) string {
