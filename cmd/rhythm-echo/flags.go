@@ -593,6 +593,7 @@ var commands = []cmdSpec{
 	{name: "mcp", use: "mcp [--url URL] [--token T] [--config FILE]", about: "MCP server for coding agents, on stdin and stdout", own: true},
 	{name: "hub", use: "hub --store DIR --sites FILE [flags]", about: "one Echo for many staging sites, each with its own write token", own: true},
 	{name: "schedule", use: `schedule "<when>" --store DIR --after "<command>"`, about: "snapshot, update and compare the hub's sites in a window", own: true},
+	{name: "conformance", use: "conformance [--listen addr]", about: "a strict stand-in Echo for a connector's end-to-end test", own: true},
 	{name: "init", use: "init [--stack s] [--force]", about: "write .echo/config.yaml with an action for this stack (--force replaces it)", own: true},
 	{name: "ca", use: "ca [--pem]", about: "print the proxy's CA certificate path (--pem: the certificate)", own: true},
 	{name: "sendmail", use: "sendmail [-t] [-i] [-f from] [rcpt…]", about: "sendmail stand-in for sendmail_path; reads the message on stdin", own: true},

@@ -27,6 +27,7 @@ import (
 	"github.com/charmbracelet/x/term"
 
 	"github.com/RhythmShahriar/echo/config"
+	"github.com/RhythmShahriar/echo/conformance"
 	"github.com/RhythmShahriar/echo/hub"
 	"github.com/RhythmShahriar/echo/mcp"
 	"github.com/RhythmShahriar/echo/runner"
@@ -115,6 +116,8 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	case "schedule":
 		hub.Version, hub.Replay = version, ownReplayer
 		return hub.ScheduleMain(args[1:], stdin, stdout, stderr)
+	case "conformance":
+		return conformance.Main(args[1:], stdin, stdout, stderr)
 	case "init":
 		return cmdInit(args[1:], stdout, stderr)
 	case "install":
@@ -150,7 +153,7 @@ func help(name string, stdin io.Reader, stdout, stderr io.Writer) int {
 
 // ownUsage is the help of the commands another package runs, which
 // print it on stderr for --help; help prints it on stdout.
-var ownUsage = map[string]string{"mcp": mcp.Usage, "hub": hub.Usage, "schedule": hub.ScheduleUsage}
+var ownUsage = map[string]string{"mcp": mcp.Usage, "hub": hub.Usage, "schedule": hub.ScheduleUsage, "conformance": conformance.Usage}
 
 // ownReplayer is the replayer mcp and schedule run replay actions with:
 // the one snapshot and compare use, in the working folder.
@@ -205,6 +208,7 @@ Usage:
   rhythm echo hub --store D --sites F    one Echo for many staging sites, each with its own write token
   rhythm echo schedule "<when>" --store D --after "<command>"
                                          snapshot, update and compare the hub's sites in a window
+  rhythm echo conformance [--listen a]   a strict stand-in Echo for a connector's end-to-end test
   rhythm echo sendmail [-t] [-i] [-f from] [rcpt…]
                                          sendmail stand-in for sendmail_path; reads the message on stdin
   rhythm echo help [command] | version   this help, one command's, or the version
