@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/RhythmShahriar/echo/catcher"
 	"github.com/RhythmShahriar/echo/config"
 	"github.com/RhythmShahriar/echo/runner"
 )
@@ -21,16 +20,5 @@ func cmdDoctor(s *session) int                       { return notYet(s.stderr, "
 func cmdCheck(s *session) int                        { return notYet(s.stderr, "check") }
 func cmdHeaders(s *session) int                      { return notYet(s.stderr, "headers") }
 func cmdReplay(s *session) int                       { return notYet(s.stderr, "replay") }
-func cmdCA(_ []string, _, stderr io.Writer) int      { return notYet(stderr, "ca") }
-func cmdSendmail(_ []string, _ io.Reader, stderr io.Writer) int {
-	return notYet(stderr, "sendmail")
-}
 
 func replayer(config.Config) runner.Replayer { return nil }
-
-func startProxy(s *session, _ *catcher.Server) (func(), error) {
-	if s.cfg.Proxy != "" {
-		return nil, fmt.Errorf("the proxy isn't available in this build yet")
-	}
-	return func() {}, nil
-}
