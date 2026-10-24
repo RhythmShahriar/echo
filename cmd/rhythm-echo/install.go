@@ -7,16 +7,24 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 
-	"github.com/RhythmShahriar/echo/client"
+	"github.com/RhythmShahriar/echo/config"
 	"github.com/RhythmShahriar/echo/connectors/wordpress"
 	"github.com/RhythmShahriar/echo/proxy"
 	"github.com/RhythmShahriar/rhythm/kit/cli"
 )
+
+const installUsage = `usage: rhythm echo install <stack> [path] [flags]
+  stacks: wordpress (wp), laravel, next (nextjs), node, generic (php)
+  wordpress: [path] --url URL --token T --mode seal|observe --force --proxy URL --ca PATH
+             --wp-cli | --container NAME, --uninstall
+  all: --url URL --token T --config FILE`
 
 // cmdInstall connects a site to Echo. WordPress is installed for real (a
 // mu-plugin, on disk, through WP-CLI or into a container); the other
@@ -34,13 +42,39 @@ func cmdInstall(args []string, stdout, stderr io.Writer) int {
 	uninstall := fs.Bool("uninstall", false, "")
 	proxyURL := fs.String("proxy", "", "")
 	caPath := fs.String("ca", "", "")
+	configPath := fs.String("config", "", "")
 	pos, err := cli.ParseInterspersed(fs, args)
+	if errors.Is(err, flag.ErrHelp) {
+		fmt.Fprintln(stdout, installUsage)
+		return exitOK
+	}
 	if err != nil || len(pos) == 0 {
-		fmt.Fprintln(stderr, "rhythm echo: usage: rhythm echo install <wordpress|laravel|next|node|generic> [path] [--url URL] [--token T]")
+		if err != nil {
+			fmt.Fprintln(stderr, "rhythm echo:", err)
+		}
+		fmt.Fprintln(stderr, installUsage)
 		return exitUsage
 	}
-	echoURL := cmp.Or(*url, os.Getenv("RHYTHM_ECHO_URL"), client.DefaultURL)
+	if *mode != "" && *mode != "seal" && *mode != "observe" {
+		fmt.Fprintf(stderr, "rhythm echo: --mode %q: use seal or observe\n", *mode)
+		return exitUsage
+	}
+	// The addresses Echo runs on come from .echo/config.yaml when there is one.
+	cfg, err := config.Load(cmp.Or(*configPath, config.Path()))
+	if err != nil {
+		fmt.Fprintln(stderr, "rhythm echo:", err)
+		return exitUsage
+	}
+	echoURL := cmp.Or(*url, os.Getenv("RHYTHM_ECHO_URL"), "http://"+cfg.Listen)
 	tok := cmp.Or(*token, os.Getenv("RHYTHM_ECHO_TOKEN"))
+	proxyAddr := cfg.Proxy
+	if proxyAddr == "" || proxyAddr == "off" {
+		proxyAddr = "127.0.0.1:8026"
+	}
+	smtpAddr := cfg.SMTP
+	if smtpAddr == "" || smtpAddr == "off" {
+		smtpAddr = config.Default().SMTP
+	}
 	switch pos[0] {
 	case "wordpress", "wp":
 		target := "."
@@ -52,41 +86,56 @@ func cmdInstall(args []string, stdout, stderr io.Writer) int {
 	case "laravel":
 		fmt.Fprintf(stdout, `Laravel: add the package and point it at Echo.
 
-  composer require --dev rhythmsh/echo-laravel
+  composer require rhythmsh/echo-laravel
 
-Then in .env (staging or local only; the connector stays off in production):
+It's a regular dependency, not --dev: staging deploys usually run composer install
+--no-dev, which would leave it out. It does nothing where APP_ENV is production or
+testing (RHYTHM_ECHO_FORCE=true overrides that, only for a box that isn't production).
+
+Then in .env on staging or your machine:
 
   RHYTHM_ECHO_URL=%s%s
   QUEUE_CONNECTION=sync          # or flush with: php artisan queue:work --stop-when-empty
 
-Check it: php artisan echo:status   ·   then: rhythm echo doctor
+Check it: php artisan echo:status, then: rhythm echo doctor
 Packages that skip Laravel's mailer and Http client (raw Guzzle, SDKs) are caught
-through Echo's proxy: rhythm echo up --proxy 127.0.0.1:8026 --mitm, then set
-HTTPS_PROXY=http://127.0.0.1:8026 and trust: %s
-`, echoURL, tokenLine(tok), caHint())
+through Echo's proxy: rhythm echo up --proxy %s --mitm, then set
+HTTPS_PROXY=http://%s and trust: %s
+`, echoURL, tokenLine(tok), proxyAddr, proxyAddr, caHint())
 		return exitOK
 	case "next", "nextjs":
 		return installNext(cmp.Or(second(pos), "."), echoURL, tok, stdout, stderr)
 	case "node":
 		fmt.Fprintf(stdout, `Node: add the package and load it before your app.
 
-  npm install --save-dev @rhythmsh/echo
+  npm install --save-dev @rhythmsh/echo   # or a regular dependency if staging installs without dev deps
   node --import @rhythmsh/echo/register server.js      # or: import '@rhythmsh/echo/register'
 
-Environment (never production; the connector stays off there):
+Environment, on staging or your machine only:
 
   RHYTHM_ECHO_URL=%s%s
+
+The connector is off on VERCEL_ENV=production, and on NODE_ENV=production unless
+RHYTHM_ECHO_URL is set: setting it there turns the connector on.
 
 Express/Fastify: app.use(echoMiddleware()) ties messages to the request that caused them.
 `, echoURL, tokenLine(tok))
 		return exitOK
 	case "generic", "php":
+		smtpLogin := "any username and password"
+		if !loopback(smtpAddr) {
+			smtpLogin = "any username, Echo's token as the password"
+		}
+		smtpHost, smtpPort, err := net.SplitHostPort(smtpAddr)
+		if err != nil {
+			smtpHost, smtpPort = smtpAddr, "25"
+		}
 		fmt.Fprintf(stdout, `Any stack: point mail and outbound HTTPS at Echo.
 
-  Mail (SMTP):      host 127.0.0.1, port 1025, any username and password
-  Mail (PHP):       sendmail_path = "rhythm-echo sendmail -t -i"   (php.ini or php-fpm pool)
-  HTTP(S):          rhythm echo up --proxy 127.0.0.1:8026 --mitm
-                    HTTPS_PROXY=http://127.0.0.1:8026  https_proxy=http://127.0.0.1:8026
+  Mail (SMTP):      host %s, port %s, %s
+  Mail (PHP):       sendmail_path = "%s sendmail -t -i"   (php.ini or php-fpm pool)
+  HTTP(S):          rhythm echo up --proxy %s --mitm
+                    HTTPS_PROXY=http://%s  https_proxy=http://%s
                     and trust Echo's CA: %s
                     (curl, PHP cURL, Python requests and Go honor these; Node needs
                     NODE_USE_ENV_PROXY=1 and NODE_EXTRA_CA_CERTS on 22.21+/24.5+)
@@ -95,7 +144,7 @@ Express/Fastify: app.use(echoMiddleware()) ties messages to the request that cau
 
 For a seal that can't be bypassed, see docs/seal in the Echo repository: the app on an
 internal Docker network or behind a firewall, with Echo as its only way out.
-`, caHint())
+`, smtpHost, smtpPort, smtpLogin, binaryPath(), proxyAddr, proxyAddr, proxyAddr, caHint())
 		return exitOK
 	}
 	fmt.Fprintf(stderr, "rhythm echo: install: unknown stack %q (wordpress, laravel, next, node, generic)\n", pos[0])
@@ -107,42 +156,49 @@ func installWordPress(target string, s wordpress.Settings, wpcli bool, container
 		fmt.Fprintln(stderr, "rhythm echo:", err)
 		return exitError
 	}
+	script := wordpress.UninstallScript()
+	if !uninstall && (wpcli || container != "") {
+		var err error
+		if script, err = wordpress.Script(s); err != nil {
+			return fail(err)
+		}
+	}
 	switch {
 	case container != "":
-		script := wordpress.UninstallScript()
-		if !uninstall {
-			var err error
-			if script, err = s2(wordpress.Script(s)); err != nil {
-				return fail(err)
-			}
-		}
+		var errb bytes.Buffer
 		cmd := exec.Command("docker", "exec", "-i", container, "wp", "eval-file", "-", "--allow-root") //nolint:gosec // the user's container
-		cmd.Stdin, cmd.Stdout, cmd.Stderr = strings.NewReader(script), stdout, stderr
+		cmd.Stdin, cmd.Stdout, cmd.Stderr = strings.NewReader(script), stdout, io.MultiWriter(stderr, &errb)
 		if err := cmd.Run(); err != nil {
-			return fail(fmt.Errorf("running wp-cli in %s: %w (is wp-cli installed in the container? or copy the files with docker cp)", container, err))
+			hint := "is wp-cli installed in the container? or copy the files with docker cp"
+			switch msg := errb.String(); {
+			case strings.Contains(msg, "ermission denied"):
+				hint = "wp-cli's user in the container can't write wp-content/mu-plugins; give that folder to it, or copy the files with docker cp"
+			case strings.Contains(msg, "No such container"):
+				hint = "no container named " + container + "; see: docker ps"
+			}
+			return fail(fmt.Errorf("running wp-cli in %s: %w (%s)", container, err, hint))
 		}
 	case wpcli:
-		script := wordpress.UninstallScript()
-		if !uninstall {
-			var err error
-			if script, err = s2(wordpress.Script(s)); err != nil {
-				return fail(err)
-			}
-		}
 		cmd := exec.Command("wp", "eval-file", "-", "--path="+target) //nolint:gosec // the user's site
 		cmd.Stdin, cmd.Stdout, cmd.Stderr = strings.NewReader(script), stdout, stderr
 		if err := cmd.Run(); err != nil {
 			return fail(fmt.Errorf("wp eval-file: %w", err))
 		}
-	case uninstall:
-		if err := wordpress.Uninstall(target); err != nil {
-			if wordpress.IsNotInstalled(err) {
-				fmt.Fprintln(stdout, "The connector isn't installed there.")
-				return exitOK
-			}
-			return fail(err)
-		}
 	default:
+		if _, err := wordpress.ContentDir(target); err != nil {
+			fmt.Fprintln(stderr, "rhythm echo:", err)
+			return exitUsage
+		}
+		if uninstall {
+			if err := wordpress.Uninstall(target); err != nil {
+				if wordpress.IsNotInstalled(err) {
+					fmt.Fprintln(stdout, "The connector isn't installed there.")
+					return exitOK
+				}
+				return fail(err)
+			}
+			break
+		}
 		if err := wordpress.Install(target, s); err != nil {
 			var pe *os.PathError
 			if errors.As(err, &pe) && errors.Is(pe.Err, os.ErrPermission) {
@@ -155,17 +211,50 @@ func installWordPress(target string, s wordpress.Settings, wpcli bool, container
 		fmt.Fprintln(stdout, "Removed the Echo connector.")
 		return exitOK
 	}
-	fmt.Fprintf(stdout, `Installed the Echo connector (wp-content/%s), reporting to %s.
+	fmt.Fprintf(stdout, "Installed the Echo connector (wp-content/%s), reporting to %s.\n\n", wordpress.PluginPath, s.URL)
+	switch env := wpEnvironment(target, wpcli || container != ""); {
+	case s.Force:
+		fmt.Fprintln(stdout, "  Forced on: it runs even where WordPress says production.")
+	case env != "":
+		fmt.Fprintf(stdout, "  wp-config.php sets WP_ENVIRONMENT_TYPE to %s, so the connector runs.\n", env)
+	default:
+		fmt.Fprint(stdout, `  It runs only where WP_ENVIRONMENT_TYPE is local, development or staging. WordPress
+  treats an unset WP_ENVIRONMENT_TYPE as production, and there the connector does
+  nothing. On staging, add this to wp-config.php, above "That's all, stop editing!":
 
-  It stays off on production (WP_ENVIRONMENT_TYPE=production) unless forced.
+    define( 'WP_ENVIRONMENT_TYPE', 'staging' );
+
+  (or set it in the server's environment). On a box that isn't production but says
+  so, reinstall with --force.
+`)
+	}
+	fmt.Fprint(stdout, `
   Next: rhythm echo up, then rhythm echo doctor (with site: in .echo/config.yaml)
   Flush async mail and webhooks after actions: add to .echo/config.yaml
     flush: ["wp cron event run --due-now", "wp action-scheduler run"]
-`, wordpress.PluginPath, s.URL)
-	if strings.Contains(s.URL, "127.0.0.1") && container != "" {
-		fmt.Fprintln(stdout, "  In Docker, 127.0.0.1 is the container itself: reinstall with --url http://host.docker.internal:8025")
+`)
+	if container != "" && (strings.Contains(s.URL, "127.0.0.1") || strings.Contains(s.URL, "localhost")) {
+		fmt.Fprintln(stdout, "  In Docker, 127.0.0.1 and localhost are the container itself: reinstall with --url http://host.docker.internal:8025")
 	}
 	return exitOK
+}
+
+var wpEnvDefine = regexp.MustCompile(`(?m)^\s*define\s*\(\s*['"]WP_ENVIRONMENT_TYPE['"]\s*,\s*['"](local|development|staging)['"]\s*\)`)
+
+// wpEnvironment returns the non-production WP_ENVIRONMENT_TYPE the site's
+// wp-config.php defines, if it can be read here.
+func wpEnvironment(target string, remote bool) string {
+	if remote {
+		return ""
+	}
+	for _, p := range []string{filepath.Join(target, "wp-config.php"), filepath.Join(target, "..", "wp-config.php")} {
+		if b, err := os.ReadFile(p); err == nil { //nolint:gosec // the user's own site
+			if m := wpEnvDefine.FindSubmatch(b); m != nil {
+				return string(m[1])
+			}
+		}
+	}
+	return ""
 }
 
 // installNext adds instrumentation.ts when the project has none, and says
@@ -179,27 +268,28 @@ func installNext(dir, url, token string, stdout, stderr io.Writer) int {
 	for _, name := range []string{"instrumentation.ts", "instrumentation.js", "src/instrumentation.ts", "src/instrumentation.js"} {
 		if _, err := os.Stat(filepath.Join(dir, name)); err == nil { //nolint:gosec // the user's own project folder
 			inst = name
+			break
 		}
 	}
-	wrote := ""
-	if inst == "" {
+	var b bytes.Buffer
+	fmt.Fprintf(&b, "Next.js: add the package.\n\n  npm install --save-dev @rhythmsh/echo\n\n")
+	switch {
+	case inst == "":
 		target := "instrumentation.ts"
 		if fi, err := os.Stat(filepath.Join(dir, "src", "app")); err == nil && fi.IsDir() { //nolint:gosec // the user's own project folder
 			target = "src/instrumentation.ts"
 		}
-		body := "export async function register() {\n  const { register } = await import('@rhythmsh/echo/next');\n  register();\n}\n"
+		body := "export async function register() {\n  const { register } = await import('@rhythmsh/echo/next');\n  await register();\n}\n"
 		if err := os.WriteFile(filepath.Join(dir, target), []byte(body), 0o644); err != nil { //nolint:gosec // a project source file
 			fmt.Fprintln(stderr, "rhythm echo:", err)
 			return exitError
 		}
-		wrote = target
-	}
-	var b bytes.Buffer
-	fmt.Fprintf(&b, "Next.js: add the package.\n\n  npm install --save-dev @rhythmsh/echo\n\n")
-	if wrote != "" {
-		fmt.Fprintf(&b, "Wrote %s, which starts Echo's connector (it stays off in production).\n", wrote)
-	} else {
-		fmt.Fprintf(&b, "You already have %s; add this inside register():\n\n  const { register: echo } = await import('@rhythmsh/echo/next');\n  echo();\n", inst)
+		fmt.Fprintf(&b, "Wrote %s, which starts Echo's connector (it stays off in production).\n", target)
+	case importsEcho(filepath.Join(dir, inst)):
+		fmt.Fprintf(&b, "%s already starts Echo's connector; nothing to add there.\n", inst)
+	default:
+		fmt.Fprintf(&b, "You already have %s; add this inside its register(), which must be async:\n\n"+
+			"  const { register: registerEcho } = await import('@rhythmsh/echo/next');\n  await registerEcho();\n", inst)
 	}
 	fmt.Fprintf(&b, `
 Wrap your next.config so mail libraries run outside the bundle and get captured:
@@ -217,6 +307,12 @@ Then: rhythm echo up, and rhythm echo watch while you use the app.
 	return exitOK
 }
 
+// importsEcho reports whether a source file already loads the connector.
+func importsEcho(path string) bool {
+	b, err := os.ReadFile(path) //nolint:gosec // the user's own project file
+	return err == nil && bytes.Contains(b, []byte("@rhythmsh/echo"))
+}
+
 func tokenLine(t string) string {
 	if t == "" {
 		return ""
@@ -224,11 +320,28 @@ func tokenLine(t string) string {
 	return "\n  RHYTHM_ECHO_TOKEN=<the token you started Echo with>"
 }
 
+// caHint is where Echo's CA certificate is, without creating it.
 func caHint() string {
-	if ca, err := proxy.LoadCA(""); err == nil {
-		return ca.CertPath
+	p, err := proxy.DefaultCAPath()
+	if err != nil {
+		return "the path printed by: rhythm echo ca"
 	}
-	return "the path printed by: rhythm echo ca"
+	if _, err := os.Stat(p); err != nil {
+		return p + " (rhythm echo ca creates it)"
+	}
+	return p
+}
+
+// binaryPath is this binary's absolute path, for settings like
+// sendmail_path that run without a PATH (php-fpm).
+func binaryPath() string {
+	if p, err := os.Executable(); err == nil {
+		if r, err := filepath.EvalSymlinks(p); err == nil {
+			return r
+		}
+		return p
+	}
+	return "/usr/local/bin/rhythm-echo"
 }
 
 func second(s []string) string {
@@ -237,5 +350,3 @@ func second(s []string) string {
 	}
 	return ""
 }
-
-func s2(s string, err error) (string, error) { return s, err }

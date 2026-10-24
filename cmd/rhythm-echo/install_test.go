@@ -47,8 +47,55 @@ func TestInstallInstructions(t *testing.T) {
 	if code, out, _ := runCLI(t, "install", "next", dir); code != 0 || !strings.Contains(out, "Wrote instrumentation.ts") {
 		t.Errorf("next: %d\n%s", code, out)
 	}
-	if code, out, _ := runCLI(t, "install", "next", dir); code != 0 || !strings.Contains(out, "already have instrumentation.ts") {
+	if b, _ := os.ReadFile(filepath.Join(dir, "instrumentation.ts")); !strings.Contains(string(b), "await register();") {
+		t.Errorf("register() is async and must be awaited:\n%s", b)
+	}
+	if code, out, _ := runCLI(t, "install", "next", dir); code != 0 || !strings.Contains(out, "already starts Echo's connector") {
 		t.Errorf("next again: %d\n%s", code, out)
+	}
+	// Someone else's instrumentation file gets the lines to add, awaited.
+	_ = os.WriteFile(filepath.Join(dir, "instrumentation.ts"), []byte("export async function register() {}\n"), 0o600)
+	if code, out, _ := runCLI(t, "install", "next", dir); code != 0 || !strings.Contains(out, "add this inside its register()") ||
+		!strings.Contains(out, "await registerEcho();") {
+		t.Errorf("next with an existing file: %d\n%s", code, out)
+	}
+}
+
+func TestInstallUsageAndConfig(t *testing.T) {
+	t.Chdir(t.TempDir())
+	for _, args := range [][]string{
+		{"install", "wordpress", t.TempDir()},            // not WordPress
+		{"install", "wordpress", "--mode", "bogus", "."}, // bad mode
+		{"install"},                            // no stack
+		{"install", "laravel", "--frobnicate"}, // unknown flag
+	} {
+		if code, _, errOut := runCLI(t, args...); code != exitUsage {
+			t.Errorf("%v: exit %d, want %d\n%s", args, code, exitUsage, errOut)
+		}
+	}
+	_ = os.MkdirAll(config.Dir, 0o750)
+	_ = os.WriteFile(config.Path(), []byte("listen: 127.0.0.1:9125\nsmtp: 127.0.0.1:9126\n"), 0o600)
+	t.Setenv("RHYTHM_ECHO_URL", "")
+	if code, out, _ := runCLI(t, "install", "generic"); code != 0 || !strings.Contains(out, "port 9126") || !strings.Contains(out, "rhythm-echo") {
+		t.Errorf("generic ignores the config: %d\n%s", code, out)
+	}
+	if code, out, _ := runCLI(t, "install", "laravel"); code != 0 || !strings.Contains(out, "RHYTHM_ECHO_URL=http://127.0.0.1:9125") ||
+		strings.Contains(out, "require --dev") {
+		t.Errorf("laravel: %d\n%s", code, out)
+	}
+}
+
+func TestInstallWordPressEnvironmentHint(t *testing.T) {
+	site := t.TempDir()
+	_ = os.MkdirAll(filepath.Join(site, "wp-content"), 0o750)
+	_ = os.WriteFile(filepath.Join(site, "wp-config.php"), []byte("<?php\n"), 0o600)
+	_, out, _ := runCLI(t, "install", "wordpress", site)
+	if !strings.Contains(out, "define( 'WP_ENVIRONMENT_TYPE', 'staging' );") || !strings.Contains(out, "unset WP_ENVIRONMENT_TYPE as production") {
+		t.Errorf("no environment hint:\n%s", out)
+	}
+	_ = os.WriteFile(filepath.Join(site, "wp-config.php"), []byte("<?php\ndefine( 'WP_ENVIRONMENT_TYPE', 'staging' );\n"), 0o600)
+	if _, out, _ := runCLI(t, "install", "wordpress", site); !strings.Contains(out, "sets WP_ENVIRONMENT_TYPE to staging") {
+		t.Errorf("staging site:\n%s", out)
 	}
 }
 

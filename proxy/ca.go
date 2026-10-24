@@ -67,6 +67,16 @@ func DefaultCADir() (string, error) {
 	return filepath.Join(d, "ca"), nil
 }
 
+// DefaultCAPath is where LoadCA("") keeps the certificate, whether or not
+// it has been created yet: what `rhythm echo ca` prints.
+func DefaultCAPath() (string, error) {
+	d, err := DefaultCADir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(d, caCertFile), nil
+}
+
 // LoadCA loads the CA from dir, creating it on first use. An empty dir
 // means DefaultCADir. A CA close to expiry is replaced, which means
 // clients must trust the new one.
