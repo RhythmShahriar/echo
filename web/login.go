@@ -28,7 +28,10 @@ const (
 const SessionTTL = 8 * time.Hour
 
 // maxFailures is how many wrong passwords Login takes per minute, from
-// everyone together, before it asks callers to wait.
+// everyone together, before it refuses every attempt (a right password
+// too) until the oldest failure is a minute old. Counting everyone keeps
+// a guesser from spreading attempts over many addresses; the cost is
+// that a guesser also locks the real viewers out for that minute.
 const maxFailures = 20
 
 // Login lets people who only view the inbox (an agency's client signing
@@ -70,7 +73,9 @@ func (l *Login) check(user, pass string) bool {
 	return subtle.ConstantTimeCompare(u[:], l.user[:])&subtle.ConstantTimeCompare(p[:], l.pass[:]) == 1
 }
 
-// throttled records a failure and reports whether there were too many.
+// throttled reports whether the last minute saw maxFailures wrong
+// passwords. It is asked before the password is checked: refusing only
+// the wrong ones would still let a guesser in on the right one.
 func (l *Login) throttled() bool {
 	l.mu.Lock()
 	defer l.mu.Unlock()
@@ -81,8 +86,15 @@ func (l *Login) throttled() bool {
 			kept = append(kept, t)
 		}
 	}
-	l.failures = append(kept, l.now())
-	return len(l.failures) > maxFailures
+	l.failures = kept
+	return len(l.failures) >= maxFailures
+}
+
+// failed records a wrong password.
+func (l *Login) failed() {
+	l.mu.Lock()
+	l.failures = append(l.failures, l.now())
+	l.mu.Unlock()
 }
 
 func (l *Login) start() (string, time.Time) {
@@ -185,13 +197,21 @@ func sameOrigin(r *http.Request) bool {
 	return o == "" || o == "http://"+r.Host || o == "https://"+r.Host
 }
 
-// localPath returns p when it is a path on this site, else "/": a
-// next= that names another host would make the sign-in an open redirect.
+// localPath returns p, escaped, when it is a path on this site, else
+// "/": a next= that names another host would make the sign-in an open
+// redirect. Browsers drop tabs and newlines from a Location and read a
+// backslash as a slash, so "/\t/evil.example" and "/\\evil.example" are
+// refused along with "//evil.example".
 func localPath(p string) string {
-	if !strings.HasPrefix(p, "/") || strings.HasPrefix(p, "//") || strings.HasPrefix(p, "/\\") || p == PathLogin {
+	if strings.ContainsFunc(p, func(r rune) bool { return r < 0x20 || r == 0x7f || r == '\\' }) {
 		return "/"
 	}
-	return p
+	u, err := url.Parse(p)
+	if err != nil || u.Scheme != "" || u.Host != "" || u.User != nil || u.Opaque != "" ||
+		!strings.HasPrefix(u.Path, "/") || strings.HasPrefix(u.Path, "//") || u.Path == PathLogin {
+		return "/"
+	}
+	return (&url.URL{Path: u.Path, RawPath: u.RawPath, RawQuery: u.RawQuery}).String()
 }
 
 func (l *Login) serveLogin(w http.ResponseWriter, r *http.Request) {
@@ -211,11 +231,15 @@ func (l *Login) serveLogin(w http.ResponseWriter, r *http.Request) {
 		}
 		r.Body = http.MaxBytesReader(w, r.Body, 8<<10)
 		next := localPath(r.PostFormValue("next"))
-		if !l.check(r.PostFormValue("user"), r.PostFormValue("password")) {
-			status, msg := http.StatusUnauthorized, "Wrong user name or password."
-			if l.throttled() {
-				status, msg = http.StatusTooManyRequests, "Too many sign-in attempts. Wait a minute and try again."
-			}
+		status, msg := 0, ""
+		switch {
+		case l.throttled():
+			status, msg = http.StatusTooManyRequests, "Too many sign-in attempts. Wait a minute and try again."
+		case !l.check(r.PostFormValue("user"), r.PostFormValue("password")):
+			l.failed()
+			status, msg = http.StatusUnauthorized, "Wrong user name or password."
+		}
+		if status != 0 {
 			h.Set("Content-Type", "text/html; charset=utf-8")
 			w.WriteHeader(status)
 			_ = loginPage.Execute(w, loginData{Next: next, Error: msg})

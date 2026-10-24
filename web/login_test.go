@@ -155,20 +155,43 @@ func TestLoginRefusesOtherSitesAndOpenRedirects(t *testing.T) {
 	if w.Code != http.StatusForbidden {
 		t.Errorf("cross-site sign in = %d", w.Code)
 	}
-	for _, next := range []string{"//evil.test/", "https://evil.test/", `/\evil.test`, PathLogin} {
+	for _, next := range []string{"//evil.test/", "https://evil.test/", `/\evil.test`, PathLogin,
+		"/\t/evil.test", "/\n/evil.test", "/\r/evil.test", "/\x7f/evil.test", "/x\\..\\/evil.test",
+		"/%2F/evil.test", "javascript:alert(1)", "mailto:a@evil.test", "evil.test", ""} {
 		if w, _ := signIn(t, h, "client", "correct horse", next); w.Header().Get("Location") != "/" {
-			t.Errorf("next=%s redirected to %q", next, w.Header().Get("Location"))
+			t.Errorf("next=%q redirected to %q", next, w.Header().Get("Location"))
+		}
+		if w := do(h, http.MethodGet, PathLogin+"?next="+url.QueryEscape(next), nil); !strings.Contains(w.Body.String(), `name="next" value="/"`) {
+			t.Errorf("next=%q kept on the sign-in page", next)
+		}
+	}
+	// A path on this site comes back escaped and with its query.
+	for next, want := range map[string]string{"/report?id=7": "/report?id=7", "/a b": "/a%20b"} {
+		if w, _ := signIn(t, h, "client", "correct horse", next); w.Header().Get("Location") != want {
+			t.Errorf("next=%q redirected to %q, want %q", next, w.Header().Get("Location"), want)
 		}
 	}
 }
 
 func TestLoginThrottlesGuessing(t *testing.T) {
-	_, h := viewerApp(t)
-	var w *httptest.ResponseRecorder
-	for range maxFailures + 1 {
-		w, _ = signIn(t, h, "client", "guess-guess", "/")
+	l, h := viewerApp(t)
+	now := time.Now()
+	l.now = func() time.Time { return now }
+	for i := range maxFailures {
+		if w, _ := signIn(t, h, "client", "guess-guess", "/"); w.Code != http.StatusUnauthorized {
+			t.Fatalf("wrong password %d: %d", i+1, w.Code)
+		}
 	}
-	if w.Code != http.StatusTooManyRequests {
-		t.Errorf("after %d wrong passwords: %d", maxFailures+1, w.Code)
+	if w, _ := signIn(t, h, "client", "guess-guess", "/"); w.Code != http.StatusTooManyRequests {
+		t.Errorf("after %d wrong passwords: %d", maxFailures, w.Code)
+	}
+	// The right password is refused too while throttled: otherwise the
+	// throttle would slow nothing.
+	if w, c := signIn(t, h, "client", "correct horse", "/"); w.Code != http.StatusTooManyRequests || c != nil {
+		t.Errorf("right password while throttled: %d, cookie %v", w.Code, c)
+	}
+	now = now.Add(time.Minute + time.Second)
+	if w, c := signIn(t, h, "client", "correct horse", "/"); w.Code != http.StatusSeeOther || c == nil {
+		t.Errorf("right password a minute later: %d", w.Code)
 	}
 }
