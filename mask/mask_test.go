@@ -58,6 +58,16 @@ func TestRules(t *testing.T) {
 		{"author kept", URL, "https://shop.test/blog?author=jane&t=42", "", "", true},
 		{"page kept", URL, "https://shop.test/orders?page=2&utm_source=email", "", "", true},
 		{"keyword kept", URL, "https://shop.test/search?keyword=shoes&sort=price", "", "", true},
+		{"gcs signed url", URL, "https://storage.googleapis.com/b/invoice.pdf?X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Credential=svc%40p.iam.gserviceaccount.com&X-Goog-Signature=7f3a" + secret,
+			"7f3a" + secret, "X-Goog-Signature=" + Hidden, false},
+		{"s3 signed url", URL, "https://b.s3.amazonaws.com/a.pdf?X-Amz-Credential=AKIA%2F20261024&X-Amz-Security-Token=" + secret + "&X-Amz-Signature=9c1d" + secret,
+			"9c1d" + secret, "X-Amz-Signature=" + Hidden, false},
+		{"s3 security token", URL, "https://b.s3.amazonaws.com/a.pdf?X-Amz-Security-Token=" + secret, secret, "X-Amz-Security-Token=" + Hidden, false},
+		{"magic", URL, "https://shop.test/login?magic=Zx81kQ0pL2mN7rT4", "Zx81kQ0pL2mN7rT4", "magic=" + Hidden, false},
+		{"login_token", URL, "https://shop.test/login?login_token=" + secret, secret, "login_token=" + Hidden, false},
+		{"api_key", URL, "https://api.shop.test/x?api_key=supersecretvalue123", "supersecretvalue123", "api_key=" + Hidden, false},
+		{"signature in text", Text, "Download: https://b.s3.amazonaws.com/a.pdf?X-Amz-Signature=9c1d" + secret, "9c1d" + secret, "X-Amz-Signature=" + Hidden, false},
+		{"monkey kept", URL, "https://shop.test/zoo?monkey=george&keys=3", "", "", true},
 
 		// Text: the kit's rules, codes and URL on every URL.
 		{"link in text", Text, "Reset: https://shop.test/wp-login.php?action=rp&key=" + secret + "&login=jane.", secret, "login=jane.", false},
