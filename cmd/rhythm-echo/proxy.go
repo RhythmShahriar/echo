@@ -178,17 +178,6 @@ func untrustSteps(certs []*x509.Certificate, dirs []string) string {
 	return b.String()
 }
 
-// shellQuote quotes p for a POSIX shell when it needs it.
-func shellQuote(p string) string {
-	safe := func(r rune) bool {
-		return strings.ContainsRune("/.-_~", r) || r >= '0' && r <= '9' || r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z'
-	}
-	if p != "" && strings.IndexFunc(p, func(r rune) bool { return !safe(r) }) < 0 {
-		return p
-	}
-	return "'" + strings.ReplaceAll(p, "'", `'\''`) + "'"
-}
-
 // cmdSendmail is a sendmail-compatible entry for PHP's sendmail_path and
 // other tools. Its flags are sendmail's, so they bypass Echo's parser.
 func cmdSendmail(args []string, stdin io.Reader, stderr io.Writer) int {

@@ -643,24 +643,6 @@ func TestFailedSnapshotKeepsTheBaseline(t *testing.T) {
 	}
 }
 
-// syncBuffer is a bytes.Buffer safe to read while watch writes to it.
-type syncBuffer struct {
-	mu sync.Mutex
-	b  bytes.Buffer
-}
-
-func (b *syncBuffer) Write(p []byte) (int, error) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	return b.b.Write(p)
-}
-
-func (b *syncBuffer) String() string {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	return b.b.String()
-}
-
 // startWatch runs watch with args against a fresh Echo until the test ends.
 func startWatch(t *testing.T, args ...string) (*catcher.Inbox, *syncBuffer) {
 	t.Helper()
@@ -929,7 +911,7 @@ func TestRunCommand(t *testing.T) {
 
 	// A site listed under production: is refused, so nothing ran.
 	writeConfig(t, cfg(good.URL)+"production: ["+good.URL+"]\n")
-	if code, out, errOut := runCLI(t, "run", "--url", srv.URL, "--plain"); code != exitError || !strings.Contains(out+errOut, "listed under production") {
+	if code, out, errOut := runCLI(t, "run", "--url", srv.URL, "--plain"); code != exitError || !strings.Contains(out+errOut, "under production; actions only run against staging") {
 		t.Errorf("production site: %d\n%s\n%s", code, out, errOut)
 	}
 
@@ -1686,11 +1668,11 @@ func TestImportRefusesReservedNamesAndRepeats(t *testing.T) {
 	run := func(name string) string {
 		return `{"schema":"` + model.Schema + `","tool":"rhythm-echo","name":"` + name + `","actions":[]}`
 	}
-	// A real snapshot first, so LATEST exists and must survive.
+	// A real snapshot first, so the latest pointer exists and must survive.
 	if code, _, errOut := runCLI(t, "snapshot", "--import", tarArchive(t, "base/run.json", run("base"))); code != exitOK {
 		t.Fatalf("import base: %d %q", code, errOut)
 	}
-	latest := filepath.Join(config.Dir, "snapshots", "LATEST")
+	latest := filepath.Join(config.Dir, "snapshots", ".latest")
 	for _, tc := range []struct {
 		name string
 		tgz  string
@@ -1705,7 +1687,7 @@ func TestImportRefusesReservedNamesAndRepeats(t *testing.T) {
 			t.Errorf("%s: %d %q; want 2 and %q", tc.name, code, errOut, tc.want)
 		}
 		if fi, err := os.Lstat(latest); err != nil || !fi.Mode().IsRegular() {
-			t.Fatalf("%s: LATEST is no longer the pointer file: %v", tc.name, err)
+			t.Fatalf("%s: the latest pointer is no longer a file: %v", tc.name, err)
 		}
 	}
 	tgz := tarArchive(t, "base/run.json", run("base"))
@@ -1718,7 +1700,7 @@ func TestImportRefusesReservedNamesAndRepeats(t *testing.T) {
 		}
 	}
 	if b, err := os.ReadFile(latest); err != nil || strings.TrimSpace(string(b)) != "base" {
-		t.Errorf("LATEST = %q %v, want base", b, err)
+		t.Errorf("latest pointer = %q %v, want base", b, err)
 	}
 }
 
@@ -1859,13 +1841,13 @@ func TestQuietAndTimeoutFlags(t *testing.T) {
 		t.Errorf("run --quiet=200ms: %d\n%s", code, out)
 	}
 
-	// Two emails are expected and one comes: only the timeout ends it
-	// and the runner counts the wait that ran out as the action failing.
+	// Two emails are expected and one comes: only the timeout ends the
+	// wait for the second, and the runner reports the expectation unmet.
 	// The config's timeout is a minute.
 	writeConfig(t, "site: "+shop.URL+"\nquiet: 200ms\ntimeout: 1m\n"+action+"    expect: {email: 2}\n")
 	start = time.Now()
 	code, out, _ = runCLI(t, "run", "--url", srv.URL, "--plain", "--timeout", "600ms")
-	if took := time.Since(start); code != exitError || took > 30*time.Second || !strings.Contains(out, "timeout=600ms") {
+	if took := time.Since(start); code != exitFindings || took > 30*time.Second || !strings.Contains(out, "email: expected 2, got 1") {
 		t.Errorf("run --timeout 600ms: exit %d in %s\n%s", code, took, out)
 	}
 	writeConfig(t, "site: "+shop.URL+"\nquiet: 200ms\ntimeout: 10s\n"+action+"    expect: {email: 1}\n")
@@ -2077,7 +2059,16 @@ func TestLatestPrintsTheCodeOrLink(t *testing.T) {
 		t.Errorf("latest with a wrong token: %d %q", code, errOut)
 	}
 	t.Setenv("RHYTHM_ECHO_TOKEN", "")
-	old := fixtureServer(t, 20471, catcher.NewServer(catcher.NewInbox(10), catcher.Config{Version: "test"}))
+	// Echo 1.0.0 had no latest route: GET /v1/messages/{id} took "latest"
+	// for an ID and answered http.NotFound.
+	current := catcher.NewServer(catcher.NewInbox(10), catcher.Config{Version: "test"})
+	old := fixtureServer(t, 20471, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/v1/messages/latest" {
+			http.NotFound(w, r)
+			return
+		}
+		current.ServeHTTP(w, r)
+	}))
 	if code, _, errOut := runCLI(t, "latest", "--to", "ann@shop.test", "--url", old.URL); code != exitError ||
 		!strings.Contains(errOut, "this Echo doesn't read codes and links; update it") {
 		t.Errorf("latest on an older Echo: %d %q", code, errOut)
@@ -2089,6 +2080,35 @@ func TestLatestPrintsTheCodeOrLink(t *testing.T) {
 
 	if code, out, _ := runCLI(t, "latest", "--help"); code != exitOK || !strings.Contains(out, "--kind <k>") || !strings.Contains(out, "default 10s") {
 		t.Errorf("latest --help: %d\n%s", code, out)
+	}
+}
+
+// TestLatestAgainstTheRealCatcher: latest reads the code and the link
+// from Echo's own /v1/messages/latest, and its "nothing came" answer.
+func TestLatestAgainstTheRealCatcher(t *testing.T) {
+	t.Chdir(t.TempDir())
+	echo := fixtureServer(t, 21300, catcher.NewServer(catcher.NewInbox(10), catcher.Config{Version: "test"}))
+	t.Setenv("RHYTHM_ECHO_URL", echo.URL)
+	t.Setenv("RHYTHM_ECHO_TOKEN", "")
+	body := `{"v":1,"kind":"email","source":{"via":"wordpress"},"email":{"from":"shop@shop.test","to":["ann@shop.test"],` +
+		`"subject":"Your login code","text":"Your verification code is 482913. Or sign in: https://shop.test/login?token=m1abc"}}`
+	resp, err := http.Post(echo.URL+"/v1/capture", "application/json", strings.NewReader(body)) //nolint:noctx // a test fixture
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("capture: %s", resp.Status)
+	}
+	if code, out, errOut := runCLI(t, "latest", "--to", "ann@shop.test", "--code"); code != exitOK || out != "482913\n" {
+		t.Errorf("latest --code: exit %d, %q %q", code, out, errOut)
+	}
+	if code, out, errOut := runCLI(t, "latest", "--to", "ann@shop.test", "--link"); code != exitOK || out != "https://shop.test/login?token=m1abc\n" {
+		t.Errorf("latest --link: exit %d, %q %q", code, out, errOut)
+	}
+	code, out, errOut := runCLI(t, "latest", "--to", "nobody@shop.test", "--wait", "0")
+	if code != exitFindings || out != "" || !strings.Contains(errOut, "no message to nobody@shop.test arrived") {
+		t.Errorf("latest with nothing: exit %d, %q %q", code, out, errOut)
 	}
 }
 

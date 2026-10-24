@@ -185,9 +185,10 @@ func nextFreePair(host string, smtpOn bool) (api, smtp string, ok bool) {
 	return "", "", false
 }
 
-// probeTimeout bounds each look at a busy port: whatever holds it may not
-// answer at all.
-const probeTimeout = time.Second
+// busyPortTimeout bounds each look at a busy port: whatever holds it may
+// not answer at all. It is shorter than doctor's probeTimeout because up
+// waits on it before it starts.
+const busyPortTimeout = time.Second
 
 // identify names what listens on addr: "Mailpit", "MailHog", "MailDev",
 // "Echo", or "" for anything else. An SMTP port is known by its banner,
@@ -230,12 +231,12 @@ func catcherName(s string) string {
 // fromBanner reads the SMTP greeting: Mailpit and MailHog name
 // themselves there; Echo's sink greets as echo.local.
 func fromBanner(addr string) string {
-	c, err := net.DialTimeout("tcp", addr, probeTimeout)
+	c, err := net.DialTimeout("tcp", addr, busyPortTimeout)
 	if err != nil {
 		return ""
 	}
 	defer func() { _ = c.Close() }()
-	_ = c.SetDeadline(time.Now().Add(probeTimeout))
+	_ = c.SetDeadline(time.Now().Add(busyPortTimeout))
 	line, _ := bufio.NewReader(io.LimitReader(c, 512)).ReadString('\n')
 	if !strings.HasPrefix(line, "220") {
 		return ""
@@ -250,7 +251,7 @@ func fromBanner(addr string) string {
 // route, then the page at / (Mailpit, MailHog and MailDev name
 // themselves in its title).
 func fromHTTP(addr string) string {
-	c := &http.Client{Timeout: probeTimeout, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	c := &http.Client{Timeout: busyPortTimeout, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 	get := func(path string) (int, []byte) {
 		resp, err := c.Get("http://" + addr + path) //nolint:noctx // bounded by the client timeout
 		if err != nil {

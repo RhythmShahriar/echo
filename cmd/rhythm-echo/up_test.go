@@ -213,7 +213,8 @@ func TestUpBindsEveryPortFirst(t *testing.T) {
 	}
 }
 
-// syncBuffer is a bytes.Buffer safe for the server goroutines to write.
+// syncBuffer is a bytes.Buffer safe for the server goroutines to write and
+// for a test to read while watch or up writes to it.
 type syncBuffer struct {
 	mu sync.Mutex
 	b  bytes.Buffer
@@ -235,7 +236,8 @@ func (b *syncBuffer) String() string {
 // waits until the API answers.
 func startUp(t *testing.T, args ...string) (out, errOut *syncBuffer, stop func() int) {
 	t.Helper()
-	p, err := parse(append([]string{"--plain"}, args...))
+	up, _ := lookup("up")
+	p, err := parse(up, append([]string{"--plain"}, args...))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -339,7 +341,8 @@ func (l *pipeListener) Addr() net.Addr { return &net.TCPAddr{IP: net.IPv4(127, 0
 
 func TestStartProxyServesOnTheListener(t *testing.T) {
 	upEnv(t)
-	p, err := parse([]string{"--plain", "--proxy", "127.0.0.1:20419"})
+	up, _ := lookup("up")
+	p, err := parse(up, []string{"--plain", "--proxy", "127.0.0.1:20419"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -762,7 +765,8 @@ func TestUpMovesAsideWhenAsked(t *testing.T) {
 		t.Skip("no free pair")
 	}
 
-	p, err := parse([]string{"--plain", "--listen", ports[0], "--smtp", ports[1]})
+	up, _ := lookup("up")
+	p, err := parse(up, []string{"--plain", "--listen", ports[0], "--smtp", ports[1]})
 	if err != nil {
 		t.Fatal(err)
 	}
