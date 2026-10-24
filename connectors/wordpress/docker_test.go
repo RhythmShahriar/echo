@@ -684,13 +684,15 @@ func testPlugin(t *testing.T, r *rig) {
 	}
 
 	// uninstall.php removes the settings, every user's last output and the
-	// remembered wire version but leaves other transients alone.
+	// remembered wire version and run-log quiet periods but leaves other
+	// transients alone.
 	r.wp(t, nil, "transient", "set", "echo_staging_seal_output_99", "x", "3600")
 	r.wp(t, nil, "transient", "set", "rhythm_echo_wire_0123", "1", "3600")
+	r.wp(t, nil, "transient", "set", "rhythm_echo_runlog_remote", "1", "600")
 	r.wp(t, nil, "transient", "set", "someone_else", "kept", "3600")
 	r.wp(t, nil, "eval", "define( 'WP_UNINSTALL_PLUGIN', 'echo-staging-seal/echo-staging-seal.php' ); include WP_PLUGIN_DIR . '/echo-staging-seal/uninstall.php';")
-	left := r.wp(t, nil, "eval", `echo wp_json_encode( array( get_option( 'echo_staging_seal_settings' ), get_transient( 'echo_staging_seal_output_99' ), get_transient( 'rhythm_echo_wire_0123' ), get_transient( 'someone_else' ) ) );`)
-	if strings.TrimSpace(left) != `[false,false,false,"kept"]` {
+	left := r.wp(t, nil, "eval", `echo wp_json_encode( array( get_option( 'echo_staging_seal_settings' ), get_transient( 'echo_staging_seal_output_99' ), get_transient( 'rhythm_echo_wire_0123' ), get_transient( 'rhythm_echo_runlog_remote' ), get_transient( 'someone_else' ) ) );`)
+	if strings.TrimSpace(left) != `[false,false,false,false,"kept"]` {
 		t.Errorf("after uninstall.php: %s", left)
 	}
 }

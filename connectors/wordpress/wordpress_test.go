@@ -401,12 +401,30 @@ func TestRequestRun(t *testing.T) {
 	}
 }
 
-// An ignored value is logged once per request.
+// An ignored value is logged once per reason, then stays quiet for ten
+// minutes across requests: under PHP-FPM a forged header must not add a log
+// line to every request.
 func TestRequestRunLogsOnce(t *testing.T) {
+	const line = "Rhythm Echo: ignored an unsigned X-Echo-Run: with a token set, only runs Echo signed with it count"
 	var got string
 	logged := callPHP(t, `{"token":"secret"}`, "accept_run,accept_run", &got, "r1/checkout", "127.0.0.1", false)
-	if n := strings.Count(logged, "Rhythm Echo: ignored an unsigned X-Echo-Run: with a token set, only runs Echo signed with it count"); n != 1 {
+	if n := strings.Count(logged, line); n != 1 {
 		t.Errorf("logged %d times:\n%s", n, logged)
+	}
+	if !strings.Contains(logged, "harness: set_transient rhythm_echo_runlog_unsigned 600\n") {
+		t.Errorf("did not remember it for the next request:\n%s", logged)
+	}
+
+	// the next request, within ten minutes
+	logged = callPHP(t, `{"token":"secret","transients":{"rhythm_echo_runlog_unsigned":1}}`, "accept_run", &got, "r1/checkout", "127.0.0.1", false)
+	if strings.Contains(logged, "Rhythm Echo:") {
+		t.Errorf("logged again within ten minutes:\n%s", logged)
+	}
+
+	// another reason is still logged
+	logged = callPHP(t, `{"token":"","transients":{"rhythm_echo_runlog_unsigned":1}}`, "accept_run", &got, "r1/checkout", "203.0.113.9", false)
+	if !strings.Contains(logged, "Rhythm Echo: ignored an X-Echo-Run from 203.0.113.9") {
+		t.Errorf("a different reason was not logged:\n%s", logged)
 	}
 }
 

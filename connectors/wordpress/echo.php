@@ -115,8 +115,8 @@ final class Rhythm_Echo {
 	/** @var string|null this request's accepted X-Echo-Run, once checked */
 	private static $request_run = null;
 
-	/** @var bool an ignored X-Echo-Run was logged already */
-	private static $run_logged = false;
+	/** @var array<string, bool> reasons an ignored X-Echo-Run was logged for in this request */
+	private static $run_logged = array();
 
 	/** @var array<string, string> request key → capture ID, for the after phase */
 	private static $pending = array();
@@ -431,28 +431,45 @@ final class Rhythm_Echo {
 		$token                      = self::config()['token'];
 		list( $run, $action, $ok ) = self::verify_run( $token, $value );
 		if ( '' === $run ) {
-			self::run_ignored( 'ignored an X-Echo-Run whose signature does not verify (' . ( '' !== $token ? 'not signed with this token' : 'no token is set here' ) . ')' );
+			self::run_ignored( 'bad', 'ignored an X-Echo-Run whose signature does not verify (' . ( '' !== $token ? 'not signed with this token' : 'no token is set here' ) . ')' );
 			return '';
 		}
 		if ( $ok ) {
 			return $run . '/' . $action;
 		}
 		if ( '' !== $token ) {
-			self::run_ignored( 'ignored an unsigned X-Echo-Run: with a token set, only runs Echo signed with it count' );
+			self::run_ignored( 'unsigned', 'ignored an unsigned X-Echo-Run: with a token set, only runs Echo signed with it count' );
 			return '';
 		}
 		if ( ! $forwarded && self::loopback_addr( $remote ) ) {
 			return $run . '/' . $action;
 		}
-		self::run_ignored( sprintf( 'ignored an X-Echo-Run from %s%s: without a token only a direct call from this machine may set the run (set the same token here and in Echo)', '' !== $remote ? $remote : 'an unknown address', $forwarded ? ' behind a proxy' : '' ) );
+		self::run_ignored( 'remote', sprintf( 'ignored an X-Echo-Run from %s%s: without a token only a direct call from this machine may set the run (set the same token here and in Echo)', '' !== $remote ? $remote : 'an unknown address', $forwarded ? ' behind a proxy' : '' ) );
 		return '';
 	}
 
-	private static function run_ignored( string $message ): void {
-		if ( ! self::$run_logged ) {
-			self::$run_logged = true;
-			error_log( 'Rhythm Echo: ' . $message ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions
+	/** How long an ignored X-Echo-Run stays quiet after it was logged. */
+	const RUN_LOG_QUIET = 600;
+
+	/**
+	 * Logs why an X-Echo-Run was ignored, once per reason every ten
+	 * minutes. Under PHP-FPM every request is a new process, so a static
+	 * alone would let any visitor add a log line per request with a forged
+	 * header; a transient remembers it across requests.
+	 */
+	private static function run_ignored( string $reason, string $message ): void {
+		if ( isset( self::$run_logged[ $reason ] ) ) {
+			return;
 		}
+		self::$run_logged[ $reason ] = true;
+		$key                         = 'rhythm_echo_runlog_' . $reason;
+		if ( function_exists( 'get_transient' ) && false !== get_transient( $key ) ) {
+			return;
+		}
+		if ( function_exists( 'set_transient' ) ) {
+			set_transient( $key, 1, self::RUN_LOG_QUIET );
+		}
+		error_log( 'Rhythm Echo: ' . $message ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions
 	}
 
 	/**

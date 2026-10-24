@@ -13,8 +13,9 @@
 // The setup may set "env" (wp_get_environment_type, default development),
 // "token" (RHYTHM_ECHO_TOKEN), "server" ($_SERVER entries), "cookie"
 // ($_COOKIE entries), "getenv" (process environment), "options"
-// (get_option values) and "require" (more files to load after the
-// plugin, such as Echo Staging Seal's class). A method named
+// (get_option values), "transients" (get_transient values; set_transient
+// writes "harness: set_transient <name> <ttl>" to stderr) and "require"
+// (more files to load after the plugin, such as Echo Staging Seal's class). A method named
 // Class::method is called on that class instead of Rhythm_Echo.
 
 list( , $plugin, $setup, $method, $args ) = $argv;
@@ -35,9 +36,18 @@ foreach ( (array) ( $setup['getenv'] ?? array() ) as $k => $v ) {
 }
 $GLOBALS['env']     = $setup['env'] ?? 'development';
 $GLOBALS['options'] = (array) ( $setup['options'] ?? array() );
+$GLOBALS['transients'] = (array) ( $setup['transients'] ?? array() );
 
 function get_option( $name, $fallback = false ) {
 	return $GLOBALS['options'][ $name ] ?? $fallback;
+}
+function get_transient( $name ) {
+	return $GLOBALS['transients'][ $name ] ?? false;
+}
+function set_transient( $name, $value, $ttl = 0 ) {
+	$GLOBALS['transients'][ $name ] = $value;
+	fwrite( STDERR, "harness: set_transient $name $ttl\n" );
+	return true;
 }
 function add_action( $hook, $cb ) {}
 function add_filter( $hook, $cb ) {}
