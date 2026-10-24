@@ -319,3 +319,26 @@ func TestExpandJSONLeavesOtherValues(t *testing.T) {
 		t.Errorf("a top-level string: %#v", got)
 	}
 }
+
+// A Config built in code skips Load's checks; a timeout of 0 must not
+// fail every action or leave the HTTP client waiting forever.
+func TestZeroWaitsUseDefaults(t *testing.T) {
+	c := withWaits(config.Config{})
+	if d := config.Default(); c.Timeout != d.Timeout || c.Quiet != d.Quiet {
+		t.Errorf("withWaits: %+v", c)
+	}
+	if c := withWaits(config.Config{Timeout: config.Duration{Duration: -time.Second}, Quiet: config.Duration{Duration: time.Second}}); c.Quiet.Duration != time.Second || c.Timeout.Duration <= 0 {
+		t.Errorf("withWaits kept a set quiet or a negative timeout: %+v", c)
+	}
+	srv := httptest.NewServer(catcher.NewServer(catcher.NewInbox(10), catcher.Config{}))
+	defer srv.Close()
+	site := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	defer site.Close()
+	cfg := config.Default()
+	cfg.Site, cfg.Timeout, cfg.Quiet = site.URL, config.Duration{}, config.Duration{Duration: 50 * time.Millisecond}
+	cfg.Actions = []config.Action{{Name: "Ping", HTTP: &config.HTTPAction{URL: "/"}}}
+	run, err := Run(context.Background(), Options{Config: cfg, Client: client.New(srv.URL, "")})
+	if err != nil || run.Actions[0].Error != "" {
+		t.Errorf("timeout 0: %v %+v", err, run)
+	}
+}

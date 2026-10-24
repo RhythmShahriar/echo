@@ -95,7 +95,8 @@ func Select(cfg config.Config, only []string) ([]config.Action, error) {
 // production is refused (ErrProduction) before anything is sent.
 func Run(ctx context.Context, o Options) (*model.Run, error) {
 	start := time.Now()
-	cfg := o.Config
+	cfg := withWaits(o.Config)
+	o.Config = cfg
 	if r := cfg.ProductionReason(cfg.Site); cfg.Site != "" && r != "" {
 		return nil, fmt.Errorf("%w against %s: %s; actions only run against staging and local sites", ErrProduction, cfg.Site, r)
 	}
@@ -126,6 +127,20 @@ func Run(ctx context.Context, o Options) (*model.Run, error) {
 	}
 	run.Duration = float64(time.Since(start).Milliseconds())
 	return run, ctx.Err()
+}
+
+// withWaits fills a timeout or quiet that isn't more than 0 with the
+// default. Load refuses such values, but a Config built in code skips
+// Load, and a timeout of 0 would leave the HTTP client waiting forever.
+func withWaits(cfg config.Config) config.Config {
+	d := config.Default()
+	if cfg.Timeout.Duration <= 0 {
+		cfg.Timeout = d.Timeout
+	}
+	if cfg.Quiet.Duration <= 0 {
+		cfg.Quiet = d.Quiet
+	}
+	return cfg
 }
 
 // ActionID is the stable ID compare matches actions on. config.Validate

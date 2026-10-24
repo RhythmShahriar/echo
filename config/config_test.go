@@ -298,3 +298,37 @@ func TestActionID(t *testing.T) {
 		}
 	}
 }
+
+func TestWaits(t *testing.T) {
+	for in, want := range map[string]string{
+		"mode: seal\ntimeout: 0s\n":             `line 2: timeout: 0s must be more than 0, like 30s`,
+		"mode: seal\ntimeout: -5s\n":            `line 2: timeout: -5s must be more than 0, like 30s`,
+		"mode: seal\ntimeout: 120s\n":           `line 2: timeout: 2m is over the 1m Echo waits for one action at most`,
+		"mode: seal\nquiet: 45s\ntimeout: 1m\n": `line 2: quiet: 45s is over the 30s Echo waits for quiet at most`,
+		"quiet: 0s\n":                           `line 1: quiet: 0s must be more than 0, like 2s`,
+		"timeout: 10s\nquiet: 20s\n":            `line 2: quiet: 20s is longer than the timeout of 10s (line 1), so no action could ever fall quiet`,
+		"quiet: 1s\ntimeout: 10s\nactions:\n  - name: a\n    command: x\n    quiet: 11s\n": `line 6: action "a": quiet: 11s is longer than the timeout of 10s (line 2), so no action could ever fall quiet`,
+		"actions:\n  - name: a\n    command: x\n    quiet: -1s\n":                          `line 4: action "a": quiet: -1s must be more than 0, like 2s`,
+		"actions:\n  - name: a\n    command: x\n    quiet: 31s\n":                          `line 4: action "a": quiet: 31s is over the 30s Echo waits for quiet at most`,
+	} {
+		_, err := Load(write(t, in))
+		if err == nil || !strings.HasSuffix(err.Error(), ": "+want) {
+			t.Errorf("%q:\n got %v\nwant %s", in, err, want)
+		}
+	}
+	for _, in := range []string{
+		"quiet: 1s\ntimeout: 10s\n",
+		"quiet: 30s\ntimeout: 1m\n",
+		"quiet: 2s\ntimeout: 2s\nactions:\n  - name: a\n    command: x\n    quiet: 2s\n",
+	} {
+		if _, err := Load(write(t, in)); err != nil {
+			t.Errorf("%q: %v", in, err)
+		}
+	}
+	// A config built in code has no lines to name.
+	c := Default()
+	c.Timeout.Duration = 0
+	if err := c.Validate(); err == nil || err.Error() != "timeout: 0s must be more than 0, like 30s" {
+		t.Errorf("no file: %v", err)
+	}
+}

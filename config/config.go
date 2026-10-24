@@ -45,8 +45,8 @@ type Config struct {
 	Staging         []string         `yaml:"staging,omitempty"`          // URL prefixes that are staging: replay only sends to these (and local addresses)
 	Production      []string         `yaml:"production,omitempty"`       // live sites, as URLs or hosts (subdomains count): actions and replays refuse them
 	Flush           []string         `yaml:"flush,omitempty"`            // commands run after each action so async senders send now
-	Quiet           Duration         `yaml:"quiet,omitempty"`            // how long nothing must arrive before an action counts as done; default 2s
-	Timeout         Duration         `yaml:"timeout,omitempty"`          // longest wait per action; default 30s
+	Quiet           Duration         `yaml:"quiet,omitempty"`            // how long nothing must arrive before an action counts as done; default 2s, at most 30s and timeout
+	Timeout         Duration         `yaml:"timeout,omitempty"`          // longest wait per action; default 30s, at most 1m
 	Checks          map[string]Level `yaml:"checks,omitempty"`           // per check ID: off, notice, warning, error, broke or changed
 	Rules           []Rule           `yaml:"rules,omitempty"`            // project checks: text that must never be sent
 	Inbox           *Inbox           `yaml:"inbox,omitempty"`            // where `up` keeps captures; default in memory
@@ -67,7 +67,7 @@ type Action struct {
 	Env      map[string]string `yaml:"env,omitempty"`
 	Expect   Expect            `yaml:"expect,omitempty"`   // optional: fail the action unless these were sent
 	Ignore   []string          `yaml:"ignore,omitempty"`   // fields, headers or recipients compare leaves out (globs)
-	Quiet    *Duration         `yaml:"quiet,omitempty"`    // overrides the global quiet for this action
+	Quiet    *Duration         `yaml:"quiet,omitempty"`    // overrides the global quiet for this action; same limits
 	Parallel *bool             `yaml:"parallel,omitempty"` // false: never run beside another action; default true
 }
 
@@ -333,6 +333,9 @@ func (c Config) Validate() error {
 			return fmt.Errorf("%sproduction: %q isn't a URL or host name", c.at("production", i), p)
 		}
 	}
+	if err := c.waits(); err != nil {
+		return err
+	}
 	ids := map[string]int{} // action ID to the index of the action that has it
 	for i, a := range c.Actions {
 		n := 0
@@ -368,6 +371,11 @@ func (c Config) Validate() error {
 			return fmt.Errorf("%saction %q: http needs a url", at, a.Name)
 		case a.Replay != nil && (a.Replay.Event == "" || a.Replay.To == ""):
 			return fmt.Errorf("%saction %q: replay needs event and to", at, a.Name)
+		}
+		if a.Quiet != nil {
+			if err := c.quiet(a.Quiet.Duration); err != nil {
+				return fmt.Errorf("%saction %q: %w", c.at("actions", i, "quiet"), a.Name, err)
+			}
 		}
 		for j, g := range a.Ignore {
 			if err := glob(g); err != nil {
@@ -427,6 +435,57 @@ func (c Config) Validate() error {
 		}
 	}
 	return nil
+}
+
+// The longest timeout and quiet Echo's wait API honors. It cuts longer
+// values short without saying so, so Validate refuses them instead.
+const (
+	MaxTimeout = time.Minute
+	MaxQuiet   = 30 * time.Second
+)
+
+// waits checks the global timeout and quiet: 0 < quiet <= timeout <=
+// MaxTimeout, and quiet <= MaxQuiet. A timeout of 0 failed every action
+// at once and left the HTTP client waiting forever.
+func (c Config) waits() error {
+	t := c.Timeout.Duration
+	switch {
+	case t <= 0:
+		return fmt.Errorf("%stimeout: %s must be more than 0, like 30s", c.at("timeout"), short(t))
+	case t > MaxTimeout:
+		return fmt.Errorf("%stimeout: %s is over the %s Echo waits for one action at most", c.at("timeout"), short(t), short(MaxTimeout))
+	}
+	if err := c.quiet(c.Quiet.Duration); err != nil {
+		return fmt.Errorf("%s%w", c.at("quiet"), err)
+	}
+	return nil
+}
+
+// quiet checks one quiet value, global or an action's, against the cap
+// and the global timeout. The caller adds where it is.
+func (c Config) quiet(q time.Duration) error {
+	t := c.Timeout.Duration
+	switch {
+	case q <= 0:
+		return fmt.Errorf("quiet: %s must be more than 0, like 2s", short(q))
+	case q > MaxQuiet:
+		return fmt.Errorf("quiet: %s is over the %s Echo waits for quiet at most", short(q), short(MaxQuiet))
+	case q > t:
+		return fmt.Errorf("quiet: %s is longer than the timeout of %s%s, so no action could ever fall quiet", short(q), short(t), c.also("timeout"))
+	}
+	return nil
+}
+
+// short writes a duration the way a config would: 1m, not 1m0s.
+func short(d time.Duration) string {
+	s := d.String()
+	if strings.HasSuffix(s, "m0s") {
+		s = strings.TrimSuffix(s, "0s")
+	}
+	if strings.HasSuffix(s, "h0m") {
+		s = strings.TrimSuffix(s, "0m")
+	}
+	return s
 }
 
 // glob checks an ignore or allow pattern: *, ? and [ ] as in path.Match.
@@ -608,8 +667,8 @@ production: []          # live sites, e.g. ["shop.com"] (subdomains too); action
 flush: []               # run after each action so queued mail and webhooks go out now, e.g.
                         #   ["wp cron event run --due-now", "wp action-scheduler run"]
                         #   ["php artisan queue:work --stop-when-empty"]
-quiet: 2s               # an action is done when nothing new arrives for this long
-timeout: 30s            # longest wait per action
+quiet: 2s               # an action is done when nothing new arrives for this long (at most 30s)
+timeout: 30s            # longest wait per action (at most 1m, and at least quiet)
 
 # What snapshot and compare run. Each action makes the site send something.
 # Form submits and multi-step journeys are better run by Soundcheck with --echo.
