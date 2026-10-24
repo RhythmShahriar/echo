@@ -68,13 +68,9 @@ var (
 	telegramBot = regexp.MustCompile(`(bot\d+:)([A-Za-z0-9_-]{30,})`)
 	// IFTTT and similar put the key in a path segment: /with/key/<key>.
 	keySegment = regexp.MustCompile(`(?i)(/key/)([^/?#\s"'<>]+)`)
-	// Query values that open an account or prove who someone is: the
-	// names below, magic (a sign-in link) and any name ending in
-	// signature, credential or secret, or in _token, -token, _key or -key
-	// (X-Goog-Signature and X-Amz-Signature of a signed download,
-	// login_token, api_key). The separator may be "&amp;" in HTML, hence ";".
-	queryValue = regexp.MustCompile(`(?i)([?&;](?:key|k|code|otp|reset|token|sig|signature|hash|auth|ticket|magic|apikey|` +
-		`[\w.-]*(?:signature|credential|secret|[_-]token|[_-]key))=)([^&#\s"'<>]+)`)
+	// A query parameter. The separator may be "&amp;" in HTML, hence ";".
+	// secretParam says which ones hold a credential.
+	queryValue = regexp.MustCompile(`([?&;])([\w.-]{1,64})=([^&#\s"'<>]+)`)
 	// A URL in free text.
 	urlPattern = regexp.MustCompile(`(?i)\b(?:https?|ftp)://[^\s"'<>]+`)
 	// A one-time code named as one: "Your login code is 482913".
@@ -102,8 +98,35 @@ func URL(s string) string {
 	})
 	return queryValue.ReplaceAllStringFunc(s, func(m string) string {
 		p := queryValue.FindStringSubmatch(m)
-		return p[1] + Hidden
+		if !secretParam(p[2]) {
+			return m
+		}
+		return p[1] + p[2] + "=" + Hidden
 	})
+}
+
+// secretNames are the query keys that open an account or prove who
+// someone is, in lower case.
+var secretNames = map[string]bool{"key": true, "k": true, "code": true, "otp": true, "reset": true, "token": true, "sig": true,
+	"signature": true, "hash": true, "auth": true, "ticket": true, "magic": true, "apikey": true}
+
+// secretSuffixes end the names of more such keys: X-Goog-Signature and
+// X-Amz-Signature of a signed download, X-Amz-Security-Token, login_token,
+// api_key.
+var secretSuffixes = []string{"signature", "credential", "secret", "_token", "-token", "_key", "-key"}
+
+// secretParam reports whether the query key name holds a credential.
+func secretParam(name string) bool {
+	name = strings.ToLower(name)
+	if secretNames[name] {
+		return true
+	}
+	for _, s := range secretSuffixes {
+		if strings.HasSuffix(name, s) {
+			return true
+		}
+	}
+	return false
 }
 
 // Text masks free text (an email body, a subject, an SMS): the kit's rules,
