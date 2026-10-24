@@ -122,3 +122,24 @@ func TestBeginLeaseOnOldEcho(t *testing.T) {
 		t.Errorf("EndLease without a lease ends the old way: %v %q", err, ends)
 	}
 }
+
+func TestHealthFields(t *testing.T) {
+	srv := httptest.NewServer(catcher.NewServer(catcher.NewInbox(1), catcher.Config{Version: "test", SMTPAddr: "0.0.0.0:1025", BootID: "b1"}))
+	defer srv.Close()
+	h, err := New(srv.URL, "").Health(context.Background())
+	if err != nil || h.SMTP != "0.0.0.0:1025" || h.Proxy != "" || h.BootID != "b1" || h.Store != "memory" || !h.Supports("leases") || h.Supports("nope") {
+		t.Errorf("health: %+v %v", h, err)
+	}
+}
+
+// The health answer of Echo 1.0, before boot IDs and addresses.
+func TestHealthFromOldEcho(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = io.WriteString(w, `{"tool":"rhythm-echo","version":"1.0.0","mode":"seal","wire":1,"providers":["twilio"]}`)
+	}))
+	defer srv.Close()
+	h, err := New(srv.URL, "").Health(context.Background())
+	if err != nil || h.Version != "1.0.0" || h.SMTP != "" || h.BootID != "" || h.Capabilities != nil || h.Supports("leases") {
+		t.Errorf("old health: %+v %v", h, err)
+	}
+}

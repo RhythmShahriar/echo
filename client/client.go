@@ -14,6 +14,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -40,14 +41,28 @@ func New(base, token string) *Client {
 	return &Client{URL: strings.TrimRight(base, "/"), Token: token, HTTP: &http.Client{Timeout: 70 * time.Second}}
 }
 
-// Health is what /v1/health reports.
+// Health is what /v1/health reports. An older Echo leaves out the fields
+// after Wire: they're then empty.
 type Health struct {
-	Tool      string   `json:"tool"`
-	Version   string   `json:"version"`
-	Mode      string   `json:"mode"`
-	Wire      int      `json:"wire"`
-	Providers []string `json:"providers"`
+	Tool    string `json:"tool"`
+	Version string `json:"version"`
+	Mode    string `json:"mode"`
+	Wire    int    `json:"wire"`
+	// SMTP and Proxy are where Echo's SMTP sink and proxy listen, such as
+	// "127.0.0.1:1025", or "off". Empty when Echo doesn't say.
+	SMTP  string `json:"smtp,omitempty"`
+	Proxy string `json:"proxy,omitempty"`
+	// BootID changes every time Echo starts: a different one mid-run
+	// means Echo restarted and lost the messages it held in memory.
+	BootID       string   `json:"boot_id,omitempty"`
+	Store        string   `json:"store,omitempty"` // "memory" or "jsonl"
+	Capabilities []string `json:"capabilities,omitempty"`
+	Providers    []string `json:"providers"`
 }
+
+// Supports reports whether Echo has the API feature name, such as
+// "leases".
+func (h Health) Supports(name string) bool { return slices.Contains(h.Capabilities, name) }
 
 // Health checks that Echo is running and returns its mode.
 func (c *Client) Health(ctx context.Context) (Health, error) {

@@ -5,6 +5,7 @@ package catcher
 
 import (
 	"context"
+	"crypto/rand"
 	"crypto/subtle"
 	"encoding/json"
 	"errors"
@@ -57,7 +58,17 @@ type Config struct {
 	// message.
 	Site            string
 	AllowRecipients []string
-	Version         string
+	// SMTPAddr and ProxyAddr are where the SMTP sink and the proxy listen
+	// ("off" when they don't run), so clients reach the real ones rather
+	// than config defaults. Empty means not known: health leaves it out.
+	SMTPAddr  string
+	ProxyAddr string
+	// BootID names this start of Echo; a client that sees it change knows
+	// Echo restarted and lost what it held in memory. Default: random.
+	BootID string
+	// Store is where messages are kept: "memory" (default) or "jsonl".
+	Store   string
+	Version string
 	// Warn is told about things worth a line in the log, such as a
 	// connector's site host that Echo ignores. Default: the standard log.
 	Warn func(msg string)
@@ -79,6 +90,12 @@ func NewServer(inbox *Inbox, cfg Config) *Server {
 	}
 	if cfg.MaxBody == 0 {
 		cfg.MaxBody = 256 << 10
+	}
+	if cfg.BootID == "" {
+		cfg.BootID = rand.Text()
+	}
+	if cfg.Store == "" {
+		cfg.Store = "memory"
 	}
 	if cfg.Warn == nil {
 		cfg.Warn = func(msg string) { log.Print("echo: " + msg) }
@@ -113,6 +130,9 @@ func listenHosts(listen string) []string {
 // Mode is seal or observe.
 func (s *Server) Mode() string { return s.cfg.Mode }
 
+// BootID names this start of Echo, as health reports it.
+func (s *Server) BootID() string { return s.cfg.BootID }
+
 // ServeHTTP serves the API. Requests pass Protect first, then the token
 // check when a token is set.
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) { s.handler.ServeHTTP(w, r) }
@@ -125,9 +145,31 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
 	s.mux.ServeHTTP(w, r)
 }
 
+// capabilities are the API features this catcher has beyond wire version
+// 1, so a client can tell a newer Echo from an older one.
+var capabilities = []string{
+	"leases", // begin answers a lease that end takes
+	"issues", // every message carries the checks' findings
+}
+
+// health is what GET /v1/health answers, in this order.
+type health struct {
+	Tool         string   `json:"tool"`
+	Version      string   `json:"version"`
+	Mode         string   `json:"mode"`
+	Wire         int      `json:"wire"`
+	SMTP         string   `json:"smtp,omitempty"`
+	Proxy        string   `json:"proxy,omitempty"`
+	BootID       string   `json:"boot_id"`
+	Store        string   `json:"store"`
+	Capabilities []string `json:"capabilities"`
+	Providers    []string `json:"providers"`
+}
+
 func (s *Server) health(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]any{"tool": "rhythm-echo", "version": s.cfg.Version, "mode": s.cfg.Mode,
-		"wire": wire.Version, "providers": recognize.Providers()})
+	writeJSON(w, http.StatusOK, health{Tool: "rhythm-echo", Version: s.cfg.Version, Mode: s.cfg.Mode, Wire: wire.Version,
+		SMTP: s.cfg.SMTPAddr, Proxy: s.cfg.ProxyAddr, BootID: s.cfg.BootID, Store: s.cfg.Store,
+		Capabilities: capabilities, Providers: recognize.Providers()})
 }
 
 // capture records an email or an HTTP request and decides its fate.
