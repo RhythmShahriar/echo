@@ -114,8 +114,9 @@ var stripe = Recognizer{
 	Channel:  model.Payment,
 	Match:    func(r Request) bool { return host(r, "api.stripe.com") },
 	Fill: func(r Request, m *model.Message) {
-		res, _, action := stripeCall(r)
-		m.Event = res + " " + action
+		if res, _, action := stripeCall(r); res != "" {
+			m.Event = res + " " + action // a tunnel (CONNECT) has no path to name
+		}
 		f := values(r)
 		if e := f.Get("receipt_email"); e != "" {
 			m.To = []string{e}
