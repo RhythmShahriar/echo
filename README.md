@@ -93,7 +93,7 @@ actions:
 
 Each action counts as done when nothing new arrives for `quiet` (default 2s), or after `timeout` (default 30s). Echo caps `quiet` at 30s and `timeout` at 60s: a longer value acts as the cap. For one run, `--quiet 500ms` and `--timeout 10s` on snapshot, compare and run override them (within the same caps; a value outside them is refused).
 
-Commands find `.echo/config.yaml` in the folder you're in or one above it, up to the repository root, so they work from any subfolder. Snapshots and runs are kept next to the config; `--config` points at another one (its snapshots come with it) and `--store <dir>` keeps them elsewhere.
+Commands find `.echo/config.yaml` in the folder you're in or one above it, so they work from any subfolder: flush and command actions run in the project's folder, and snapshot, compare, run and doctor name the config they use. The search stops at the repository root, or below your home folder outside a repository, and skips a folder above that isn't yours or that anyone can write to (such as `/tmp`), since a config there could run someone else's commands. Snapshots and runs are kept next to the config; `--config` points at another one (its snapshots come with it) and `--store <dir>` keeps them elsewhere.
 
 > [!WARNING]
 > **`.echo/config.yaml` is code.** A `command` action or a `flush` entry runs in your shell on every `snapshot`, `compare` and `run`. `${env:NAME}` puts an environment variable into an `http` action, which sends it to the URL the action names. Read a config from a repository you didn't write before you run Echo in it, as you would a Makefile.
@@ -118,7 +118,7 @@ rhythm echo compare --open                       # what changed, in a report
 | Check SPF, DKIM and DMARC for the sender you use | `rhythm echo check shop.com --from-mail received.eml` |
 | Fail CI when a message stops being sent | `rhythm echo compare` (exits 1 on BROKE by default; `--fail-on new` is stricter) |
 | Compare in CI with a baseline from another job | `rhythm echo snapshot --export base.tgz` there, `rhythm echo compare --against base.tgz` here |
-| Get the login code or magic link just sent, in a test | `code=$(rhythm echo latest --to ann@shop.test --code)` (`--link --kind magic` for the link; exits 1 when nothing arrives within `--wait`, default 10s) |
+| Get the login code or magic link just sent, in a test | `code=$(rhythm echo latest --to ann@shop.test --code)` (`--link --kind magic` for the link; looks back 1m and waits up to `--wait`, default 10s, then exits 1). A test that signs the same user in again should pass `--run` or a short `--since 5s`, or run `rhythm echo clear --to ann@shop.test` first, or it may get the previous code |
 | Stream what the site sends into a script | `rhythm echo watch --json` (one JSON object per line) |
 | Read any result in a script | `--json` on any command: one shape, with `kind`, `summary`, `verdict` and `data` |
 
