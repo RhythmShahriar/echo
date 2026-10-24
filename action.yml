@@ -71,8 +71,9 @@ inputs:
   version:
     description: >
       Echo version to install, e.g. 1.0.0, or "latest". Default: the Action's own release when it
-      is used by a release tag (RhythmShahriar/echo@v1.2.3), otherwise the latest release, with a
-      warning. Every download is checked against its cosign signature before it runs.
+      is used by a release tag (RhythmShahriar/echo@v1.2.3) or by that tag's commit SHA, otherwise
+      the latest release, with a warning. Set it when you pin the Action to a commit no release
+      tag points at. Every download is checked against its cosign signature before it runs.
     required: false
     default: ""
   upload:
@@ -147,18 +148,16 @@ runs:
         VERSION: ${{ inputs.version }}
         ACTION_REF: ${{ github.action_ref }}
         VERIFY: ${{ github.action_path }}/.github/scripts/verify-release.sh
+        PICK: ${{ github.action_path }}/integrations/action/version.sh
+        # Only to look up which release tag a commit SHA is.
+        GH_TOKEN: ${{ github.token }}
       run: |
         set -euo pipefail
-        # The binary follows the Action: RhythmShahriar/echo@v1.2.3 runs Echo 1.2.3,
-        # so a new release can't change a pinned build.
-        if [ -z "$VERSION" ]; then
-          if [[ $ACTION_REF =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            VERSION=$ACTION_REF
-          else
-            VERSION=latest
-            echo "::warning::Installing the latest Echo release because this Action isn't used by a release tag. Use RhythmShahriar/echo@vX.Y.Z or set version so a new release can't change your build."
-          fi
-        fi
+        # The binary follows the Action: RhythmShahriar/echo@v1.2.3 (or that
+        # tag's commit SHA) runs Echo 1.2.3, so a new release can't change a
+        # pinned build.
+        # Its warning goes to stdout, where the runner reads workflow commands.
+        { VERSION=$(bash "$PICK" 2>&3); } 3>&1
         case "$(uname -m)" in x86_64|amd64) arch=amd64 ;; aarch64|arm64) arch=arm64 ;; *) echo "unsupported CPU $(uname -m)"; exit 1 ;; esac
         os=$(uname -s | tr '[:upper:]' '[:lower:]')
         if [ "$VERSION" = latest ]; then
