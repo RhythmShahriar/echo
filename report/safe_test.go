@@ -28,6 +28,8 @@ func TestSafe(t *testing.T) {
 		"c1 \u009b31m":          `c1 \u009b31m`,
 		"lone \xed\xa0\x80 sur": `lone \xed\xa0\x80 sur`,
 		"bad \xff byte":         `bad \xff byte`,
+		"BROKE \u202edexif":     `BROKE \u202edexif`, // RLO shows "fixed" backwards
+		"\u2066isolate\u2069":   `\u2066isolate\u2069`,
 		"":                      "",
 	}
 	for in, want := range cases {
@@ -44,6 +46,7 @@ func TestSafeKeepsText(t *testing.T) {
 		"שלום, ההזמנה שלך נשלחה", // Hebrew
 		"Grüße aus Köln · ✓ 日本語", // accents, symbols, CJK
 		"👩‍👩‍👧 family (ZWJ)",
+		"left \u200f mark", // RLM only nudges neutrals
 	} {
 		if got := Safe(s); got != s {
 			t.Errorf("Safe changed %q to %q", s, got)

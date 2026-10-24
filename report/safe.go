@@ -14,8 +14,11 @@ import (
 // Echo), so it may carry escape sequences that clear the screen, rewrite
 // earlier lines to hide a BROKE result, set the window title or plant OSC 8
 // links. Safe writes C0 controls (except tab), DEL and invalid UTF-8 (which
-// includes lone surrogates) as \xNN, and C1 controls as \u00NN. Everything
-// else, emoji and right-to-left text included, is kept as is.
+// includes lone surrogates) as \xNN and C1 controls as \u00NN. It writes
+// the bidi embedding, override and isolate controls as \uNNNN too: one of
+// them in a subject can show a line in an order other than its bytes
+// (Trojan Source), so a BROKE line could read as fine. Everything else,
+// emoji and right-to-left letters included, is kept as is.
 func Safe(s string) string {
 	if !needsEscape(s) {
 		return s
@@ -29,7 +32,7 @@ func Safe(s string) string {
 			fmt.Fprintf(&b, `\x%02x`, s[i])
 		case r < 0x20 && r != '\t', r == 0x7f:
 			fmt.Fprintf(&b, `\x%02x`, r)
-		case r >= 0x80 && r <= 0x9f:
+		case r >= 0x80 && r <= 0x9f, isBidiControl(r):
 			fmt.Fprintf(&b, `\u%04x`, r)
 		default:
 			b.WriteString(s[i : i+size])
@@ -60,10 +63,18 @@ func needsEscape(s string) bool {
 			continue
 		}
 		r, size := utf8.DecodeRuneInString(s[i:])
-		if (r == utf8.RuneError && size <= 1) || (r >= 0x80 && r <= 0x9f) {
+		if (r == utf8.RuneError && size <= 1) || (r >= 0x80 && r <= 0x9f) || isBidiControl(r) {
 			return true
 		}
 		i += size
 	}
 	return false
+}
+
+// isBidiControl reports the explicit bidi controls: LRE, RLE, PDF, LRO
+// and RLO (U+202A to U+202E) and LRI, RLI, FSI and PDI (U+2066 to
+// U+2069). The implicit marks (LRM, RLM) only nudge neutral characters
+// and are kept.
+func isBidiControl(r rune) bool {
+	return (r >= 0x202a && r <= 0x202e) || (r >= 0x2066 && r <= 0x2069)
 }
