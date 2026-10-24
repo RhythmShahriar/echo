@@ -67,7 +67,7 @@ func decodeExtras(body []byte) extras {
 
 // attachments returns the files x describes as model attachments. A
 // checksum that isn't a SHA-256 in hex is dropped rather than shown as
-// one, and a negative size is read as unknown.
+// one and a negative size is read as unknown.
 func (x extras) attachments() []model.Attachment {
 	if x.Email == nil || len(x.Email.Attachments) == 0 {
 		return nil
@@ -138,7 +138,7 @@ func isSig(s string) bool {
 }
 
 // runTokens are the tokens a run value from a capture may be signed with:
-// the shared and read tokens, and the write token of the capture's site
+// the shared and read tokens and the write token of the capture's site
 // (every write token for a capture that came in without one, such as
 // mail handed to the SMTP sink).
 func (s *Server) runTokens(site string) []string {

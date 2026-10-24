@@ -284,7 +284,7 @@ func (s *Server) Capture(c wire.Capture) (wire.Decision, error) {
 
 // captureFor is Capture with the wire 2 fields x and the site of the
 // write token the capture came with. That site marks what's captured
-// over the one the capture names, and an after phase only updates that
+// over the one the capture names and an after phase only updates that
 // site's own messages.
 func (s *Server) captureFor(c wire.Capture, x extras, site string) (wire.Decision, error) {
 	if err := checkVersion(c.Version); err != nil {
