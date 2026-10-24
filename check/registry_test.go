@@ -280,3 +280,23 @@ func TestCompatIssues(t *testing.T) {
 		}
 	}
 }
+
+// TestCustomRuleDetailIsMasked: a rule that catches a leaked key doesn't
+// copy the key into the report.
+func TestCustomRuleDetailIsMasked(t *testing.T) {
+	key := "sk_" + "live_51HxQ2eLkV9pZr8mN4bT6wY3"
+	rs, err := CustomRules([]Custom{{ID: "leak/stripe-key", Regex: `sk_live_\w+`, Level: model.Error}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	is := Message(mail(func(m *model.Message) { m.Text = "Debug: " + key }), Options{Rules: rs})
+	for _, i := range is {
+		if i.Check == "leak/stripe-key" {
+			if strings.Contains(i.Detail, key) || !strings.HasPrefix(i.Detail, "found ") {
+				t.Errorf("detail %q", i.Detail)
+			}
+			return
+		}
+	}
+	t.Fatalf("the rule didn't fire: %+v", is)
+}

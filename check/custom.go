@@ -12,6 +12,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/RhythmShahriar/echo/mask"
 	"github.com/RhythmShahriar/echo/model"
 )
 
@@ -98,7 +99,9 @@ func (c Custom) Rule() (Rule, error) {
 			for _, s := range []string{m.Subject, visibleText(m), m.Body} {
 				if i, j := find(s); i >= 0 {
 					return []model.Issue{{Title: fmt.Sprintf("%s in %s", say, Describe(m)),
-						Detail: fmt.Sprintf("found %q", clip(s[i:j], 80)),
+						// Masked: a rule written to catch a leaked key must
+						// not copy the key into the report.
+						Detail: fmt.Sprintf("found %q", mask.Text(clip(s[i:j], 80))),
 						Fix:    fmt.Sprintf("Change the message, or the rule %s in .echo/config.yaml if the text is fine now.", c.ID)}}
 				}
 			}
