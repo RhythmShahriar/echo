@@ -31,6 +31,7 @@ type options struct {
 	failOn                         string
 
 	configPath, url, token string
+	storeDir               string // --store: where snapshots and runs go
 	name, snapshot         string
 	actions                cli.RepeatFlag
 	force                  bool // snapshot: save even when every action failed
@@ -69,6 +70,7 @@ func flagSet(o *options) *flag.FlagSet {
 	fs.StringVar(&o.failOn, "fail-on", "", "")
 
 	fs.StringVar(&o.configPath, "config", "", "")
+	fs.StringVar(&o.storeDir, "store", "", "")
 	fs.StringVar(&o.url, "url", "", "")
 	fs.StringVar(&o.token, "token", "", "")
 	fs.StringVar(&o.name, "name", "", "")
@@ -110,12 +112,13 @@ func flagSet(o *options) *flag.FlagSet {
 
 // plan is a command's validated settings.
 type plan struct {
-	o      options
-	args   []string
-	cfg    config.Config
-	format string
-	st     store.Store
-	echo   *client.Client
+	o       options
+	args    []string
+	cfg     config.Config
+	cfgPath string // the config file read; "" when there is none and the defaults apply
+	format  string
+	st      store.Store
+	echo    *client.Client
 }
 
 func parse(c cmdSpec, args []string) (*plan, error) {
@@ -134,12 +137,17 @@ func parse(c cmdSpec, args []string) (*plan, error) {
 	}
 	p.args = pos
 	path := o.configPath
-	if path == "" {
-		path = config.Path()
-	} else if _, err := os.Stat(path); err != nil {
-		return nil, cli.Usagef("--config %s: %v", path, err)
+	if path != "" {
+		if _, err := os.Stat(path); err != nil {
+			return nil, cli.Usagef("--config %s: %v", path, err)
+		}
+	} else if path, err = findConfig("."); errors.Is(err, errNoConfig) {
+		path = "" // the defaults; commands that need actions say so
+	} else if err != nil {
+		return nil, err
 	}
-	if p.cfg, err = config.Load(path); err != nil {
+	p.cfgPath = path
+	if p.cfg, err = loadConfig(path); err != nil {
 		return nil, cli.UsageError{Msg: err.Error()}
 	}
 	switch {
@@ -190,10 +198,101 @@ func parse(c cmdSpec, args []string) (*plan, error) {
 	if o.name != "" && !store.ValidName(o.name) {
 		return nil, cli.Usagef("--name %q: use letters, digits, dots, dashes and underscores", o.name)
 	}
-	p.st = store.Store{Root: config.Dir}
+	p.st = store.Store{Root: storeRoot(o.storeDir, path)}
 	url := cmp.Or(o.url, os.Getenv("RHYTHM_ECHO_URL"), "http://"+p.cfg.Listen)
 	p.echo = client.New(url, cmp.Or(o.token, os.Getenv("RHYTHM_ECHO_TOKEN")))
 	return p, nil
+}
+
+// errNoConfig is the error when no folder from here up has a
+// .echo/config.yaml. It stands in for config.ErrNoConfig until that is
+// released, with the same words.
+var errNoConfig = errors.New("no .echo/config.yaml here or above; run rhythm echo init")
+
+// findConfig returns the absolute path of the nearest .echo/config.yaml
+// in start or a folder above it, as git finds .git, so Echo works from
+// any subfolder of a project. The search ends at the repository root
+// (the folder holding .git, which is searched) and below $HOME (which
+// isn't, unless start is $HOME): a stray ~/.echo would otherwise catch
+// every project outside a repository.
+//
+// This stands in for config.Find until that is released.
+func findConfig(start string) (string, error) {
+	dir, err := filepath.Abs(start)
+	if err != nil {
+		return "", err
+	}
+	home := ""
+	if h, err := os.UserHomeDir(); err == nil && h != "" {
+		if h, err := filepath.Abs(h); err == nil {
+			home = h
+		}
+	}
+	for {
+		p := filepath.Join(dir, config.Dir, "config.yaml")
+		if fi, err := os.Stat(p); err == nil && fi.Mode().IsRegular() {
+			return p, nil
+		}
+		// .git is a folder in a clone and a file in a worktree or submodule.
+		if _, err := os.Lstat(filepath.Join(dir, ".git")); err == nil {
+			return "", errNoConfig
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir || parent == home {
+			return "", errNoConfig
+		}
+		dir = parent
+	}
+}
+
+// loadConfig reads the config at path, or returns the defaults when
+// path is "".
+func loadConfig(path string) (config.Config, error) {
+	if path == "" {
+		return config.Default(), nil
+	}
+	return config.Load(path)
+}
+
+// projectDir is the folder the config belongs to: proj for
+// proj/.echo/config.yaml, else the working folder (a --config file kept
+// elsewhere, or none at all).
+func (p *plan) projectDir() string {
+	if p.cfgPath != "" && filepath.Base(filepath.Dir(p.cfgPath)) == config.Dir {
+		return filepath.Dir(filepath.Dir(p.cfgPath))
+	}
+	return "."
+}
+
+// storeRoot is where snapshots and runs are kept: --store when given,
+// else the folder the config is in (proj/.echo for proj/.echo/config.yaml,
+// found from proj/sub or named with --config), else ./.echo.
+func storeRoot(flag, cfgPath string) string {
+	switch {
+	case flag != "":
+		return flag
+	case cfgPath != "":
+		return filepath.Dir(cfgPath)
+	}
+	return config.Dir
+}
+
+// needConfig is errNoConfig, as a usage error, when no config was found:
+// snapshot, compare, run and doctor have nothing to do without one.
+func (p *plan) needConfig() error {
+	if p.cfgPath == "" {
+		return cli.UsageError{Msg: errNoConfig.Error()}
+	}
+	return nil
+}
+
+// configName is the config file as messages name it: relative to the
+// working folder when it's below it.
+func (p *plan) configName() string {
+	if p.cfgPath == "" {
+		return config.Path()
+	}
+	return rel(p.cfgPath)
 }
 
 // channels are the values --channel accepts.
@@ -270,7 +369,8 @@ var flagDocs = map[string]flagDoc{
 	"verbose":  {"-v, --verbose", "show every message"},
 	"fail-on":  {"--fail-on <level>", "exit 1 on issues at or above error (the default), warning or notice;\nnone: never. A failed action also exits 1, unless none"},
 
-	"config":   {"--config <file>", "settings (default .echo/config.yaml)"},
+	"config":   {"--config <file>", "settings (default the nearest .echo/config.yaml, here or above)"},
+	"store":    {"--store <dir>", "where snapshots and runs are kept (default the config's folder)"},
 	"url":      {"--url <url>", "where Echo runs (default http://127.0.0.1:8025; RHYTHM_ECHO_URL)"},
 	"token":    {"--token <t>", "the token Echo was started with (prefer RHYTHM_ECHO_TOKEN)"},
 	"name":     {"--name <name>", "the snapshot's name (default the date and time)"},
@@ -315,6 +415,7 @@ var (
 	reportFlags = []flagUse{{"json", ""}, {"md", ""}, {"junit", ""}, {"html", ""}, {"output", ""}, {"open", ""},
 		{"quiet", ""}, {"plain", ""}, {"no-color", ""}, {"verbose", ""}}
 	echoFlags     = []flagUse{{"config", ""}, {"url", ""}, {"token", ""}}
+	storeFlags    = []flagUse{{"config", ""}, {"store", ""}}
 	messageFlags  = []flagUse{{"channel", ""}, {"run", ""}, {"to", ""}}
 	terminalFlags = []flagUse{{"quiet", ""}, {"plain", ""}, {"no-color", ""}}
 )
@@ -342,14 +443,14 @@ var commands = []cmdSpec{
 	{name: "show", use: "show <id>", about: "one message, as JSON", flags: echoFlags},
 	{name: "clear", use: "clear", about: "delete captured messages", flags: flags(echoFlags, messageFlags)},
 	{name: "snapshot", aliases: []string{"snap"}, use: "snapshot [--name N]", about: "run the actions in .echo/config.yaml and save what they sent",
-		flags: flags(echoFlags, []flagUse{{"action", ""}, {"name", ""}, {"force", ""}, {"fail-on", ""}}, reportFlags)},
+		flags: flags(echoFlags, []flagUse{{"store", ""}, {"action", ""}, {"name", ""}, {"force", ""}, {"fail-on", ""}}, reportFlags)},
 	{name: "compare", aliases: []string{"cmp"}, use: "compare [--snapshot N]", about: "run the actions again and show what changed since a snapshot",
-		flags: flags(echoFlags, []flagUse{{"action", ""}, {"snapshot", ""}, {"fail-on", failOnChanges}}, reportFlags)},
+		flags: flags(echoFlags, []flagUse{{"store", ""}, {"action", ""}, {"snapshot", ""}, {"fail-on", failOnChanges}}, reportFlags)},
 	{name: "run", use: "run", about: "run the actions once, no comparison",
-		flags: flags(echoFlags, []flagUse{{"action", ""}, {"fail-on", ""}}, reportFlags)},
+		flags: flags(echoFlags, []flagUse{{"store", ""}, {"action", ""}, {"fail-on", ""}}, reportFlags)},
 	{name: "report", use: "report [run | snapshot]", about: "show the last result again (--open, -o)",
-		flags: flags([]flagUse{{"fail-on", "as compare for a comparison, as run otherwise; none: never"}}, reportFlags)},
-	{name: "snapshots", use: "snapshots [delete <name>]", about: "list snapshots, or delete one"},
+		flags: flags(storeFlags, []flagUse{{"fail-on", "as compare for a comparison, as run otherwise; none: never"}}, reportFlags)},
+	{name: "snapshots", use: "snapshots [delete <name>]", about: "list snapshots, or delete one", flags: storeFlags},
 	{name: "replay", use: "replay <event> --to <url>", about: "send a signed test webhook (Stripe, Standard Webhooks…)",
 		flags: flags([]flagUse{{"to", "where to send (absolute, or relative to site:)"}, {"set", ""}, {"header", ""}, {"secret-env", ""},
 			{"scheme", ""}, {"type", ""}, {"list", ""}, {"wait", ""}}, echoFlags,

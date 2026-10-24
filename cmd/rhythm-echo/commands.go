@@ -135,7 +135,7 @@ func (s *session) actions(name string) (*model.Run, error) {
 	}
 	s.ran = true
 	return runner.Run(s.ctx, runner.Options{Config: s.cfg, Client: s.echo, Version: version, Name: name, Only: s.o.actions,
-		Replay: replayer(s.cfg), Hooks: runner.Hooks{Action: s.view.Action, Log: s.view.Log}})
+		Replay: replayer(s.cfg, s.projectDir(), s.cfgPath), Hooks: runner.Hooks{Action: s.view.Action, Log: s.view.Log}})
 }
 
 // finish saves the HTML report, writes the chosen format, prints the
@@ -282,9 +282,12 @@ func defaultFailOn(compared bool) string {
 
 func cmdSnapshot(s *session) int {
 	if len(s.args) > 0 {
-		return s.fail(usageErr("snapshot takes no arguments; actions come from %s", config.Path()))
+		return s.fail(usageErr("snapshot takes no arguments; actions come from %s", s.configName()))
 	}
 	if err := s.checkFailOn(false); err != nil {
+		return s.fail(err)
+	}
+	if err := s.needConfig(); err != nil {
 		return s.fail(err)
 	}
 	if err := s.selectActions(); err != nil {
@@ -334,6 +337,9 @@ func cmdCompare(s *session) int {
 	if err := s.checkFailOn(true); err != nil {
 		return s.fail(err)
 	}
+	if err := s.needConfig(); err != nil {
+		return s.fail(err)
+	}
 	snapDir, err := s.st.Snapshot(s.o.snapshot)
 	if err != nil {
 		return s.fail(cli.UsageError{Msg: err.Error()})
@@ -372,9 +378,12 @@ func cmdCompare(s *session) int {
 
 func cmdRun(s *session) int {
 	if len(s.args) > 0 {
-		return s.fail(usageErr("run takes no arguments; actions come from %s (pick some with --action)", config.Path()))
+		return s.fail(usageErr("run takes no arguments; actions come from %s (pick some with --action)", s.configName()))
 	}
 	if err := s.checkFailOn(false); err != nil {
+		return s.fail(err)
+	}
+	if err := s.needConfig(); err != nil {
 		return s.fail(err)
 	}
 	if err := s.selectActions(); err != nil {
@@ -627,56 +636,48 @@ func cmdClear(s *session) int {
 	return exitOK
 }
 
-func cmdSnapshots(args []string, stdout, stderr io.Writer) int {
-	if len(args) > 0 && (args[0] == "-h" || args[0] == "--help") {
-		c, _ := lookup("snapshots")
-		commandHelp(stdout, c)
-		return exitOK
-	}
-	st := store.Store{Root: config.Dir}
+// cmdSnapshots lists the snapshots in the store, or deletes one.
+func cmdSnapshots(s *session) int {
+	st, args := s.st, s.args
 	if len(args) == 2 && (args[0] == "delete" || args[0] == "rm") {
 		if _, err := st.Snapshot(args[1]); err != nil {
-			fmt.Fprintln(stderr, "rhythm echo:", err)
-			return exitUsage
+			return s.fail(cli.UsageError{Msg: err.Error()})
 		}
 		before, _ := st.Snapshot("")
 		if err := st.Delete(args[1]); err != nil {
-			fmt.Fprintln(stderr, "rhythm echo:", err)
-			return exitError
+			return s.fail(err)
 		}
-		fmt.Fprintln(stdout, "Deleted snapshot", args[1])
+		fmt.Fprintln(s.stdout, "Deleted snapshot", args[1])
 		if after, err := st.Snapshot(""); err == nil && after != before {
-			fmt.Fprintln(stdout, "The latest snapshot is now", filepath.Base(after))
+			fmt.Fprintln(s.stdout, "The latest snapshot is now", filepath.Base(after))
 		}
 		return exitOK
 	}
 	if len(args) > 0 {
-		fmt.Fprintln(stderr, "rhythm echo: usage: rhythm echo snapshots [delete <name>]")
-		return exitUsage
+		return s.fail(usageErr("usage: rhythm echo snapshots [delete <name>]"))
 	}
 	names, err := st.Snapshots()
 	if err != nil {
-		fmt.Fprintln(stderr, "rhythm echo:", err)
-		return exitError
+		return s.fail(err)
 	}
 	if len(names) == 0 {
-		fmt.Fprintln(stdout, "No snapshots yet. Take one: rhythm echo snapshot")
+		fmt.Fprintln(s.stdout, "No snapshots yet. Take one: rhythm echo snapshot")
 		return exitOK
 	}
 	latest, _ := st.Snapshot("")
-	fmt.Fprintf(stdout, "%-24s %-8s %-12s %s\n", "NAME", "ACTIONS", "TAKEN", "SENT")
+	fmt.Fprintf(s.stdout, "%-24s %-8s %-12s %s\n", "NAME", "ACTIONS", "TAKEN", "SENT")
 	for _, n := range names {
 		dir := filepath.Join(st.Root, "snapshots", n)
 		r, err := store.LoadRun(dir)
 		if err != nil {
-			fmt.Fprintf(stdout, "%-24s %s\n", n, err)
+			fmt.Fprintf(s.stdout, "%-24s %s\n", n, err)
 			continue
 		}
 		mark := ""
 		if dir == latest {
 			mark = "  (latest)"
 		}
-		fmt.Fprintf(stdout, "%-24s %-8d %-12s %s%s\n", n, len(r.Actions), report.Ago(r.Started), report.Tally(r), mark)
+		fmt.Fprintf(s.stdout, "%-24s %-8d %-12s %s%s\n", n, len(r.Actions), report.Ago(r.Started), report.Tally(r), mark)
 	}
 	return exitOK
 }
@@ -698,6 +699,10 @@ func cmdInit(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stderr, "rhythm echo: %s already exists (--force replaces it)\n", path)
 		return exitUsage
 	}
+	if above := configAbove(); above != "" {
+		// Commands use the nearest config, which will be this new one.
+		fmt.Fprintf(stderr, "rhythm echo: note: %s is above this folder; here the new one takes its place\n", above)
+	}
 	// .echo/ will hold captured messages, so only its owner may open it.
 	if err := os.MkdirAll(config.Dir, 0o700); err != nil {
 		fmt.Fprintln(stderr, "rhythm echo:", err)
@@ -710,6 +715,25 @@ func cmdInit(args []string, stdout, stderr io.Writer) int {
 	store.Store{Root: config.Dir}.ExcludeFromGit()
 	fmt.Fprintf(stdout, "Wrote %s. Every setting is optional; add actions to snapshot and compare.\n", path)
 	return exitOK
+}
+
+// configAbove is the config commands use here before init writes one:
+// the nearest above the working folder, within the same search
+// findConfig makes. "" when there's none, or the working folder is
+// where that search ends.
+func configAbove() string {
+	if _, err := os.Lstat(".git"); err == nil {
+		return ""
+	}
+	wd, err := os.Getwd()
+	if err != nil {
+		return ""
+	}
+	if home, err := os.UserHomeDir(); err == nil && filepath.Clean(home) == wd {
+		return ""
+	}
+	path, _ := findConfig(filepath.Dir(wd))
+	return path
 }
 
 // cmdUpdate exists so `rhythm update` (which runs every tool's update)

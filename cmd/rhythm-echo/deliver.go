@@ -4,6 +4,7 @@
 package main
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -410,7 +411,7 @@ func cmdReplay(s *session) int {
 		}
 		headersMap[strings.TrimSpace(name)] = strings.TrimSpace(value)
 	}
-	opts := replay.Options{SecretEnv: *secretEnv, Staging: s.cfg.Staging, Scan: scanConfigs()}
+	opts := replay.Options{SecretEnv: *secretEnv, Staging: s.cfg.Staging, Scan: scanConfigs(s.projectDir(), s.cfgPath)}
 	if err := replay.SecretReady(ev, opts); err != nil {
 		return s.fail(err) // a usage error, before the header
 	}
@@ -453,7 +454,7 @@ func loadEvent(name, scheme, typ string) (replay.Event, error) {
 }
 
 // replayer runs replay actions from .echo/config.yaml.
-func replayer(cfg config.Config) runner.Replayer {
+func replayer(cfg config.Config, dir, cfgPath string) runner.Replayer {
 	return func(ctx context.Context, a config.ReplayAction, to, run string) error {
 		ev, err := loadEvent(a.Event, "", "")
 		if err != nil {
@@ -469,7 +470,7 @@ func replayer(cfg config.Config) runner.Replayer {
 		}
 		r, act, _ := strings.Cut(run, "/")
 		res, err := replay.Send(ctx, ev, replay.Target{URL: to}, replay.Options{SecretEnv: a.Secret, Staging: cfg.Staging,
-			Scan: scanConfigs(), Run: r, Action: act})
+			Scan: scanConfigs(dir, cfgPath), Run: r, Action: act})
 		if err != nil {
 			return err
 		}
@@ -481,11 +482,20 @@ func replayer(cfg config.Config) runner.Replayer {
 }
 
 // scanConfigs reads config files in reach (.env, wp-config.php) so replay
-// can refuse to run where live payment keys are configured.
-func scanConfigs() map[string]string {
+// can refuse to run where live payment keys are configured: those in the
+// working folder, in the project folder dir when Echo's config was found
+// above it, and Echo's config itself.
+func scanConfigs(dir, cfgPath string) map[string]string {
 	out := map[string]string{}
-	for _, f := range []string{".env", "wp-config.php", "../wp-config.php", config.Path()} {
-		if b, err := os.ReadFile(f); err == nil { //nolint:gosec // fixed local names
+	files := []string{".env", "wp-config.php", "../wp-config.php", cmp.Or(cfgPath, config.Path())}
+	if dir != "." {
+		files = append(files, filepath.Join(dir, ".env"), filepath.Join(dir, "wp-config.php"), filepath.Join(dir, "..", "wp-config.php"))
+	}
+	for _, f := range files {
+		if _, seen := out[f]; seen {
+			continue
+		}
+		if b, err := os.ReadFile(f); err == nil { //nolint:gosec // fixed names in the project
 			out[f] = string(b)
 		}
 	}

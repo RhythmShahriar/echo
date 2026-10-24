@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io/fs"
@@ -75,7 +76,7 @@ func TestUsageErrors(t *testing.T) {
 		{[]string{"snapshot", "--json", "--md"}, "one output format"},
 		{[]string{"snapshot", "--name", "../x"}, "--name"},
 		{[]string{"snapshot", "--fail-on", "broke"}, "--fail-on"},
-		{[]string{"compare"}, "no snapshot yet"},
+		{[]string{"compare"}, "no .echo/config.yaml here or above; run rhythm echo init"},
 		{[]string{"report"}, "nothing to show"},
 		{[]string{"show"}, "message ID"},
 		{[]string{"run", "--config", "missing.yaml"}, "--config"},
@@ -218,7 +219,7 @@ func TestUsageErrorsExitTwo(t *testing.T) {
 	t.Chdir(t.TempDir())
 	srv := httptest.NewServer(catcher.NewServer(catcher.NewInbox(10), catcher.Config{Version: "test"}))
 	defer srv.Close()
-	if code, _, errOut := runCLI(t, "run", "--url", srv.URL); code != exitUsage || !strings.Contains(errOut, "no actions in") {
+	if code, _, errOut := runCLI(t, "run", "--url", srv.URL); code != exitUsage || !strings.Contains(errOut, "no .echo/config.yaml here or above") {
 		t.Errorf("no actions: %d %q", code, errOut)
 	}
 	_ = os.MkdirAll(config.Dir, 0o750)
@@ -406,7 +407,7 @@ func TestUnusedFlagsAreRejected(t *testing.T) {
 		{[]string{"list", "-o", "x.json"}, "--output has no effect on ls"},
 		{[]string{"watch", "--action", "Sign up"}, "--action has no effect on watch"},
 		{[]string{"check", "shop.test", "--url", "http://127.0.0.1:1"}, "--url has no effect on check"},
-		{[]string{"report", "--config", "x.yaml"}, "--config has no effect on report"},
+		{[]string{"report", "--url", "http://127.0.0.1:1"}, "--url has no effect on report"},
 		{[]string{"up", "--fail-on", "none"}, "--fail-on has no effect on up"},
 		{[]string{"doctor", "--json"}, "--json has no effect on doctor"},
 	} {
@@ -991,5 +992,128 @@ func TestSendmailCommand(t *testing.T) {
 	if code := run([]string{"sendmail"}, strings.NewReader("Subject: x\n\nbody\n"), &stdout, &stderr); code != 64 ||
 		!strings.Contains(stderr.String(), "no recipients") {
 		t.Errorf("no recipients: %d %s", code, stderr.String())
+	}
+}
+
+// noopConfig is a config with one action that sends nothing.
+const noopConfig = "quiet: 100ms\ntimeout: 2s\nactions:\n  - name: Noop\n    command: \"true\"\n"
+
+// writeConfigAt writes cfg as dir/.echo/config.yaml.
+func writeConfigAt(t *testing.T, dir, cfg string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Join(dir, config.Dir), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, config.Path()), []byte(cfg), 0o600); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestConfigIsFoundAboveAndKeepsTheStore(t *testing.T) {
+	if _, err := exec.LookPath("true"); err != nil {
+		t.Skip("no true")
+	}
+	srv := httptest.NewServer(catcher.NewServer(catcher.NewInbox(100), catcher.Config{Version: "test"}))
+	defer srv.Close()
+	root := t.TempDir()
+	t.Setenv("HOME", root)
+	proj, other := filepath.Join(root, "proj"), filepath.Join(root, "other")
+	writeConfigAt(t, proj, noopConfig)
+	writeConfigAt(t, other, noopConfig)
+	sub := filepath.Join(proj, "sub", "deeper")
+	if err := os.MkdirAll(sub, 0o750); err != nil {
+		t.Fatal(err)
+	}
+
+	// From a subfolder, the project's config and store are used.
+	t.Chdir(sub)
+	if code, out, errOut := runCLI(t, "snapshot", "--url", srv.URL, "--name", "base", "--plain"); code != 0 {
+		t.Fatalf("snapshot from a subfolder: %d\n%s\n%s", code, out, errOut)
+	}
+	if _, err := os.Stat(filepath.Join(proj, config.Dir, "snapshots", "base", "run.json")); err != nil {
+		t.Errorf("the snapshot isn't in proj/.echo: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(sub, config.Dir)); err == nil {
+		t.Error("a .echo folder was made in the subfolder")
+	}
+	if code, out, errOut := runCLI(t, "compare", "--url", srv.URL, "--plain"); code != 0 {
+		t.Errorf("compare from a subfolder: %d\n%s\n%s", code, out, errOut)
+	}
+
+	// --config moves the store with it.
+	t.Chdir(root)
+	cfg := filepath.Join("other", config.Path())
+	if code, out, errOut := runCLI(t, "snapshot", "--config", cfg, "--url", srv.URL, "--name", "theirs", "--plain"); code != 0 {
+		t.Fatalf("snapshot --config: %d\n%s\n%s", code, out, errOut)
+	}
+	if _, err := os.Stat(filepath.Join(other, config.Dir, "snapshots", "theirs", "run.json")); err != nil {
+		t.Errorf("the snapshot isn't in other/.echo: %v", err)
+	}
+	if code, out, errOut := runCLI(t, "compare", "--config", cfg, "--url", srv.URL, "--plain"); code != 0 || !strings.Contains(out, "theirs") {
+		t.Errorf("compare --config didn't read other/.echo/snapshots: %d\n%s\n%s", code, out, errOut)
+	}
+	if code, out, _ := runCLI(t, "snapshots", "--config", cfg); code != 0 || !strings.Contains(out, "theirs") || strings.Contains(out, "base") {
+		t.Errorf("snapshots --config:\n%s", out)
+	}
+
+	// --store puts them anywhere.
+	storeDir := filepath.Join(root, "ci-store")
+	if code, out, errOut := runCLI(t, "snapshot", "--config", cfg, "--store", storeDir, "--url", srv.URL, "--name", "ci", "--plain"); code != 0 {
+		t.Fatalf("snapshot --store: %d\n%s\n%s", code, out, errOut)
+	}
+	if _, err := os.Stat(filepath.Join(storeDir, "snapshots", "ci", "run.json")); err != nil {
+		t.Errorf("the snapshot isn't in --store: %v", err)
+	}
+	if code, out, _ := runCLI(t, "report", "ci", "--store", storeDir, "--plain"); code != 0 || !strings.Contains(out, "ci") {
+		t.Errorf("report --store:\n%s", out)
+	}
+}
+
+func TestMissingConfigSaysRunInit(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("HOME", root)
+	t.Chdir(root)
+	const want = "rhythm echo: no .echo/config.yaml here or above; run rhythm echo init\n"
+	for _, args := range [][]string{{"snapshot"}, {"compare"}, {"run"}, {"doctor"}} {
+		code, out, errOut := runCLI(t, append(args, "--url", "http://127.0.0.1:1")...)
+		if code != exitUsage || errOut != want || out != "" {
+			t.Errorf("%v: exit %d, stdout %q, stderr %q; want 2 and %q", args, code, out, errOut, want)
+		}
+	}
+	// Commands that work without actions still run on the defaults.
+	if code, _, errOut := runCLI(t, "snapshots"); code != 0 {
+		t.Errorf("snapshots without a config: %d %q", code, errOut)
+	}
+}
+
+func TestFindConfigStopsAtTheRepoAndHome(t *testing.T) {
+	root := t.TempDir()
+	home := filepath.Join(root, "home")
+	t.Setenv("HOME", home)
+	mk := func(parts ...string) string {
+		d := filepath.Join(append([]string{root}, parts...)...)
+		if err := os.MkdirAll(d, 0o750); err != nil {
+			t.Fatal(err)
+		}
+		return d
+	}
+	// A config above a repository's root isn't the repository's.
+	writeConfigAt(t, root, noopConfig)
+	repo := mk("home", "repo")
+	mk("home", "repo", ".git")
+	if _, err := findConfig(mk("home", "repo", "a", "b")); !errors.Is(err, errNoConfig) {
+		t.Errorf("found a config above the repository: %v", err)
+	}
+	writeConfigAt(t, repo, noopConfig)
+	if got, err := findConfig(filepath.Join(repo, "a", "b")); err != nil || got != filepath.Join(repo, config.Path()) {
+		t.Errorf("findConfig in the repo = %q, %v", got, err)
+	}
+	// Outside a repository the search ends below $HOME.
+	writeConfigAt(t, home, noopConfig)
+	if _, err := findConfig(mk("home", "loose", "x")); !errors.Is(err, errNoConfig) {
+		t.Errorf("found ~/.echo from a folder below it: %v", err)
+	}
+	if got, err := findConfig(home); err != nil || got != filepath.Join(home, config.Path()) {
+		t.Errorf("findConfig($HOME) = %q, %v", got, err)
 	}
 }

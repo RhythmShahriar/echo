@@ -93,6 +93,8 @@ actions:
 
 Each action counts as done when nothing new arrives for `quiet` (default 2s), or after `timeout` (default 30s). Echo caps `quiet` at 30s and `timeout` at 60s: a longer value acts as the cap.
 
+Commands find `.echo/config.yaml` in the folder you're in or one above it, up to the repository root, so they work from any subfolder. Snapshots and runs are kept next to the config; `--config` points at another one (its snapshots come with it) and `--store <dir>` keeps them elsewhere.
+
 > [!WARNING]
 > **`.echo/config.yaml` is code.** A `command` action or a `flush` entry runs in your shell on every `snapshot`, `compare` and `run`. `${env:NAME}` puts an environment variable into an `http` action, which sends it to the URL the action names. Read a config from a repository you didn't write before you run Echo in it, as you would a Makefile.
 

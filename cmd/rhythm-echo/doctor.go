@@ -36,6 +36,9 @@ func cmdDoctor(s *session) int {
 	pass := func(label, detail string) { ok++; s.doctorLine(doctorOK, label, detail) }
 	fail := func(label, detail string) { fails++; s.doctorLine(doctorFail, label, detail) }
 	note := func(label, detail string) { s.doctorLine(doctorNote, label, detail) }
+	if err := s.needConfig(); err != nil {
+		return s.fail(err)
+	}
 	s.view.Header(version, "doctor")
 
 	h, err := s.echo.Health(s.ctx)

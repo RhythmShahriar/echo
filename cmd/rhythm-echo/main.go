@@ -94,7 +94,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	case "replay":
 		return command(c, cmdReplay, args[1:], stdout, stderr)
 	case "snapshots":
-		return cmdSnapshots(args[1:], stdout, stderr)
+		return command(c, cmdSnapshots, args[1:], stdout, stderr)
 	case "init":
 		return cmdInit(args[1:], stdout, stderr)
 	case "install":
@@ -213,7 +213,9 @@ Output:
                              action fails; none turns both off
 
 Actions (snapshot, compare, run):
-      --config <file>        settings (default .echo/config.yaml)
+      --config <file>        settings (default the nearest .echo/config.yaml, here or above)
+      --store <dir>          where snapshots and runs are kept (default the config's
+                             folder); report and snapshots read --config and --store too
       --url <url>            where Echo runs (default http://127.0.0.1:8025; RHYTHM_ECHO_URL)
       --action <name>        run only this action (repeatable)
       --name <name>          snapshot: its name (default the date and time)

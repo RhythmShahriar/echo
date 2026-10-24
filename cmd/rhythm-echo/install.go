@@ -66,7 +66,11 @@ func cmdInstall(args []string, stdout, stderr io.Writer) int {
 		return exitUsage
 	}
 	// The addresses Echo runs on come from .echo/config.yaml when there is one.
-	cfg, err := config.Load(cmp.Or(*configPath, config.Path()))
+	path := *configPath
+	if path == "" {
+		path, _ = findConfig(".") // none: the defaults
+	}
+	cfg, err := loadConfig(path)
 	if err != nil {
 		fmt.Fprintln(stderr, "rhythm echo:", err)
 		return exitUsage
