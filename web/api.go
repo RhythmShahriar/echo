@@ -57,6 +57,9 @@ type Page struct {
 	Inbox  int    `json:"inbox"`
 	Mode   string `json:"mode"`
 	Facets Facets `json:"facets"`
+	// ReadOnly is set for a viewer signed in with a Login: the page then
+	// hides Delete and offers Sign out.
+	ReadOnly bool `json:"read_only,omitempty"`
 }
 
 // Facets are the values the filters offer, from the whole inbox.
@@ -97,7 +100,7 @@ func (u *UI) list(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	p := Page{Messages: []Summary{}, Inbox: len(all), Mode: u.o.Mode}
+	p := Page{Messages: []Summary{}, Inbox: len(all), Mode: u.o.Mode, ReadOnly: ReadOnly(r.Context())}
 	var facets facetSet
 	// Content checks cost up to a few ms for a large email, so they're
 	// only run here for the rows on the page and for a query that needs

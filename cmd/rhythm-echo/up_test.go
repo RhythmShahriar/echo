@@ -42,7 +42,7 @@ func testUp(token string) (http.Handler, []upRoute, *catcher.Inbox) {
 	checks := check.Options{SiteHost: "shop.example.com"}
 	ui := web.New(web.Options{Inbox: inbox, Mode: catcher.Seal, Checks: checks, AnyHost: token != ""})
 	routes := upRoutes(srv, inbox, ui, catcher.Seal, checks)
-	return upHandler(routes, token), routes, inbox
+	return upHandler(routes, token, nil), routes, inbox
 }
 
 func serve(h http.Handler, r *http.Request) *httptest.ResponseRecorder {
@@ -832,5 +832,135 @@ func TestPrivateNetworkRefusesAPublicInterface(t *testing.T) {
 	code, _, errOut = runCLI(t, "up", "--listen", "0.0.0.0:20400", "--smtp", "off")
 	if code != exitUsage || !strings.Contains(errOut, "--listen 0.0.0.0:20400 is reachable from other machines; set --token") {
 		t.Errorf("exit %d: %s", code, errOut)
+	}
+}
+
+// testLoginUp is up's handler with a viewer login, with or without a token.
+func testLoginUp(t *testing.T, token string) http.Handler {
+	t.Helper()
+	inbox := catcher.NewInbox(100)
+	inbox.Add(model.Message{ID: "m1", Channel: model.Email, Subject: "Order 1042", Status: model.Faked})
+	srv := catcher.NewServer(inbox, catcher.Config{Mode: catcher.Seal, Token: token, Version: version})
+	ui := web.New(web.Options{Inbox: inbox, Mode: catcher.Seal, AnyHost: true})
+	login, err := web.ParseLogin("client:correct horse")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return upHandler(upRoutes(srv, inbox, ui, catcher.Seal, check.Options{}), token, login)
+}
+
+func viewerSession(t *testing.T, h http.Handler) *http.Cookie {
+	t.Helper()
+	r := httptest.NewRequest(http.MethodPost, web.PathLogin, strings.NewReader("user=client&password=correct+horse&next=%2F"))
+	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	w := serve(h, r)
+	for _, c := range w.Result().Cookies() {
+		if c.Name == web.SessionCookie {
+			return c
+		}
+	}
+	t.Fatalf("no session: %d %s", w.Code, w.Body)
+	return nil
+}
+
+// TestLoginGivesViewersTheInboxOnly: with a token and a login, a viewer
+// reads Echo Inbox and nothing else. Deleting is refused.
+func TestLoginGivesViewersTheInboxOnly(t *testing.T) {
+	h := testLoginUp(t, testToken)
+	get := func(path string, c *http.Cookie, header bool) *httptest.ResponseRecorder {
+		r := httptest.NewRequest(http.MethodGet, path, nil)
+		if c != nil {
+			r.AddCookie(c)
+		}
+		if header {
+			r.Header.Set(wire.TokenHeader, testToken)
+		}
+		return serve(h, r)
+	}
+	if w := get("/", nil, false); w.Code != http.StatusFound || !strings.HasPrefix(w.Header().Get("Location"), "/login?next=") {
+		t.Errorf("GET / without anything = %d %q", w.Code, w.Header().Get("Location"))
+	}
+	if w := get("/v1/messages", nil, false); w.Code != http.StatusUnauthorized {
+		t.Errorf("API without the token = %d", w.Code)
+	}
+	c := viewerSession(t, h)
+	if w := get("/", c, false); w.Code != 200 || !strings.Contains(w.Body.String(), "Echo Inbox") {
+		t.Errorf("GET / signed in = %d", w.Code)
+	}
+	w := get(web.PathMessages, c, false)
+	var page web.Page
+	if err := json.Unmarshal(w.Body.Bytes(), &page); err != nil || !page.ReadOnly || len(page.Messages) != 1 {
+		t.Errorf("list signed in = %d %s", w.Code, w.Body)
+	}
+	if w := get("/report", c, false); w.Code != 200 {
+		t.Errorf("report signed in = %d", w.Code)
+	}
+	if w := get("/v1/messages", c, false); w.Code != http.StatusUnauthorized {
+		t.Errorf("a viewer reading the API = %d", w.Code)
+	}
+	r := httptest.NewRequest(http.MethodDelete, web.PathMessages+"/m1", nil)
+	r.AddCookie(c)
+	if w := serve(h, r); w.Code != http.StatusForbidden {
+		t.Errorf("a viewer deleting = %d", w.Code)
+	}
+	// The token still opens everything, read-write.
+	if w := get(web.PathMessages, nil, true); w.Code != 200 || strings.Contains(w.Body.String(), "read_only") {
+		t.Errorf("list with the token = %d %s", w.Code, w.Body)
+	}
+}
+
+// TestLoginWithoutAToken: the Inbox needs the login, the API stays open
+// to connectors on this machine as before.
+func TestLoginWithoutAToken(t *testing.T) {
+	h := testLoginUp(t, "")
+	if w := serve(h, httptest.NewRequest(http.MethodGet, "/", nil)); w.Code != http.StatusFound {
+		t.Errorf("GET / = %d", w.Code)
+	}
+	if w := serve(h, httptest.NewRequest(http.MethodGet, "/v1/messages", nil)); w.Code != 200 {
+		t.Errorf("API = %d", w.Code)
+	}
+	c := viewerSession(t, h)
+	r := httptest.NewRequest(http.MethodGet, web.PathMessages, nil)
+	r.AddCookie(c)
+	if w := serve(h, r); w.Code != 200 || !strings.Contains(w.Body.String(), `"read_only":true`) {
+		t.Errorf("list signed in = %d %s", w.Code, w.Body)
+	}
+}
+
+func TestLoginFromEnv(t *testing.T) {
+	t.Setenv(loginEnv, "")
+	if l, err := loginFromEnv(); l != nil || err != nil {
+		t.Errorf("unset: %v %v", l, err)
+	}
+	t.Setenv(loginEnv, "client:short")
+	if _, err := loginFromEnv(); err == nil || err.Error() != "RHYTHM_ECHO_LOGIN: the password must be at least 8 characters" {
+		t.Errorf("short password: %v", err)
+	}
+	t.Setenv(loginEnv, "client:correct horse")
+	if l, err := loginFromEnv(); err != nil || l.User() != "client" {
+		t.Errorf("good: %v %v", l, err)
+	}
+}
+
+// TestUpWithLogin: RHYTHM_ECHO_LOGIN puts the Inbox behind the sign-in
+// page and says so in the banner.
+func TestUpWithLogin(t *testing.T) {
+	upEnv(t)
+	t.Setenv(loginEnv, "client:correct horse")
+	api := freePorts(t, 1)[0]
+	out, _, stop := startUp(t, "--listen", api, "--smtp", "off")
+	defer stop()
+	want := "Login: viewers sign in as client at http://" + api + "/login (read only, for 8 hours)"
+	if !strings.Contains(out.String(), want) {
+		t.Errorf("banner lacks %q:\n%s", want, out)
+	}
+	c := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	resp, err := c.Get("http://" + api + "/") //nolint:noctx // test
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusFound || resp.Header.Get("Location") != "/login?next=%2F" {
+		t.Errorf("GET / = %d %q", resp.StatusCode, resp.Header.Get("Location"))
 	}
 }

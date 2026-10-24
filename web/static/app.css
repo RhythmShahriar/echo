@@ -183,3 +183,24 @@ td { overflow-wrap: anywhere; }
   .list { width: 100%; max-width: none; max-height: 45vh; border-right: 0; border-bottom: 1px solid var(--line); }
   .search select { flex: 1; max-width: none; }
 }
+
+/* The sign-in page (web/login.go). */
+body.signin { align-items: center; justify-content: center; padding: 16px; }
+.signin-box {
+  width: 100%;
+  max-width: 340px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 24px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.signin-box h1 { font-size: 18px; margin: 0; }
+.signin-box label { display: flex; flex-direction: column; gap: 4px; color: var(--muted); font-size: 13px; }
+.signin-box input { padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--text); }
+.signin-note { margin: 0; color: var(--muted); font-size: 13px; }
+.signin-error { margin: 0; color: var(--error); }
+#signout { margin: 0; }
+#d-delete[hidden], #signout[hidden] { display: none; }

@@ -67,6 +67,10 @@ func cmdUp(s *session) int {
 		}
 		open = append(open, l.addr)
 	}
+	login, err := loginFromEnv()
+	if err != nil {
+		return s.fail(err)
+	}
 
 	// Every port is taken before anything is printed, so a port in use
 	// fails with only its error. Whatever was started is stopped again
@@ -105,14 +109,16 @@ func cmdUp(s *session) int {
 	checks := liveChecks(cfg)
 	log := newLiveLog(s.view)
 	log.checks = checks
-	ui := web.New(web.Options{Inbox: inbox, Mode: cfg.Mode, Checks: checks, AnyHost: token != ""})
+	// A login guards the Inbox with a session cookie, which a rebinding
+	// page can't send either, so the Host check isn't needed then.
+	ui := web.New(web.Options{Inbox: inbox, Mode: cfg.Mode, Checks: checks, AnyHost: token != "" || login != nil})
 	log.issues = ui.Issues // checked once, for the log and the page
 	inbox.OnAdd(func(m model.Message) {
 		ui.Notify(m)
 		log.add(m)
 	})
 	errs := make(chan error, 3)
-	api := &http.Server{Addr: cfg.Listen, Handler: upHandler(upRoutes(srv, inbox, ui, cfg.Mode, checks), token), ReadHeaderTimeout: 10 * time.Second}
+	api := &http.Server{Addr: cfg.Listen, Handler: upHandler(upRoutes(srv, inbox, ui, cfg.Mode, checks), token, login), ReadHeaderTimeout: 10 * time.Second}
 	go func() { errs <- api.Serve(ln) }()
 	stack.push(func(ctx context.Context) { _ = api.Shutdown(ctx) })
 	stack.push(func(context.Context) { ui.Close() }) // runs first: Shutdown waits for open event streams
@@ -149,6 +155,9 @@ func cmdUp(s *session) int {
 	}
 	if proxyLine != "" {
 		s.view.Step("Proxy", proxyLine)
+	}
+	if login != nil {
+		s.view.Step("Login", "viewers sign in as "+login.User()+" at http://"+cfg.Listen+web.PathLogin+" (read only, for 8 hours)")
 	}
 	if len(cfg.Allow) > 0 {
 		s.view.Step("Allowed", strings.Join(cfg.Allow, ", "))
@@ -197,28 +206,76 @@ type upRoute struct {
 	pattern string
 	probe   string // a GET path that reaches the route, for the test
 	handler http.Handler
+	browser bool // part of Echo Inbox: a --login session may read it
 }
 
 // upRoutes lists everything the API listener serves: the catcher's API,
 // Echo Inbox at / and the session as an HTML report at /report.
 func upRoutes(srv *catcher.Server, inbox *catcher.Inbox, ui *web.UI, mode string, checks check.Options) []upRoute {
 	return []upRoute{
-		{"/v1/", "/v1/messages", srv},
-		{"/api/v1/", "/api/v1/messages", srv}, // Mailpit-compatible email API
-		{"GET /{$}", "/", ui},
-		{"GET /assets/", "/assets/app.js", ui},
-		{"/ui/", web.PathMessages, ui},
-		{"GET /report", "/report", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { liveReport(w, r, inbox, mode, checks) })},
+		{"/v1/", "/v1/messages", srv, false},
+		{"/api/v1/", "/api/v1/messages", srv, false}, // Mailpit-compatible email API
+		{"GET /{$}", "/", ui, true},
+		{"GET /assets/", "/assets/app.js", ui, true},
+		{"/ui/", web.PathMessages, ui, true},
+		{"GET /report", "/report", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { liveReport(w, r, inbox, mode, checks) }), true},
 	}
 }
 
-// upHandler serves routes, all behind the token when one is set.
-func upHandler(routes []upRoute, token string) http.Handler {
+// upHandler serves routes, all behind the token when one is set. With a
+// login, Echo Inbox's routes are also open to a signed-in viewer, read
+// only (web.Login.Guard). Without a token they need the login then, while
+// the API stays as open as before: connectors on this machine post to it.
+func upHandler(routes []upRoute, token string, login *web.Login) http.Handler {
 	mux := http.NewServeMux()
+	viewer := http.NewServeMux()
 	for _, r := range routes {
 		mux.Handle(r.pattern, r.handler)
+		if r.browser {
+			viewer.Handle(r.pattern, r.handler)
+		}
 	}
-	return requireToken(token, mux)
+	if login == nil {
+		return requireToken(token, mux, nil)
+	}
+	viewer.Handle(web.PathLogin, http.NotFoundHandler()) // Guard answers these itself
+	viewer.Handle(web.PathLogout, http.NotFoundHandler())
+	guarded := login.Guard(viewer)
+	viewing := func(r *http.Request) bool { _, p := viewer.Handler(r); return p != "" }
+	if token == "" {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if viewing(r) {
+				guarded.ServeHTTP(w, r)
+				return
+			}
+			mux.ServeHTTP(w, r)
+		})
+	}
+	return requireToken(token, mux, func(w http.ResponseWriter, r *http.Request) bool {
+		if !viewing(r) {
+			return false
+		}
+		guarded.ServeHTTP(w, r)
+		return true
+	})
+}
+
+// loginEnv sets up a viewer login (user:password). The --login flag
+// belongs to the cli lane's flag set; until it lands, the environment is
+// how to ask for one.
+const loginEnv = "RHYTHM_ECHO_LOGIN"
+
+// loginFromEnv returns the login RHYTHM_ECHO_LOGIN asks for, or nil.
+func loginFromEnv() (*web.Login, error) {
+	spec := os.Getenv(loginEnv)
+	if spec == "" {
+		return nil, nil
+	}
+	l, err := web.ParseLogin(spec)
+	if err != nil {
+		return nil, usageErr("%s: %v", loginEnv, err)
+	}
+	return l, nil
 }
 
 // tokenCookie holds the token for a browser that opened the live view
@@ -228,8 +285,10 @@ const tokenCookie = "echo_token"
 // requireToken guards a handler when token is set. Connectors and scripts
 // send X-Echo-Token. A browser can't, so it opens /?token=... once: Echo
 // sets an HttpOnly, same-site cookie and redirects to the URL without the
-// token, so the token doesn't stay in the address bar or the history.
-func requireToken(token string, next http.Handler) http.Handler {
+// token, so the token doesn't stay in the address bar or the history. A
+// request without the token goes to otherwise when that is set and says
+// it served it (a login's viewer); it is refused otherwise.
+func requireToken(token string, next http.Handler, otherwise func(http.ResponseWriter, *http.Request) bool) http.Handler {
 	if token == "" {
 		return next
 	}
@@ -267,6 +326,9 @@ func requireToken(token string, next http.Handler) http.Handler {
 			r = r.Clone(r.Context())
 			r.Header.Set(wire.TokenHeader, token)
 			next.ServeHTTP(w, r)
+			return
+		}
+		if otherwise != nil && otherwise(w, r) {
 			return
 		}
 		deny(w)

@@ -27,6 +27,7 @@
     tab: "",           // the open tab
     images: new Set(), // messages whose remote images may load
     fresh: new Set(),  // IDs to flash once
+    readOnly: false,   // signed in with a login: viewing only
   };
 
   const filters = {
@@ -51,6 +52,11 @@
 
   async function getJSON(url) {
     const r = await fetch(url, { headers: { Accept: "application/json" } });
+    if (r.redirected && new URL(r.url).pathname === "/login") {
+      // The sign-in expired: go back through it to this view.
+      location.href = "/login?next=" + encodeURIComponent(location.pathname + location.hash);
+      throw new Error("signed out");
+    }
     if (r.status === 401) {
       showProblem("Echo needs its token: open /?token=<your token> once in this browser.");
       throw new Error("unauthorized");
@@ -73,6 +79,9 @@
     $("mode").textContent = page.mode === "observe" ? "observe" : "sealed";
     $("mode").title = page.mode === "observe" ? "Messages are recorded and sent for real" : "Nothing leaves; Echo answers for every service";
     fillFacets(page.facets);
+    state.readOnly = !!page.read_only;
+    $("d-delete").hidden = state.readOnly;
+    $("signout").hidden = !state.readOnly;
     let rows = page.messages;
     let next = page.next;
     if (keep && state.rows.length > rows.length) {
@@ -299,6 +308,7 @@
   }
 
   async function remove(id) {
+    if (state.readOnly) return;
     const r = await fetch(API + "/" + encodeURIComponent(id), { method: "DELETE" });
     if (!r.ok && r.status !== 404) return;
     const i = state.rows.findIndex((s) => s.id === id);
