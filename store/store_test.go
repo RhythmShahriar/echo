@@ -221,3 +221,21 @@ func TestFailedSnapshotLeavesNothing(t *testing.T) {
 		t.Errorf("left behind: %v", left)
 	}
 }
+
+func TestLatestRunFallsBackToTheSnapshot(t *testing.T) {
+	s := Store{Root: filepath.Join(t.TempDir(), ".echo")}
+	if _, err := s.LatestRun(); err == nil || !strings.Contains(err.Error(), "nothing to show yet") {
+		t.Fatalf("empty store: %v", err)
+	}
+	take(t, s, "first", time.Now())
+	if dir, err := s.LatestRun(); err != nil || filepath.Base(dir) != "first" {
+		t.Errorf("only a snapshot: %s, %v", dir, err)
+	}
+	run, err := s.NewDir("runs", Stamp(time.Now()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if dir, err := s.LatestRun(); err != nil || dir != run {
+		t.Errorf("a run since: %s, %v", dir, err)
+	}
+}

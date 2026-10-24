@@ -206,13 +206,17 @@ func (s Store) Snapshots() ([]string, error) {
 	return s.list("snapshots")
 }
 
-// LatestRun returns the newest run directory (a run or comparison).
+// LatestRun returns the newest run directory (a run or comparison), or
+// the latest snapshot when nothing has been run since taking one.
 func (s Store) LatestRun() (string, error) {
 	runs, err := s.list("runs")
-	if err != nil || len(runs) == 0 {
-		return "", errors.New("nothing to show yet; run rhythm echo compare or run first")
+	if err == nil && len(runs) > 0 {
+		return filepath.Join(s.Root, "runs", runs[len(runs)-1]), nil
 	}
-	return filepath.Join(s.Root, "runs", runs[len(runs)-1]), nil
+	if dir, err := s.Snapshot(""); err == nil {
+		return dir, nil
+	}
+	return "", errors.New("nothing to show yet; run rhythm echo snapshot, compare or run first")
 }
 
 func (s Store) list(kind string) ([]string, error) {
