@@ -36,9 +36,9 @@ const (
 	shopAddr = "127.0.0.1:20501"
 )
 
-// The secrets the shop's mail carries. Echo's catcher stores them as they
-// are today (the header isn't one it masks, nor is ?code= or ?k=), so the
-// MCP results must mask them.
+// The secrets the shop's mail carries. Echo's catcher masks them when it
+// stores the mail; an Echo before 1.1 did not, so the MCP results must
+// mask them as well.
 const (
 	shopifyToken = "shpat_0123456789abcdef0123456789abcdef"
 	resetKey     = "Zk3pQ9vX2mL7tR4w"
@@ -297,8 +297,12 @@ func TestSession(t *testing.T) {
 		if headers["x-request-id"] != "req-42" {
 			t.Errorf("x-request-id was masked or lost: %v", headers)
 		}
-		if !strings.Contains(text, "page=2") || !strings.Contains(text, "482913") {
+		if !strings.Contains(text, "page=2") || !strings.Contains(text, "Order W-1001 received") {
 			t.Errorf("masking took more than the secrets: %s", text)
+		}
+		// Echo stores the one-time code masked; latest_code is the way to it.
+		if strings.Contains(text, "482913") {
+			t.Errorf("get_message shows the one-time code: %s", text)
 		}
 		id, _ := res["id"].(string)
 		byID, _, isErr := ss.tool("get_message", map[string]any{"id": id})

@@ -19,6 +19,7 @@
 package hub
 
 import (
+	"crypto/rand"
 	"crypto/subtle"
 	"encoding/json"
 	"errors"
@@ -51,6 +52,7 @@ type Hub struct {
 	o       Options
 	Inbox   *catcher.Inbox
 	srv     *catcher.Server
+	inner   string // the catcher's own token, sent on requests the hub let through
 	persist *persister
 
 	mu     sync.Mutex
@@ -90,8 +92,12 @@ func New(o Options) (*Hub, error) {
 		h.Inbox.Add(r.Message) // keeps the stored ID, time and run
 		h.siteOf[r.Message.ID] = r.Site
 	}
-	// The server checks no token itself: the hub does, by site.
-	h.srv = catcher.NewServer(h.Inbox, catcher.Config{Mode: o.Mode, Allow: o.Allow, Version: o.Version})
+	// The hub checks the tokens, by site. The catcher behind it gets a
+	// token of its own that only the hub sends, so its loopback guard
+	// (Host and Origin) lets through what the hub already let in: the hub
+	// listens beyond loopback, under its own name.
+	h.inner = rand.Text()
+	h.srv = catcher.NewServer(h.Inbox, catcher.Config{Mode: o.Mode, Allow: o.Allow, Version: o.Version, Token: h.inner})
 	h.Inbox.OnAdd(h.added)
 	return h, nil
 }
@@ -227,7 +233,7 @@ func (h *Hub) write(site string, w http.ResponseWriter, r *http.Request) {
 	case isAction(r):
 		h.action(site, w, r)
 	case r.Method == http.MethodGet && r.URL.Path == "/v1/health":
-		h.srv.ServeHTTP(w, r)
+		h.pass(w, r)
 	default:
 		http.Error(w, "a site's write token can only send captures; reading needs the hub's read token", http.StatusForbidden)
 	}
@@ -275,13 +281,21 @@ func (h *Hub) read(w http.ResponseWriter, r *http.Request) {
 		}
 		h.action(site, w, r)
 	case r.Method == http.MethodDelete:
-		h.srv.ServeHTTP(w, r)
+		h.pass(w, r)
 		h.compact() // deleted messages stay deleted after a restart
 	case r.Method == http.MethodPost && r.URL.Path == "/v1/capture":
 		http.Error(w, "the read token can't send captures; each site uses its own write token", http.StatusForbidden)
 	default:
-		h.srv.ServeHTTP(w, r)
+		h.pass(w, r)
 	}
+}
+
+// pass hands a request the hub has let in to the catcher, with the
+// catcher's own token in place of the site's or the read token.
+func (h *Hub) pass(w http.ResponseWriter, r *http.Request) {
+	r = r.Clone(r.Context())
+	r.Header.Set(wire.TokenHeader, h.inner)
+	h.srv.ServeHTTP(w, r)
 }
 
 // list is GET /v1/messages with the catcher's filters plus site.

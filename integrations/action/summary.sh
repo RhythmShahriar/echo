@@ -46,6 +46,13 @@ def mask:
         end)
       | sub("^(?<h>[0-9]{2}:[0-9]{2}:[0-9]{2} .+? to [^:]*: ).*(?<s> \\[[a-z_ -]+\\])$"; "\(.h)***\(.s)")
     end;
+# unwrap takes the run or comparison out of the JSON envelope Echo writes
+# (schema, kind, summary, data). A comparison envelope holds the compared
+# actions as a list with their count in summary, so the count goes back
+# in. Plain JSON from an older Echo passes unchanged.
+def unwrap: if type == "object" and (.kind | type) == "string" and has("data") then
+    (if .kind == "comparison" then .data + {actions: .summary.actions} else .data end)
+  else . end;
 def cell: gsub("\\|"; "\\|") | gsub("[\r\n]+"; " ") | gsub("<"; "&lt;") | gsub(">"; "&gt;");
 def plural($n; $one; $many): if $n == 1 then "1 \($one)" else "\($n) \($many)" end;
 def actions: (.actions // []) as $a
@@ -157,10 +164,10 @@ mask)
 	;;
 report)
 	[ $# -eq 2 ] || { echo "usage: summary.sh report <report.json>" >&2; exit 2; }
-	if jq -e 'has("changes")' "$2" >/dev/null; then
-		q false false -r "$jqlib $comparison" "$2"
+	if q false false -e "$jqlib unwrap | has(\"changes\")" "$2" >/dev/null; then
+		q false false -r "$jqlib unwrap | $comparison" "$2"
 	else
-		q false false -r "$jqlib $run" "$2"
+		q false false -r "$jqlib unwrap | $run" "$2"
 	fi
 	echo "$hidden"
 	;;
@@ -171,7 +178,7 @@ comment)
 		shift
 	fi
 	[ $# -eq 2 ] || { echo "usage: summary.sh comment [--details] <report.json>" >&2; exit 2; }
-	q "$raw" false -r "$jqlib $comment" "$2"
+	q "$raw" false -r "$jqlib unwrap | $comment" "$2"
 	;;
 error)
 	[ $# -eq 4 ] || { echo "usage: summary.sh error <code> <stderr> <log>" >&2; exit 2; }

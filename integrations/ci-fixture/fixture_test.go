@@ -50,7 +50,11 @@ func TestSnapshotAndCompare(t *testing.T) {
 
 	cli := func(want int, args ...string) string {
 		t.Helper()
-		cmd := exec.Command(echo, append(args, "--url", "http://"+apiAddr, "--plain")...) //nolint:gosec // the binary this test built
+		// report reads the store only and refuses --url.
+		if args[0] != "report" {
+			args = append(args, "--url", "http://"+apiAddr)
+		}
+		cmd := exec.Command(echo, append(args, "--plain")...) //nolint:gosec // the binary this test built
 		cmd.Dir = dir
 		out, err := cmd.CombinedOutput()
 		code := 0
@@ -76,18 +80,26 @@ func TestSnapshotAndCompare(t *testing.T) {
 		t.Fatal(err)
 	}
 	cli(1, "compare", "--fail-on", "broke")
+	// The comparison is the data of Echo's JSON envelope. report exits 1
+	// on it as compare did: it broke.
 	var c struct {
-		Changes []struct{ Class, Title string } `json:"changes"`
+		Kind string `json:"kind"`
+		Data struct {
+			Changes []struct{ Class, Title string } `json:"changes"`
+		} `json:"data"`
 	}
-	if err := json.Unmarshal([]byte(cli(0, "report", "--json")), &c); err != nil {
+	if err := json.Unmarshal([]byte(cli(1, "report", "--json")), &c); err != nil {
 		t.Fatal(err)
 	}
+	if c.Kind != "comparison" {
+		t.Errorf("report --json kind = %q, want comparison", c.Kind)
+	}
 	classes := map[string]int{}
-	for _, ch := range c.Changes {
+	for _, ch := range c.Data.Changes {
 		classes[ch.Class]++
 	}
 	if classes["broke"] != 1 || classes["new"] != 1 {
-		t.Errorf("broken compare: %+v, want one broke and one new", c.Changes)
+		t.Errorf("broken compare: %+v, want one broke and one new", c.Data.Changes)
 	}
 }
 

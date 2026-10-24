@@ -334,7 +334,9 @@ runs:
             { echo "exit-code=0"; echo "summary=$md"; } >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          jq -e 'has("changes")' "$json" >/dev/null && compared=true
+          # Echo's JSON envelope names its kind; an older Echo's plain
+          # comparison is known by its changes.
+          jq -e '.kind == "comparison" or has("changes")' "$json" >/dev/null && compared=true
         fi
 
         # One --fail-on vocabulary, as in the CLI: any case is fine and none
@@ -379,6 +381,10 @@ runs:
         "${cmd[@]}" ${fail[@]+"${fail[@]}"} ${extra[@]+"${extra[@]}"} --plain 2> "$errf"
         code=$?
         cat "$errf" >&2
+        # Without --fail-on the CLI still exits 1 on a failed action or at
+        # its default level. none never fails; Echo 1.0.0 refuses
+        # --fail-on none, so it isn't passed.
+        [ "$level" = none ] && [ "$code" -eq 1 ] && code=0
         [ "$code" -ge 2 ] && finish "$code"
         echo "exit-code=$code" >> "$GITHUB_OUTPUT"
 

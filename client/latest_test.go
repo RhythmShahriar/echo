@@ -40,6 +40,13 @@ func TestLatest(t *testing.T) {
 	if l.Message.Subject != "Your sign-in code" {
 		t.Errorf("message: %+v", l.Message)
 	}
+	// Has sends has: a link was read, so has=link finds the message.
+	if l, err := c.Latest(ctx, LatestQuery{To: "ann@", Has: "link"}); err != nil || l.Message.Subject != "Your sign-in code" {
+		t.Errorf("has link: %+v %v", l, err)
+	}
+	if _, err := c.Latest(ctx, LatestQuery{To: "ann@", Has: "nothing"}); err == nil {
+		t.Error("an unknown has should fail")
+	}
 	if _, err := New(srv.URL, "").Latest(ctx, LatestQuery{}); err == nil {
 		t.Error("without the token Latest should fail")
 	}

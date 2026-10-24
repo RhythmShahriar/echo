@@ -547,3 +547,31 @@ func doQuiet(method, url, token string) (int, error) {
 	_ = resp.Body.Close()
 	return resp.StatusCode, nil
 }
+
+// TestHubAnswersUnderItsOwnName: the hub listens beyond loopback, so the
+// catcher behind it must not refuse a Host it doesn't know once the hub
+// let the request in. A token is still needed.
+func TestHubAnswersUnderItsOwnName(t *testing.T) {
+	h := newHub(t, t.TempDir())
+	defer func() { _ = h.Close() }()
+	for _, tc := range []struct {
+		method, path, token string
+		want                int
+	}{
+		{http.MethodGet, "/v1/health", tokens["TOKEN_A"], http.StatusOK},
+		{http.MethodGet, "/api/v1/messages", tokens["READ"], http.StatusOK},
+		{http.MethodDelete, "/v1/messages", tokens["READ"], http.StatusOK},
+		{http.MethodGet, "/api/v1/messages", "", http.StatusUnauthorized},
+	} {
+		req := httptest.NewRequest(tc.method, tc.path, nil)
+		req.Host = "hub.agency.example:8025"
+		if tc.token != "" {
+			req.Header.Set(wire.TokenHeader, tc.token)
+		}
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		if rec.Code != tc.want {
+			t.Errorf("%s %s: %d %s, want %d", tc.method, tc.path, rec.Code, rec.Body, tc.want)
+		}
+	}
+}

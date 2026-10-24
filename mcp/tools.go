@@ -323,10 +323,30 @@ func (s *Server) getMessage(ctx context.Context, id string) (any, error) {
 	return m, err
 }
 
+// latestCode finds the newest email or text with a one-time code. An Echo
+// with the "codes" capability reads codes before it masks a message, so
+// it is asked for them (GET /v1/messages/latest?has=code): what it stores
+// has the code masked. An older Echo stores messages unmasked; Code
+// reads them.
 func (s *Server) latestCode(ctx context.Context, to, channel, since string) (string, string, error) {
 	t, err := s.since(since)
 	if err != nil {
 		return "", "", err
+	}
+	h, err := s.Echo.Health(ctx)
+	reads := err == nil && h.Supports("codes")
+	if reads {
+		channels := []model.Channel{model.Email, model.SMS, model.WhatsApp}
+		if channel != "" {
+			channels = []model.Channel{model.Channel(channel)}
+		}
+		l, err := s.Echo.Latest(ctx, client.LatestQuery{To: to, Channels: channels, Since: t, Has: "code"})
+		switch {
+		case err == nil && l.Code() != "":
+			return l.Code(), l.Message.ID, nil
+		case err != nil && !client.IsNotFound(err):
+			return "", "", err
+		}
 	}
 	ms, err := s.Echo.Messages(ctx, client.Filter{To: to, Channel: model.Channel(channel), Since: t})
 	if err != nil {
@@ -339,6 +359,9 @@ func (s *Server) latestCode(ctx context.Context, to, channel, since string) (str
 			continue
 		}
 		looked++
+		if reads {
+			continue // counted only: the stored code is masked
+		}
 		if code := Code(m); code != "" {
 			return code, m.ID, nil
 		}

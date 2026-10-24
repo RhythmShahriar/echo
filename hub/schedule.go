@@ -26,6 +26,7 @@ import (
 	"github.com/RhythmShahriar/echo/model"
 	"github.com/RhythmShahriar/echo/runner"
 	"github.com/RhythmShahriar/echo/store"
+	"github.com/RhythmShahriar/rhythm/kit/cache"
 )
 
 // Schedule is when an update window opens: on some days of the week at a
@@ -288,7 +289,7 @@ func window(ctx context.Context, o WindowOptions, echo *client.Client, site *Sit
 	}
 	r.Finished = o.Now().UTC()
 	if b, err := json.MarshalIndent(r, "", "  "); err == nil {
-		_ = store.Saver(dir)("schedule.json", b)
+		_ = cache.WriteFile(filepath.Join(dir, "schedule.json"), b)
 	}
 	_ = st.Prune(keepWindows)
 	return r

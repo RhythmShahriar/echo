@@ -178,3 +178,28 @@ func TestHideLink(t *testing.T) {
 		}
 	}
 }
+
+// TestLatestHas: has=code and has=link skip the newer messages that carry
+// none, such as a welcome email sent after the sign-in code.
+func TestLatestHas(t *testing.T) {
+	s := NewServer(NewInbox(10), Config{})
+	srv := httptest.NewServer(s)
+	defer srv.Close()
+	login := post(t, srv, wire.Capture{Version: 1, Kind: "email", Source: wire.Source{Via: "laravel"},
+		Email: &wire.Email{To: []string{"ann@example.com"}, Subject: "Your code", Text: "Your verification code is 482913."}})
+	welcome := post(t, srv, wire.Capture{Version: 1, Kind: "email", Source: wire.Source{Via: "laravel"},
+		Email: &wire.Email{To: []string{"ann@example.com"}, Subject: "Welcome", Text: "Glad to have you."}})
+
+	if code, a, body := getLatest(t, srv, "to=ann@"); code != http.StatusOK || a.Message.ID != welcome.ID || len(a.Codes) != 0 {
+		t.Errorf("latest: %d %s", code, body)
+	}
+	if code, a, body := getLatest(t, srv, "to=ann@&has=code"); code != http.StatusOK || a.Message.ID != login.ID || strings.Join(a.Codes, ",") != "482913" {
+		t.Errorf("has=code: %d %s", code, body)
+	}
+	if code, _, body := getLatest(t, srv, "to=ann@&has=link"); code != http.StatusNotFound || !strings.HasPrefix(body, "no message matched") {
+		t.Errorf("has=link with no link: %d %s", code, body)
+	}
+	if code, _, body := getLatest(t, srv, "has=secret"); code != http.StatusBadRequest || !strings.Contains(body, "has: want code or link, not secret") {
+		t.Errorf("has=secret: %d %s", code, body)
+	}
+}

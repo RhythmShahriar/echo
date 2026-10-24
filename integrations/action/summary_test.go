@@ -4,6 +4,7 @@
 package action
 
 import (
+	"encoding/json"
 	"flag"
 	"os"
 	"os/exec"
@@ -52,6 +53,48 @@ func TestSummaryReport(t *testing.T) {
 				}
 			}
 			golden(t, filepath.Join("testdata", c.json+".md"), out)
+		})
+	}
+}
+
+// TestSummaryReadsTheEnvelope: rhythm-echo report --json wraps the run
+// or comparison in Echo's JSON envelope. A comparison's data holds the
+// compared actions as a list and their count in summary. The summary and
+// the comment read the same as from the plain JSON of Echo 1.0.0.
+func TestSummaryReadsTheEnvelope(t *testing.T) {
+	needBash(t, "jq")
+	sh := filepath.Join(root(t), "integrations", "action", "summary.sh")
+	dir := t.TempDir()
+	for _, name := range []string{"comparison", "same", "run"} {
+		t.Run(name, func(t *testing.T) {
+			b, err := os.ReadFile(filepath.Join("testdata", name+".json"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			var data map[string]any
+			if err := json.Unmarshal(b, &data); err != nil {
+				t.Fatal(err)
+			}
+			kind, count := "run", 0
+			if _, ok := data["changes"]; ok {
+				kind, count = "comparison", int(data["actions"].(float64))
+				data["actions"] = []any{}
+			} else {
+				count = len(data["actions"].([]any))
+			}
+			env, _ := json.Marshal(map[string]any{"schema": "rhythm-echo/v1", "kind": kind, "tool": "rhythm-echo", "version": "1.1.0",
+				"complete": true, "summary": map[string]any{"actions": count}, "verdict": "findings", "data": data})
+			path := filepath.Join(dir, name+".json")
+			if err := os.WriteFile(path, env, 0o600); err != nil {
+				t.Fatal(err)
+			}
+			for _, args := range [][]string{{"report"}, {"comment"}} {
+				want, _, _ := script(t, sh, nil, append(args, filepath.Join("testdata", name+".json"))...)
+				got, errOut, code := script(t, sh, nil, append(args, path)...)
+				if code != 0 || got != want {
+					t.Errorf("%s from the envelope: exit %d %s\n%s\nwant\n%s", args[0], code, errOut, got, want)
+				}
+			}
 		})
 	}
 }

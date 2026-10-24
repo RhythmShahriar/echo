@@ -215,6 +215,9 @@ type LatestQuery struct {
 	Since time.Time
 	Q     string        // a search, as in Filter
 	Wait  time.Duration // how long to wait for a match; at most a minute
+	// Has skips messages without a one-time code ("code") or without a
+	// link ("link"). An Echo from before it ignores it.
+	Has string
 }
 
 // Latest is the newest matching message with what Echo read from it before
@@ -260,6 +263,9 @@ func (c *Client) Latest(ctx context.Context, lq LatestQuery) (Latest, error) {
 	}
 	if lq.Wait > 0 {
 		q.Set("wait", lq.Wait.String())
+	}
+	if lq.Has != "" {
+		q.Set("has", lq.Has)
 	}
 	var l Latest
 	return l, c.do(ctx, http.MethodGet, "/v1/messages/latest", q, nil, &l)

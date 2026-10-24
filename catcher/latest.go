@@ -117,16 +117,28 @@ func hideLink(u string) string {
 
 func isLetter(r rune) bool { return 'a' <= r && r <= 'z' || 'A' <= r && r <= 'Z' }
 
+// What Latest's has asks for: a message with a one-time code, or with a
+// link codes.Extract read, of any kind.
+const (
+	HasCode = "code"
+	HasLink = "link"
+)
+
 // Latest returns the newest message matching f and, when channels isn't
 // empty, on one of them, with the codes and links read from it before
-// masking. It waits for one until ctx ends.
-func (in *Inbox) Latest(ctx context.Context, f Filter, channels []model.Channel) (m model.Message, cs []string, ls []codes.Link, ok bool) {
+// masking. With has (HasCode or HasLink) it skips messages that carry
+// none: the newest email with a sign-in code, past a welcome email sent
+// after it. It waits for one until ctx ends.
+func (in *Inbox) Latest(ctx context.Context, f Filter, channels []model.Channel, has string) (m model.Message, cs []string, ls []codes.Link, ok bool) {
 	for {
 		in.mu.Lock()
 		for i := len(in.msgs) - 1; i >= 0; i-- {
 			e := in.msgs[i]
 			if f.match(e.m) && (len(channels) == 0 || slices.Contains(channels, e.m.Channel)) {
 				x := in.found[e.m.ID]
+				if has == HasCode && len(x.codes) == 0 || has == HasLink && len(x.links) == 0 {
+					continue
+				}
 				in.mu.Unlock()
 				return e.m, x.codes, x.links, true
 			}
@@ -151,8 +163,9 @@ type latestAnswer struct {
 // latest answers the newest message matching the filter (run, action,
 // to, since, q) on one of the channels in channel (comma-separated), with
 // the codes and links read from it before masking: what a login or
-// checkout test needs next. With wait it waits up to that long for one,
-// at most a minute; it answers 404 when none came.
+// checkout test needs next. has=code or has=link skips messages without
+// one. With wait it waits up to that long for one, at most a minute; it
+// answers 404 when none came.
 func (s *Server) latest(w http.ResponseWriter, r *http.Request) {
 	f, ok := filter(w, r)
 	if !ok {
@@ -171,10 +184,15 @@ func (s *Server) latest(w http.ResponseWriter, r *http.Request) {
 		channels = append(channels, model.Channel(c))
 	}
 	f.Channel = "" // channels holds them
+	has := q.Get("has")
+	if has != "" && has != HasCode && has != HasLink {
+		http.Error(w, "has: want "+HasCode+" or "+HasLink+", not "+has, http.StatusBadRequest)
+		return
+	}
 	wait := duration(q.Get("wait"), 0, time.Minute)
 	ctx, cancel := context.WithTimeout(r.Context(), wait)
 	defer cancel()
-	m, cs, ls, ok := s.Inbox.Latest(ctx, f, channels)
+	m, cs, ls, ok := s.Inbox.Latest(ctx, f, channels, has)
 	if !ok {
 		msg := "no message matched"
 		if wait > 0 {
