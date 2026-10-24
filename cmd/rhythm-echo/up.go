@@ -507,12 +507,19 @@ func lookupIPs(host string) ([]net.IP, error) {
 }
 
 // containerIface matches the bridges and virtual links container runtimes
-// create (Docker, Podman, Kubernetes CNIs). Their addresses are usually
-// private anyway; a runtime can give them any range, though.
+// create (Docker, Podman, Kubernetes CNIs). The name alone is not trusted:
+// a runtime can give a bridge any range, so its address must also be
+// non-global (see sharedSpace).
 var containerIface = regexp.MustCompile(`^(docker\d*|br-[0-9a-f]+|veth.+|cni\d*|podman\d*|cali.+|flannel.+|cilium.+)$`)
 
+// sharedSpace is the carrier-grade NAT range (RFC 6598). It is not
+// RFC 1918 but is never routed on the internet, and some runtimes and
+// overlay networks hand it to container bridges.
+var sharedSpace = &net.IPNet{IP: net.IPv4(100, 64, 0, 0).To4(), Mask: net.CIDRMask(10, 32)}
+
 // privateOnly returns nil when addr can be reached only from loopback,
-// private networks (RFC 1918, fc00::/7) or container interfaces. A
+// private networks (RFC 1918, fc00::/7) or container interfaces with a
+// private or shared (100.64.0.0/10) address. A
 // wildcard address listens on every interface, so each must qualify;
 // link-local addresses are left out, as they can't be routed.
 func privateOnly(flag, addr string, ifaces []netIface, lookup func(string) ([]net.IP, error)) error {
@@ -528,7 +535,7 @@ func privateOnly(flag, addr string, ifaces []netIface, lookup func(string) ([]ne
 		return fmt.Errorf("%s %s is reachable from a public address (%s); --private-network allows only private (RFC 1918) and container networks: listen on a private address, or set --token (or RHYTHM_ECHO_TOKEN)", flag, addr, where)
 	}
 	ok := func(ip net.IP, iface string) bool {
-		return ip.IsLoopback() || ip.IsPrivate() || containerIface.MatchString(iface)
+		return ip.IsLoopback() || ip.IsPrivate() || containerIface.MatchString(iface) && sharedSpace.Contains(ip)
 	}
 	ip := net.ParseIP(host)
 	if host == "" || ip != nil && ip.IsUnspecified() {

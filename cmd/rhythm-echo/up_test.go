@@ -781,6 +781,21 @@ var publicHost = []netIface{
 	{"docker0", []net.IP{net.ParseIP("100.64.0.1")}},
 }
 
+// cgnatHost has a carrier-grade NAT address on an ordinary interface,
+// which other customers of the same carrier can reach.
+var cgnatHost = []netIface{
+	{"lo", []net.IP{net.ParseIP("127.0.0.1")}},
+	{"eth0", []net.IP{net.ParseIP("100.64.0.9")}},
+}
+
+// publicBridge is a Docker network given a public range: the bridge's
+// name does not make it private.
+var publicBridge = []netIface{
+	{"lo", []net.IP{net.ParseIP("127.0.0.1")}},
+	{"eth0", []net.IP{net.ParseIP("10.0.0.4")}},
+	{"br-3f2a", []net.IP{net.ParseIP("198.51.100.1")}},
+}
+
 func TestPrivateOnly(t *testing.T) {
 	lookup := func(host string) ([]net.IP, error) {
 		switch host {
@@ -802,7 +817,10 @@ func TestPrivateOnly(t *testing.T) {
 		{"172.17.0.2:8025", containerHost, ""},
 		{"192.168.1.20:8025", publicHost, ""},
 		{"[fd00::5]:8025", publicHost, ""},
-		{"100.64.0.1:8025", publicHost, ""}, // not RFC 1918, but Docker's bridge
+		{"100.64.0.1:8025", publicHost, ""},                    // not RFC 1918; allowed as it is on docker0
+		{"100.64.0.9:8025", cgnatHost, "(100.64.0.9 on eth0)"}, // shared space off a container bridge
+		{"0.0.0.0:8025", publicBridge, "(198.51.100.1 on br-3f2a)"},
+		{"198.51.100.1:8025", publicBridge, "(198.51.100.1 on br-3f2a)"},
 		{"echo:8025", publicHost, ""},
 		{"0.0.0.0:8025", publicHost, "--listen 0.0.0.0:8025 is reachable from a public address (203.0.113.5 on eth0)"},
 		{"203.0.113.5:8025", publicHost, "(203.0.113.5 on eth0); --private-network allows only private (RFC 1918) and container networks"},
