@@ -229,7 +229,8 @@ var shellSafe = regexp.MustCompile(`^[A-Za-z0-9_./:@%+=,-]+$`)
 
 // shellQuote quotes s for sh when it holds anything but the characters
 // a path is usually made of, so the line stays readable in the common
-// case. A ' inside is written as '\''.
+// case. A single quote inside ends the quoting, is escaped with a
+// backslash and the quoting starts again.
 func shellQuote(s string) string {
 	if s != "" && shellSafe.MatchString(s) {
 		return s
