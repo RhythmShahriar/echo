@@ -10,12 +10,14 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net"
 	"net/http"
 	"net/url"
 	"path"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 	"unicode/utf8"
 
@@ -49,6 +51,9 @@ type Config struct {
 	Listen  string   // the address Echo listens on; its host is accepted in Host besides loopback names
 	MaxBody int      // bytes of body kept per message; default 256 KiB
 	Version string
+	// Warn is told about things worth a line in the log, such as a
+	// connector's site host that Echo ignores. Default: the standard log.
+	Warn func(msg string)
 }
 
 // Server is the catcher's HTTP API.
@@ -57,6 +62,7 @@ type Server struct {
 	cfg     Config
 	mux     *http.ServeMux
 	handler http.Handler // mux behind Protect and the token check
+	warned  sync.Map     // site hosts already warned about
 }
 
 // NewServer returns the API over inbox.
@@ -66,6 +72,9 @@ func NewServer(inbox *Inbox, cfg Config) *Server {
 	}
 	if cfg.MaxBody == 0 {
 		cfg.MaxBody = 256 << 10
+	}
+	if cfg.Warn == nil {
+		cfg.Warn = func(msg string) { log.Print("echo: " + msg) }
 	}
 	s := &Server{Inbox: inbox, cfg: cfg, mux: http.NewServeMux()}
 	s.mux.HandleFunc("GET /v1/health", s.health)
@@ -217,7 +226,9 @@ func (s *Server) http(c wire.Capture, run, action string, src model.Source) (wir
 	// Recognizers copy what they read from the raw request: the SMS text,
 	// the chat message and for unknown APIs the host and path as To.
 	s.maskFields(&m)
-	allowed := s.allowed(u.Hostname(), src.Host)
+	// The site may call itself (cron, loopback) while sealed, but only a
+	// host that can't be a provider's counts as the site.
+	allowed := s.allowed(u.Hostname(), s.siteHost(src.Host, u.Hostname(), rec.Provider != ""))
 	d := wire.Decision{Mode: s.cfg.Mode}
 	switch {
 	case c.Phase == wire.After: // observed with nothing before: record as sent
@@ -254,7 +265,8 @@ func (s *Server) http(c wire.Capture, run, action string, src model.Source) (wir
 func sink(via string) bool { return via == "smtp" || via == "sendmail" }
 
 // allowed reports whether host may be reached when sealed: the site
-// itself (cron and loopback calls) and the configured allowlist.
+// itself (cron and loopback calls) and the configured allowlist. site
+// comes from the connector and must pass siteHost first.
 func (s *Server) allowed(host, site string) bool {
 	host = strings.ToLower(host)
 	if site != "" && strings.EqualFold(host, hostOnly(site)) {
