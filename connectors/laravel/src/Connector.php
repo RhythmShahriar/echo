@@ -206,7 +206,13 @@ class Connector
             'host' => $this->siteHost(),
         ], fn ($v) => $v !== '');
 
-        return $this->client->capture($capture);
+        $wire = $this->client->wire();
+        $decision = $this->client->capture($capture);
+        if ($this->client->wire() !== $wire) {
+            $this->app->make('log')->warning("Rhythm Echo: Echo at {$this->client->url()} speaks wire {$this->client->wire()}: sending that (rhythm update gets a newer Echo)");
+        }
+
+        return $decision;
     }
 
     /**

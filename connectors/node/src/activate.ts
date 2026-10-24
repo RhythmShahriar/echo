@@ -12,6 +12,8 @@ export function activate(o?: Options): boolean {
   const s = state();
   const cfg = resolveConfig(o);
   const g = guard(cfg);
+  // Another Echo may speak another wire version: find out again.
+  if (s.cfg?.url !== cfg.url) delete s.wire;
   s.cfg = cfg;
   s.active = g.active;
   if (g.active) reason = g.reason;

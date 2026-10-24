@@ -213,10 +213,12 @@ NODE_USE_ENV_PROXY=1 HTTPS_PROXY=http://127.0.0.1:8026 NODE_EXTRA_CA_CERTS="$(rh
 ```sh
 npm run test:ci    # npm ci --ignore-scripts, tsc, then the tests: what CI runs
 npm test           # builds dist/, then the Vitest suite
-npm run test:e2e   # the packed package in a real Next.js app against Echo's catcher (needs Go)
+npm run test:e2e   # the packed package in a real Next.js app against Echo's conformance stand-in (needs Go)
 ```
 
-The suite is hermetic. No install script is needed (`npm ci --ignore-scripts` is enough). The tests start their own fakes on 127.0.0.1 (a fake Echo and fake provider APIs) and need no network. It runs from the repository root too, with `npm --prefix connectors/node test`. Run-signature tests read Echo's shared vectors in `conformance/testdata/run-signature.json`.
+The suite is hermetic. No install script is needed (`npm ci --ignore-scripts` is enough). The tests start their own fakes on 127.0.0.1 (a fake Echo and fake provider APIs) and need no network. It runs from the repository root too, with `npm --prefix connectors/node test`. The fake Echo checks every capture against Echo's wire schema (`wire/schema.json`) and refuses one that breaks it, so a test fails on a capture Echo would not accept. Other tests read Echo's shared vectors in `conformance/testdata/` (run signatures, captures and the fail-closed cases). Outside Echo's repository those checks are skipped.
+
+The connector sends wire version 2. An older Echo that refuses it gets asked which version it speaks (`/v1/health`) and from then on gets that version, without the fields it lacks. It logs once: `[rhythm-echo] Echo at <url> speaks wire 1: sending that (rhythm update gets a newer Echo)`.
 
 ## License
 

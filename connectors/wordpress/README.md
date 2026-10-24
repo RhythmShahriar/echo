@@ -9,6 +9,8 @@ The WordPress connector reports every `wp_mail()` and `wp_remote_*()` call to Rh
 
 How the connector hooks in (wp_mail, pre_http_request, runs, fail closed, the production guard) is described at the top of `echo.php`.
 
+It sends wire version 2. An older Echo that refuses it gets asked which version it speaks (`/v1/health`) and then gets that version, without the fields it lacks, for an hour (a transient per Echo URL). The PHP error log says so: `Rhythm Echo: Echo at <url> speaks wire 1: sending that (rhythm update gets a newer Echo)`. The doctor ping reports the version Echo speaks as `echo.wire`.
+
 ## Settings
 
 First found wins:
@@ -50,7 +52,7 @@ ECHO_PHPSTAN=/path/to/vendor/bin/phpstan GOWORK=off go test -run PHPStan ./conne
 GOWORK=off go test -tags docker -run Docker -v ./connectors/wordpress/   # a real WordPress in Docker
 ```
 
-PHPStan checks `echo.php` at level 6 (`phpstan.neon.dist`) and the plugin's own code at level max (`phpstan-plugin.neon.dist`). It needs `szepeviktor/phpstan-wordpress` and `phpstan/extension-installer` next to phpstan. `ECHO_TEST_PORTS=LOW-HIGH` moves the host ports the Docker test uses (default 18900-18999).
+The Docker test checks every capture against Echo's wire schema (`wire/schema.json`) and fails on one that breaks it. PHPStan checks `echo.php` at level 6 (`phpstan.neon.dist`) and the plugin's own code at level max (`phpstan-plugin.neon.dist`). It needs `szepeviktor/phpstan-wordpress` and `phpstan/extension-installer` next to phpstan. `ECHO_TEST_PORTS=LOW-HIGH` moves the host ports the Docker test uses (default 18900-18999).
 
 After changing a translatable string, regenerate the template:
 

@@ -6,7 +6,7 @@
 // fail-open depending on the last mode Echo reported.
 
 import { state, warnOnce } from './state.js';
-import { TOKEN_HEADER, WIRE_VERSION, type Capture, type Decision } from './wire.js';
+import { downgrade, TOKEN_HEADER, WIRE_MIN_VERSION, WIRE_VERSION, type Capture, type Decision } from './wire.js';
 
 export async function send(c: Omit<Capture, 'v'>): Promise<Decision | null> {
   const s = state();
@@ -15,19 +15,34 @@ export async function send(c: Omit<Capture, 'v'>): Promise<Decision | null> {
   if (!cfg || !f) return null;
   const headers: Record<string, string> = { 'content-type': 'application/json' };
   if (cfg.token) headers[TOKEN_HEADER] = cfg.token;
-  try {
-    const res = await f(`${cfg.url}/v1/capture`, {
+  const post = (v: number) =>
+    f(`${cfg.url}/v1/capture`, {
       method: 'POST',
       headers,
-      body: JSON.stringify({ v: WIRE_VERSION, ...c }),
+      body: JSON.stringify({ v, ...(v < WIRE_VERSION ? downgrade(c) : c) }),
       signal: AbortSignal.timeout(cfg.timeout),
       // keep Next.js's fetch cache out of it if a patched fetch is underneath
       cache: 'no-store',
     });
+  try {
+    let res = await post(s.wire ?? WIRE_VERSION);
     if (!res.ok) {
-      const text = (await res.text().catch(() => '')).trim().slice(0, 200);
-      warnOnce(`status-${res.status}`, `Echo at ${cfg.url} answered ${res.status}${text ? `: ${text}` : ''}`);
-      return null;
+      let text = (await res.text().catch(() => '')).trim().slice(0, 200);
+      // An older Echo refuses a newer wire version; ask which it speaks and
+      // send that from now on.
+      if (res.status === 400 && /newer than Echo/.test(text) && s.wire === undefined) {
+        const older = await echoWire(f, headers, cfg.url, cfg.timeout);
+        if (older !== null && older >= WIRE_MIN_VERSION && older < WIRE_VERSION) {
+          s.wire = older;
+          warnOnce('wire', `Echo at ${cfg.url} speaks wire ${older}: sending that (rhythm update gets a newer Echo)`);
+          res = await post(older);
+          text = res.ok ? '' : (await res.text().catch(() => '')).trim().slice(0, 200);
+        }
+      }
+      if (!res.ok) {
+        warnOnce(`status-${res.status}`, `Echo at ${cfg.url} answered ${res.status}${text ? `: ${text}` : ''}`);
+        return null;
+      }
     }
     const d = (await res.json()) as Decision;
     if (d.mode) s.mode = d.mode;
@@ -38,6 +53,18 @@ export async function send(c: Omit<Capture, 'v'>): Promise<Decision | null> {
       `Echo is unreachable at ${cfg.url} (${errText(err)}); ` +
         (s.mode === 'observe' ? 'letting messages through (observe mode)' : 'blocking outbound requests and mail (sealed)'),
     );
+    return null;
+  }
+}
+
+/** echoWire is the wire version Echo's /v1/health names, or null. */
+async function echoWire(f: typeof fetch, headers: Record<string, string>, url: string, timeout: number): Promise<number | null> {
+  try {
+    const res = await f(`${url}/v1/health`, { headers, signal: AbortSignal.timeout(timeout), cache: 'no-store' });
+    if (!res.ok) return null;
+    const h = (await res.json()) as { wire?: unknown };
+    return typeof h.wire === 'number' ? h.wire : null;
+  } catch {
     return null;
   }
 }

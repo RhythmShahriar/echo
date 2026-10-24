@@ -19,6 +19,14 @@ class EchoClient
     private Client $http;
 
     /**
+     * The wire version each Echo speaks, by URL, once one refused a newer
+     * capture. Kept for the process, so a queue worker asks once.
+     *
+     * @var array<string, int>
+     */
+    private static array $wire = [];
+
+    /**
      * @param  callable|null  $handler  a Guzzle handler, for tests
      */
     public function __construct(
@@ -58,13 +66,48 @@ class EchoClient
      */
     public function capture(array $capture): array
     {
-        $decision = $this->call('POST', 'v1/capture', $capture);
+        $version = self::$wire[$this->url] ?? Wire::VERSION;
+        try {
+            $decision = $this->call('POST', 'v1/capture', Wire::forVersion($capture, $version));
+        } catch (EchoUnreachable $e) {
+            // An older Echo refuses a newer wire version: ask which it
+            // speaks and send that from now on.
+            $older = $e->status === 400 && str_contains($e->getMessage(), 'newer than Echo') && $version === Wire::VERSION ? $this->olderWire() : null;
+            if ($older === null) {
+                throw $e;
+            }
+            self::$wire[$this->url] = $older;
+            $decision = $this->call('POST', 'v1/capture', Wire::forVersion($capture, $older));
+        }
 
         return [
             'id' => (string) ($decision['id'] ?? ''),
             'mode' => (string) ($decision['mode'] ?? ''),
             'action' => (string) ($decision['action'] ?? ''),
         ] + (is_array($decision['response'] ?? null) ? ['response' => $this->response($decision['response'])] : []);
+    }
+
+    /**
+     * The wire version /v1/health names, when it is one this connector can
+     * fall back to.
+     */
+    private function olderWire(): ?int
+    {
+        try {
+            $wire = $this->health()['wire'] ?? null;
+        } catch (EchoUnreachable) {
+            return null;
+        }
+
+        return is_int($wire) && $wire >= Wire::MIN_VERSION && $wire < Wire::VERSION ? $wire : null;
+    }
+
+    /**
+     * The wire version captures go to this Echo in.
+     */
+    public function wire(): int
+    {
+        return self::$wire[$this->url] ?? Wire::VERSION;
     }
 
     /**
@@ -99,7 +142,9 @@ class EchoClient
         }
         $body = (string) $response->getBody();
         if ($response->getStatusCode() !== 200) {
-            throw new EchoUnreachable("Rhythm Echo at {$this->url} answered {$response->getStatusCode()}: ".trim(substr($body, 0, 200)));
+            $e = new EchoUnreachable("Rhythm Echo at {$this->url} answered {$response->getStatusCode()}: ".trim(substr($body, 0, 200)));
+            $e->status = $response->getStatusCode();
+            throw $e;
         }
         $data = json_decode($body, true);
         if (! is_array($data)) {

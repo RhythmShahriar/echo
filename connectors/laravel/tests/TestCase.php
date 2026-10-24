@@ -10,6 +10,8 @@ use Illuminate\Notifications\SlackChannelServiceProvider;
 use Illuminate\Notifications\VonageChannelServiceProvider;
 use Illuminate\Support\Facades\Schema;
 use Orchestra\Testbench\TestCase as Testbench;
+use ReflectionProperty;
+use Rhythm\Echo\EchoClient;
 use Rhythm\Echo\EchoServiceProvider;
 use Rhythm\Echo\Mail\EchoTransport;
 use RuntimeException;
@@ -59,12 +61,53 @@ abstract class TestCase extends Testbench
 
     protected function setUp(): void
     {
-        @unlink(self::$state.'/captures.jsonl');
-        @unlink(self::$state.'/token');
+        foreach (['captures.jsonl', 'invalid.jsonl', 'token', 'wire', 'health', 'fail'] as $f) {
+            @unlink(self::$state.'/'.$f);
+        }
+        // Each test starts with a connector that has not met an older Echo.
+        (new ReflectionProperty(EchoClient::class, 'wire'))->setValue(null, []);
         $this->mode('seal');
         putenv('RHYTHM_ECHO_RUN');
         unset($_ENV['RHYTHM_ECHO_RUN'], $_SERVER['RHYTHM_ECHO_RUN']);
         parent::setUp();
+    }
+
+    /**
+     * Every capture a test sent must follow Echo's wire schema: the fake
+     * Echo refused the ones that did not.
+     */
+    protected function tearDown(): void
+    {
+        $invalid = self::$state.'/invalid.jsonl';
+        $lines = is_file($invalid) ? (string) file_get_contents($invalid) : '';
+        @unlink($invalid);
+        parent::tearDown();
+        if ($lines !== '' && ! $this->allowInvalid) {
+            $this->fail("captures broke Echo's wire schema:\n".$lines);
+        }
+    }
+
+    /** Tests that send broken captures on purpose set this. */
+    protected bool $allowInvalid = false;
+
+    /** Makes the fake Echo speak an older wire version. */
+    protected function wire(int $v): void
+    {
+        file_put_contents(self::$state.'/wire', (string) $v);
+    }
+
+    /** Makes the fake Echo fail: 5xx or timeout. */
+    protected function fail_echo(string $how): void
+    {
+        file_put_contents(self::$state.'/fail', $how);
+    }
+
+    /** How many times the connector asked /v1/health. */
+    protected function healthCalls(): int
+    {
+        $f = self::$state.'/health';
+
+        return is_file($f) ? strlen((string) file_get_contents($f)) : 0;
     }
 
     protected function getPackageProviders($app): array

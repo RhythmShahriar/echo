@@ -65,7 +65,10 @@ if ( ! defined( 'ABSPATH' ) ) {
 final class Rhythm_Echo {
 
 	const VERSION = '1.0.0';
-	const WIRE    = 1;
+
+	/** The wire version captures are sent in; WIRE_MIN to an Echo that speaks only that. */
+	const WIRE     = 2;
+	const WIRE_MIN = 1;
 
 	/** Bytes of request or response body reported to Echo. */
 	const MAX_BODY = 2097152;
@@ -109,6 +112,9 @@ final class Rhythm_Echo {
 
 	/** @var int a counter making request keys unique */
 	private static $seq = 0;
+
+	/** @var int|null the wire version Echo speaks, once it refused a newer one */
+	private static $wire = null;
 
 	/** @var bool fallback layer: pre_wp_mail already reported the mail now being sent */
 	private static $mail_reported = false;
@@ -1541,18 +1547,81 @@ final class Rhythm_Echo {
 	 * @return array<string, mixed>|null
 	 */
 	private static function send( array $capture ): ?array {
-		$body = wp_json_encode( $capture, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE );
-		if ( ! is_string( $body ) ) {
-			error_log( 'Rhythm Echo: could not encode a capture as JSON' ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions
-			return null;
+		$version                    = self::wire();
+		list( $status, $out, $err ) = self::post( self::for_version( $capture, $version ) );
+		if ( 400 === $status && false !== strpos( $out, 'newer than Echo' ) && self::WIRE === $version ) {
+			// An older Echo refuses a newer wire version: ask which it
+			// speaks and send that, this request and the next hour.
+			$older = self::older_wire();
+			if ( null !== $older ) {
+				self::$wire = $older;
+				set_transient( self::wire_key(), $older, HOUR_IN_SECONDS );
+				error_log( sprintf( 'Rhythm Echo: Echo at %s speaks wire %d: sending that (rhythm update gets a newer Echo)', self::config()['url'], $older ) ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions
+				list( $status, $out, $err ) = self::post( self::for_version( $capture, $older ) );
+			}
 		}
-		list( $status, $out, $err ) = self::call( 'POST', '/v1/capture', $body );
 		if ( 200 !== $status ) {
 			error_log( sprintf( 'Rhythm Echo: %s %s/v1/capture failed (%s); %s', $capture['kind'], self::config()['url'], '' !== $err ? $err : 'HTTP ' . $status, self::sealed() ? 'sealed, so it was not sent' : 'observe mode, so it was sent anyway' ) ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions
 			return null;
 		}
 		$d = json_decode( $out, true );
 		return is_array( $d ) ? $d : null;
+	}
+
+	/**
+	 * Posts one capture, encoded.
+	 *
+	 * @param array<string, mixed> $capture
+	 * @return array{0: int, 1: string, 2: string}
+	 */
+	private static function post( array $capture ): array {
+		$body = wp_json_encode( $capture, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE );
+		if ( ! is_string( $body ) ) {
+			return array( 0, '', 'could not encode the capture as JSON' );
+		}
+		return self::call( 'POST', '/v1/capture', $body );
+	}
+
+	/**
+	 * The capture in wire version $v: wire 1 has no source.site and no
+	 * email.attachments, so an Echo that speaks only wire 1 gets neither.
+	 *
+	 * @param array<string, mixed> $capture
+	 * @return array<string, mixed>
+	 */
+	public static function for_version( array $capture, int $v ): array {
+		$capture['v'] = $v;
+		if ( $v < 2 ) {
+			if ( isset( $capture['source'] ) && is_array( $capture['source'] ) ) {
+				unset( $capture['source']['site'] );
+			}
+			if ( isset( $capture['email'] ) && is_array( $capture['email'] ) ) {
+				unset( $capture['email']['attachments'] );
+			}
+		}
+		return $capture;
+	}
+
+	/** The wire version to send in: the newest, unless Echo said otherwise. */
+	private static function wire(): int {
+		if ( null === self::$wire ) {
+			$cached     = function_exists( 'get_transient' ) ? get_transient( self::wire_key() ) : false;
+			self::$wire = is_numeric( $cached ) && (int) $cached >= self::WIRE_MIN && (int) $cached < self::WIRE ? (int) $cached : self::WIRE;
+		}
+		return self::$wire;
+	}
+
+	/** Remembered per Echo URL: another Echo may be newer. */
+	private static function wire_key(): string {
+		return 'rhythm_echo_wire_' . md5( self::config()['url'] );
+	}
+
+	/** The wire version /v1/health names, when it is one to fall back to. */
+	private static function older_wire(): ?int {
+		list( $status, $body ) = self::call( 'GET', '/v1/health' );
+		$health                = 200 === $status ? json_decode( $body, true ) : null;
+		$wire                  = is_array( $health ) && isset( $health['wire'] ) && is_int( $health['wire'] ) ? $health['wire'] : 0;
+		return $wire >= self::WIRE_MIN && $wire < self::WIRE ? $wire : null;
 	}
 
 	/**
@@ -1765,6 +1834,7 @@ final class Rhythm_Echo {
 				'reachable' => 200 === $status,
 				'error'     => 200 === $status ? '' : ( '' !== $err ? $err : 'HTTP ' . $status ),
 				'mode'      => is_array( $health ) && isset( $health['mode'] ) ? (string) $health['mode'] : '',
+				'wire'      => is_array( $health ) && isset( $health['wire'] ) && is_int( $health['wire'] ) ? $health['wire'] : 0,
 			),
 		);
 	}

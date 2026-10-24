@@ -5,12 +5,17 @@
 namespace Rhythm\Echo;
 
 /**
- * Constants of Echo's capture protocol (wire/wire.go in the Echo repo).
- * Keep them in step with it: Echo checks the version.
+ * Constants of Echo's capture protocol (wire/wire.go in the Echo repo, and
+ * its JSON Schema wire/schema.json). Keep them in step with it: the test
+ * suite checks every capture against the schema.
  */
 final class Wire
 {
-    public const VERSION = 1;
+    /** The wire version captures are sent in. */
+    public const VERSION = 2;
+
+    /** The oldest wire version, spoken to an Echo that says so in /v1/health. */
+    public const MIN_VERSION = 1;
 
     public const RUN_HEADER = 'X-Echo-Run';
 
@@ -35,6 +40,28 @@ final class Wire
 
     /** A run signature: 16 bytes in unpadded base64url, 22 characters. */
     private const SIGNATURE = '/^[A-Za-z0-9_-]{22}$/';
+
+    /**
+     * The capture in wire version $v: wire 1 has no source.site and no
+     * email.attachments, so an Echo that speaks only wire 1 gets neither.
+     *
+     * @param  array<string, mixed>  $capture
+     * @return array<string, mixed>
+     */
+    public static function forVersion(array $capture, int $v): array
+    {
+        $capture['v'] = $v;
+        if ($v < 2) {
+            if (is_array($capture['source'] ?? null)) {
+                unset($capture['source']['site']);
+            }
+            if (is_array($capture['email'] ?? null)) {
+                unset($capture['email']['attachments']);
+            }
+        }
+
+        return $capture;
+    }
 
     /**
      * Port of wire.SignRun for "<run>/<action>": the value with its

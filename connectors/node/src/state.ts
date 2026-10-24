@@ -37,6 +37,8 @@ export interface State {
   active: boolean;
   /** Echo's mode from its last answer; seal until Echo says otherwise, so an unreachable Echo fails closed. */
   mode: string;
+  /** The wire version Echo speaks, once it refused a newer one; unset means the newest. */
+  wire?: number;
   origFetch?: typeof fetch;
   patched: Set<string>;
   als?: ALS<Context>;

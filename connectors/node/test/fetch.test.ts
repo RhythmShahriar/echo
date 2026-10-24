@@ -47,7 +47,7 @@ describe('fetch, sealed', () => {
     expect(api.requests).toHaveLength(0);
     const [c] = await echo.waitFor(befores);
     expect(c).toMatchObject({
-      v: 1,
+      v: 2,
       kind: 'http',
       phase: 'before',
       source: { via: 'node', hook: 'fetch' },

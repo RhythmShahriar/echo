@@ -43,6 +43,7 @@ import (
 	"time"
 
 	"github.com/RhythmShahriar/echo/catcher"
+	"github.com/RhythmShahriar/echo/conformance"
 	"github.com/RhythmShahriar/echo/model"
 	"github.com/RhythmShahriar/echo/wire"
 )
@@ -65,9 +66,18 @@ type rig struct {
 	echoURL string // as the containers reach it
 	content string // the mounted wp-content
 
-	echo  atomic.Pointer[catcher.Server] // nil: Echo is down (503)
-	smtp  *catcher.Server                // observed mail lands here
-	hooks atomic.Int32                   // requests the webhook fixture got
+	echo atomic.Pointer[catcher.Server] // nil: Echo is down (503)
+	// standin, when set, answers instead of echo: Echo's conformance
+	// stand-in, to act like an older Echo.
+	standin atomic.Pointer[conformance.Server]
+	// invalid collects captures that broke Echo's wire schema; the test
+	// fails on any.
+	invalid struct {
+		sync.Mutex
+		got []string
+	}
+	smtp  *catcher.Server // observed mail lands here
+	hooks atomic.Int32    // requests the webhook fixture got
 	proxy struct {
 		sync.Mutex
 		lines []string
@@ -474,7 +484,39 @@ func TestDockerWordPress(t *testing.T) {
 		}
 	})
 
+	t.Run("an Echo that speaks wire 1 gets wire 1", func(t *testing.T) {
+		st, err := conformance.New(conformance.Options{Token: token, Wire: 1, Expect: []string{"http-before", "wire-1"}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		r.standin.Store(st)
+		defer func() {
+			r.standin.Store(nil)
+			r.wp(t, nil, "eval", "delete_transient( 'rhythm_echo_wire_' . md5( Rhythm_Echo::config()['url'] ) );")
+		}()
+		r.get(t, "twilio", nil)
+		r.get(t, "twilio", nil) // the next request remembers: no refusal
+		rep := st.Report()
+		var fallback string
+		for _, row := range rep.Rows {
+			if row.Check == "fallback" {
+				fallback = row.Detail
+			}
+		}
+		if !rep.OK || fallback != "refused 1 newer capture, then got wire 1" {
+			var b strings.Builder
+			rep.Table(&b)
+			t.Errorf("wire 1 Echo:\n%s", b.String())
+		}
+	})
+
 	t.Run("echo staging seal plugin", func(t *testing.T) { testPlugin(t, r) })
+
+	r.invalid.Lock()
+	defer r.invalid.Unlock()
+	for _, bad := range r.invalid.got {
+		t.Errorf("a capture broke Echo's wire schema: %s", bad)
+	}
 }
 
 // Echo Staging Seal, the regular plugin, in place of the mu-plugin: the
@@ -805,12 +847,29 @@ func start(t *testing.T) *rig {
 	r := &rig{t: t, project: fmt.Sprintf("echo-wp-test-%d", time.Now().UnixNano()%1e8), wpURL: fmt.Sprintf("http://localhost:%d", wpPort)}
 	t.Setenv("ECHO_TEST_PROXY_PORT", fmt.Sprint(proxyPort))
 
-	// Echo, switchable between seal, observe and down.
+	// Echo, switchable between seal, observe and down. Every capture is
+	// checked against the wire schema first, as Echo's conformance stand-in
+	// does.
 	r.seal()
+	schema, err := conformance.WireSchema()
+	if err != nil {
+		t.Fatal(err)
+	}
 	listen(t, echoPort, http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		if st := r.standin.Load(); st != nil {
+			st.ServeHTTP(w, req)
+			return
+		}
 		if req.URL.Path == "/v1/capture" {
 			b, _ := io.ReadAll(req.Body)
 			req.Body = io.NopCloser(bytes.NewReader(b))
+			if problems := schema.Capture(b); len(problems) > 0 {
+				r.invalid.Lock()
+				r.invalid.got = append(r.invalid.got, strings.Join(problems, "; ")+"\n  "+string(b))
+				r.invalid.Unlock()
+				http.Error(w, "conformance: "+strings.Join(problems, "; "), http.StatusBadRequest)
+				return
+			}
 			var c wire.Capture
 			if json.Unmarshal(b, &c) == nil && c.Kind == "email" && c.Email != nil {
 				r.mails.Lock()

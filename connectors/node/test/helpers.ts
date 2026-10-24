@@ -4,12 +4,17 @@
 // A tiny Echo for tests: POST /v1/capture records the capture and answers
 // like the real catcher (seal: fake HTTP and email; observe: allow; a call
 // to the reported source.host: allow), unless a test sets its own decide().
+// Like Echo's conformance stand-in it is strict: a capture that breaks
+// wire/schema.json is answered 400 and kept in `invalid`: the test that
+// sent it fails. Set `wire` to 1 to act like an Echo that speaks only
+// wire 1.
 
 import { createHmac } from 'node:crypto';
 import http from 'node:http';
 import type { AddressInfo } from 'node:net';
 
 import type { Capture, Decision } from '../src/wire.js';
+import { captureProblems } from './schema.js';
 
 export interface FakeEcho {
   url: string;
@@ -17,6 +22,12 @@ export interface FakeEcho {
   captures: Capture[];
   tokens: (string | undefined)[];
   decide?: (c: Capture) => Partial<Decision>;
+  /** The wire version this Echo speaks (default 2). */
+  wire: number;
+  /** Captures refused for breaking the schema, with why. */
+  invalid: { capture: unknown; problems: string[] }[];
+  /** Requests to /v1/health. */
+  health: number;
   close(): Promise<void>;
   /** waitFor resolves once n captures match. */
   waitFor(pred: (c: Capture) => boolean, n?: number, ms?: number): Promise<Capture[]>;
@@ -29,6 +40,9 @@ export async function fakeEcho(mode: 'seal' | 'observe' = 'seal'): Promise<FakeE
     mode,
     captures: [],
     tokens: [],
+    wire: 2,
+    invalid: [],
+    health: 0,
     close: () => new Promise((r) => server.close(() => r())),
     async waitFor(pred, n = 1, ms = 3000) {
       const end = Date.now() + ms;
@@ -41,6 +55,11 @@ export async function fakeEcho(mode: 'seal' | 'observe' = 'seal'): Promise<FakeE
     },
   };
   const server = http.createServer((req, res) => {
+    if (req.method === 'GET' && req.url === '/v1/health') {
+      echo.health++;
+      res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ tool: 'rhythm-echo', mode: echo.mode, wire: echo.wire }));
+      return;
+    }
     if (req.method !== 'POST' || req.url !== '/v1/capture') {
       res.writeHead(404).end();
       return;
@@ -50,6 +69,16 @@ export async function fakeEcho(mode: 'seal' | 'observe' = 'seal'): Promise<FakeE
     req.on('data', (d: string) => (body += d));
     req.on('end', () => {
       const c = JSON.parse(body) as Capture;
+      if (c.v > echo.wire && c.v <= 2) {
+        res.writeHead(400).end('this connector is newer than Echo; run: rhythm update\n');
+        return;
+      }
+      const problems = captureProblems(c);
+      if (problems.length > 0) {
+        echo.invalid.push({ capture: c, problems });
+        res.writeHead(400).end(`conformance: ${problems.join('; ')}\n`);
+        return;
+      }
       echo.captures.push(c);
       echo.tokens.push(req.headers['x-echo-token'] as string | undefined);
       const id = c.phase === 'after' && c.id ? c.id : `m${++seq}`;
