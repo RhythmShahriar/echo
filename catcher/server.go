@@ -543,10 +543,10 @@ func fillEmpty(m *model.Message, p model.Message) {
 	}
 }
 
-// fit masks v with fn and keeps at most MaxBody bytes of the result,
-// marking m as truncated when it cuts. v is cut to MaxBody plus a margin
-// before masking: masking all of a 20 MiB body took 29 s and all but
-// MaxBody of it was thrown away.
+// fit masks v with fn and keeps at most MaxBody bytes of the result, the
+// truncated mark included, marking m as truncated when it cuts. v is cut
+// to MaxBody plus a margin before masking: masking all of a 20 MiB body
+// took 29 s and all but MaxBody of it was thrown away.
 func (s *Server) fit(m *model.Message, v string, fn func(string) string) string {
 	v, cut := s.cutMasked(v, fn)
 	m.Truncated = m.Truncated || cut
@@ -568,14 +568,23 @@ func (s *Server) cutMasked(v string, fn func(string) string) (string, bool) {
 	if fn != nil {
 		v = fn(v)
 	}
-	if len(v) > s.cfg.MaxBody {
-		v, cut = v[:runeStart(v, s.cfg.MaxBody)], true
+	if !cut && len(v) <= s.cfg.MaxBody {
+		return v, false
 	}
-	if cut {
-		v += "\n…(truncated)"
+	// The mark counts toward MaxBody, unless MaxBody is too small to
+	// hold it: then the text alone fills it.
+	keep := s.cfg.MaxBody - len(truncatedMark)
+	if keep < 0 {
+		return v[:runeStart(v, min(s.cfg.MaxBody, len(v)))], true
 	}
-	return v, cut
+	if len(v) > keep {
+		v = v[:runeStart(v, keep)]
+	}
+	return v + truncatedMark, true
 }
+
+// truncatedMark ends a field Echo cut to fit MaxBody.
+const truncatedMark = "\n…(truncated)"
 
 // runeStart moves i back to the start of the UTF-8 sequence it falls in,
 // so a cut never splits a character.

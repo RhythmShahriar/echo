@@ -20,8 +20,6 @@ import (
 	"github.com/RhythmShahriar/echo/wire"
 )
 
-const truncatedMark = "\n…(truncated)"
-
 // largeText is n bytes of ordinary email text.
 func largeText(n int) string {
 	line := "Hello Jane, your order #42 has shipped and is on its way to you.\n"
@@ -80,7 +78,7 @@ func TestLargeCaptureIsCutBeforeMasking(t *testing.T) {
 	if took := time.Since(start); took > 500*time.Millisecond*slowdown {
 		t.Errorf("a 20 MiB text capture took %s", took)
 	}
-	if m, _ := s.Inbox.Get(d.ID); !m.Truncated || len(m.Text) > 256<<10+len(truncatedMark) {
+	if m, _ := s.Inbox.Get(d.ID); !m.Truncated || len(m.Text) > 256<<10 {
 		t.Errorf("20 MiB text: truncated %v, %d bytes stored", m.Truncated, len(m.Text))
 	}
 
@@ -96,7 +94,7 @@ func TestLargeCaptureIsCutBeforeMasking(t *testing.T) {
 	if !m.Truncated {
 		t.Error("Truncated not set")
 	}
-	limit := 16<<10 + len(truncatedMark)
+	limit := 16 << 10
 	for name, v := range map[string]string{"text": m.Text, "html": m.HTML, "subject": m.Subject, "to[1]": m.To[1]} {
 		if len(v) > limit || !strings.HasSuffix(v, truncatedMark) {
 			t.Errorf("%s: %d bytes stored, want at most %d and the mark", name, len(v), limit)
@@ -124,10 +122,16 @@ func TestLargeCaptureIsCutBeforeMasking(t *testing.T) {
 }
 
 func TestCutKeepsWholeCharacters(t *testing.T) {
-	s := NewServer(NewInbox(10), Config{MaxBody: 10})
-	v, cut := s.cutMasked("ééééééé", nil) // 14 bytes; byte 10 is inside a character
+	// 26 bytes leave 11 for the text, which ends inside a character.
+	s := NewServer(NewInbox(10), Config{MaxBody: 11 + len(truncatedMark)})
+	v, cut := s.cutMasked(strings.Repeat("é", 20), nil)
 	if !cut || v != "ééééé"+truncatedMark {
 		t.Errorf("cut = %q, %v", v, cut)
+	}
+	// Too small for the mark: the text alone, still whole characters.
+	s = NewServer(NewInbox(10), Config{MaxBody: 5})
+	if v, cut := s.cutMasked("ééééééé", nil); !cut || v != "éé" {
+		t.Errorf("tiny cut = %q, %v", v, cut)
 	}
 }
 
@@ -183,7 +187,7 @@ func FuzzCutMasking(f *testing.F) {
 		}
 		v := b.String()
 		full := mask.Text(v)
-		want := full[:runeStart(full, maxBody)] + truncatedMark
+		want := full[:runeStart(full, maxBody-len(truncatedMark))] + truncatedMark
 		got, cut := s.cutMasked(v, mask.Text)
 		if !cut || got != want {
 			t.Fatalf("cut first differs from mask first (len %d vs %d)", len(got), len(want))
