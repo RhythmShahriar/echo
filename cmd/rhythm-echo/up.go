@@ -71,6 +71,9 @@ func cmdUp(s *session) int {
 	if err != nil {
 		return s.fail(err)
 	}
+	if err := loginNeedsToken(login, token, cfg.Listen); err != nil {
+		return s.fail(err)
+	}
 
 	// Every port is taken before anything is printed, so a port in use
 	// fails with only its error. Whatever was started is stopped again
@@ -161,7 +164,7 @@ func cmdUp(s *session) int {
 		s.view.Step(n.label, n.text)
 	}
 	if login != nil {
-		s.view.Step("Login", "viewers sign in as "+login.User()+" at http://"+cfg.Listen+web.PathLogin+" (read only, for 8 hours)")
+		s.view.Step("Login", loginLine(login, token, cfg.Listen))
 	}
 	if len(cfg.Allow) > 0 {
 		s.view.Step("Allowed", strings.Join(cfg.Allow, ", "))
@@ -231,6 +234,8 @@ func upRoutes(srv *catcher.Server, inbox *catcher.Inbox, ui *web.UI, mode string
 // login, Echo Inbox's routes are also open to a signed-in viewer, read
 // only (web.Login.Guard). Without a token they need the login then, while
 // the API stays as open as before: connectors on this machine post to it.
+// That is why cmdUp allows a login without a token on loopback only
+// (loginNeedsToken).
 func upHandler(routes []upRoute, token string, login *web.Login) http.Handler {
 	mux := http.NewServeMux()
 	viewer := http.NewServeMux()
@@ -281,6 +286,29 @@ func loginFromEnv() (*web.Login, error) {
 		return nil, usageErr("%s: %v", loginEnv, err)
 	}
 	return l, nil
+}
+
+// loginNeedsToken refuses a login without a token on a --listen address
+// other machines can reach. Without a token the API (/v1/, /api/v1/)
+// stays open, as connectors on this machine post to it, so anyone who can
+// reach the address could read and delete what the sign-in guards. Only
+// --listen matters: the SMTP sink and the proxy serve nothing to read.
+func loginNeedsToken(login *web.Login, token, listen string) error {
+	if login == nil || token != "" || loopback(listen) {
+		return nil
+	}
+	return usageErr("%s needs a token when --listen %s is reachable from other machines: without one the API answers anyone there; set --token (or RHYTHM_ECHO_TOKEN) for connectors and keep the login for viewers", loginEnv, listen)
+}
+
+// loginLine is the banner step for a login. Without a token (loopback
+// only, see loginNeedsToken) the API stays open to this machine, so the
+// line says the sign-in guards only Echo Inbox.
+func loginLine(login *web.Login, token, listen string) string {
+	line := "viewers sign in as " + login.User() + " at http://" + listen + web.PathLogin + " (read only, for 8 hours)"
+	if token == "" {
+		line += "; the API stays open to programs on this machine"
+	}
+	return line
 }
 
 // tokenCookie holds the token for a browser that opened the live view

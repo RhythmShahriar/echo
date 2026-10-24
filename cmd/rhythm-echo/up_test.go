@@ -934,6 +934,44 @@ func TestPrivateNetworkRefusesAPublicInterface(t *testing.T) {
 	}
 }
 
+// TestLoginNeedsATokenBeyondLoopback: without a token the API answers
+// anyone who reaches --listen, so a login there would guard nothing. up
+// refuses it before anything is bound, --private-network or not.
+func TestLoginNeedsATokenBeyondLoopback(t *testing.T) {
+	t.Chdir(t.TempDir())
+	t.Setenv("RHYTHM_ECHO_TOKEN", "")
+	t.Setenv(privateNetworkEnv, "1")
+	t.Setenv(loginEnv, "client:correct horse")
+	orig := listIfaces
+	listIfaces = func() ([]netIface, error) { return containerHost, nil }
+	t.Cleanup(func() { listIfaces = orig })
+	code, out, errOut := runCLI(t, "up", "--listen", "0.0.0.0:20400", "--smtp", "off")
+	want := "RHYTHM_ECHO_LOGIN needs a token when --listen 0.0.0.0:20400 is reachable from other machines: without one the API answers anyone there; set --token (or RHYTHM_ECHO_TOKEN) for connectors and keep the login for viewers"
+	if code != exitUsage || !strings.Contains(errOut, want) || strings.Contains(out, "API") {
+		t.Errorf("exit %d:\n%s\n%s", code, out, errOut)
+	}
+	if err := loginNeedsToken(nil, "", "0.0.0.0:8025"); err != nil {
+		t.Errorf("no login: %v", err)
+	}
+	l, _ := web.ParseLogin("client:correct horse")
+	if err := loginNeedsToken(l, "s3cret-token", "0.0.0.0:8025"); err != nil {
+		t.Errorf("with a token: %v", err)
+	}
+	if err := loginNeedsToken(l, "", "127.0.0.1:8025"); err != nil {
+		t.Errorf("loopback: %v", err)
+	}
+}
+
+func TestLoginLine(t *testing.T) {
+	l, _ := web.ParseLogin("client:correct horse")
+	if got := loginLine(l, "tok", "0.0.0.0:8025"); got != "viewers sign in as client at http://0.0.0.0:8025/login (read only, for 8 hours)" {
+		t.Errorf("with a token: %q", got)
+	}
+	if got := loginLine(l, "", "127.0.0.1:8025"); got != "viewers sign in as client at http://127.0.0.1:8025/login (read only, for 8 hours); the API stays open to programs on this machine" {
+		t.Errorf("without: %q", got)
+	}
+}
+
 // TestReportRefusesARebindingHost: /report holds the whole session, so
 // without a token it answers only to loopback names, like Echo Inbox.
 func TestReportRefusesARebindingHost(t *testing.T) {
@@ -1024,7 +1062,8 @@ func TestLoginGivesViewersTheInboxOnly(t *testing.T) {
 }
 
 // TestLoginWithoutAToken: the Inbox needs the login, the API stays open
-// to connectors on this machine as before.
+// to connectors on this machine as before. up allows this on loopback
+// only (TestLoginNeedsATokenBeyondLoopback).
 func TestLoginWithoutAToken(t *testing.T) {
 	h := testLoginUp(t, "")
 	if w := serve(h, httptest.NewRequest(http.MethodGet, "/", nil)); w.Code != http.StatusFound {
@@ -1064,7 +1103,7 @@ func TestUpWithLogin(t *testing.T) {
 	api := freePorts(t, 1)[0]
 	out, _, stop := startUp(t, "--listen", api, "--smtp", "off")
 	defer stop()
-	want := "Login: viewers sign in as client at http://" + api + "/login (read only, for 8 hours)"
+	want := "Login: viewers sign in as client at http://" + api + "/login (read only, for 8 hours); the API stays open to programs on this machine"
 	if !strings.Contains(out.String(), want) {
 		t.Errorf("banner lacks %q:\n%s", want, out)
 	}
