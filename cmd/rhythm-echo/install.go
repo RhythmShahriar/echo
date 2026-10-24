@@ -56,8 +56,7 @@ func cmdInstall(args []string, stdout, stderr io.Writer) int {
 	}
 	if err != nil || len(pos) == 0 {
 		if err != nil {
-			c, _ := lookup("install")
-			fmt.Fprintln(stderr, "rhythm echo:", flagError(err, c))
+			fmt.Fprintln(stderr, "rhythm echo:", ownFlagError(err, fs))
 		}
 		fmt.Fprintln(stderr, installUsage)
 		return exitUsage

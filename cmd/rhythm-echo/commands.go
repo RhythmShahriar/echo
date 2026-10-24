@@ -806,8 +806,7 @@ func cmdInit(args []string, stdout, stderr io.Writer) int {
 			return exitOK
 		}
 		if err != nil {
-			c, _ := lookup("init")
-			fmt.Fprintln(stderr, "rhythm echo:", flagError(err, c))
+			fmt.Fprintln(stderr, "rhythm echo:", ownFlagError(err, fs))
 		}
 		fmt.Fprintln(stderr, initUsage)
 		return exitUsage

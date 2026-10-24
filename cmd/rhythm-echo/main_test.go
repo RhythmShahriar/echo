@@ -383,6 +383,9 @@ func TestCommandAndFlagSuggestions(t *testing.T) {
 		{[]string{"ls", "--since", "abc"}, `--since "abc": want a duration like 10m or 5s`},
 		{[]string{"run", "--json=maybe"}, `--json "maybe": want true or false`},
 		{[]string{"install", "laravel", "--tokn", "x"}, "unknown flag --tokn; did you mean --token?"},
+		{[]string{"init", "--stak", "x"}, "unknown flag --stak; did you mean --stack?"},
+		{[]string{"install", "wordpress", "--uninstal"}, "did you mean --uninstall?"},
+		{[]string{"install", "wordpress", "--contaner", "wp"}, "did you mean --container?"},
 	} {
 		code, out, errOut := runCLI(t, tc.args...)
 		if code != exitUsage || !strings.Contains(errOut, tc.want) {

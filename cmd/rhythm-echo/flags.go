@@ -643,6 +643,15 @@ func flagError(err error, c cmdSpec) error {
 	return cli.UsageError{Msg: msg}
 }
 
+// ownFlagError is flagError for a command that parses its own flags
+// (init, install): the hint comes from the flags fs defines, which c's
+// shared list doesn't hold, before the shared ones.
+func ownFlagError(err error, fs *flag.FlagSet) error {
+	var c cmdSpec
+	fs.VisitAll(func(f *flag.Flag) { c.flags = append(c.flags, flagUse{name: f.Name}) })
+	return flagError(err, c)
+}
+
 // suggestFlag is the flag a mistyped one most likely meant: the
 // command's own first, then any shared flag. "" when none is close.
 func (c cmdSpec) suggestFlag(typed string) string {
