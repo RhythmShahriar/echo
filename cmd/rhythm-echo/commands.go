@@ -223,10 +223,7 @@ func cmdSnapshot(s *session) int {
 	if err != nil {
 		return s.fail(err)
 	}
-	defer func() {
-		_ = os.RemoveAll(dir)            //nolint:gosec // our own incoming folder
-		_ = os.Remove(filepath.Dir(dir)) //nolint:gosec // our own .incoming folder, removed only when empty
-	}()
+	defer func() { _ = os.RemoveAll(dir) }() //nolint:gosec // our own incoming folder
 	s.start(cmp.Or(s.cfg.Site, "this machine"))
 	s.view.Step("Snapshot", fmt.Sprintf("%q", name))
 	run, err := s.actions(name)
@@ -322,13 +319,8 @@ func cmdReport(s *session) int {
 	var err error
 	switch len(s.args) {
 	case 0:
-		// The newest run or comparison; after only a snapshot, the snapshot.
 		if dir, err = s.st.LatestRun(); err != nil {
-			if snap, serr := s.st.Snapshot(""); serr == nil {
-				dir, err = snap, nil
-			} else {
-				err = cli.UsageError{Msg: err.Error()}
-			}
+			err = cli.UsageError{Msg: err.Error()}
 		}
 	case 1:
 		if fi, statErr := os.Stat(s.args[0]); statErr == nil && fi.IsDir() { //nolint:gosec // the user names a folder
@@ -435,24 +427,18 @@ func cmdClear(s *session) int {
 func cmdSnapshots(args []string, stdout, stderr io.Writer) int {
 	st := store.Store{Root: config.Dir}
 	if len(args) == 2 && (args[0] == "delete" || args[0] == "rm") {
-		dir, err := st.Snapshot(args[1])
-		if err != nil {
+		if _, err := st.Snapshot(args[1]); err != nil {
 			fmt.Fprintln(stderr, "rhythm echo:", err)
 			return exitUsage
 		}
-		latest, _ := st.Snapshot("")
-		if err := os.RemoveAll(dir); err != nil { //nolint:gosec // validated by Snapshot
+		before, _ := st.Snapshot("")
+		if err := st.Delete(args[1]); err != nil {
 			fmt.Fprintln(stderr, "rhythm echo:", err)
 			return exitError
 		}
 		fmt.Fprintln(stdout, "Deleted snapshot", args[1])
-		if dir == latest {
-			if next := newestSnapshot(st); next != "" {
-				_ = st.SetLatest(next)
-				fmt.Fprintln(stdout, "The latest snapshot is now", next)
-			} else {
-				_ = os.Remove(filepath.Join(st.Root, "snapshots", "LATEST"))
-			}
+		if after, err := st.Snapshot(""); err == nil && after != before {
+			fmt.Fprintln(stdout, "The latest snapshot is now", filepath.Base(after))
 		}
 		return exitOK
 	}
@@ -485,18 +471,6 @@ func cmdSnapshots(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stdout, "%-24s %-8d %-12s %s%s\n", n, len(r.Actions), report.Ago(r.Started), report.Tally(r), mark)
 	}
 	return exitOK
-}
-
-// newestSnapshot is the name of the snapshot taken last, or "".
-func newestSnapshot(st store.Store) string {
-	names, _ := st.Snapshots()
-	best, at := "", time.Time{}
-	for _, n := range names {
-		if r, err := store.LoadRun(filepath.Join(st.Root, "snapshots", n)); err == nil && !r.Started.Before(at) {
-			best, at = n, r.Started
-		}
-	}
-	return best
 }
 
 func cmdInit(args []string, stdout, stderr io.Writer) int {
