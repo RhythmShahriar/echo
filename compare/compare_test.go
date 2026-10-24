@@ -314,3 +314,59 @@ func TestSilentConnectorIsNoted(t *testing.T) {
 		t.Errorf("the connector still sends, yet warnings = %q", c.Warnings)
 	}
 }
+
+// TestSilentConnectorFailsTheAction: sealed, a connector that can't reach
+// Echo throws (the Laravel HTTP hook does, as a dead connection would), so
+// the action fails with a 500. It stays BROKE and the comparison says
+// why: the connector's messages are lost and can't reach Echo is the
+// likely cause. A failing action whose mail never came from a connector,
+// or that failed in the snapshot too, gets neither.
+func TestSilentConnectorFailsTheAction(t *testing.T) {
+	m := email("admin@shop.com", "Order confirmed", "x")
+	m.Source = model.Source{Via: "laravel", Hook: "mail.transport"}
+	sms := model.Message{Channel: model.SMS, Status: model.Faked, To: []string{"+15551234567"}, Text: "Box confirmed",
+		Source: model.Source{Via: "laravel", Hook: "http"}}
+	works := model.Action{ID: "a", Label: "Subscription order", Messages: []model.Message{m, sms}}
+	fails := model.Action{ID: "a", Label: "Subscription order", Error: "POST http://localhost:18851/orders returned 500 Internal Server Error"}
+	c := Compare(run(works), run(fails), "", "", "test")
+	want := "Subscription order: the action failed and nothing arrived from the site's laravel connector, which sent 2 messages in the snapshot. " +
+		"A connector that can't reach Echo blocks every send while sealed: check the site reaches Echo with rhythm echo doctor"
+	if strings.Join(c.Warnings, "\n") != want {
+		t.Errorf("warnings = %q", c.Warnings)
+	}
+	var failed, missing int
+	for _, ch := range c.Changes {
+		switch {
+		case ch.Check == ActionFailed && ch.Class == model.Broke:
+			failed++
+			if ch.Detail != fails.Error || !strings.Contains(ch.Fix, "can't reach Echo") {
+				t.Errorf("action failed = %+v", ch)
+			}
+		case ch.Check == "message/missing" && ch.Class == model.Broke:
+			missing++
+		default:
+			t.Errorf("unexpected change %s: %s", ch.Class, ch.Title)
+		}
+	}
+	if failed != 1 || missing != 2 {
+		t.Errorf("want the failure and 2 lost messages:\n%s", titles(c.Changes))
+	}
+
+	// The same failure without connector mail: only the failure.
+	plain := email("admin@shop.com", "Order confirmed", "x")
+	c = Compare(run(model.Action{ID: "a", Label: "Subscription order", Messages: []model.Message{plain}}), run(fails), "", "", "test")
+	if got := titles(c.Changes); got != "broke: Action fails" || len(c.Warnings) != 0 || strings.Contains(c.Changes[0].Fix, "Echo") {
+		t.Errorf("no connector:\n%s\nwarnings = %q", got, c.Warnings)
+	}
+	// Failing in the snapshot too: still fails, no note.
+	c = Compare(run(fails), run(fails), "", "", "test")
+	if got := titles(c.Changes); got != "broke: Action still fails" || len(c.Warnings) != 0 {
+		t.Errorf("down at both ends:\n%s\nwarnings = %q", got, c.Warnings)
+	}
+	// Something still arrives: the connector reaches Echo.
+	part := fails
+	part.Messages = []model.Message{m}
+	if c = Compare(run(works), run(part), "", "", "test"); titles(c.Changes) != "broke: Action fails" || len(c.Warnings) != 0 {
+		t.Errorf("a message still arrived:\n%s\nwarnings = %q", titles(c.Changes), c.Warnings)
+	}
+}

@@ -51,7 +51,7 @@ final class EchoTransport implements TransportInterface
             if (! $this->echo->sealed() || $this->staysLocal()) {
                 return $this->inner->send($message, $envelope);
             }
-            throw new TransportException($e->getMessage().'; sealed, so the mail was not sent', 0, $e);
+            throw new TransportException($e->sealedMessage('mail'), 0, $e);
         }
 
         return match ($d['action']) {

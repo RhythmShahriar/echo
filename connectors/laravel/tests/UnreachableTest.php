@@ -17,7 +17,7 @@ class UnreachableTest extends TestCase
     public function test_mail_fails_closed(): void
     {
         $this->expectException(TransportException::class);
-        $this->expectExceptionMessage('sealed, so the mail was not sent');
+        $this->expectExceptionMessage('sealed, so the mail was not sent. Check the site reaches Echo: php artisan echo:status');
         Mail::mailer('smtp')->raw('Hi', fn ($m) => $m->to('a@example.test')->subject('Down'));
     }
 
@@ -35,6 +35,7 @@ class UnreachableTest extends TestCase
             $this->fail('the request went out');
         } catch (ConnectionException $e) {
             $this->assertStringContainsString('sealed, so the request was not sent', $e->getMessage());
+            $this->assertStringContainsString('Check the site reaches Echo: php artisan echo:status, or rhythm echo doctor', $e->getMessage());
         }
     }
 }

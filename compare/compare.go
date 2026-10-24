@@ -48,8 +48,20 @@ func compareRuns(before, after *model.Run, beforeDir, afterDir, version string, 
 			if b != nil && b.Error != "" {
 				title = "Action still fails"
 			}
-			g.add(model.Change{Class: model.Broke, Check: ActionFailed, Title: title, Detail: a.Error,
-				Fix: "The request that triggers the messages failed, so nothing it sends was compared: fix that first."}, a.Label)
+			fix := "The request that triggers the messages failed, so nothing it sends was compared: fix that first."
+			silent := b != nil && b.Error == "" && silentVia(*b, a) != ""
+			if silent {
+				fix = "The request that triggers the messages failed and none of them arrived. " + unreachableHint +
+					": a site that doesn't catch the connector's error fails with it."
+			}
+			g.add(model.Change{Class: model.Broke, Check: ActionFailed, Title: title, Detail: a.Error, Fix: fix}, a.Label)
+			if silent {
+				// Nothing arrived at all, so whatever the snapshot had is
+				// lost whatever else the failure hides.
+				for _, c := range Messages(strip(b.Messages, o.ignored(a)), nil) {
+					g.add(c, a.Label)
+				}
+			}
 			continue
 		}
 		if b != nil && b.Error != "" {
@@ -603,30 +615,46 @@ func Sort(cs []model.Change) {
 // unable to reach Echo, each blocks every send, so Echo hears nothing.
 var connectorVias = []string{"wordpress", "laravel", "node"}
 
+// unreachableHint says why a connector's messages may all be missing.
+const unreachableHint = "A connector that can't reach Echo blocks every send while sealed: check the site reaches Echo with rhythm echo doctor"
+
+// silentVia returns the connector that sent b's messages in the snapshot
+// when a, the same action now, sent nothing at all, or "".
+func silentVia(b, a model.Action) string {
+	if len(a.Messages) > 0 {
+		return ""
+	}
+	for _, m := range b.Messages {
+		if slices.Contains(connectorVias, m.Source.Via) {
+			return m.Source.Via
+		}
+	}
+	return ""
+}
+
 // silentConnectors notes each action that sent nothing at all this time
 // although a connector in the site sent its mail in the snapshot. Echo
 // can't tell that from a site that stopped sending. A connector that
-// can't reach Echo is the likelier cause when every message is gone.
+// can't reach Echo is the likelier cause when every message is gone, and
+// it can fail the action too: a connector that can't hand a request to
+// Echo throws, as a dead connection would.
 func silentConnectors(before, after *model.Run) []string {
 	var w []string
 	for _, b := range before.Actions {
 		a := after.Action(b.ID)
-		if a == nil || a.Error != "" || len(a.Messages) > 0 {
+		if a == nil || b.Error != "" {
 			continue
 		}
-		var via string
-		for _, m := range b.Messages {
-			if slices.Contains(connectorVias, m.Source.Via) {
-				via = m.Source.Via
-				break
-			}
-		}
+		via := silentVia(b, *a)
 		if via == "" {
 			continue
 		}
-		w = append(w, fmt.Sprintf("%s: nothing arrived this time from the site's %s connector, which sent %s in the snapshot. "+
-			"A connector that can't reach Echo blocks every send while sealed: check the site reaches Echo with rhythm echo doctor",
-			b.Label, via, nMessages(len(b.Messages))))
+		what := "nothing arrived this time"
+		if a.Error != "" {
+			what = "the action failed and nothing arrived"
+		}
+		w = append(w, fmt.Sprintf("%s: %s from the site's %s connector, which sent %s in the snapshot. %s",
+			b.Label, what, via, nMessages(len(b.Messages)), unreachableHint))
 	}
 	return w
 }

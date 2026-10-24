@@ -53,7 +53,7 @@ final class CaptureRequests
                 $d = $this->echo->capture(['kind' => 'http', 'phase' => Wire::BEFORE, 'http' => array_filter($http)], $source);
             } catch (EchoUnreachable $e) {
                 if ($this->echo->sealed()) {
-                    return Create::rejectionFor(new ConnectException($e->getMessage().'; sealed, so the request was not sent', $request, $e));
+                    return Create::rejectionFor(new ConnectException($e->sealedMessage('request'), $request, $e));
                 }
 
                 return $handler($request, $options);
