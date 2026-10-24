@@ -8,7 +8,7 @@
 // and after.
 //
 //	rhythm echo hub --store /srv/echo --sites sites.yaml --listen 0.0.0.0:8025 --tls-self-signed
-//	rhythm echo schedule "Tue 02:00" --store /srv/echo --sites all --after "wp plugin update --all"
+//	rhythm echo schedule "Tue 02:00" --store /srv/echo --sites sites.yaml --after "wp plugin update --all"
 //
 // Each site posts with its own write token, which can only add captures;
 // reading needs the hub's read token, which sees every site and can filter

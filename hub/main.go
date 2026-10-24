@@ -221,8 +221,8 @@ then a compare. Results are kept in the store, per site.
   <when>              "Tue 02:00", "Mon,Thu 03:30", "daily 02:00", "weekdays 22:00"
                       (local time); not needed with --now
   --store <dir>       the hub's store (required)
-  --file <file>       sites.yaml (default sites.yaml)
-  --sites <ids>       all (default) or a comma list of site IDs
+  --sites <file>      sites.yaml, as rhythm echo hub reads it (default sites.yaml)
+  --only <ids>        all (default) or a comma list of site IDs
   --after <command>   the update, run with sh -c and RHYTHM_ECHO_SITE set (required)
   --after-timeout <d> stop the command after this long (default 30m)
   --snapshot <name>   compare with this snapshot instead of taking one first
@@ -264,8 +264,8 @@ func scheduleMain(ctx context.Context, args []string, stdout, stderr io.Writer, 
 	fs := flag.NewFlagSet("schedule", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	storeDir := fs.String("store", "", "")
-	file := fs.String("file", "sites.yaml", "")
-	list := fs.String("sites", "all", "")
+	file := fs.String("sites", "sites.yaml", "")
+	list := fs.String("only", "all", "")
 	afterCmd := fs.String("after", "", "")
 	afterTimeout := fs.Duration("after-timeout", 30*time.Minute, "")
 	snap := fs.String("snapshot", "", "")
@@ -302,13 +302,17 @@ func scheduleMain(ctx context.Context, args []string, stdout, stderr io.Writer, 
 			return usage("%v", err)
 		}
 	}
+	if _, err := os.Stat(*file); errors.Is(err, os.ErrNotExist) && !strings.HasSuffix(*file, ".yaml") && !strings.HasSuffix(*file, ".yml") {
+		// Before hub and schedule agreed, --sites took the site IDs.
+		return usage("--sites %s: no such file; --sites names the sites.yaml (as for rhythm echo hub) and --only picks the sites, like --only %s", *file, *file)
+	}
 	sites, err := LoadSites(*file, os.Getenv)
 	if err != nil {
 		return usage("%v", err)
 	}
 	chosen, err := sites.Select(*list)
 	if err != nil {
-		return usage("--sites: %v", err)
+		return usage("--only: %v", err)
 	}
 	httpClient, err := hubClient(*url, *ca, *storeDir)
 	if err != nil {

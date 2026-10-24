@@ -241,7 +241,7 @@ Catcher (up):
                              (prefer RHYTHM_ECHO_LOGIN)
       --sites <file>         a write token per site (captures only), from a hub sites.yaml
       --store <dir>          keep what Echo catches in this folder, across restarts
-      --keep <n>             the most messages kept (default 10000)
+      --keep <n>             the most messages kept (default 10000; at most 256 MiB)
       --keep-for <d>         with --store: drop messages older than this, e.g. 14d
       --spamassassin <addr>  score each email with the SpamAssassin daemon at host:port
                              (spamd; port 783 when left out)

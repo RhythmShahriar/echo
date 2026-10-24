@@ -213,14 +213,16 @@ func TestScheduleMain(t *testing.T) {
 		args []string
 		want string
 	}{
-		{[]string{"Tue 02:00", "--after", "true", "--file", sitesFile}, "--store is required"},
-		{[]string{"Tue 02:00", "--store", dir, "--file", sitesFile}, "--after is required"},
-		{[]string{"--store", dir, "--after", "true", "--file", sitesFile}, "say when"},
-		{[]string{"Tue", "02:00", "--store", dir, "--after", "true", "--file", sitesFile}, "one schedule, in quotes"},
-		{[]string{"Tue 25:00", "--store", dir, "--after", "true", "--file", sitesFile}, `schedule "Tue 25:00"`},
-		{[]string{"--now", "--once", "--store", dir, "--after", "true", "--file", sitesFile}, "pick --now or --once"},
-		{[]string{"--now", "--store", dir, "--after", "true", "--file", sitesFile, "--sites", "client-z"}, `no site "client-z"`},
-		{[]string{"--now", "--store", dir, "--after", "true", "--file", filepath.Join(dir, "none.yaml")}, "none.yaml"},
+		{[]string{"Tue 02:00", "--after", "true", "--sites", sitesFile}, "--store is required"},
+		{[]string{"Tue 02:00", "--store", dir, "--sites", sitesFile}, "--after is required"},
+		{[]string{"--store", dir, "--after", "true", "--sites", sitesFile}, "say when"},
+		{[]string{"Tue", "02:00", "--store", dir, "--after", "true", "--sites", sitesFile}, "one schedule, in quotes"},
+		{[]string{"Tue 25:00", "--store", dir, "--after", "true", "--sites", sitesFile}, `schedule "Tue 25:00"`},
+		{[]string{"--now", "--once", "--store", dir, "--after", "true", "--sites", sitesFile}, "pick --now or --once"},
+		{[]string{"--now", "--store", dir, "--after", "true", "--sites", sitesFile, "--only", "client-z"}, `no site "client-z"`},
+		{[]string{"--now", "--store", dir, "--after", "true", "--sites", filepath.Join(dir, "none.yaml")}, "none.yaml"},
+		{[]string{"--now", "--store", dir, "--after", "true", "--sites", "client-a,client-b"},
+			"--sites client-a,client-b: no such file; --sites names the sites.yaml (as for rhythm echo hub) and --only picks the sites, like --only client-a,client-b"},
 	} {
 		if code, _, errb := run(tc.args...); code != 2 || !strings.Contains(errb, tc.want) {
 			t.Errorf("%q: %d %q, want 2 and %q", tc.args, code, errb, tc.want)
@@ -228,7 +230,7 @@ func TestScheduleMain(t *testing.T) {
 	}
 	// No hub is listening: each site fails to compare, so --once exits 3
 	// (couldn't run) after waiting until Tuesday 02:00.
-	code, out, errb := run("Tue 02:00", "--once", "--store", dir, "--after", "true", "--file", sitesFile, "--url", "http://127.0.0.1:20519")
+	code, out, errb := run("Tue 02:00", "--once", "--store", dir, "--after", "true", "--sites", sitesFile, "--url", "http://127.0.0.1:20519")
 	if code != 3 || waited != 64*time.Hour {
 		t.Errorf("--once: code %d, waited %s\n%s%s", code, waited, out, errb)
 	}
