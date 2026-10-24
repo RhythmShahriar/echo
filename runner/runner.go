@@ -288,9 +288,18 @@ func refuse(cfg config.Config, a config.Action, mode string, fake *fakeData) err
 		return fmt.Errorf("refusing to run against %s: %s", shownURL(target), r)
 	}
 	if a.Replay != nil && mode != catcher.Seal {
-		return fmt.Errorf("Echo is in %s mode; replays only run sealed, so the site's reactions can't reach anyone (rhythm echo up --seal)", mode) //nolint:staticcheck // "Echo" is a name, so it stays capitalized
+		return fmt.Errorf("Echo is in %s; replays only run sealed, so the site's reactions can't reach anyone (rhythm echo up --seal)", ModeName(mode)) //nolint:staticcheck // "Echo" is a name, so it stays capitalized
 	}
 	return nil
+}
+
+// ModeName names the mode Echo's health gave, for a message: "observe
+// mode", or "an unknown mode" when an Echo said none.
+func ModeName(mode string) string {
+	if mode == "" {
+		return "an unknown mode"
+	}
+	return mode + " mode"
 }
 
 // expectations reports an action that sent fewer messages than its

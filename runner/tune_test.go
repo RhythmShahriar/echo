@@ -86,3 +86,13 @@ func TestErrorsHideTheTargetsSecrets(t *testing.T) {
 		t.Errorf("the masked error lost what it wraps: %v", wrapped)
 	}
 }
+
+func TestModeName(t *testing.T) {
+	if got := ModeName("observe"); got != "observe mode" {
+		t.Errorf("observe: %q", got)
+	}
+	a := config.Action{Name: "r", Replay: &config.ReplayAction{Event: "x", To: "/"}}
+	if err := refuse(config.Default(), a, "", newFake()); err == nil || !strings.HasPrefix(err.Error(), "Echo is in an unknown mode; replays") {
+		t.Errorf("no mode: %v", err)
+	}
+}

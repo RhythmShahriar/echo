@@ -397,7 +397,7 @@ func cmdReplay(s *session) int {
 		return s.fail(fmt.Errorf("%w; replays run with Echo up and sealed, so what the site sends back is caught", err))
 	}
 	if h.Mode != "seal" {
-		return s.fail(usageErr("Echo is in %s mode; replays only run sealed, so the site's reactions can't reach anyone (rhythm echo up --seal)", h.Mode))
+		return s.fail(usageErr("Echo is in %s; replays only run sealed, so the site's reactions can't reach anyone (rhythm echo up --seal)", runner.ModeName(h.Mode)))
 	}
 	ev, err := loadEvent(args[0], *scheme, *typ)
 	if err != nil {
