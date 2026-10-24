@@ -6,11 +6,14 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/url"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/RhythmShahriar/echo/catcher"
+	"github.com/RhythmShahriar/echo/check"
 	"github.com/RhythmShahriar/echo/model"
 	"github.com/RhythmShahriar/echo/report"
 )
@@ -32,7 +35,7 @@ func cmdUp(s *session) int {
 	}
 	inbox := catcher.NewInbox(10000)
 	srv := catcher.NewServer(inbox, catcher.Config{Mode: cfg.Mode, Allow: cfg.Allow, Token: token, Version: version})
-	inbox.OnAdd(s.view.Message)
+	inbox.OnAdd(newLiveLog(s.view).add)
 
 	mux := http.NewServeMux()
 	mux.Handle("/v1/", srv)
@@ -91,6 +94,41 @@ func cmdUp(s *session) int {
 		fmt.Fprintf(s.stderr, "\nStopped. Captured %s this session.\n", report.Tally(liveRun(inbox, cfg.Mode)))
 	}
 	return exitOK
+}
+
+// liveLog prints each captured message once. The inbox calls back again
+// when a message changes (an observed request gets its answer, a check
+// blocks it); a new status is printed as a marked update, and an update
+// that changes nothing visible isn't printed at all.
+type liveLog struct {
+	view   *report.Pretty
+	mu     sync.Mutex
+	status map[string]model.Status
+}
+
+func newLiveLog(v *report.Pretty) *liveLog {
+	return &liveLog{view: v, status: map[string]model.Status{}}
+}
+
+func (l *liveLog) add(m model.Message) {
+	l.mu.Lock()
+	prev, seen := l.status[m.ID]
+	if len(l.status) > 20000 { // the inbox keeps 10000; forget the oldest half's worth at once
+		clear(l.status)
+	}
+	l.status[m.ID] = m.Status
+	l.mu.Unlock()
+	switch {
+	case !seen:
+		l.view.Message(m)
+	case prev != m.Status:
+		to := strings.Join(m.To, ", ")
+		if u, err := url.Parse(m.URL); to == "" && err == nil {
+			to = u.Host // not the path: some webhook URLs carry their secret there
+		}
+		l.view.Step("Update", fmt.Sprintf("%s %s to %s is now %s (was %s)",
+			m.At.Local().Format("15:04:05"), check.Describe(m), to, m.Status, prev))
+	}
 }
 
 func modeLine(mode string) string {

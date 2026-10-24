@@ -13,6 +13,7 @@ import (
 	"github.com/RhythmShahriar/echo/catcher"
 	"github.com/RhythmShahriar/echo/config"
 	"github.com/RhythmShahriar/echo/model"
+	"github.com/RhythmShahriar/echo/report"
 )
 
 func init() {
@@ -138,5 +139,22 @@ func TestSnapshotCompareThroughTheCLI(t *testing.T) {
 	}
 	if code, out, _ := runCLI(t, "ls", "--url", srv.URL, "--plain"); code != 0 || !strings.Contains(out, "admin@shop.test") {
 		t.Errorf("ls:\n%s", out)
+	}
+}
+
+func TestLiveLogPrintsEachMessageOnce(t *testing.T) {
+	var out bytes.Buffer
+	l := newLiveLog(report.NewPretty(&out, &out, report.PrettyOptions{Plain: true}))
+	m := model.Message{ID: "m1", Channel: model.Email, To: []string{"ann@shop.test"}, Subject: "Reset", Status: model.Faked}
+	l.add(m)
+	l.add(m) // an update that changes nothing visible
+	m.Status = model.Blocked
+	l.add(m)
+	got := out.String()
+	if n := strings.Count(got, "Reset"); n != 1 {
+		t.Errorf("message printed %d times:\n%s", n, got)
+	}
+	if !strings.Contains(got, "Update: ") || !strings.Contains(got, "is now blocked (was faked)") {
+		t.Errorf("no marked update:\n%s", got)
 	}
 }
