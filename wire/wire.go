@@ -30,7 +30,7 @@ const (
 type Capture struct {
 	Version int    `json:"v"`
 	Kind    string `json:"kind"`            // email or http
-	Phase   string `json:"phase,omitempty"` // http only: before or after
+	Phase   string `json:"phase,omitempty"` // http: before or after; email: after (with id) reports a real send's outcome
 	ID      string `json:"id,omitempty"`    // after: the ID Echo returned for before
 	Run     string `json:"run,omitempty"`   // from X-Echo-Run, "<run>/<action>"
 	Source  Source `json:"source"`

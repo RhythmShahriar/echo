@@ -169,3 +169,15 @@ func TestSMTPSink(t *testing.T) {
 		t.Errorf("smtp message = %+v", m)
 	}
 }
+
+func TestEmailAfterPhaseUpdates(t *testing.T) {
+	s := NewServer(NewInbox(10), Config{Mode: Observe})
+	srv := httptest.NewServer(s)
+	defer srv.Close()
+	d := post(t, srv, wire.Capture{Version: 1, Kind: "email", Email: &wire.Email{To: []string{"a@example.com"}, Subject: "x"}})
+	post(t, srv, wire.Capture{Version: 1, Kind: "email", Phase: wire.After, ID: d.ID, Error: "535 authentication failed"})
+	m, _ := s.Inbox.Get(d.ID)
+	if m.Status != model.Failed || m.Error == "" || len(s.Inbox.List(Filter{})) != 1 {
+		t.Errorf("after phase: %+v", m)
+	}
+}

@@ -103,6 +103,18 @@ func (s *Server) Capture(c wire.Capture) (wire.Decision, error) {
 	src := model.Source{Via: c.Source.Via, Stack: c.Source.Stack, Plugin: c.Source.Plugin, Hook: c.Source.Hook, Host: c.Source.Host}
 	switch c.Kind {
 	case "email":
+		// After a real send (observe mode), a connector may report how it
+		// went; the message it captured before is updated, not duplicated.
+		if c.Phase == wire.After && c.ID != "" {
+			s.Inbox.Update(c.ID, func(m *model.Message) {
+				if c.Error != "" {
+					m.Status, m.Error = model.Failed, c.Error
+				} else if m.Status != model.Failed {
+					m.Status = model.Sent
+				}
+			})
+			return wire.Decision{ID: c.ID, Mode: s.cfg.Mode, Action: wire.Allow}, nil
+		}
 		if c.Email == nil {
 			return wire.Decision{}, errors.New("an email capture needs email")
 		}
