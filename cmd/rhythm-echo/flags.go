@@ -60,7 +60,7 @@ type options struct {
 	sites                     string // up: sites.yaml with a write token per site
 
 	channel, runID, to string
-	since              time.Duration // ls and watch: also the messages from this long ago
+	since              time.Duration // ls and watch: also the messages from this long ago; report --site: the period
 
 	// check, headers and replay
 	fromMail, provider, selector, returnPath, smtpHost, resolver string
@@ -75,6 +75,10 @@ type options struct {
 	quietForSet, timeoutSet bool
 
 	test bool // checks: try the config's rules on their fixtures
+
+	// report --site: the agency report over a hub site's update windows
+	site, brandName, brandLogo, brandColor string
+	pdf                                    bool
 
 	// latest
 	code, link bool
@@ -124,14 +128,14 @@ func flagSet(o *options) *flag.FlagSet {
 	fs.BoolVar(&o.freePorts, "free-ports", false, "")
 	fs.StringVar(&o.login, "login", "", "")
 	fs.IntVar(&o.keep, "keep", 0, "")
-	fs.Var(daysFlag{&o.keepFor}, "keep-for", "")
+	fs.Var(daysFlag{&o.keepFor, errDaysValue}, "keep-for", "")
 	fs.StringVar(&o.spamassassin, "spamassassin", "", "")
 	fs.StringVar(&o.sites, "sites", "", "")
 
 	fs.StringVar(&o.channel, "channel", "", "")
 	fs.StringVar(&o.runID, "run", "", "")
 	fs.StringVar(&o.to, "to", "", "")
-	fs.DurationVar(&o.since, "since", 0, "")
+	fs.Var(daysFlag{&o.since, errSinceValue}, "since", "")
 
 	fs.StringVar(&o.fromMail, "from-mail", "", "")
 	fs.StringVar(&o.provider, "provider", "", "")
@@ -151,6 +155,11 @@ func flagSet(o *options) *flag.FlagSet {
 	fs.DurationVar(&o.wait, "wait", 5*time.Second, "")
 	fs.DurationVar(&o.timeout, "timeout", 0, "")
 	fs.BoolVar(&o.test, "test", false, "")
+	fs.StringVar(&o.site, "site", "", "")
+	fs.BoolVar(&o.pdf, "pdf", false, "")
+	fs.StringVar(&o.brandName, "brand-name", "", "")
+	fs.StringVar(&o.brandLogo, "brand-logo", "", "")
+	fs.StringVar(&o.brandColor, "brand-color", "", "")
 	fs.BoolVar(&o.code, "code", false, "")
 	fs.BoolVar(&o.link, "link", false, "")
 	fs.StringVar(&o.kind, "kind", "", "")
@@ -488,18 +497,23 @@ var flagDocs = map[string]flagDoc{
 	"check":         {"--check", "also run the DNS checks for the sender"},
 	"hops":          {"--hops", "show the route the message took"},
 
-	"set":        {"--set <path=value>", "override a field, e.g. data.object.amount=1999 (repeatable)"},
-	"header":     {"-H, --header <h>", `extra header, "Name: value" (repeatable)`},
-	"secret-env": {"--secret-env <NAME>", "env var with the signing secret (default per scheme,\ne.g. ECHO_STRIPE_WEBHOOK_SECRET)"},
-	"scheme":     {"--scheme <s>", "for JSON files: stripe, standard, github, woocommerce, hmac"},
-	"type":       {"--type <t>", `for JSON files: the event type (default the payload's "type")`},
-	"list":       {"--list", "list the built-in events"},
-	"wait":       {"--wait <d>", "how long to collect what the site sends back (default 5s)"},
-	"code":       {"--code", "print the one-time code (the default, else the first link)"},
-	"link":       {"--link", "print the first link instead (magic, verify, reset, login or\nunsubscribe)"},
-	"kind":       {"--kind <k>", "with --link: only this kind of link, e.g. magic or reset"},
-	"test":       {"--test", "try each of the config's rules on its fixtures; exit 1 when one fails"},
-	"timeout":    {"--timeout <d>", "longest wait per action (overrides timeout:, at most 1m)"},
+	"set":         {"--set <path=value>", "override a field, e.g. data.object.amount=1999 (repeatable)"},
+	"header":      {"-H, --header <h>", `extra header, "Name: value" (repeatable)`},
+	"secret-env":  {"--secret-env <NAME>", "env var with the signing secret (default per scheme,\ne.g. ECHO_STRIPE_WEBHOOK_SECRET)"},
+	"scheme":      {"--scheme <s>", "for JSON files: stripe, standard, github, woocommerce, hmac"},
+	"type":        {"--type <t>", `for JSON files: the event type (default the payload's "type")`},
+	"list":        {"--list", "list the built-in events"},
+	"wait":        {"--wait <d>", "how long to collect what the site sends back (default 5s)"},
+	"code":        {"--code", "print the one-time code (the default, else the first link)"},
+	"link":        {"--link", "print the first link instead (magic, verify, reset, login or\nunsubscribe)"},
+	"kind":        {"--kind <k>", "with --link: only this kind of link, e.g. magic or reset"},
+	"site":        {"--site <id>", "the agency report for this hub site: did its update windows\nbreak anything (--store is the hub's store)"},
+	"pdf":         {"--pdf", "with --site: also print it to a PDF (needs Chrome or Chromium)"},
+	"brand-name":  {"--brand-name <name>", "with --site: the agency's name on the report"},
+	"brand-logo":  {"--brand-logo <file>", "with --site: the agency's logo (PNG, JPEG, GIF, WebP or SVG)"},
+	"brand-color": {"--brand-color <#hex>", "with --site: the report's accent color, e.g. #1F6FEB"},
+	"test":        {"--test", "try each of the config's rules on its fixtures; exit 1 when one fails"},
+	"timeout":     {"--timeout <d>", "longest wait per action (overrides timeout:, at most 1m)"},
 }
 
 // Flag groups several commands share.
@@ -565,8 +579,10 @@ var commands = []cmdSpec{
 			{"accept", ""}, {"fail-on", failOnChanges}}, actionFlags)},
 	{name: "run", use: "run", about: "run the actions once, no comparison",
 		flags: flags(echoFlags, []flagUse{{"store", ""}, {"action", ""}, {"fail-on", ""}}, actionFlags)},
-	{name: "report", use: "report [run | snapshot]", about: "show the last result again (--open, -o)",
-		flags: flags(storeFlags, []flagUse{{"fail-on", "as compare for a comparison, as run otherwise; none: never"}}, reportFlags)},
+	{name: "report", use: "report [run | snapshot] | --site <id>", about: "show the last result again (--open, -o), or a hub site's agency report",
+		flags: flags(storeFlags, []flagUse{{"fail-on", "as compare for a comparison, as run otherwise; none: never"}}, reportFlags,
+			[]flagUse{{"site", ""}, {"since", "with --site: the period, e.g. 90d (default 30d)"}, {"pdf", ""},
+				{"brand-name", ""}, {"brand-logo", ""}, {"brand-color", ""}})},
 	{name: "snapshots", use: "snapshots [delete <name>]", about: "list snapshots, or delete one",
 		flags: flags(storeFlags, []flagUse{{"json", "the list as JSON: name, time, counts and which is the latest"}})},
 	{name: "replay", use: "replay <event> --to <url>", about: "send a signed test webhook (Stripe, Standard Webhooks…)",
@@ -961,8 +977,12 @@ func shortDuration(d time.Duration) string {
 }
 
 // daysFlag is a duration flag that also takes days, as the config's
-// keep_for: does: 14d, 1d12h or 36h.
-type daysFlag struct{ d *time.Duration }
+// keep_for: does: 14d, 1d12h or 36h. why is the error for a value that
+// isn't one.
+type daysFlag struct {
+	d   *time.Duration
+	why error
+}
 
 func (f daysFlag) String() string {
 	if f.d == nil {
@@ -974,10 +994,13 @@ func (f daysFlag) String() string {
 func (f daysFlag) Set(v string) error {
 	var d config.Duration
 	if err := d.UnmarshalYAML(&yaml.Node{Kind: yaml.ScalarNode, Value: v}); err != nil {
-		return errDaysValue
+		return f.why
 	}
 	*f.d = d.Duration
 	return nil
 }
 
-var errDaysValue = errors.New("want a duration like 14d or 12h")
+var (
+	errDaysValue  = errors.New("want a duration like 14d or 12h")
+	errSinceValue = errors.New("want a duration like 10m or 5s")
+)

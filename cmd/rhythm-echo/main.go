@@ -192,6 +192,8 @@ Usage:
   rhythm echo compare [--snapshot N]     run them again and show what changed
   rhythm echo run                        run the actions once, no comparison
   rhythm echo report [run | snapshot]    show the last result again (--open, -o)
+  rhythm echo report --site <id> --store <hub store> [--pdf]
+                                         a hub site's agency report: did its updates break anything
   rhythm echo snapshots [delete <name>]  list snapshots, or delete one
   rhythm echo replay <event> --to <url>  send a signed test webhook (Stripe, Standard Webhooks…)
   rhythm echo latest --to <address> [--code | --link]
@@ -328,6 +330,14 @@ Deliverability (check, headers; never sends anything):
       --resolver <host:port> DNS server to ask (default the system's)
       --check                (headers) also run the DNS checks for the sender
       --hops                 (headers) show the route the message took
+
+Agency report (report --site <id> --store <the hub's store>; rhythm echo schedule fills it):
+      --site <id>            the hub site to report on: did its update windows break anything
+      --since <d>            the period, e.g. 90d (default 30d)
+      --pdf                  also print it to a PDF (needs Chrome or Chromium)
+      --brand-name <name>    the agency's name on the report
+      --brand-logo <file>    the agency's logo (PNG, JPEG, GIF, WebP or SVG)
+      --brand-color <#hex>   the report's accent color, e.g. #1F6FEB
 
 Checks (checks; rules: and checks: in .echo/config.yaml add and tune them):
       --test                 try each of the config's rules on its fixtures; exit 1 when

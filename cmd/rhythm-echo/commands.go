@@ -525,6 +525,12 @@ func cmdRun(s *session) int {
 }
 
 func cmdReport(s *session) int {
+	if s.o.site != "" {
+		return s.agencyReport()
+	}
+	if s.o.pdf || s.o.since != 0 || s.o.brandName != "" || s.o.brandLogo != "" || s.o.brandColor != "" {
+		return s.fail(usageErr("--since, --pdf and the --brand flags are for the agency report: add --site <id>"))
+	}
 	var dir string
 	var err error
 	switch len(s.args) {
