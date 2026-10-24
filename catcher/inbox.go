@@ -17,21 +17,82 @@ import (
 	"github.com/RhythmShahriar/echo/model"
 )
 
+// DefaultMaxBytes is how much message data an inbox holds by default.
+const DefaultMaxBytes = 256 << 20
+
 // Inbox holds captured messages in memory, newest last.
 type Inbox struct {
-	mu      sync.Mutex
-	msgs    []model.Message
-	max     int
-	changed chan struct{} // closed and replaced whenever a message is added or updated
-	run     string        // the action in progress, for messages that don't say
-	action  string
-	seq     int
-	onAdd   func(model.Message)
+	mu       sync.Mutex
+	msgs     []model.Message
+	max      int
+	maxBytes int64
+	bytes    int64         // sum of size(m) over msgs
+	changed  chan struct{} // closed and replaced whenever a message is added or updated
+	run      string        // the action in progress, for messages that don't say
+	action   string
+	seq      int
+	onAdd    func(model.Message)
 }
 
-// NewInbox keeps at most max messages (oldest dropped first).
+// NewInbox keeps at most max messages and DefaultMaxBytes of them (oldest
+// dropped first).
 func NewInbox(max int) *Inbox {
-	return &Inbox{max: max, changed: make(chan struct{})}
+	return &Inbox{max: max, maxBytes: DefaultMaxBytes, changed: make(chan struct{})}
+}
+
+// SetMaxBytes caps how much message data the inbox holds, dropping the
+// oldest messages now if it holds more. The count cap alone let 10,000
+// large messages fill gigabytes.
+func (in *Inbox) SetMaxBytes(n int64) {
+	in.mu.Lock()
+	in.maxBytes = n
+	in.evict()
+	in.mu.Unlock()
+}
+
+// Bytes returns how much message data the inbox holds.
+func (in *Inbox) Bytes() int64 {
+	in.mu.Lock()
+	defer in.mu.Unlock()
+	return in.bytes
+}
+
+// evict drops the oldest messages until both caps hold, always keeping
+// the newest one. Called with in.mu held.
+func (in *Inbox) evict() {
+	n := 0
+	for len(in.msgs)-n > 1 && (len(in.msgs)-n > in.max || in.bytes > in.maxBytes) {
+		in.bytes -= size(in.msgs[n])
+		n++
+	}
+	if n > 0 {
+		in.msgs = slices.Delete(in.msgs, 0, n)
+	}
+}
+
+// size estimates the memory a message holds: its text fields, which are
+// what grows. Fixed-size fields are left out.
+func size(m model.Message) int64 {
+	n := len(m.ID) + len(m.Run) + len(m.Action) + len(m.From) + len(m.ReplyTo) + len(m.Subject) + len(m.Text) + len(m.HTML) +
+		len(m.Event) + len(m.Method) + len(m.URL) + len(m.Body) + len(m.Error) + len(m.LateFor)
+	for _, list := range [][]string{m.To, m.CC, m.BCC} {
+		for _, v := range list {
+			n += len(v)
+		}
+	}
+	for k, v := range m.Headers {
+		n += len(k) + len(v)
+	}
+	if m.Response != nil {
+		n += len(m.Response.Body)
+	}
+	for _, a := range m.Attachments {
+		n += len(a.Name) + len(a.Type) + len(a.SHA256)
+	}
+	for _, i := range m.Issues {
+		n += len(i.Check) + len(i.Title) + len(i.Detail) + len(i.Fix) + len(i.Key)
+	}
+	return int64(n)
 }
 
 // OnAdd registers a callback for every new or updated message (a log, the
@@ -64,9 +125,8 @@ func (in *Inbox) Add(m model.Message) model.Message {
 		m.Run, m.Action = in.run, in.action
 	}
 	in.msgs = append(in.msgs, m)
-	if len(in.msgs) > in.max {
-		in.msgs = slices.Delete(in.msgs, 0, len(in.msgs)-in.max)
-	}
+	in.bytes += size(m)
+	in.evict()
 	in.notify()
 	in.mu.Unlock()
 	if in.onAdd != nil {
@@ -83,12 +143,15 @@ func (in *Inbox) Update(id string, fn func(*model.Message)) bool {
 	found := false
 	for i := range in.msgs {
 		if in.msgs[i].ID == id {
+			before := size(in.msgs[i])
 			fn(&in.msgs[i])
+			in.bytes += size(in.msgs[i]) - before
 			out, found = in.msgs[i], true
 			break
 		}
 	}
 	if found {
+		in.evict()
 		in.notify()
 	}
 	in.mu.Unlock()
@@ -193,7 +256,7 @@ func (in *Inbox) Clear(f Filter) int {
 	in.mu.Lock()
 	defer in.mu.Unlock()
 	n := len(in.msgs)
-	in.msgs = slices.DeleteFunc(in.msgs, f.match)
+	in.msgs = slices.DeleteFunc(in.msgs, func(m model.Message) bool { return in.drop(f.match(m), m) })
 	in.notify()
 	return n - len(in.msgs)
 }
@@ -204,7 +267,18 @@ func (in *Inbox) Delete(channel model.Channel, ids []string) int {
 	in.mu.Lock()
 	defer in.mu.Unlock()
 	n := len(in.msgs)
-	in.msgs = slices.DeleteFunc(in.msgs, func(m model.Message) bool { return m.Channel == channel && slices.Contains(ids, m.ID) })
+	in.msgs = slices.DeleteFunc(in.msgs, func(m model.Message) bool {
+		return in.drop(m.Channel == channel && slices.Contains(ids, m.ID), m)
+	})
 	in.notify()
 	return n - len(in.msgs)
+}
+
+// drop returns del, taking m's size off the total when it's deleted.
+// Called with in.mu held.
+func (in *Inbox) drop(del bool, m model.Message) bool {
+	if del {
+		in.bytes -= size(m)
+	}
+	return del
 }

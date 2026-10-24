@@ -8,6 +8,7 @@ import (
 	"crypto/subtle"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -16,12 +17,23 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/RhythmShahriar/echo/mask"
 	"github.com/RhythmShahriar/echo/model"
 	"github.com/RhythmShahriar/echo/recognize"
 	"github.com/RhythmShahriar/echo/wire"
 )
+
+// MaxCapture is the largest capture the API accepts. Echo keeps MaxBody
+// of each field, so a bigger capture only costs memory and time.
+const MaxCapture = 8 << 20
+
+// margin is how far past MaxBody a field is kept for masking. A secret
+// that starts before the cut is still matched whole, so cutting first
+// gives the same result as masking everything, without running every rule
+// over megabytes that are thrown away.
+const margin = 4 << 10
 
 // Modes.
 const (
@@ -103,7 +115,11 @@ func (s *Server) health(w http.ResponseWriter, _ *http.Request) {
 // capture records an email or an HTTP request and decides its fate.
 func (s *Server) capture(w http.ResponseWriter, r *http.Request) {
 	var c wire.Capture
-	if err := json.NewDecoder(io.LimitReader(r.Body, 32<<20)).Decode(&c); err != nil {
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, MaxCapture)).Decode(&c); err != nil {
+		if _, ok := errors.AsType[*http.MaxBytesError](err); ok {
+			http.Error(w, fmt.Sprintf("capture too large: Echo accepts up to %d MiB", MaxCapture>>20), http.StatusRequestEntityTooLarge)
+			return
+		}
 		http.Error(w, "bad capture: "+err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -171,7 +187,7 @@ func (s *Server) http(c wire.Capture, run, action string, src model.Source) (wir
 	h := c.HTTP
 	if c.Phase == wire.After && c.ID != "" {
 		s.Inbox.Update(c.ID, func(m *model.Message) {
-			m.Response = &model.Response{Status: h.Status, Body: s.cut(mask.Body(h.Response))}
+			m.Response = &model.Response{Status: h.Status, Body: s.fitAny(h.Response, mask.Body)}
 			switch {
 			case c.Error != "":
 				m.Status, m.Error = model.Failed, c.Error
@@ -194,18 +210,19 @@ func (s *Server) http(c wire.Capture, run, action string, src model.Source) (wir
 	}
 	req := recognize.Request{Method: strings.ToUpper(h.Method), URL: u, Headers: lower(h.Headers), Body: []byte(h.Body)}
 	m := model.Message{Run: run, Action: action, Source: src, Method: req.Method,
-		URL: mask.Text(h.URL), Headers: mask.Headers(req.Headers), Body: s.cut(mask.Body(h.Body))}
+		Headers: s.headers(req.Headers)}
+	m.Body = s.fit(&m, h.Body, mask.Body)
 	rec := recognize.Recognize(req, &m)
-	m.URL = mask.Text(recognize.RedactURL(rec, h.URL)) // a catch hook's URL is its credential
+	m.URL = s.fitAny(recognize.RedactURL(rec, h.URL), mask.Text) // a catch hook's URL is its credential
 	// Recognizers copy what they read from the raw request: the SMS text,
 	// the chat message, and for unknown APIs the host and path as To.
-	maskFields(&m)
+	s.maskFields(&m)
 	allowed := s.allowed(u.Hostname(), src.Host)
 	d := wire.Decision{Mode: s.cfg.Mode}
 	switch {
 	case c.Phase == wire.After: // observed with nothing before: record as sent
 		m.Status = model.Sent
-		m.Response = &model.Response{Status: h.Status, Body: s.cut(mask.Body(h.Response))}
+		m.Response = &model.Response{Status: h.Status, Body: s.fitAny(h.Response, mask.Body)}
 		if h.Status >= 400 || c.Error != "" {
 			m.Status, m.Error = model.Failed, c.Error
 		}
@@ -216,7 +233,7 @@ func (s *Server) http(c wire.Capture, run, action string, src model.Source) (wir
 		// card. It's answered with the provider's own refusal.
 		f := recognize.FakeFor(rec, req, &m)
 		m.Status, m.Error = model.Blocked, "refused: a live-mode "+recognize.Name(m.Provider)+" call; use test credentials on staging"
-		m.Response = &model.Response{Status: f.Status, Body: s.cut(f.Body)}
+		m.Response = &model.Response{Status: f.Status, Body: s.fitAny(f.Body, nil)}
 		d.Action, d.Response = wire.Fake, &wire.Response{Status: f.Status, Headers: f.Headers, Body: f.Body}
 	case s.cfg.Mode == Observe || allowed:
 		m.Status = model.Sent // until the after phase says otherwise
@@ -224,7 +241,7 @@ func (s *Server) http(c wire.Capture, run, action string, src model.Source) (wir
 	default:
 		f := recognize.FakeFor(rec, req, &m)
 		m.Status = model.Faked
-		m.Response = &model.Response{Status: f.Status, Body: s.cut(f.Body)}
+		m.Response = &model.Response{Status: f.Status, Body: s.fitAny(f.Body, nil)}
 		d.Action, d.Response = wire.Fake, &wire.Response{Status: f.Status, Headers: f.Headers, Body: f.Body}
 	}
 	m = s.Inbox.Add(m)
@@ -263,33 +280,41 @@ func (s *Server) email(e *wire.Email) model.Message {
 		}
 		// Decoded first: a reset link in a base64 part is invisible to
 		// every rule.
-		m.Body = s.cut(mask.MIME(e.Raw))
+		m.Body = s.fit(&m, e.Raw, mask.MIME)
 	}
-	m.Headers = mask.Headers(m.Headers)
-	maskFields(&m)
-	m.HTML = s.cut(m.HTML)
+	m.Headers = s.headers(m.Headers)
+	s.maskFields(&m)
 	return m
 }
 
 // maskFields masks the fields a message's text and recipients are read
-// into: a subject can hold a login code, an HTML link a reset key, and a
-// recipient copied from an API path a bot token.
-func maskFields(m *model.Message) {
-	m.Subject, m.Text, m.HTML = mask.Text(m.Subject), mask.Text(m.Text), mask.Text(m.HTML)
-	m.From, m.ReplyTo = maskAddress(m.From), maskAddress(m.ReplyTo)
-	m.To, m.CC, m.BCC = maskAddresses(m.To), maskAddresses(m.CC), maskAddresses(m.BCC)
+// into, each cut to size: a subject can hold a login code, an HTML link a
+// reset key, and a recipient copied from an API path a bot token.
+func (s *Server) maskFields(m *model.Message) {
+	m.Subject, m.Text, m.HTML = s.fit(m, m.Subject, mask.Text), s.fit(m, m.Text, mask.Text), s.fit(m, m.HTML, mask.Text)
+	m.From, m.ReplyTo = s.fit(m, m.From, maskAddress), s.fit(m, m.ReplyTo, maskAddress)
+	m.To, m.CC, m.BCC = s.addresses(m, m.To), s.addresses(m, m.CC), s.addresses(m, m.BCC)
 }
 
 func maskAddress(v string) string { return mask.URL(mask.Text(v)) }
 
-// maskAddresses returns a masked copy: the list may be the caller's.
-func maskAddresses(list []string) []string {
+// addresses returns a masked copy of list: it may be the caller's.
+func (s *Server) addresses(m *model.Message, list []string) []string {
 	if list == nil {
 		return nil
 	}
 	out := make([]string, len(list))
 	for i, v := range list {
-		out[i] = maskAddress(v)
+		out[i] = s.fit(m, v, maskAddress)
+	}
+	return out
+}
+
+// headers masks every header value, each cut to size.
+func (s *Server) headers(h map[string]string) map[string]string {
+	out := make(map[string]string, len(h))
+	for k, v := range h {
+		out[k] = s.fitAny(v, func(v string) string { return mask.Header(k, v) })
 	}
 	return out
 }
@@ -323,11 +348,49 @@ func fillEmpty(m *model.Message, p model.Message) {
 	}
 }
 
-func (s *Server) cut(v string) string {
-	if len(v) > s.cfg.MaxBody {
-		return v[:s.cfg.MaxBody] + "\n…(truncated)"
-	}
+// fit masks v with fn and keeps at most MaxBody bytes of the result,
+// marking m as truncated when it cuts. v is cut to MaxBody plus a margin
+// before masking: masking all of a 20 MiB body took 29 s, and all but
+// MaxBody of it was thrown away.
+func (s *Server) fit(m *model.Message, v string, fn func(string) string) string {
+	v, cut := s.cutMasked(v, fn)
+	m.Truncated = m.Truncated || cut
 	return v
+}
+
+// fitAny is fit for a field Truncated doesn't cover (a response, a
+// header, the URL). fn may be nil for text Echo wrote itself.
+func (s *Server) fitAny(v string, fn func(string) string) string {
+	v, _ = s.cutMasked(v, fn)
+	return v
+}
+
+func (s *Server) cutMasked(v string, fn func(string) string) (string, bool) {
+	cut := false
+	if limit := s.cfg.MaxBody + margin; len(v) > limit {
+		v, cut = v[:runeStart(v, limit)], true
+	}
+	if fn != nil {
+		v = fn(v)
+	}
+	if len(v) > s.cfg.MaxBody {
+		v, cut = v[:runeStart(v, s.cfg.MaxBody)], true
+	}
+	if cut {
+		v += "\n…(truncated)"
+	}
+	return v, cut
+}
+
+// runeStart moves i back to the start of the UTF-8 sequence it falls in,
+// so a cut never splits a character.
+func runeStart(v string, i int) int {
+	for j := i; j > 0 && j > i-utf8.UTFMax; j-- {
+		if utf8.RuneStart(v[j]) {
+			return j
+		}
+	}
+	return i
 }
 
 func filterFrom(q url.Values) Filter {

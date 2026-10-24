@@ -75,7 +75,7 @@ type Message struct {
 	// that doesn't use them encodes exactly as before and the schema stays
 	// rhythm-echo/v1.
 
-	// Truncated says a field (Body, HTML, Text, a response body) was cut
+	// Truncated says Body, HTML, Text, Subject or an address was cut
 	// to the size cap. Compare must not read a cut payload as "fields lost".
 	Truncated bool `json:"truncated,omitempty"`
 	// Attachments lists the files the message carried, without their
