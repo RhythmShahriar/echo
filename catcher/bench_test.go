@@ -66,17 +66,25 @@ func BenchmarkCaptureLargeEmail(b *testing.B) {
 }
 
 // TestLargeCaptureIsCutBeforeMasking: a 20 MiB text took 29 s to mask in
-// full. Cut first, it's quick and what's stored fits MaxBody.
+// full. Cut first, it costs about what a text of MaxBody does (measured
+// here too, so a loaded machine slows both) and what's stored fits
+// MaxBody.
 func TestLargeCaptureIsCutBeforeMasking(t *testing.T) {
 	s := NewServer(NewInbox(10), Config{})
-	big := largeText(20 << 20)
-	start := time.Now()
-	d, err := s.Capture(wire.Capture{Version: 1, Kind: "email", Email: &wire.Email{To: []string{"jane@example.com"}, Text: big}})
-	if err != nil {
-		t.Fatal(err)
+	capture := func(text string) (wire.Decision, time.Duration) {
+		t.Helper()
+		start := time.Now()
+		d, err := s.Capture(wire.Capture{Version: 1, Kind: "email", Email: &wire.Email{To: []string{"jane@example.com"}, Text: text}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return d, time.Since(start)
 	}
-	if took := time.Since(start); took > 500*time.Millisecond*slowdown {
-		t.Errorf("a 20 MiB text capture took %s", took)
+	_, base := capture(largeText(256 << 10))
+	big := largeText(20 << 20)
+	d, took := capture(big)
+	if limit := max(4*base+100*time.Millisecond, 500*time.Millisecond*slowdown); took > limit {
+		t.Errorf("a 20 MiB text capture took %s; one of MaxBody took %s", took, base)
 	}
 	if m, _ := s.Inbox.Get(d.ID); !m.Truncated || len(m.Text) > 256<<10 {
 		t.Errorf("20 MiB text: truncated %v, %d bytes stored", m.Truncated, len(m.Text))
@@ -85,7 +93,7 @@ func TestLargeCaptureIsCutBeforeMasking(t *testing.T) {
 	// Every field is cut: the subject and each address too. A smaller cap
 	// keeps this quick under the race detector.
 	s = NewServer(NewInbox(10), Config{MaxBody: 16 << 10})
-	d, err = s.Capture(wire.Capture{Version: 1, Kind: "email", Email: &wire.Email{
+	d, err := s.Capture(wire.Capture{Version: 1, Kind: "email", Email: &wire.Email{
 		To: []string{"jane@example.com", big}, Subject: big, Text: big, HTML: "<p>" + big}})
 	if err != nil {
 		t.Fatal(err)
