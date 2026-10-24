@@ -205,7 +205,8 @@ Usage:
                                          (wordpress, laravel, next, node or php; --force replaces it)
   rhythm echo providers                  list the services Echo recognizes, by channel (--json)
   rhythm echo checks [--test]            list the checks and the config's rules (--test: try their fixtures)
-  rhythm echo ca [--pem]                 print the proxy's CA certificate path (--pem: the certificate)
+  rhythm echo ca [--pem | --untrust]     print the proxy's CA certificate path (--pem: the certificate;
+                                         --untrust: how to stop trusting it)
   rhythm echo mcp                        MCP server for coding agents: claude mcp add echo -- rhythm-echo mcp
   rhythm echo hub --store D --sites F    one Echo for many staging sites, each with its own write token
   rhythm echo schedule "<when>" --store D --after "<command>"

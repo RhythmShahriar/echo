@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -85,5 +86,17 @@ func TestLiveChargesRefusedToday(t *testing.T) {
 		if !recognize.Refuses(recognize.Recognize(r, &model.Message{}), r) {
 			t.Errorf("live %s call isn't refused", c.gateway)
 		}
+	}
+}
+
+// The README's count of the services Echo recognizes must be the
+// catalog's.
+func TestReadmeProviderCount(t *testing.T) {
+	m := regexp.MustCompile(`(\d+) services are recognized out of the box`).FindStringSubmatch(readme(t))
+	if m == nil {
+		t.Fatal("README doesn't say how many services are recognized")
+	}
+	if want := strconv.Itoa(len(recognize.Catalog())); m[1] != want {
+		t.Errorf("README says %s services are recognized; the catalog has %s", m[1], want)
 	}
 }

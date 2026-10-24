@@ -611,7 +611,7 @@ var commands = []cmdSpec{
 	{name: "schedule", use: `schedule "<when>" --store DIR --after "<command>"`, about: "snapshot, update and compare the hub's sites in a window", own: true},
 	{name: "conformance", use: "conformance [--listen addr]", about: "a strict stand-in Echo for a connector's end-to-end test", own: true},
 	{name: "init", use: "init [--stack s] [--force]", about: "write .echo/config.yaml with an action for this stack (--force replaces it)", own: true},
-	{name: "ca", use: "ca [--pem]", about: "print the proxy's CA certificate path (--pem: the certificate)", own: true},
+	{name: "ca", use: "ca [--pem | --untrust]", about: "print the proxy's CA certificate path (--pem: the certificate; --untrust: how to remove it)", own: true},
 	{name: "sendmail", use: "sendmail [-t] [-i] [-f from] [rcpt…]", about: "sendmail stand-in for sendmail_path; reads the message on stdin", own: true},
 	{name: "update", use: "update", about: "nothing to refresh; kept for rhythm update", hidden: true},
 }

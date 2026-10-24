@@ -121,6 +121,10 @@ rhythm echo compare --open                       # what changed, in a report
 | Get the login code or magic link just sent, in a test | `code=$(rhythm echo latest --to ann@shop.test --code)` (`--link --kind magic` for the link; looks back 1m and waits up to `--wait`, default 10s, then exits 1). A test that signs the same user in again should pass `--run` or a short `--since 5s`, or run `rhythm echo clear --to ann@shop.test` first, or it may get the previous code |
 | Stream what the site sends into a script | `rhythm echo watch --json` (one JSON object per line) |
 | Read any result in a script | `--json` on any command: one shape, with `kind`, `summary`, `verdict` and `data` |
+| Accept a change you meant to make | `rhythm echo compare --accept <key>` (`compare -v` shows each change's key) |
+| Add a check of your own, such as an old phone number | `rules:` in `.echo/config.yaml`, then `rhythm echo checks --test` |
+| Let a coding agent read what the site sent | `claude mcp add echo -- rhythm-echo mcp` |
+| Watch many client sites from one Echo | `rhythm echo hub`, `rhythm echo schedule` for update windows and `rhythm echo report --site <id> --store <dir> --pdf` for the client |
 
 ## What it catches
 
@@ -143,7 +147,7 @@ Unfilled placeholders (`{first_name}`, `*|FNAME|*`, `[your-name]`), PHP warnings
 <td valign="top">
 
 ### 🔒 Staging that talks to real people
-Sealed by default: email, SMS, WhatsApp, webhooks, analytics and push are answered by Echo. Live-mode Stripe and PayPal calls get the provider's own refusal, so a test can't charge a card through either, even in observe mode. Other payment gateways are sealed like any other service, so in observe mode or on an allowlisted host they go through. In observe mode, any real recipient outside your allowlist is flagged.
+Sealed by default: email, SMS, WhatsApp, webhooks, analytics and push are answered by Echo. Live-mode calls to Stripe, PayPal, Adyen, Braintree, Square, Authorize.net, Mollie and Razorpay get the gateway's own refusal in every mode, so a test can never charge a card through them, even in observe mode or on an allowlisted host. In observe mode, any real recipient outside your allowlist is flagged.
 
 </td>
 <td valign="top">
@@ -155,7 +159,7 @@ SPF (including the 10-lookup limit), DKIM keys, DMARC policy and alignment for t
 </tr>
 </table>
 
-34 services are recognized out of the box, from SendGrid, Mailgun, Postmark, Resend and SES to Twilio, Vonage, WhatsApp Cloud, Slack, Teams, GA4, Meta, FCM, Stripe, HubSpot, Klaviyo and Zapier. Anything else is captured as a generic webhook.
+53 services are recognized out of the box, from SendGrid, Mailgun, Postmark, Resend, SES and the Gmail and Microsoft Graph APIs to Twilio, Vonage, WhatsApp Cloud, Slack, Teams, GA4, Segment, Meta, FCM, APNs, Stripe, HubSpot, Klaviyo and Zapier (`rhythm echo providers` lists them). Anything else is captured as a generic webhook.
 
 ## Why Echo
 
