@@ -1,0 +1,26 @@
+{
+  "schema": "rhythm-echo/v1",
+  "tool": "rhythm-echo",
+  "version": "1.0.0",
+  "id": "r1",
+  "name": "ci",
+  "mode": "seal",
+  "started": "2026-10-24T10:00:00Z",
+  "duration_ms": 1200,
+  "actions": [
+    {"id": "a", "label": "Order form", "kind": "http", "duration_ms": 10,
+     "messages": [
+       {"channel": "email", "to": ["jane.doe@customer.example"], "subject": "Your order W-1234 for Jane Doe"},
+       {"channel": "email", "to": ["admin@shop.example"], "subject": "New order"},
+       {"channel": "sms", "to": ["+61412345678"], "text": "Hi Jane"}
+     ],
+     "issues": [
+       {"check": "content/merge-tag", "level": "error", "title": "Unfilled placeholder {first_name} in email to jane.doe@customer.example", "key": "content/merge-tag|x"},
+       {"check": "email/no-text", "level": "notice", "title": "Email has no plain-text part", "key": "email/no-text|Email has no plain-text part"}
+     ]},
+    {"id": "b", "label": "Contact form", "kind": "http", "duration_ms": 10, "messages": [],
+     "issues": [{"check": "email/no-text", "level": "notice", "title": "Email has no plain-text part", "key": "email/no-text|Email has no plain-text part"}],
+     "error": "POST http://127.0.0.1:20519/contact: connection refused\nsecond line"}
+  ],
+  "issues": [{"check": "seal/real-recipient", "level": "warning", "title": "Email really sent to bob@real.example", "key": "seal/real-recipient|y"}]
+}

@@ -60,9 +60,19 @@ inputs:
     required: false
     default: ""
   upload:
-    description: Upload the HTML and JUnit reports as a workflow artifact.
+    description: >
+      Upload the HTML and JUnit reports as the echo-report workflow artifact. Off by default: the
+      HTML report holds every captured recipient, subject and body, and anyone can download the
+      artifacts of a public repository's runs. The Action warns when it is on in a public repository.
     required: false
-    default: "true"
+    default: "false"
+  summary-details:
+    description: >
+      Show recipients, subjects and before and after values in the job summary. By default the
+      summary has counts, change titles and action names, with addresses, numbers and quoted text
+      masked, because anyone who can read the repository can read it.
+    required: false
+    default: "false"
 
 outputs:
   url:
@@ -85,6 +95,9 @@ outputs:
   report:
     description: Path of the standalone HTML report.
     value: ${{ steps.check.outputs.report }}
+  summary:
+    description: Path of a copy of the job summary the Action wrote (Markdown).
+    value: ${{ steps.check.outputs.summary }}
 
 runs:
   using: composite
@@ -192,6 +205,10 @@ runs:
         NAME: ${{ inputs.name }}
         FAIL_ON: ${{ inputs.fail-on }}
         ARGS: ${{ inputs.args }}
+        UPLOAD: ${{ inputs.upload }}
+        DETAILS: ${{ inputs.summary-details }}
+        PRIVATE: ${{ github.event.repository.private }}
+        SUMMARY: ${{ github.action_path }}/integrations/action/summary.sh
       run: |
         set -uo pipefail
         level=$FAIL_ON
@@ -220,7 +237,20 @@ runs:
         [ "$MODE" = snapshot ] && which=("$NAME")
         out="$RUNNER_TEMP/echo-report"
         mkdir -p "$out"
-        rhythm-echo report ${which[@]+"${which[@]}"} --md >> "$GITHUB_STEP_SUMMARY" || true
+        # The summary is masked unless summary-details: true; a copy stays
+        # outside the uploaded folder for the summary output.
+        md="$RUNNER_TEMP/echo-summary.md"
+        if [ "$DETAILS" = true ]; then
+          rhythm-echo report ${which[@]+"${which[@]}"} --md > "$md" || true
+        elif rhythm-echo report ${which[@]+"${which[@]}"} --json -o "$RUNNER_TEMP/echo-report.json" -q; then
+          bash "$SUMMARY" report "$RUNNER_TEMP/echo-report.json" > "$md" || true
+          rm -f "$RUNNER_TEMP/echo-report.json"
+        fi
+        cat "$md" >> "$GITHUB_STEP_SUMMARY"
+        echo "summary=$md" >> "$GITHUB_OUTPUT"
+        if [ "$UPLOAD" = true ] && [ "$PRIVATE" = false ]; then
+          echo "::warning::upload is on in a public repository: anyone can download the echo-report artifact, with every captured recipient, subject and message. Turn upload off, or keep the repository private."
+        fi
         rhythm-echo report ${which[@]+"${which[@]}"} ${fail[@]+"${fail[@]}"} --junit -o "$out/echo-junit.xml" -q || true
         rhythm-echo report ${which[@]+"${which[@]}"} --html -o "$out/echo-report.html" -q || true
         echo "report=$out/echo-report.html" >> "$GITHUB_OUTPUT"
@@ -246,5 +276,5 @@ runs:
       env:
         FAIL_ON: ${{ inputs.fail-on }}
       run: |
-        echo "::error::Echo found changes or issues at or above --fail-on ${FAIL_ON:-its default}. See the job summary and the echo-report artifact."
+        echo "::error::Echo found changes or issues at or above --fail-on ${FAIL_ON:-its default}. See the job summary."
         exit 1

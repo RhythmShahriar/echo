@@ -1,0 +1,1 @@
+{"schema": "rhythm-echo/v1", "before": {"dir": ".echo/runs/a", "started": "2026-10-20T10:00:00Z"}, "after": {"dir": "x", "started": "2026-10-24T10:00:00Z"}, "changes": [], "actions": 1, "created": "2026-10-24T10:00:05Z"}

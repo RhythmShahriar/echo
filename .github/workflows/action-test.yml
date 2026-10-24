@@ -73,3 +73,57 @@ jobs:
           if bash .github/scripts/verify-release.sh "$d" rhythm-echo_linux_amd64.tar.gz; then
             echo "::error::a release without a signature verified"; exit 1
           fi
+
+  # Upload is off by default and the summary hides who was messaged and
+  # what was said, unless summary-details is on.
+  summary:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read   # list this run's artifacts
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Start the fixture shop
+        run: php -S 127.0.0.1:20510 integrations/ci-fixture/php/index.php > "$RUNNER_TEMP/php.log" 2>&1 &
+      - uses: ./
+        with:
+          mode: snapshot
+          name: good
+          args: --config integrations/ci-fixture/.echo/config.yaml
+      - run: touch integrations/ci-fixture/php/broken
+      - uses: ./
+        id: masked
+        with:
+          mode: compare
+          fail-on: none
+          args: --config integrations/ci-fixture/.echo/config.yaml
+      - name: The summary is masked
+        env:
+          SUMMARY: ${{ steps.masked.outputs.summary }}
+        run: |
+          cat "$SUMMARY"
+          grep -F '**Something broke.**' "$SUMMARY"
+          grep -F '| 1 | 1 | 0 | 0 |' "$SUMMARY"
+          grep -F 'summary-details: true' "$SUMMARY"
+          for private in customer@example.com 'Order W-1001 received' 'New order W-1001'; do
+            if grep -F "$private" "$SUMMARY"; then echo "::error::the summary shows $private"; exit 1; fi
+          done
+      - uses: ./
+        id: details
+        with:
+          mode: compare
+          fail-on: none
+          summary-details: "true"
+          args: --config integrations/ci-fixture/.echo/config.yaml
+      - name: summary-details shows everything
+        env:
+          SUMMARY: ${{ steps.details.outputs.summary }}
+        run: |
+          cat "$SUMMARY"
+          grep -F 'Order W-1001 received' "$SUMMARY"
+      - name: No artifact by default
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          names=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/artifacts" --jq '.artifacts[].name')
+          if printf '%s\n' "$names" | grep -qx echo-report; then echo "::error::the report was uploaded by default"; exit 1; fi

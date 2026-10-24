@@ -1,0 +1,16 @@
+{
+  "schema": "rhythm-echo/v1",
+  "tool": "rhythm-echo",
+  "version": "1.0.0",
+  "before": {"name": "main", "dir": ".echo/snapshots/main", "started": "2026-10-20T10:00:00Z"},
+  "after": {"dir": ".echo/runs/20261024-100000", "started": "2026-10-24T10:00:00Z"},
+  "changes": [
+    {"class": "broke", "check": "message/lost", "title": "Email to jane.doe@customer.example is no longer sent", "detail": "Subject: Your order W-1234 for Jane Doe", "actions": ["Order form"], "channel": "email", "before": "Your order W-1234", "after": ""},
+    {"class": "new", "check": "message/new", "title": "SMS to +61 412 345 678 (\"Hi Jane, code 4411\") is now sent", "actions": ["Order form", "Sign-up", "Reset", "Checkout"], "channel": "sms"},
+    {"class": "changed", "check": "message/subject", "title": "Subject changed | escaped", "before": "Welcome Jane", "after": "Welcome <b>Jane</b>", "actions": ["Sign-up"]},
+    {"class": "fixed", "check": "content/merge-tag", "title": "Unfilled placeholder {first_name} in email", "actions": []}
+  ],
+  "actions": 4,
+  "warnings": ["one note"],
+  "created": "2026-10-24T10:00:05Z"
+}
