@@ -8,6 +8,7 @@ package check
 import (
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/url"
 	"path"
 	"regexp"
@@ -86,7 +87,7 @@ func Message(m model.Message, o Options) []model.Issue {
 				Detail: fmt.Sprintf("%d KB of HTML; Gmail clips messages over 102 KB", len(m.HTML)/1024),
 				Fix:    "Trim inline CSS and markup, or move content behind links."})
 		}
-		if d := domainOf(m.From); d != "" && o.domain() != "" && !sameOrg(d, o.domain()) {
+		if d := domainOf(m.From); d != "" && o.domain() != "" && !isDevHost(o.domain()) && net.ParseIP(o.domain()) == nil && !sameOrg(d, o.domain()) {
 			add(model.Issue{Check: "email/from-domain", Level: model.Notice, Title: fmt.Sprintf("Email is sent from another domain (%s)", d),
 				Detail: "the site is " + o.domain(),
 				Fix:    "Send from an address on your own domain, or make sure its SPF, DKIM and DMARC cover this sender."})
