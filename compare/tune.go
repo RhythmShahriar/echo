@@ -142,10 +142,6 @@ var Checks = []string{
 	"message/attachment-lost", "message/attachment-changed", "message/attachment-new",
 }
 
-// issuePrefixes are the families of checks other packages report as
-// run issues (DNS, headers, the seal, expectations).
-var issuePrefixes = []string{"dns/", "headers/", "seal/", "expect/", "run/"}
-
 // UnknownChecks returns the IDs in overrides that no check has, sorted,
 // so a typo in `checks:` can be pointed out. rules are the custom rules.
 func UnknownChecks(overrides map[string]string, rules []check.Rule) []string {
@@ -155,7 +151,7 @@ func UnknownChecks(overrides map[string]string, rules []check.Rule) []string {
 		switch {
 		case builtin, slices.Contains(Checks, id),
 			slices.ContainsFunc(rules, func(r check.Rule) bool { return r.ID == id }),
-			slices.ContainsFunc(issuePrefixes, func(p string) bool { return strings.HasPrefix(id, p) }):
+			slices.ContainsFunc(check.IssuePrefixes, func(p string) bool { return strings.HasPrefix(id, p) }):
 		default:
 			out = append(out, id)
 		}

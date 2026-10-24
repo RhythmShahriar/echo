@@ -175,6 +175,9 @@ func TestCustomRules(t *testing.T) {
 func TestCustomRuleErrors(t *testing.T) {
 	for want, cs := range map[string][]Custom{
 		`rule "send/failed": that is a built-in check`:  {{ID: "send/failed", Match: "x"}},
+		`rule "message/text": that is a built-in check`: {{ID: "message/text", Match: "x"}},
+		`rule "dns/spf": that is a built-in check`:      {{ID: "dns/spf", Match: "x"}},
+		`rule "run/x": that is a built-in check`:        {{ID: "run/x", Match: "x"}},
 		`rule "a b": needs an id without spaces`:        {{ID: "a b", Match: "x"}},
 		`rule "a": set exactly one of match or regex`:   {{ID: "a", Match: "x", Regex: "y"}},
 		`rule "a": regex: error parsing regexp`:         {{ID: "a", Regex: "("}},

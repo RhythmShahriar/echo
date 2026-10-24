@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"regexp"
+	"slices"
 	"strings"
 	"unicode/utf8"
 
@@ -62,12 +63,23 @@ func (c Custom) matcher() (func(s string) (start, end int), error) {
 	}, nil
 }
 
+// IssuePrefixes are the families of checks that other packages report
+// as run issues: DNS, headers, the seal, expectations and the run itself.
+var IssuePrefixes = []string{"dns/", "headers/", "seal/", "expect/", "run/"}
+
+// reserved reports an ID a custom rule can't take: one in IssuePrefixes
+// or in compare's message/ family. A `checks:` override for it would
+// otherwise turn both the custom rule and the built-in check off.
+func reserved(id string) bool {
+	return strings.HasPrefix(id, "message/") || slices.ContainsFunc(IssuePrefixes, func(p string) bool { return strings.HasPrefix(id, p) })
+}
+
 // Rule compiles c into a rule for Options.Rules.
 func (c Custom) Rule() (Rule, error) {
 	if c.ID == "" || strings.ContainsAny(c.ID, " \t\n") {
 		return Rule{}, fmt.Errorf("rule %q: needs an id without spaces, like brand/old-phone", c.ID)
 	}
-	if _, builtin := Lookup(c.ID); builtin {
+	if _, builtin := Lookup(c.ID); builtin || reserved(c.ID) {
 		return Rule{}, fmt.Errorf("rule %q: that is a built-in check; give the rule its own id", c.ID)
 	}
 	level := cmp.Or(c.Level, model.Warning)
