@@ -108,11 +108,6 @@ scenarios:
     toggle: "the API key's variable was renamed, so the Resend call throws before it's made; the route logs it and still answers 200 (next/app/api/signup/route.ts)"
     expect:
       - {class: broke, check: message/missing, title: "Resend email to the test submitter is no longer sent"}
-    known_issue: >-
-      compare matches emails on channel and recipient only (compare/compare.go, identity), so the Resend welcome
-      and the Nodemailer account email to the same address count as one message. When the welcome is lost, Echo
-      reports CHANGED "Resend email to the test submitter is sent fewer times" and diffs the welcome against the
-      account email (subject, sender, text, "payload lost fields") instead of BROKE message/missing for the welcome.
 
   - id: s08
     name: The receipt is never sent because cron is off

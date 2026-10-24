@@ -6,9 +6,9 @@ The testbed (`testbed/`) is a WordPress shop, a Laravel app, a Next.js app and a
 
 We wrote both Echo and the testbed, so read this as a regression suite with a scoreboard, not an independent review: every scenario is something we built Echo to catch. Each one is still a real failure mode, in a real WordPress, Laravel or Next.js, and it passes only when Echo reports the expected change through its normal commands.
 
-**Echo caught 19 of 20 scenarios.**
+**Echo caught 20 of 20 scenarios.**
 
-Run on 2026-10-24 with rhythm-echo dev (linux/amd64); the run took 4m53s.
+Run on 2026-10-24 with rhythm-echo dev (linux/amd64); the run took 5m8s.
 
 | # | Area | Scenario | Stack | Expected | Echo | Mailpit | MessagePit |
 |---|---|---|---|---|---|---|---|
@@ -18,7 +18,7 @@ Run on 2026-10-24 with rhythm-echo dev (linux/amd64); the run took 4m53s.
 | s04 | Lost messages | The new-order Slack alert is removed | wordpress | BROKE message/missing “Slack message is no longer sent” | **caught** | can't see | not run |
 | s05 | Lost messages | The GA4 purchase event is missing | wordpress | BROKE message/missing “GA4 event "purchase" is no longer sent” | **caught** | can't see | not run |
 | s06 | Lost messages | Laravel's queued order email is stuck (the job throws) | laravel | BROKE message/missing “email to the test submitter is no longer sent” | **caught** | missed | not run |
-| s07 | Lost messages | The Next.js welcome email (Resend) now throws | next | BROKE message/missing “Resend email to the test submitter is no longer sent” | missed (known Echo issue, see Details) | missed | not run |
+| s07 | Lost messages | The Next.js welcome email (Resend) now throws | next | BROKE message/missing “Resend email to the test submitter is no longer sent” | **caught** | missed | not run |
 | s08 | Lost messages | The receipt is never sent because cron is off | wordpress | BROKE message/missing “email to the test submitter is no longer sent” | **caught** | missed | not run |
 | s09 | Wrong content | The owner's notification goes to the wrong address | wordpress | NEW message/new “webmaster@old-agency.example.net is now sent”<br>or BROKE message/missing “owner@shop.example.com is no longer sent” | **caught** | **caught** | not run |
 | s10 | Wrong content | A merge tag is left unreplaced in the receipt | wordpress | BROKE content/placeholder “{customer_first_name}” | **caught** | **caught** | not run |
@@ -45,77 +45,76 @@ Run on 2026-10-24 with rhythm-echo dev (linux/amd64); the run took 4m53s.
 ### Lost messages
 
 **s01 The contact form stops emailing the shop owner** (wordpress, action “Contact form”, seal mode, 15 s). Broken state: the 2.0 update reset “Notify the site owner” to off (wp/plugins/testbed-forms).
-Echo: BROKE message/missing: Email to owner@shop.example.com is no longer sent (1 → 0). Also reported: BROKE expect/email: Sent fewer emails than expected.
+Echo: BROKE message/missing: Email to owner@shop.example.com is no longer sent (sent → not sent). Also reported: BROKE expect/email: Sent fewer emails than expected.
 Mailpit: the inbox has 1 email instead of 2; Mailpit keeps no baseline, so nothing says one is missing.
 
 **s02 The contact form's autoresponder is lost** (wordpress, action “Contact form”, seal mode, 15 s). Broken state: the same update switched the autoresponder off (wp/plugins/testbed-forms).
-Echo: BROKE message/missing: Email to the test submitter is no longer sent (1 → 0). Also reported: BROKE expect/email: Sent fewer emails than expected.
+Echo: BROKE message/missing: Email to the test submitter is no longer sent (sent → not sent). Also reported: BROKE expect/email: Sent fewer emails than expected.
 Mailpit: the inbox has 1 email instead of 2; Mailpit keeps no baseline, so nothing says one is missing.
 
 **s03 The owner's order SMS is gone after a plugin update** (wordpress, action “Checkout”, seal mode, 15 s). Broken state: SMS add-on 3.0 listens on a hook the shop never fires; its Twilio client is raw cURL, caught through Echo's proxy (wp/plugins/testbed-shop-sms).
-Echo: BROKE message/missing: Twilio SMS to +447700900123 is no longer sent (1 → 0).
+Echo: BROKE message/missing: Twilio SMS to +447700900123 is no longer sent (sent → not sent).
 Mailpit: Mailpit only receives email; SMS never reach it.
 
-**s04 The new-order Slack alert is removed** (wordpress, action “Checkout”, seal mode, 14 s). Broken state: the Slack alert was dropped from the 2.0 settings (wp/plugins/testbed-shop).
-Echo: BROKE message/missing: Slack message is no longer sent (1 → 0).
+**s04 The new-order Slack alert is removed** (wordpress, action “Checkout”, seal mode, 16 s). Broken state: the Slack alert was dropped from the 2.0 settings (wp/plugins/testbed-shop).
+Echo: BROKE message/missing: Slack message is no longer sent (sent → not sent).
 Mailpit: Mailpit only receives email; chat messages never reach it.
 
 **s05 The GA4 purchase event is missing** (wordpress, action “Checkout”, seal mode, 15 s). Broken state: the Measurement Protocol purchase call is no longer made (wp/plugins/testbed-shop).
-Echo: BROKE message/missing: GA4 event "purchase" is no longer sent (1 → 0).
+Echo: BROKE message/missing: GA4 event "purchase" is no longer sent (sent → not sent).
 Mailpit: Mailpit only receives email; analytics events never reach it.
 
-**s06 Laravel's queued order email is stuck (the job throws)** (laravel, action “Laravel subscription order”, seal mode, 15 s). Broken state: the Mailable names a view that doesn't exist, so the queued job fails in the worker (laravel/overlay/app/Mail/OrderConfirmation.php).
-Echo: BROKE message/missing: Email to the test submitter is no longer sent (1 → 0).
+**s06 Laravel's queued order email is stuck (the job throws)** (laravel, action “Laravel subscription order”, seal mode, 16 s). Broken state: the Mailable names a view that doesn't exist, so the queued job fails in the worker (laravel/overlay/app/Mail/OrderConfirmation.php).
+Echo: BROKE message/missing: Email to the test submitter is no longer sent (sent → not sent).
 Mailpit: the inbox has 0 emails instead of 1; Mailpit keeps no baseline, so nothing says one is missing.
 
 **s07 The Next.js welcome email (Resend) now throws** (next, action “Next.js signup”, seal mode, 15 s). Broken state: the API key's variable was renamed, so the Resend call throws before it's made; the route logs it and still answers 200 (next/app/api/signup/route.ts).
-Echo: missed: good run: email echo-test+7311b0@example.com faked, sms +15550055051 faked, email echo-test+7311b0@example.com faked; broken run: sms +15550102054 faked, email echo-test+f6573a@example.com faked. Also reported: CHANGED message/fields-lost: Email to the test submitter: payload lost fields; CHANGED message/from: Email to the test submitter: sender changed (bean & leaf <hello@shop.example.com> → bean & leaf <accounts@shop.example.com>); CHANGED message/subject: Email to the test submitter: subject changed (welcome to bean & leaf, {name} → your bean & leaf account); CHANGED message/text: Email to the test submitter: text changed (Hi echo-test 7311b0, Your account is ready. Your first order ships free. https://shop.example.com/account → Hi echo-test f6573a, You signed up with echo-test+f6573a@example.com. If this wasn't you, reply to this email. Bean & L…); CHANGED message/fewer: Resend email to the test submitter is sent fewer times (2 → 1).
-> **Known Echo issue:** compare matches emails on channel and recipient only (compare/compare.go, identity), so the Resend welcome and the Nodemailer account email to the same address count as one message. When the welcome is lost, Echo reports CHANGED "Resend email to the test submitter is sent fewer times" and diffs the welcome against the account email (subject, sender, text, "payload lost fields") instead of BROKE message/missing for the welcome.
+Echo: BROKE message/missing: Resend email to the test submitter is no longer sent (sent → not sent).
 Mailpit: 1 email in the inbox, and the problem isn't visible there.
 
 **s08 The receipt is never sent because cron is off** (wordpress, action “Checkout”, seal mode, 15 s). Broken state: the server's crontab line fails (wp: not found), so WP-Cron never runs the deferred receipt (bin/cron, Echo's flush).
-Echo: BROKE message/missing: Email to the test submitter is no longer sent (1 → 0).
+Echo: BROKE message/missing: Email to the test submitter is no longer sent (sent → not sent).
 Mailpit: the inbox has 0 emails instead of 1; Mailpit keeps no baseline, so nothing says one is missing.
 
 ### Wrong content
 
 **s09 The owner's notification goes to the wrong address** (wordpress, action “Contact form”, seal mode, 15 s). Broken state: a migration overwrote the admin email with the old agency's address (wp/plugins/testbed-forms).
-Echo: BROKE message/missing: Email to owner@shop.example.com is no longer sent (1 → 0).
+Echo: BROKE message/missing: Email to owner@shop.example.com is no longer sent (sent → not sent).
 Mailpit: the inbox shows "webmaster@old-agency.example.net" in “New message from the contact form”.
 
-**s10 A merge tag is left unreplaced in the receipt** (wordpress, action “Checkout”, seal mode, 15 s). Broken state: the 2.0 receipt template uses {customer_first_name}, a tag the mailer doesn't know (wp/plugins/testbed-shop).
-Echo: BROKE content/placeholder: Unfilled placeholder {customer_first_name} in email. Also reported: CHANGED message/text: Email to the test submitter: text changed (Hi echo-test, Thanks for your order #1025. 1 × Colombia Huila, 1 kg $39.99 1 × V60 filters, 100 $10.00 Total: $49.99 Vi… → Hi {customer_first_name}, Thanks for your order #1026. 1 × Colombia Huila, 1 kg $39.99 1 × V60 filters, 100 $10.00 Tota…).
-Mailpit: the inbox shows "{customer_first_name}" in “Your Bean & Leaf order #1026”.
+**s10 A merge tag is left unreplaced in the receipt** (wordpress, action “Checkout”, seal mode, 16 s). Broken state: the 2.0 receipt template uses {customer_first_name}, a tag the mailer doesn't know (wp/plugins/testbed-shop).
+Echo: BROKE content/placeholder: Unfilled placeholder {customer_first_name} in email. Also reported: CHANGED message/text: Email to the test submitter: text changed (Hi echo-test, Thanks for your order #1009. 1 × Colombia Huila, 1 kg $39.99 1 × V60 filters, 100 $10.00 Total: $49.99 Vi… → Hi {customer_first_name}, Thanks for your order #1010. 1 × Colombia Huila, 1 kg $39.99 1 × V60 filters, 100 $10.00 Tota…).
+Mailpit: the inbox shows "{customer_first_name}" in “Your Bean & Leaf order #1010”.
 
-**s11 A PHP warning is printed into the order email (plain PHP)** (php, action “Wholesale order (plain PHP)”, seal mode, 14 s). Broken state: the new receipt template prints $total, which the page never sets, with display_errors on (php/site/templates/receipt-2.php).
-Echo: BROKE content/php-error: PHP error printed in email. Also reported: CHANGED message/text: Email to the test submitter: text changed (Hello echo-test aaa0ae, Thanks for your wholesale order W-4146 for Corner Café. 1 x Espresso blend, 5 kg $89.00 2 x Dec… → Hello echo-test 30dda0, Thanks for your wholesale order W-8018 for Corner Café. 1 x Espresso blend, 5 kg $89.00 2 x Dec…).
-Mailpit: the inbox shows "Warning: Undefined variable" in “Wholesale order W-8018 received”.
+**s11 A PHP warning is printed into the order email (plain PHP)** (php, action “Wholesale order (plain PHP)”, seal mode, 15 s). Broken state: the new receipt template prints $total, which the page never sets, with display_errors on (php/site/templates/receipt-2.php).
+Echo: BROKE content/php-error: PHP error printed in email. Also reported: CHANGED message/text: Email to the test submitter: text changed (Hello echo-test 8a31d6, Thanks for your wholesale order W-5400 for Corner Café. 1 x Espresso blend, 5 kg $89.00 2 x Dec… → Hello echo-test a14858, Thanks for your wholesale order W-3844 for Corner Café. 1 x Espresso blend, 5 kg $89.00 2 x Dec…).
+Mailpit: the inbox shows "Warning: Undefined variable" in “Wholesale order W-3844 received”.
 
-**s12 The receipt links to the staging site** (wordpress, action “Checkout”, seal mode, 15 s). Broken state: the order link is built from a URL copied from staging (wp/plugins/testbed-shop).
-Echo: NEW content/dev-link: Email links to a development address (staging.shop.test). Also reported: CHANGED message/text: Email to the test submitter: text changed (Hi echo-test, Thanks for your order #1027. 1 × Colombia Huila, 1 kg $39.99 1 × V60 filters, 100 $10.00 Total: $49.99 Vi… → Hi echo-test, Thanks for your order #1028. 1 × Colombia Huila, 1 kg $39.99 1 × V60 filters, 100 $10.00 Total: $49.99 Vi…).
-Mailpit: the inbox shows "staging.shop.test" in “Your Bean & Leaf order #1028”.
+**s12 The receipt links to the staging site** (wordpress, action “Checkout”, seal mode, 16 s). Broken state: the order link is built from a URL copied from staging (wp/plugins/testbed-shop).
+Echo: NEW content/dev-link: Email links to a development address (staging.shop.test). Also reported: CHANGED message/text: Email to the test submitter: text changed (Hi echo-test, Thanks for your order #1011. 1 × Colombia Huila, 1 kg $39.99 1 × V60 filters, 100 $10.00 Total: $49.99 Vi… → Hi echo-test, Thanks for your order #1012. 1 × Colombia Huila, 1 kg $39.99 1 × V60 filters, 100 $10.00 Total: $49.99 Vi…).
+Mailpit: the inbox shows "staging.shop.test" in “Your Bean & Leaf order #1012”.
 
-**s13 The order SMS is now 3 segments** (wordpress, action “Checkout”, seal mode, 14 s). Broken state: the SMS gained a greeting with emoji and curly quotes: UCS-2, 3 parts (wp/plugins/testbed-shop).
-Echo: NEW sms/parts: SMS needs more than one part. Also reported: CHANGED message/text: Twilio SMS to the test number: text changed (Bean & Leaf: order #1029 is confirmed. Track it at https://shop.example.com/t/1029 → 🎉 Hi echo-test! Thanks so much for your order #1030 with Bean & Leaf ☕️ We’re roasting your beans now and they’ll ship …).
+**s13 The order SMS is now 3 segments** (wordpress, action “Checkout”, seal mode, 16 s). Broken state: the SMS gained a greeting with emoji and curly quotes: UCS-2, 3 parts (wp/plugins/testbed-shop).
+Echo: NEW sms/parts: SMS needs more than one part. Also reported: CHANGED message/text: Twilio SMS to the test number: text changed (Bean & Leaf: order #1013 is confirmed. Track it at https://shop.example.com/t/1013 → 🎉 Hi echo-test! Thanks so much for your order #1014 with Bean & Leaf ☕️ We’re roasting your beans now and they’ll ship …).
 Mailpit: Mailpit only receives email; SMS never reach it.
 
-**s14 A field is removed from the order webhook payload** (wordpress, action “Checkout”, seal mode, 14 s). Broken state: order.created no longer carries billing.email (wp/plugins/testbed-shop).
-Echo: CHANGED message/fields-lost: Webhook to gate webhook "order.created": payload lost fields.
+**s14 A field is removed from the order webhook payload** (wordpress, action “Checkout”, seal mode, 15 s). Broken state: order.created no longer carries billing.email (wp/plugins/testbed-shop).
+Echo: CHANGED message/fields-lost: Webhook to gate ("order.created"): payload lost fields.
 Mailpit: Mailpit only receives email; webhooks never reach it.
 
 ### Integrations
 
-**s15 The Zapier hook URL changed** (wordpress, action “Contact form”, seal mode, 14 s). Broken state: the lead goes to a test Zap's catch hook instead of the live one (wp/plugins/testbed-forms).
-Echo: BROKE message/missing: Webhook to hooks.zapier.com is no longer sent (1 → 0). Also reported: NEW message/new: Webhook to hooks.zapier.com is now sent (– → 1).
+**s15 The Zapier hook URL changed** (wordpress, action “Contact form”, seal mode, 15 s). Broken state: the lead goes to a test Zap's catch hook instead of the live one (wp/plugins/testbed-forms).
+Echo: BROKE message/missing: Webhook to hooks.zapier.com is no longer sent (sent → not sent). Also reported: NEW message/new: Webhook to hooks.zapier.com is now sent.
 Mailpit: Mailpit only receives email; webhooks never reach it.
 
 **s16 The order webhook to the CRM fails (and WooCommerce disables it after five failures)** (wordpress, action “Order webhook to the CRM”, observe mode, 15 s). Broken state: the CRM's endpoint answers 500 (crm/index.php); the shop counts failures and disables the webhook after five, as WooCommerce does.
-Echo: BROKE send/failed: Webhook to gate fails (HTTP 500).
+Echo: BROKE message/failing: Webhook to gate ("order.updated") now fails (sent → failed).
 Mailpit: Mailpit only receives email; webhooks never reach it.
 
 ### Deliverability
 
-**s17 The From domain changes and breaks DMARC alignment** (wordpress, action “Contact form”, seal mode, 15 s). Broken state: the autoresponder is sent from the newsletter domain, which SendGrid was never set up for (wp/plugins/testbed-forms, dns/zone.yaml).
+**s17 The From domain changes and breaks DMARC alignment** (wordpress, action “Contact form”, seal mode, 16 s). Broken state: the autoresponder is sent from the newsletter domain, which SendGrid was never set up for (wp/plugins/testbed-forms, dns/zone.yaml).
 Echo: BROKE dns/dmarc: Mail from the sending service fails DMARC alignment. Also reported: NEW email/from-domain: Email is sent from another domain (beanleaf-news.example.net); NEW dns/dkim: No DKIM key found for the sending service; CHANGED message/from: Email to the test submitter: sender changed (hello@shop.example.com → hello@beanleaf-news.example.net).
 Mailpit: 2 emails in the inbox, and the problem isn't visible there.
 
@@ -125,14 +124,14 @@ Mailpit: Mailpit only receives email; DNS records never reach it.
 
 ### Staging safety
 
-**s19 A staging refresh brings a real customer address** (wordpress, action “Resend the receipt for order 1000”, observe mode, 15 s). Broken state: the staging database was refreshed from production, so order 1000's customer is a real address (wp/plugins/testbed-shop).
-Echo: NEW seal/real-recipient: Email really sent to an address outside the allowlist. Also reported: BROKE message/missing: Email to jamie@example.net is no longer sent (1 → 0); NEW message/new: Email to jamie.rivera@gmail.com is now sent (– → 1).
+**s19 A staging refresh brings a real customer address** (wordpress, action “Resend the receipt for order 1000”, observe mode, 16 s). Broken state: the staging database was refreshed from production, so order 1000's customer is a real address (wp/plugins/testbed-shop).
+Echo: NEW seal/real-recipient: Email really sent to an address outside the allowlist. Also reported: BROKE message/missing: Email to jamie@example.net is no longer sent (sent → not sent); NEW message/new: Email to jamie.rivera@gmail.com is now sent.
 Mailpit: the inbox shows "jamie.rivera@gmail.com" in “Your Bean & Leaf order #1000”.
 
 ### Inbound
 
 **s20 A Stripe payment no longer triggers the payment email** (wordpress, action “Stripe payment succeeded”, seal mode, 15 s). Broken state: gateway 9.0 handles charge.succeeded instead of payment_intent.succeeded; Stripe still gets its 200 (wp/plugins/testbed-stripe).
-Echo: BROKE message/missing: Email to jamie@example.net is no longer sent (1 → 0).
+Echo: BROKE message/missing: Email to jamie@example.net is no longer sent (sent → not sent).
 Mailpit: the inbox has 0 emails instead of 1; Mailpit keeps no baseline, so nothing says one is missing.
 
 ## Run it
