@@ -385,3 +385,55 @@ func TestWriteFake(t *testing.T) {
 		t.Errorf("fake: %d %v", rec.status, rec.header)
 	}
 }
+
+// TestPaymentTunnelsNeedMITM: a blind tunnel to a payment API could carry
+// live keys Echo can't see, so it's refused in every mode, allowlisted or
+// not. With MITM the host is intercepted instead, even when allowlisted.
+func TestPaymentTunnelsNeedMITM(t *testing.T) {
+	for _, s := range []setup{
+		{mode: catcher.Seal},
+		{mode: catcher.Observe},
+		{mode: catcher.Observe, allow: []string{"api.stripe.com", "api-m.paypal.com"}},
+		{mode: catcher.Seal, allow: []string{"*.stripe.com"}},
+	} {
+		h := newHarness(t, s)
+		for _, host := range []string{"api.stripe.com", "api-m.paypal.com", "api.paypal.com"} {
+			req, _ := http.NewRequest(http.MethodPost, "https://"+host+"/v1/charges", strings.NewReader("amount=1000"))
+			_, err := goClient(t, h, h.bundle).Do(req) //nolint:bodyclose // fails before a body
+			if err == nil || !strings.Contains(err.Error(), "Forbidden") {
+				t.Errorf("%+v %s: err = %v, want the CONNECT refused", s, host, err)
+			}
+		}
+		ms := h.messages(t, 3)
+		for _, m := range ms {
+			if m.Status != model.Blocked || !strings.Contains(m.Error, "payment APIs need --mitm") {
+				t.Errorf("%+v: message = %+v", s, m)
+			}
+		}
+		if len(ms) != 3 {
+			t.Errorf("%+v: %d messages, want 3", s, len(ms))
+		}
+	}
+	if !blindPayment("API.Stripe.com") || blindPayment("api-m.sandbox.paypal.com") || blindPayment(twilioHost) {
+		t.Error("blindPayment: Stripe and live PayPal only")
+	}
+}
+
+func TestAllowedPaymentHostIsInterceptedWithMITM(t *testing.T) {
+	h := newHarness(t, setup{mode: catcher.Seal, mitm: true, allow: []string{"api.stripe.com"}})
+	req, _ := http.NewRequest(http.MethodPost, "https://api.stripe.com/v1/charges", strings.NewReader("amount=1000&currency=usd"))
+	req.Header.Set("Authorization", strings.Join([]string{"Bearer sk", "_live_", "abcdefghijklmnop1234"}, ""))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	resp, err := goClient(t, h, h.echoCA).Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, _ := io.ReadAll(resp.Body)
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusForbidden || !strings.Contains(string(b), "rhythm_echo_sealed") {
+		t.Fatalf("got %d %s", resp.StatusCode, b)
+	}
+	if ms := h.messages(t, 1); len(ms) != 1 || ms[0].Provider != "stripe" || ms[0].Status != model.Blocked {
+		t.Errorf("messages = %+v", ms)
+	}
+}

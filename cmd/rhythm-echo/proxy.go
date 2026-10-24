@@ -1,12 +1,16 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"flag"
 	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	"net/http"
+	"slices"
+	"strings"
 
 	"github.com/RhythmShahriar/echo/catcher"
 	"github.com/RhythmShahriar/echo/proxy"
@@ -27,7 +31,8 @@ func startProxy(s *session, srv *catcher.Server) (func(), error) {
 			return nil, fmt.Errorf("loading the proxy CA: %w", err)
 		}
 	}
-	p, err := proxy.New(proxy.Options{Server: srv, CA: ca, MITM: cfg.MITM, Allow: cfg.Allow, Token: s.echo.Token})
+	p, err := proxy.New(proxy.Options{Server: srv, CA: ca, MITM: cfg.MITM, Allow: cfg.Allow, Token: s.echo.Token,
+		Log: slog.New(viewHandler{log: s.view.Log})})
 	if err != nil {
 		return nil, err
 	}
@@ -47,6 +52,33 @@ func startProxy(s *session, srv *catcher.Server) (func(), error) {
 	s.view.Step("Proxy", line)
 	return func() { _ = p.Close() }, nil
 }
+
+// viewHandler shows the proxy's warnings (a refused payment tunnel) in
+// the live log, as "proxy: message key=value".
+type viewHandler struct {
+	log   func(string)
+	attrs []slog.Attr
+}
+
+func (viewHandler) Enabled(_ context.Context, l slog.Level) bool { return l >= slog.LevelWarn }
+
+func (h viewHandler) Handle(_ context.Context, r slog.Record) error {
+	var b strings.Builder
+	b.WriteString("proxy: " + r.Message)
+	add := func(a slog.Attr) bool { fmt.Fprintf(&b, " %s=%s", a.Key, a.Value); return true }
+	for _, a := range h.attrs {
+		add(a)
+	}
+	r.Attrs(add)
+	h.log(b.String())
+	return nil
+}
+
+func (h viewHandler) WithAttrs(as []slog.Attr) slog.Handler {
+	return viewHandler{log: h.log, attrs: append(slices.Clip(h.attrs), as...)}
+}
+
+func (h viewHandler) WithGroup(string) slog.Handler { return h }
 
 // cmdCA prints where the proxy's CA certificate is, creating it if needed,
 // so it can be trusted in containers and runtimes (--pem prints it).

@@ -233,7 +233,9 @@ func (p *Proxy) allowed(host string) bool {
 
 // connect handles CONNECT host:port: a blind tunnel for allowed hosts (and
 // for everything when observing without MITM), interception when MITM is
-// on, and a refusal when sealed without MITM.
+// on, and a refusal when sealed without MITM. Payment APIs are never
+// tunneled blind, in any mode: they're intercepted with MITM, refused
+// without it.
 func (p *Proxy) connect(w http.ResponseWriter, r *http.Request) {
 	target := r.Host
 	if _, _, err := net.SplitHostPort(target); err != nil {
@@ -242,6 +244,15 @@ func (p *Proxy) connect(w http.ResponseWriter, r *http.Request) {
 	host, _, _ := net.SplitHostPort(target)
 	run := runOf(r)
 	switch {
+	case blindPayment(host) && p.opt.MITM:
+		// Even when allowlisted: only inside can test and live keys be told apart.
+		p.intercept(w, r, target, host)
+	case blindPayment(host):
+		d, _ := p.opt.Server.Capture(wire.Capture{Version: wire.Version, Kind: "http", Phase: wire.Before, Run: run,
+			Source: source("connect"), HTTP: &wire.HTTP{Method: http.MethodConnect, URL: tunnelURL(target)}})
+		p.markBlocked(d.ID, errPaymentTunnel)
+		p.opt.Log.Warn("refused a tunnel", "host", host, "reason", errPaymentTunnel)
+		http.Error(w, "rhythm-echo: "+host+": "+errPaymentTunnel, http.StatusForbidden)
 	case p.allowed(host) || (!p.opt.MITM && p.opt.Server.Mode() == catcher.Observe):
 		p.tunnel(w, r, target, "", run)
 	case p.opt.MITM:
@@ -447,6 +458,19 @@ func (p *Proxy) forward(w http.ResponseWriter, r *http.Request, u *url.URL, body
 		msg = "copying response: " + copyErr.Error()
 	}
 	after(resp.StatusCode, decode(resp.Header.Get("Content-Encoding"), kept.Bytes(), kept.cut), msg)
+}
+
+const errPaymentTunnel = "payment APIs need --mitm so Echo can tell test from live keys"
+
+// blindPayment reports whether host is a payment API that a blind tunnel
+// could reach with live keys: one whose recognizer refuses a call it can't
+// see inside (Stripe, live PayPal; not PayPal's sandbox hosts).
+func blindPayment(host string) bool {
+	req := recognize.Request{Method: http.MethodPost, URL: &url.URL{Scheme: "https", Host: strings.ToLower(host), Path: "/"},
+		Headers: map[string]string{}}
+	var m model.Message
+	rec := recognize.Recognize(req, &m)
+	return rec.Channel == model.Payment && recognize.Refuses(rec, req)
 }
 
 // livePayment reports whether a request is a payment call the catcher
