@@ -61,27 +61,35 @@ func TestVerifyRelease(t *testing.T) {
 		path  string
 		code  int
 		error string
+		ver   string // the version asked for, v1.2.0 when empty
 	}{
-		{"signed and matching", func() string { return release(t) }, signed, 0, ""},
-		{"bad signature", func() string { return release(t) }, forged, 1, "isn't signed by Echo's release workflow"},
-		{"no cosign", func() string { return release(t) }, "PATH=/usr/bin:/bin", 1, "cosign isn't installed"},
+		{"signed and matching", func() string { return release(t) }, signed, 0, "", ""},
+		{"version without its v", func() string { return release(t) }, signed, 0, "", "1.2.0"},
+		{"not a version", func() string { return release(t) }, signed, 1, "latest isn't a release version", "latest"},
+		{"injected version", func() string { return release(t) }, signed, 1, "isn't a release version", "1.2.0 --insecure"},
+		{"bad signature", func() string { return release(t) }, forged, 1, "isn't signed by Echo's release workflow for v1.2.0", ""},
+		{"no cosign", func() string { return release(t) }, "PATH=/usr/bin:/bin", 1, "cosign isn't installed", ""},
 		{"no bundle", func() string {
 			d := release(t)
 			_ = os.Remove(filepath.Join(d, "checksums.txt.sigstore.json"))
 			return d
-		}, signed, 1, "checksums.txt.sigstore.json is missing"},
+		}, signed, 1, "checksums.txt.sigstore.json is missing", ""},
 		{"changed archive", func() string {
 			d := release(t)
 			_ = os.WriteFile(filepath.Join(d, archive), []byte("evil"), 0o600)
 			return d
-		}, signed, 1, "doesn't match its checksum"},
-		{"no line", func() string { return release(t, "%s  other.tar.gz") }, signed, 1, "has no line for " + archive},
-		{"two lines", func() string { return release(t, "%s  "+archive, "ffff  "+archive) }, signed, 1, "more than once"},
-		{"binary-mode line", func() string { return release(t, "%s *"+archive) }, signed, 0, ""},
+		}, signed, 1, "doesn't match its checksum", ""},
+		{"no line", func() string { return release(t, "%s  other.tar.gz") }, signed, 1, "has no line for " + archive, ""},
+		{"two lines", func() string { return release(t, "%s  "+archive, "ffff  "+archive) }, signed, 1, "more than once", ""},
+		{"binary-mode line", func() string { return release(t, "%s *"+archive) }, signed, 0, "", ""},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			out, _, code := script(t, sh, []string{c.path}, c.dir(), archive)
+			ver := c.ver
+			if ver == "" {
+				ver = "v1.2.0"
+			}
+			out, _, code := script(t, sh, []string{c.path}, c.dir(), archive, ver)
 			if code != c.code {
 				t.Fatalf("exit %d, want %d:\n%s", code, c.code, out)
 			}
@@ -93,13 +101,13 @@ func TestVerifyRelease(t *testing.T) {
 }
 
 // TestVerifyReleaseIdentity checks what cosign is asked to prove: the
-// signer's workflow, issuer and repository.
+// signer's workflow, issuer, repository and the tag its run was for.
 func TestVerifyReleaseIdentity(t *testing.T) {
 	needBash(t, "awk")
 	sh := filepath.Join(root(t), ".github", "scripts", "verify-release.sh")
 	path, argsFile := fakeCosign(t, "0")
 	dir := release(t)
-	if out, _, code := script(t, sh, []string{path}, dir, archive); code != 0 {
+	if out, _, code := script(t, sh, []string{path}, dir, archive, "1.2.0"); code != 0 {
 		t.Fatalf("exit %d:\n%s", code, out)
 	}
 	b, err := os.ReadFile(argsFile) //nolint:gosec // the test's own file
@@ -127,6 +135,10 @@ func TestVerifyReleaseIdentity(t *testing.T) {
 	}
 	if got := flag("--certificate-github-workflow-repository"); got != "RhythmShahriar/echo" {
 		t.Errorf("repository %s", got)
+	}
+	// A run on a branch, or for another release, must not verify.
+	if got := flag("--certificate-github-workflow-ref"); got != "refs/tags/v1.2.0" {
+		t.Errorf("workflow ref %s", got)
 	}
 	re := regexp.MustCompile(flag("--certificate-identity-regexp"))
 	const wf = "https://github.com/RhythmShahriar/.github/.github/workflows/release-go.yml@"

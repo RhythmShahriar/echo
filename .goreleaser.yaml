@@ -55,9 +55,11 @@ release:
 #   cosign verify-blob --bundle checksums.txt.sigstore.json \
 #     --certificate-identity-regexp '^https://github\.com/RhythmShahriar/\.github/\.github/workflows/release-go\.yml@' \
 #     --certificate-github-workflow-repository RhythmShahriar/echo \
+#     --certificate-github-workflow-ref refs/tags/v1.2.3 \
 #     --certificate-oidc-issuer https://token.actions.githubusercontent.com checksums.txt
 # The identity ends in the ref release.yml calls the shared workflow by
-# (refs/heads/master for v1.0.0, a commit SHA since it is pinned).
+# (refs/heads/master for v1.0.0, a commit SHA since it is pinned). Put the
+# release's own tag in place of v1.2.3.
 signs:
   - cmd: cosign
     artifacts: checksum
@@ -93,6 +95,7 @@ dockers_v2:
 #   cosign verify ghcr.io/rhythmshahriar/echo:1 \
 #     --certificate-identity-regexp '^https://github\.com/RhythmShahriar/' \
 #     --certificate-github-workflow-repository RhythmShahriar/echo \
+#     --certificate-github-workflow-ref refs/tags/v1.2.3 \
 #     --certificate-oidc-issuer https://token.actions.githubusercontent.com
 docker_signs:
   - cmd: cosign

@@ -48,11 +48,14 @@ jobs:
       - name: Download the latest release
         run: |
           mkdir -p "$RUNNER_TEMP/rel" && cd "$RUNNER_TEMP/rel"
+          url=$(curl -fsSI -o /dev/null -w '%{redirect_url}' https://github.com/RhythmShahriar/echo/releases/latest)
+          tag=${url##*/tag/}
+          echo "TAG=$tag" >> "$GITHUB_ENV"
           for f in rhythm-echo_linux_amd64.tar.gz checksums.txt checksums.txt.sigstore.json; do
-            curl -fsSLO "https://github.com/RhythmShahriar/echo/releases/latest/download/$f"
+            curl -fsSLO "https://github.com/RhythmShahriar/echo/releases/download/$tag/$f"
           done
       - name: The untouched release verifies
-        run: bash .github/scripts/verify-release.sh "$RUNNER_TEMP/rel" rhythm-echo_linux_amd64.tar.gz
+        run: bash .github/scripts/verify-release.sh "$RUNNER_TEMP/rel" rhythm-echo_linux_amd64.tar.gz "$TAG"
       - name: A changed checksums.txt fails
         run: |
           d="$RUNNER_TEMP/sums" && cp -r "$RUNNER_TEMP/rel" "$d"
@@ -61,21 +64,28 @@ jobs:
           sum=$(sha256sum /bin/sh | awk '{print $1}')
           awk -v s="$sum" '$2 == "rhythm-echo_linux_amd64.tar.gz" {$1 = s} {print}' "$RUNNER_TEMP/rel/checksums.txt" > "$d/checksums.txt"
           cmp -s "$RUNNER_TEMP/rel/checksums.txt" "$d/checksums.txt" && { echo "::error::the line to change is missing"; exit 1; }
-          if bash .github/scripts/verify-release.sh "$d" rhythm-echo_linux_amd64.tar.gz; then
+          if bash .github/scripts/verify-release.sh "$d" rhythm-echo_linux_amd64.tar.gz "$TAG"; then
             echo "::error::a tampered checksums.txt verified"; exit 1
           fi
       - name: A changed archive fails
         run: |
           d="$RUNNER_TEMP/archive" && cp -r "$RUNNER_TEMP/rel" "$d"
           printf 'x' >> "$d/rhythm-echo_linux_amd64.tar.gz"
-          if bash .github/scripts/verify-release.sh "$d" rhythm-echo_linux_amd64.tar.gz; then
+          if bash .github/scripts/verify-release.sh "$d" rhythm-echo_linux_amd64.tar.gz "$TAG"; then
             echo "::error::a tampered archive verified"; exit 1
+          fi
+      - name: Another release's signature fails
+        run: |
+          # The files are the latest release's, so its signature can't
+          # vouch for them as v0.0.0, which was never released.
+          if bash .github/scripts/verify-release.sh "$RUNNER_TEMP/rel" rhythm-echo_linux_amd64.tar.gz v0.0.0; then
+            echo "::error::a signature verified for the wrong version"; exit 1
           fi
       - name: A missing signature fails
         run: |
           d="$RUNNER_TEMP/nosig" && cp -r "$RUNNER_TEMP/rel" "$d"
           rm "$d/checksums.txt.sigstore.json"
-          if bash .github/scripts/verify-release.sh "$d" rhythm-echo_linux_amd64.tar.gz; then
+          if bash .github/scripts/verify-release.sh "$d" rhythm-echo_linux_amd64.tar.gz "$TAG"; then
             echo "::error::a release without a signature verified"; exit 1
           fi
 

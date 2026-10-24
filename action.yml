@@ -162,17 +162,20 @@ runs:
         os=$(uname -s | tr '[:upper:]' '[:lower:]')
         case "$os" in linux | darwin) ;; *) echo "::error::the Echo Action runs on Linux and macOS runners, not $(uname -s)"; exit 1 ;; esac
         if [ "$VERSION" = latest ]; then
-          base=https://github.com/RhythmShahriar/echo/releases/latest/download
-        else
-          base=https://github.com/RhythmShahriar/echo/releases/download/v${VERSION#v}
+          # The signature is checked against the release's own tag, so look
+          # it up: releases/latest redirects to releases/tag/vX.Y.Z.
+          url=$(curl -fsSI -o /dev/null -w '%{redirect_url}' https://github.com/RhythmShahriar/echo/releases/latest)
+          VERSION=${url##*/tag/}
+          [[ $url == */tag/* && $VERSION =~ ^v[0-9] ]] || { echo "::error::couldn't find Echo's latest release (got '$url')"; exit 1; }
         fi
+        base=https://github.com/RhythmShahriar/echo/releases/download/v${VERSION#v}
         dir="$RUNNER_TEMP/echo-bin"
         mkdir -p "$dir" && cd "$dir"
         archive="rhythm-echo_${os}_${arch}.tar.gz"
         for f in "$archive" checksums.txt checksums.txt.sigstore.json; do
           curl -fsSLO "$base/$f"
         done
-        bash "$VERIFY" "$dir" "$archive"
+        bash "$VERIFY" "$dir" "$archive" "$VERSION"
         tar -xzf "$archive" rhythm-echo
         echo "$dir" >> "$GITHUB_PATH"
         ./rhythm-echo --version

@@ -4,21 +4,27 @@
 
 # Checks a downloaded Echo release before anything from it runs. First the
 # cosign bundle must prove that checksums.txt was signed by Echo's release
-# workflow (keyless, through GitHub's OIDC issuer), then the archive's hash
+# workflow (keyless, through GitHub's OIDC issuer) in a run for the tag
+# v<version>, then the archive's hash
 # must match its line in checksums.txt. Comparing hashes alone proves
 # nothing: whoever can replace the archive can replace checksums.txt too.
 # Anything missing or unexpected fails; there is no "skip" path.
 #
-#   verify-release.sh <dir> <archive>
+#   verify-release.sh <dir> <archive> <version>
 #
 # <dir> holds <archive>, checksums.txt and checksums.txt.sigstore.json.
+# <version> is the release, with or without its v (1.2.3 or v1.2.3); a
+# caller installing the latest release resolves its tag first.
 # cosign must be on PATH (the Action installs it with sigstore/cosign-installer).
 set -euo pipefail
 
 # The signing identity, as .goreleaser.yaml documents it. The release runs
 # in the shared reusable workflow, which a caller names by branch, tag or
 # commit; the certificate records whichever was used. The repository check
-# pins the release to RhythmShahriar/echo itself.
+# pins the release to RhythmShahriar/echo itself. The identity alone
+# would accept a run on any branch of that repository, which anyone with
+# push access can start, so the certificate's ref must be the tag of the
+# version asked for: a signature from one release can't vouch for another.
 identity='^https://github\.com/RhythmShahriar/\.github/\.github/workflows/release-go\.yml@(refs/heads/master|refs/tags/v[0-9][0-9.]*|[0-9a-f]{40})$'
 issuer=https://token.actions.githubusercontent.com
 repository=RhythmShahriar/echo
@@ -28,11 +34,12 @@ fail() {
 	exit 1
 }
 
-[ $# -eq 2 ] || {
-	echo "usage: verify-release.sh <dir> <archive>" >&2
+[ $# -eq 3 ] || {
+	echo "usage: verify-release.sh <dir> <archive> <version>" >&2
 	exit 2
 }
-dir=$1 archive=$2
+dir=$1 archive=$2 version=v${3#v}
+[[ $version =~ ^v[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)?$ ]] || fail "$3 isn't a release version"
 
 command -v cosign >/dev/null 2>&1 || fail "cosign isn't installed, so the signature can't be checked"
 for f in "$archive" checksums.txt checksums.txt.sigstore.json; do
@@ -44,8 +51,9 @@ cosign verify-blob \
 	--certificate-identity-regexp "$identity" \
 	--certificate-oidc-issuer "$issuer" \
 	--certificate-github-workflow-repository "$repository" \
+	--certificate-github-workflow-ref "refs/tags/$version" \
 	"$dir/checksums.txt" ||
-	fail "checksums.txt isn't signed by Echo's release workflow"
+	fail "checksums.txt isn't signed by Echo's release workflow for $version"
 
 # Exactly one line must name the archive: two would let a forged line win.
 lines=$(awk -v a="$archive" '$2 == a || $2 == "*" a' "$dir/checksums.txt")
@@ -59,4 +67,4 @@ else
 	got=$(shasum -a 256 "$dir/$archive" | awk '{print $1}') # macOS
 fi
 [ "$got" = "$want" ] || fail "$archive doesn't match its checksum (want $want, got $got)"
-echo "Verified $archive: signed by $repository's release workflow, checksum matches."
+echo "Verified $archive: signed by $repository's release workflow for $version, checksum matches."
