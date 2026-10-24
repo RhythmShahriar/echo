@@ -20,9 +20,9 @@ var version = "dev"
 // these; the help text lists them under "Exit codes".
 const (
 	exitOK       = 0   // done, and nothing at or above --fail-on
-	exitFindings = 1   // --fail-on hit, a doctor check failed, or the site rejected a replay
+	exitFindings = 1   // --fail-on hit, an action failed, a doctor check failed, or the site rejected a replay
 	exitUsage    = 2   // wrong command line, or .echo/config.yaml asks for what isn't there
-	exitError    = 3   // couldn't run: Echo not reachable, a file or network error
+	exitError    = 3   // couldn't run: Echo not reachable, every action failed, a file or network error
 	exitCanceled = 130 // interrupted
 )
 
@@ -157,7 +157,9 @@ Output:
   -v, --verbose              show every message
       --fail-on <level>      exit 1 on changes at or above broke, new or changed;
                              for run, snapshot, check and headers: issues at or
-                             above error, warning or notice
+                             above error, warning or notice. run, snapshot and
+                             compare also exit 1 when an action fails; none turns
+                             both off
 
 Actions (snapshot, compare, run):
       --config <file>        settings (default .echo/config.yaml)
@@ -191,9 +193,10 @@ Deliverability (check, headers; never sends anything):
 
 Exit codes (as in Tuner and Soundcheck):
   0    ok
-  1    findings: --fail-on hit, a doctor check failed, or the site rejected a replay
+  1    findings: --fail-on hit, an action failed, a doctor check failed, or the site
+       rejected a replay
   2    usage error: a wrong command line, or .echo/config.yaml asks for what isn't there
-  3    couldn't run: Echo not reachable, a file or network error
+  3    couldn't run: Echo not reachable, every action failed, a file or network error
   130  interrupted
   sendmail exits with sendmail's codes instead (sysexits: 64 usage, 69 Echo unreachable…)
 

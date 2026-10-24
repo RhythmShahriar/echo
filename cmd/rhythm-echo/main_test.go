@@ -293,3 +293,66 @@ func TestPicker(t *testing.T) {
 		}
 	}
 }
+
+// writeActions writes a config whose actions run these shell commands.
+func writeActions(t *testing.T, commands ...string) {
+	t.Helper()
+	cfg := "quiet: 100ms\ntimeout: 2s\nactions:\n"
+	for i, c := range commands {
+		cfg += fmt.Sprintf("  - name: Step %d\n    command: %q\n", i+1, c)
+	}
+	if err := os.MkdirAll(config.Dir, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(config.Path(), []byte(cfg), 0o600); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestFailedActionsFailTheRun(t *testing.T) {
+	if _, err := exec.LookPath("sh"); err != nil {
+		t.Skip("no sh")
+	}
+	t.Chdir(t.TempDir())
+	srv := httptest.NewServer(catcher.NewServer(catcher.NewInbox(100), catcher.Config{Version: "test"}))
+	defer srv.Close()
+	for _, tc := range []struct {
+		name     string
+		commands []string
+		args     []string
+		want     int
+	}{
+		{"all ok", []string{"true", "true"}, nil, exitOK},
+		{"one of two failed", []string{"true", "exit 7"}, nil, exitFindings},
+		{"one failed, --fail-on none", []string{"true", "exit 7"}, []string{"--fail-on", "none"}, exitOK},
+		{"one failed, --fail-on error", []string{"true", "exit 7"}, []string{"--fail-on", "error"}, exitFindings},
+		{"all failed", []string{"exit 7", "exit 8"}, nil, exitError},
+		{"all failed, --fail-on none", []string{"exit 7", "exit 8"}, []string{"--fail-on", "none"}, exitError},
+	} {
+		writeActions(t, tc.commands...)
+		code, out, errOut := runCLI(t, append([]string{"run", "--url", srv.URL, "--plain"}, tc.args...)...)
+		if code != tc.want {
+			t.Errorf("run, %s: exit %d, want %d\n%s\n%s", tc.name, code, tc.want, out, errOut)
+		}
+		if all := strings.Contains(errOut, "every action failed"); all != (tc.want == exitError) {
+			t.Errorf("run, %s: stderr %q", tc.name, errOut)
+		}
+	}
+
+	writeActions(t, "true")
+	if code, out, errOut := runCLI(t, "snapshot", "--url", srv.URL, "--plain", "--name", "base"); code != exitOK {
+		t.Fatalf("snapshot: %d\n%s\n%s", code, out, errOut)
+	}
+	writeActions(t, "exit 7")
+	if code, out, errOut := runCLI(t, "compare", "--url", srv.URL, "--plain"); code != exitError {
+		t.Errorf("compare with every action failed: exit %d\n%s\n%s", code, out, errOut)
+	}
+	if code, out, errOut := runCLI(t, "compare", "--url", srv.URL, "--plain", "--fail-on", "none", "--junit"); code != exitError ||
+		!strings.Contains(out, "<testsuites") {
+		t.Errorf("compare --fail-on none --junit: exit %d\n%s\n%s", code, out, errOut)
+	}
+	// report shows a saved result again; it doesn't rerun the actions.
+	if code, _, errOut := runCLI(t, "report", "--plain"); code != exitOK {
+		t.Errorf("report of a failed run: exit %d %s", code, errOut)
+	}
+}

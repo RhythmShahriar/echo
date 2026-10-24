@@ -62,6 +62,8 @@ type session struct {
 	plain          bool // no color, boxes or glyphs: --plain, or not a terminal
 	view           *report.Pretty
 	notice         <-chan string
+	ran            bool   // run, snapshot or compare ran the actions: failed ones set the exit code
+	allFailed      string // what to say when every action failed
 }
 
 func (p *plan) begin(stdout, stderr io.Writer) *session {
@@ -126,6 +128,7 @@ func (s *session) actions(name string) (*model.Run, error) {
 	} else {
 		s.view.Step("Echo", fmt.Sprintf("%s mode at %s", h.Mode, s.echo.URL))
 	}
+	s.ran = true
 	return runner.Run(s.ctx, runner.Options{Config: s.cfg, Client: s.echo, Version: version, Name: name, Only: s.o.actions,
 		Replay: replayer(s.cfg), Hooks: runner.Hooks{Action: s.view.Action, Log: s.view.Log}})
 }
@@ -149,7 +152,7 @@ func (s *session) finish(res report.Result, hint string) int {
 			case "md":
 				return report.Markdown(w, res)
 			case "junit":
-				return report.JUnit(w, res, s.o.failOn)
+				return report.JUnit(w, res, s.junitFailOn(res))
 			}
 			return report.HTML(w, res)
 		}
@@ -195,14 +198,55 @@ func (s *session) finish(res report.Result, hint string) int {
 		fmt.Fprintln(s.stderr, "rhythm echo: canceled; results are partial")
 		return exitCanceled
 	}
-	if report.FailOn(res, s.o.failOn) {
+	if s.ran {
+		// An action that failed means the run checked less than it should:
+		// a site that is down must not pass CI. When none worked, nothing
+		// was checked at all.
+		if failed, total := failedActions(res.Run); total > 0 && failed == total {
+			fmt.Fprintln(s.stderr, "rhythm echo:", cmp.Or(s.allFailed, "every action failed, so nothing was checked; is the site up?"))
+			return exitError
+		}
+		if failed, _ := failedActions(res.Run); failed > 0 && s.o.failOn != failOnNone {
+			return exitFindings
+		}
+	}
+	if s.o.failOn != failOnNone && report.FailOn(res, s.o.failOn) {
 		return exitFindings
 	}
 	return exitOK
 }
 
+// failOnNone is the --fail-on value that never fails for findings or
+// failed actions, as in the GitHub Action. A run where every action
+// failed still exits 3: nothing was checked.
+const failOnNone = "none"
+
+// failedActions counts the run's actions that failed.
+func failedActions(r *model.Run) (failed, total int) {
+	if r == nil {
+		return 0, 0
+	}
+	for _, a := range r.Actions {
+		if a.Error != "" {
+			failed++
+		}
+	}
+	return failed, len(r.Actions)
+}
+
+// junitFailOn is the threshold the JUnit report marks failures at. The
+// report package doesn't know "none": for a comparison any unknown class
+// fails nothing, but for a run it would fail every issue, so a run gets
+// the default instead.
+func (s *session) junitFailOn(res report.Result) string {
+	if s.o.failOn == failOnNone && !res.Compared() {
+		return ""
+	}
+	return s.o.failOn
+}
+
 func (s *session) checkFailOn(compared bool) error {
-	if s.o.failOn == "" {
+	if s.o.failOn == "" || s.o.failOn == failOnNone {
 		return nil
 	}
 	if err := report.ValidFailOn(s.o.failOn, compared); err != nil {
