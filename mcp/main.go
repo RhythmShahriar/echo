@@ -14,6 +14,7 @@ import (
 
 	"github.com/RhythmShahriar/echo/client"
 	"github.com/RhythmShahriar/echo/config"
+	"github.com/RhythmShahriar/echo/runner"
 	"github.com/RhythmShahriar/echo/store"
 )
 
@@ -71,6 +72,9 @@ func Main(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		Store:   store.Store{Root: config.Dir},
 		Version: Version,
 	}
+	if Replay != nil {
+		s.Replay = Replay(cfg)
+	}
 	// No signal handling: an interrupt ends the process as usual. A
 	// client that is done closes stdin, which ends Serve.
 	if err := s.Serve(context.Background(), stdin, stdout); err != nil {
@@ -83,3 +87,9 @@ func Main(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 // Version is reported in serverInfo and stored runs. The CLI sets it to
 // its own version before calling Main.
 var Version = "dev"
+
+// Replay, when set, makes the replayer for replay actions from the config.
+// It lives in the CLI (it signs events with the site's secrets), which
+// sets it before calling Main; without it replay actions report that
+// replay isn't available.
+var Replay func(config.Config) runner.Replayer

@@ -23,6 +23,7 @@ import (
 	"github.com/RhythmShahriar/echo/client"
 	"github.com/RhythmShahriar/echo/config"
 	"github.com/RhythmShahriar/echo/dns"
+	"github.com/RhythmShahriar/echo/runner"
 	"github.com/RhythmShahriar/echo/store"
 	"github.com/RhythmShahriar/echo/wire"
 )
@@ -475,5 +476,18 @@ func TestMain_(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), `"protocolVersion":"2025-06-18"`) {
 		t.Errorf("initialize answer %q", out.String())
+	}
+}
+
+func TestReplayHook(t *testing.T) {
+	called := false
+	Replay = func(config.Config) runner.Replayer {
+		called = true
+		return func(context.Context, config.ReplayAction, string, string) error { return nil }
+	}
+	defer func() { Replay = nil }()
+	var out, errb strings.Builder
+	if code := Main([]string{"--url", "http://127.0.0.1:20503"}, strings.NewReader(""), &out, &errb); code != 0 || !called {
+		t.Errorf("Main didn't use the replay hook: %d %v %q", code, called, errb.String())
 	}
 }

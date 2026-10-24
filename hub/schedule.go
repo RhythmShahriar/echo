@@ -142,6 +142,11 @@ type Result struct {
 // Broke reports whether the site broke or couldn't be checked.
 func (r Result) Broke() bool { return r.Error != "" || r.AfterError != "" || r.Counts[model.Broke] > 0 }
 
+// Replay, when set, makes the replayer for a site's replay actions. The
+// CLI sets it before calling ScheduleMain; without it replay actions
+// report that replay isn't available.
+var Replay func(config.Config) runner.Replayer
+
 // preSnapshot is the snapshot each window takes before its update. One
 // name per site, replaced each time, so windows don't pile up snapshots.
 const preSnapshot = "pre-update"
@@ -207,6 +212,9 @@ func window(ctx context.Context, o WindowOptions, echo *client.Client, site *Sit
 	}
 	st := SiteStore(o.Store, site.ID)
 	runOpts := runner.Options{Config: cfg, Client: echo, Version: o.Version}
+	if Replay != nil {
+		runOpts.Replay = Replay(cfg)
+	}
 
 	r.Snapshot = o.Snapshot
 	var snapDir string

@@ -14,6 +14,8 @@ import (
 	"time"
 
 	"github.com/RhythmShahriar/echo/client"
+	"github.com/RhythmShahriar/echo/config"
+	"github.com/RhythmShahriar/echo/runner"
 	"github.com/RhythmShahriar/echo/wire"
 )
 
@@ -120,7 +122,15 @@ func TestRunWindow(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(sitesDir, "b", ".echo"), 0o750); err != nil {
 		t.Fatal(err)
 	}
-	cfgB := "site: http://" + shopBAddr + "\nquiet: 150ms\ntimeout: 5s\nactions:\n  - name: Checkout\n    http:\n      url: /order\n      form: {email: ann@example.com}\n"
+	cfgB := "site: http://" + shopBAddr + "\nquiet: 150ms\ntimeout: 5s\nactions:\n  - name: Checkout\n    http:\n      url: /order\n      form: {email: ann@example.com}\n  - name: Refund\n    replay:\n      event: charge.refunded\n      to: /hook\n"
+	var replayed []string
+	Replay = func(config.Config) runner.Replayer {
+		return func(_ context.Context, a config.ReplayAction, to, _ string) error {
+			replayed = append(replayed, a.Event+" "+to)
+			return nil
+		}
+	}
+	defer func() { Replay = nil }()
 	if err := os.WriteFile(filepath.Join(sitesDir, "b", ".echo", "config.yaml"), []byte(cfgB), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -138,6 +148,9 @@ func TestRunWindow(t *testing.T) {
 	}
 	if b.Site != "client-b" || b.Error != "" || b.Counts["broke"] != 0 || b.Broke() || !strings.HasPrefix(b.Verdict, "Nothing broke") {
 		t.Errorf("client-b: %+v\n%s", b, log.String())
+	}
+	if len(replayed) != 2 || replayed[0] != "charge.refunded http://"+shopBAddr+"/hook" {
+		t.Errorf("replay hook: %q", replayed) // the snapshot and the compare
 	}
 	if _, err := os.Stat(filepath.Join(sitesDir, "b", "broken")); err != nil {
 		t.Errorf("the update didn't run in client-b's folder: %v", err)
