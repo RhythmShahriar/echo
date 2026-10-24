@@ -333,6 +333,12 @@ var kindWords = []struct {
 // link they make it a magic link.
 var tokenKeys = []string{"token", "key", "code", "otp", "t", "hash", "signature", "sig", "ticket"}
 
+// TokenKey reports whether the query key k carries a one-time credential
+// on a login, magic, verify or reset link: ?t=, ?token=, ?ticket= and the
+// rest. Elsewhere ?t= is often a timestamp, so only links of those kinds
+// should be masked by it.
+func TokenKey(k string) bool { return slices.Contains(tokenKeys, strings.ToLower(k)) }
+
 var nonWord = regexp.MustCompile(`[^a-z0-9]+`)
 
 // kindOf returns the kind of the link raw, or "" for any other link.

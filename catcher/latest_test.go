@@ -162,15 +162,19 @@ func TestFoundCodesLeaveWithTheMessage(t *testing.T) {
 	}
 }
 
-func TestHidePath(t *testing.T) {
+func TestHideLink(t *testing.T) {
 	for in, want := range map[string]string{
 		"https://app.test/reset-password/Zq81mXr2Lp0aT7wY4kVn?email=a": "https://app.test/reset-password/•••••?email=a",
 		"https://app.test/email/verify/7/9f8e?signature=•••••":         "https://app.test/email/verify/7/9f8e?signature=•••••",
 		"https://app.test/very-long-plain-words-path/x":                "https://app.test/very-long-plain-words-path/x",
 		"https://Zq81mXr2Lp0aT7wY4kVn.app.test/":                       "https://Zq81mXr2Lp0aT7wY4kVn.app.test/",
+		"https://app.test/sign-in?t=a1b2c3&next=/home#top":             "https://app.test/sign-in?t=•••••&next=/home#top",
+		"https://app.test/sso?page=2&amp;ticket=ST-1-abc":              "https://app.test/sso?page=2&amp;ticket=•••••",
+		"https://app.test/login?next=/orders&lang=en":                  "https://app.test/login?next=/orders&lang=en",
+		"https://shop.test/login/9f8e7d6c5b4a39281706abcd":             "https://shop.test/login/•••••",
 	} {
-		if got := hidePath(in); got != want {
-			t.Errorf("hidePath(%q) = %q, want %q", in, got, want)
+		if got := hideLink(in); got != want {
+			t.Errorf("hideLink(%q) = %q, want %q", in, got, want)
 		}
 	}
 }

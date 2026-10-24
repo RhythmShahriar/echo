@@ -31,22 +31,24 @@ func (f found) empty() bool { return len(f.codes) == 0 && len(f.links) == 0 }
 
 // hide takes the codes and one-time link tokens f found out of the masked
 // message m. Masking catches "code: 482913" but not "482913 is your
-// code" or a token in a link's path (/reset-password/<token>); the code
-// must never be stored. It also changes on every send, so a comparison
-// would see it as a change.
+// code", a token in a link's path (/reset-password/<token>,
+// /login/<token>) or under a query key only a sign-in link uses for one
+// (?t=); the code must never be stored. It also changes on every send, so
+// a comparison would see it as a change.
 func (f found) hide(m *model.Message) {
 	var pairs []string
 	for _, l := range f.links {
-		if l.Kind == codes.Unsubscribe || l.Kind == codes.Login {
+		if l.Kind == codes.Unsubscribe {
 			continue // not a credential
 		}
 		// The link as masking left it, in text and in HTML.
 		for _, u := range []string{l.URL, strings.ReplaceAll(l.URL, "&", "&amp;")} {
-			if stored := mask.URL(u); hidePath(stored) != stored {
-				pairs = append(pairs, stored, hidePath(stored))
+			if stored := mask.URL(u); hideLink(stored) != stored {
+				pairs = append(pairs, stored, hideLink(stored))
 			}
 		}
 	}
+
 	var code *regexp.Regexp
 	if len(f.codes) > 0 {
 		// Whole words only: 4821 mustn't eat into 48210.
@@ -82,8 +84,10 @@ func (f found) hide(m *model.Message) {
 // and digits mixed.
 var randomSegment = regexp.MustCompile(`^[A-Za-z0-9_-]{16,}$`)
 
-// hidePath masks the path segments of u that look like a token.
-func hidePath(u string) string {
+// hideLink masks the path segments of u that look like a token and the
+// values of the query keys codes.TokenKey names. The query separator may
+// be "&amp;" in HTML.
+func hideLink(u string) string {
 	head, query, hasQuery := strings.Cut(u, "?")
 	parts := strings.Split(head, "/")
 	for i := 3; i < len(parts); i++ { // after scheme://host
@@ -93,8 +97,20 @@ func hidePath(u string) string {
 		}
 	}
 	out := strings.Join(parts, "/")
-	if hasQuery {
-		out += "?" + query
+	if !hasQuery {
+		return out
+	}
+	query, frag, hasFrag := strings.Cut(query, "#")
+	fields := strings.Split(query, "&")
+	for i, kv := range fields {
+		k, v, ok := strings.Cut(kv, "=")
+		if ok && v != "" && v != mask.Hidden && codes.TokenKey(strings.TrimPrefix(k, "amp;")) {
+			fields[i] = k + "=" + mask.Hidden
+		}
+	}
+	out += "?" + strings.Join(fields, "&")
+	if hasFrag {
+		out += "#" + frag
 	}
 	return out
 }

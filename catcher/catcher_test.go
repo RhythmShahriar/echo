@@ -313,6 +313,15 @@ func TestCaptureMasksEverySecret(t *testing.T) {
 			Headers: map[string]string{"Content-Type": "application/json"},
 			Body:    `{"apiKey": 123456789012, "auth":{"user":"u","pass":"` + secret + `"}, "key":"` + secret + `", "lead":"Jane"}`}},
 			[]string{`"lead":"Jane"`, `"user":"u"`}},
+		{"magic link token under ?t= and in a login path", wire.Capture{Kind: "email", Source: wire.Source{Via: "wordpress"}, Email: &wire.Email{
+			To: []string{"jane@example.com"}, Subject: "Sign in",
+			Text: "Sign in: https://app.test/sign-in?t=" + secret + "&next=/home\nOr: https://shop.test/login/" + secret,
+			HTML: `<a href="https://app.test/sign-in?t=` + secret + `&amp;next=/home">Sign in</a> <a href="https://sso.test/login?ticket=ST-` + secret + `">SSO</a>`}},
+			[]string{"next=/home", "&amp;next=/home", "https://shop.test/login/"}},
+		{"one-time code in webhook JSON and a JWT header", wire.Capture{Kind: "http", HTTP: &wire.HTTP{Method: "POST", URL: "https://hooks.example/otp?auth=" + secret,
+			Headers: map[string]string{"Content-Type": "application/json", "Cf-Access-Jwt-Assertion": "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJqYW5lIn0." + secret},
+			Body:    `{"otp": ` + code + `, "phone":"+15550100", "note":"token eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJqYW5lIn0.` + secret + `"}`}},
+			[]string{`"phone":"+15550100"`, "hooks.example/otp?auth="}},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			s := NewServer(NewInbox(10), Config{})

@@ -101,3 +101,11 @@ func TestExtractReadsLargeMessagesInPart(t *testing.T) {
 		t.Errorf("codes %v", got)
 	}
 }
+
+func TestTokenKey(t *testing.T) {
+	for k, want := range map[string]bool{"t": true, "Token": true, "ticket": true, "sig": true, "page": false, "next": false, "author": false} {
+		if got := TokenKey(k); got != want {
+			t.Errorf("TokenKey(%q) = %v, want %v", k, got, want)
+		}
+	}
+}
