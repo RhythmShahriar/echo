@@ -55,6 +55,9 @@ func command(c cmdSpec, fn func(*session) int, args []string, stdout, stderr io.
 		return exitUsage
 	}
 	warnTokenFlag(stderr, p.o.token, p.o.quiet)
+	for _, n := range p.notes {
+		fmt.Fprintln(stderr, "rhythm echo:", n)
+	}
 	s := p.begin(stdout, stderr)
 	defer s.stop()
 	return fn(s)
@@ -136,6 +139,16 @@ func (s *session) actions(name string) (*model.Run, error) {
 		s.view.Step("Echo", fmt.Sprintf("%s mode at %s", h.Mode, s.echo.URL))
 	}
 	s.ran = true
+	// Flush and command actions run in the project's folder, as they do
+	// from the folder itself: "php artisan ..." fails from proj/sub.
+	// runner.Options has no Dir yet, so the whole process moves there for
+	// the run; every path the command reads after it is absolute or
+	// relative to the working folder it is put back in.
+	back, err := chdir(s.projectDir())
+	if err != nil {
+		return nil, err
+	}
+	defer back()
 	return runner.Run(s.ctx, runner.Options{Config: s.cfg, Client: s.echo, Version: version, Name: name, Only: s.o.actions,
 		Replay: replayer(s.cfg, s.projectDir(), s.cfgPath), Hooks: runner.Hooks{Action: s.view.Action, Log: s.view.Log}})
 }
@@ -920,6 +933,18 @@ func rel(path string) string {
 		return r
 	}
 	return path
+}
+
+// chdir changes into dir and returns what changes back.
+func chdir(dir string) (func(), error) {
+	wd, err := os.Getwd()
+	if err != nil {
+		return nil, err
+	}
+	if err := os.Chdir(dir); err != nil {
+		return nil, err
+	}
+	return func() { _ = os.Chdir(wd) }, nil
 }
 
 func plural(n int, word string) string {

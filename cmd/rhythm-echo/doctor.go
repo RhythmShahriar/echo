@@ -102,9 +102,11 @@ func cmdDoctor(s *session) int {
 		}
 	}
 
-	// Flush commands.
+	// Flush commands, in the project's folder as snapshot runs them.
 	for _, f := range s.cfg.Flush {
-		out, err := shell(s.ctx, f).CombinedOutput()
+		cmd := shell(s.ctx, f)
+		cmd.Dir = dir
+		out, err := cmd.CombinedOutput()
 		switch {
 		case s.ctx.Err() != nil:
 			_, _ = s.echo.Clear(context.WithoutCancel(s.ctx), client.Filter{Run: d.run})

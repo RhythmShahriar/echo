@@ -19,6 +19,7 @@ import (
 	"github.com/RhythmShahriar/echo/client"
 	"github.com/RhythmShahriar/echo/config"
 	"github.com/RhythmShahriar/echo/model"
+	"github.com/RhythmShahriar/echo/sendmail"
 	"github.com/RhythmShahriar/echo/store"
 	"github.com/RhythmShahriar/rhythm/kit/cli"
 )
@@ -135,7 +136,8 @@ type plan struct {
 	o       options
 	args    []string
 	cfg     config.Config
-	cfgPath string // the config file read; "" when there is none and the defaults apply
+	cfgPath string   // the config file read, absolute; "" when there is none and the defaults apply
+	notes   []string // said on stderr before the command runs
 	format  string
 	st      store.Store
 	echo    *client.Client
@@ -170,10 +172,25 @@ func parse(c cmdSpec, args []string) (*plan, error) {
 		}
 	} else if path, err = findConfig("."); errors.Is(err, errNoConfig) {
 		path = "" // the defaults; commands that need actions say so
+	} else if ue := (*sendmail.UntrustedError)(nil); errors.As(err, &ue) {
+		// Fall back to the defaults, saying why, rather than refuse: ls
+		// or latest shouldn't stop working because of someone else's file.
+		path, p.notes = "", append(p.notes, fmt.Sprintf("%v (someone else could have put it there); "+
+			"pass --config %s if you trust it", ue, ue.Path))
 	} else if err != nil {
 		return nil, err
 	}
+	if path != "" {
+		if path, err = filepath.Abs(path); err != nil {
+			return nil, err
+		}
+	}
 	p.cfgPath = path
+	if runsCommands[c.name] && o.configPath == "" && path != "" && !o.quiet {
+		if wd, err := os.Getwd(); err == nil && p.projectDir() != wd {
+			p.notes = append(p.notes, fmt.Sprintf("using %s; its flush and command actions run in %s", path, p.projectDir()))
+		}
+	}
 	if p.cfg, err = loadConfig(path); err != nil {
 		return nil, cli.UsageError{Msg: err.Error()}
 	}
@@ -244,45 +261,29 @@ func parse(c cmdSpec, args []string) (*plan, error) {
 	return p, nil
 }
 
+// runsCommands are the commands that run the config's flush: and
+// command actions. From a subfolder they say which config they use, as
+// it may not be the one the user expects.
+var runsCommands = map[string]bool{"snapshot": true, "compare": true, "run": true, "doctor": true}
+
 // errNoConfig is the error when no folder from here up has a
 // .echo/config.yaml. It stands in for config.ErrNoConfig until that is
 // released, with the same words.
 var errNoConfig = errors.New("no .echo/config.yaml here or above; run rhythm echo init")
 
 // findConfig returns the absolute path of the nearest .echo/config.yaml
-// in start or a folder above it, as git finds .git, so Echo works from
-// any subfolder of a project. The search ends at the repository root
-// (the folder holding .git, which is searched) and below $HOME (which
-// isn't, unless start is $HOME): a stray ~/.echo would otherwise catch
-// every project outside a repository.
+// in start or a folder above it, within sendmail.FindConfig's bounds:
+// the repository root, below $HOME, and only folders that are yours and
+// that others can't write to. A config it won't use is a
+// *sendmail.UntrustedError.
 //
 // This stands in for config.Find until that is released.
 func findConfig(start string) (string, error) {
-	dir, err := filepath.Abs(start)
-	if err != nil {
-		return "", err
+	path, err := sendmail.FindConfig(start)
+	if errors.Is(err, sendmail.ErrNoConfig) {
+		return "", errNoConfig
 	}
-	home := ""
-	if h, err := os.UserHomeDir(); err == nil && h != "" {
-		if h, err := filepath.Abs(h); err == nil {
-			home = h
-		}
-	}
-	for {
-		p := filepath.Join(dir, config.Dir, "config.yaml")
-		if fi, err := os.Stat(p); err == nil && fi.Mode().IsRegular() {
-			return p, nil
-		}
-		// .git is a folder in a clone and a file in a worktree or submodule.
-		if _, err := os.Lstat(filepath.Join(dir, ".git")); err == nil {
-			return "", errNoConfig
-		}
-		parent := filepath.Dir(dir)
-		if parent == dir || parent == home {
-			return "", errNoConfig
-		}
-		dir = parent
-	}
+	return path, err
 }
 
 // loadConfig reads the config at path, or returns the defaults when

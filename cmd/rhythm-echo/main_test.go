@@ -1121,6 +1121,75 @@ func TestFindConfigStopsAtTheRepoAndHome(t *testing.T) {
 	}
 }
 
+// From a subfolder, flush and command actions run in the project's
+// folder, as they do from the folder itself, and the command says which
+// config it uses.
+func TestCommandsRunInTheProjectFolder(t *testing.T) {
+	if _, err := exec.LookPath("test"); err != nil {
+		t.Skip("no test")
+	}
+	srv := httptest.NewServer(catcher.NewServer(catcher.NewInbox(100), catcher.Config{Version: "test"}))
+	defer srv.Close()
+	root := t.TempDir()
+	t.Setenv("HOME", root)
+	proj := filepath.Join(root, "proj")
+	writeConfigAt(t, proj, "smtp: \"off\"\nquiet: 100ms\ntimeout: 2s\nflush: [\"test -f marker\"]\n"+
+		"actions:\n  - name: Marker\n    command: \"test -f marker\"\n")
+	writeFiles(t, proj, map[string]string{"marker": "", "sub/keep": ""})
+	t.Chdir(filepath.Join(proj, "sub"))
+	wantNote := "rhythm echo: using " + filepath.Join(proj, config.Path()) + "; its flush and command actions run in " + proj + "\n"
+
+	code, out, errOut := runCLI(t, "doctor", "--url", srv.URL, "--plain")
+	if !strings.Contains(out, "ok    Flush: test -f marker") || errOut != wantNote {
+		t.Errorf("doctor from a subfolder: %d\n%s\n%q", code, out, errOut)
+	}
+	if code, out, errOut := runCLI(t, "run", "--url", srv.URL, "--plain"); code != exitOK || !strings.HasPrefix(errOut, wantNote) {
+		t.Errorf("run from a subfolder: %d\n%s\n%s", code, out, errOut)
+	}
+	if wd, _ := os.Getwd(); wd != filepath.Join(proj, "sub") {
+		t.Errorf("run left the working folder at %s", wd)
+	}
+	// -q keeps the note out; from the project folder there is none.
+	if _, _, errOut := runCLI(t, "run", "--url", srv.URL, "-q"); strings.Contains(errOut, "using ") {
+		t.Errorf("run -q said %q", errOut)
+	}
+	t.Chdir(proj)
+	if _, _, errOut := runCLI(t, "run", "--url", srv.URL, "--plain"); strings.Contains(errOut, "using ") {
+		t.Errorf("run in the project folder said %q", errOut)
+	}
+}
+
+// A config in a folder above that anyone may write to isn't used: the
+// command says so and runs on the defaults, so its flush never runs and
+// the token isn't sent to its listen: address.
+func TestPlantedConfigIsNotUsed(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("HOME", filepath.Join(root, "home"))
+	shared := filepath.Join(root, "shared")
+	writeConfigAt(t, shared, "listen: 127.0.0.1:20479\nflush: [\"touch "+filepath.Join(shared, "PWNED")+"\"]\n")
+	if err := os.Chmod(shared, 0o777); err != nil { //nolint:gosec // the point of the test
+		t.Fatal(err)
+	}
+	victim := filepath.Join(shared, "victim", "proj")
+	if err := os.MkdirAll(victim, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(victim)
+	planted := filepath.Join(shared, config.Path())
+	want := "rhythm echo: not using " + planted + ": its folder is writable by anyone (someone else could have put it there); " +
+		"pass --config " + planted + " if you trust it\n"
+	code, out, errOut := runCLI(t, "doctor", "--url", "http://127.0.0.1:1")
+	if code != exitUsage || out != "" || errOut != want+"rhythm echo: no .echo/config.yaml here or above; run rhythm echo init\n" {
+		t.Errorf("doctor below a planted config: %d %q %q", code, out, errOut)
+	}
+	if _, err := os.Stat(filepath.Join(shared, "PWNED")); err == nil {
+		t.Error("the planted flush ran")
+	}
+	if code, _, errOut := runCLI(t, "snapshots"); code != exitOK || errOut != want {
+		t.Errorf("snapshots below a planted config: %d %q", code, errOut)
+	}
+}
+
 // fixtureServer serves h on 127.0.0.1:port, a port in the range these
 // tests keep for their own servers.
 func fixtureServer(t *testing.T, port int, h http.Handler) *httptest.Server {
