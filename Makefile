@@ -19,11 +19,11 @@ check: lint test ## everything CI runs
 hooks: ## enable the Conventional Commits hook
 	git config core.hooksPath .githooks
 
-testbed: ## start the 20 broken sites in Docker (127.0.0.1:18800 and :18810)
+testbed: ## start the testbed (WordPress, Laravel, Next.js, plain PHP) in Docker on 127.0.0.1:18850-18855
 	$(MAKE) -C testbed up
 
 testbed-down:
 	$(MAKE) -C testbed down
 
-bench: build ## run the broken-sites benchmark against the testbed; writes docs/benchmark.md
+bench: build ## run the benchmark against the testbed; writes docs/benchmark.md
 	go run -tags testbed ./testbed/bench -bin $(CURDIR)/bin/rhythm-echo
