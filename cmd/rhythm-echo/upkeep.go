@@ -204,13 +204,19 @@ func upHostnames(flag []string) ([]string, error) {
 const relayEnv = "RHYTHM_ECHO_RELAY"
 
 // releasePattern is the route a reader releases one caught email on.
-const releasePattern = "POST /v1/messages/{id}/release"
+const releasePattern = "POST " + web.PathRelease
 
 // releaseRoute is the relay's route (integrations I8) when the config
 // has relay:, with the banner line that says where releases go. A
 // release needs Echo's token or a viewer's sign-in, so up refuses a relay
 // it could never use.
-func releaseRoute(s *session, inbox *catcher.Inbox, token string, login *web.Login, names []string) (*upRoute, string, error) {
+//
+// A signed-in viewer releases from Echo Inbox, which up serves to any
+// Host under a login: a rebinding page can't send the session cookie.
+// So a request with a valid session goes through Echo Inbox's own
+// checks (ui.Protect: the Origin must be the page's) rather than the
+// API's Host check, which would refuse a viewer on the agency's name.
+func releaseRoute(s *session, inbox *catcher.Inbox, ui *web.UI, token string, login *web.Login, names []string) (*upRoute, string, error) {
 	rc := s.cfg.Relay
 	if rc == nil {
 		return nil, "", nil
@@ -238,13 +244,35 @@ func releaseRoute(s *session, inbox *catcher.Inbox, token string, login *web.Log
 			hosts = []string{host}
 		}
 	}
-	h = catcher.Protect(h, catcher.ProtectOptions{Token: token, Hosts: append(hosts, names...)})
+	api := catcher.Protect(h, catcher.ProtectOptions{Token: token, Hosts: append(hosts, names...)})
+	if login != nil {
+		page := ui.Protect(h)
+		h = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if _, ok := login.Session(r); ok {
+				page.ServeHTTP(w, r)
+				return
+			}
+			api.ServeHTTP(w, r)
+		})
+	} else {
+		h = api
+	}
 	where := "the relay"
 	if u, err := url.Parse(raw); err == nil {
 		where = u.Host // never the user or password
 	}
-	line := fmt.Sprintf("releases go out through %s, only to %s", where, strings.Join(rc.Allow, ", "))
+	line := fmt.Sprintf("releases go out through %s, only to %s (Release in Echo Inbox, or rhythm echo release <id> --to <address>)",
+		where, strings.Join(rc.Allow, ", "))
 	return &upRoute{pattern: releasePattern, probe: "/v1/messages/m1/release", handler: h, session: true}, line, nil
+}
+
+// relayAllow is the relay's allowlist, which Echo Inbox shows beside its
+// Release form, or nil when the config has no relay:.
+func relayAllow(cfg config.Config) []string {
+	if cfg.Relay == nil {
+		return nil
+	}
+	return cfg.Relay.Allow
 }
 
 // spamScorer asks spamd to score each new email (up --spamassassin) in

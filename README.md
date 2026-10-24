@@ -124,6 +124,7 @@ rhythm echo compare --open                       # what changed, in a report
 | Accept a change you meant to make | `rhythm echo compare --accept <key>` (`compare -v` shows each change's key) |
 | Add a check of your own, such as an old phone number | `rules:` in `.echo/config.yaml`, then `rhythm echo checks --test` |
 | Let a coding agent read what the site sent | `claude mcp add echo -- rhythm-echo mcp` |
+| Let a client sign off on an email before launch | `relay: {allow: ["*@client.example"]}` in `.echo/config.yaml` and the SMTP account in `RHYTHM_ECHO_RELAY=smtp://user:pass@smtp.agency.example:587`, then `rhythm echo up --login client:<password>`. Release in Echo Inbox's email view, or `rhythm echo release <id> --to ann@client.example` |
 | Watch many client sites from one Echo | `rhythm echo hub`, `rhythm echo schedule` for update windows and `rhythm echo report --site <id> --store <dir> --pdf` for the client |
 
 ## What it catches

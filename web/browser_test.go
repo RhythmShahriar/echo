@@ -44,7 +44,20 @@ func TestBrowserSmoke(t *testing.T) {
 	u, inbox := newUI(120)
 	inbox.Add(model.Message{ID: "newest", Channel: model.Email, From: "shop@shop.test", To: []string{"ann@example.org"},
 		Subject: "Welcome, {first_name}", Text: "Hi there", HTML: "<p>Hi <b>there</b></p>", Status: model.Faked})
-	base := testServer(t, u)
+	// A relay that refuses everything, recording what the page sent.
+	u.o.Relay = []string{"*@client.test"}
+	released := make(chan string, 1)
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST "+PathRelease, func(w http.ResponseWriter, r *http.Request) {
+		var b struct{ To string }
+		_ = json.NewDecoder(r.Body).Decode(&b)
+		released <- r.PathValue("id") + " " + r.Header.Get("Content-Type") + " " + b.To
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		_, _ = w.Write([]byte(`{"error":"x@evil.test isn't on the relay's allowlist; nothing was sent"}`))
+	})
+	mux.Handle("/", u)
+	base := testServer(t, mux)
 	debug := freePort(t)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
@@ -131,6 +144,28 @@ func TestBrowserSmoke(t *testing.T) {
 	}
 	if len(got.CSP) > 0 {
 		t.Errorf("CSP violations: %q", got.CSP)
+	}
+
+	// The email offers Release with the allowlist; the relay's refusal
+	// shows as it said it.
+	if got := c.eval(`document.getElementById("release").hidden + " " + document.getElementById("r-allow").textContent`); got != "false only to *@client.test" {
+		t.Errorf("release form: %q", got)
+	}
+	c.eval(`document.getElementById("r-to").value = "x@evil.test"; document.getElementById("release").requestSubmit(); "ok"`)
+	select {
+	case got := <-released:
+		if got != "newest application/json x@evil.test" {
+			t.Errorf("release request: %q", got)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("the Release form sent nothing")
+	}
+	deadline = time.Now().Add(10 * time.Second)
+	for !strings.Contains(c.eval(`document.getElementById("r-note").textContent`), "isn't on the relay's allowlist; nothing was sent") {
+		if time.Now().After(deadline) {
+			t.Fatalf("release note: %q", c.eval(`document.getElementById("r-note").textContent`))
+		}
+		time.Sleep(100 * time.Millisecond)
 	}
 
 	// A message arriving now shows up without a reload.

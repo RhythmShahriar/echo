@@ -33,6 +33,13 @@
         <div class="kind" id="d-kind"></div>
         <h1 id="d-title"></h1>
         <dl id="d-fields"></dl>
+        <form class="release" id="release" hidden>
+          <label for="r-to">Release to</label>
+          <input id="r-to" type="email" required placeholder="ann@client.example" autocomplete="email" spellcheck="false">
+          <button type="submit" id="r-send">Release</button>
+          <span class="r-allow" id="r-allow"></span>
+          <p class="r-note" id="r-note" role="status" aria-live="polite"></p>
+        </form>
       </div>
       <div class="tools">
         <button type="button" id="d-delete" class="danger" title="Delete this message (Delete key)">Delete</button>

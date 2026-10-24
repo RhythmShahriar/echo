@@ -9,6 +9,7 @@
 
   const API = "/ui/messages";
   const EVENTS = "/ui/events";
+  const RELEASE = "/v1/messages/{id}/release";
   const PAGE = 50;
 
   const $ = (id) => document.getElementById(id);
@@ -28,6 +29,7 @@
     images: new Set(), // messages whose remote images may load
     fresh: new Set(),  // IDs to flash once
     readOnly: false,   // signed in with a login: viewing only
+    relay: [],         // addresses the relay may release to; empty: no relay
   };
 
   const filters = {
@@ -82,6 +84,7 @@
     state.readOnly = !!page.read_only;
     $("d-delete").hidden = state.readOnly;
     $("signout").hidden = !state.readOnly;
+    state.relay = page.relay || [];
     let rows = page.messages;
     let next = page.next;
     if (keep && state.rows.length > rows.length) {
@@ -242,9 +245,58 @@
     renderHeaders(m.headers || {});
     renderChecks(d.issues);
     renderAttachments(d.attachments);
+    renderRelease(m);
     let tab = keepTab && has[state.tab] ? state.tab : "";
     if (!tab) tab = ["html", "text", "raw", "json"].find((t) => has[t]);
     showTab(tab, keepTab && tab === state.tab);
+  }
+
+  // renderRelease offers Release for an email when up has a relay. A
+  // viewer signed in with a login may release too: the relay checks the
+  // session (or the token cookie) itself.
+  function renderRelease(m) {
+    const form = $("release");
+    const can = m.channel === "email" && state.relay.length > 0;
+    if (form.dataset.id !== m.id) {
+      form.dataset.id = m.id;
+      $("r-note").textContent = "";
+      $("r-note").className = "r-note";
+    }
+    form.hidden = !can;
+    if (can) $("r-allow").textContent = "only to " + state.relay.join(", ");
+  }
+
+  async function release(id, to) {
+    const note = $("r-note");
+    note.className = "r-note";
+    note.textContent = "Releasing…";
+    $("r-send").disabled = true;
+    let text = "";
+    let ok = false;
+    try {
+      const r = await fetch(RELEASE.replace("{id}", encodeURIComponent(id)), {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({ to: to }),
+      });
+      let a = {};
+      try {
+        a = await r.json();
+      } catch (_) {
+        // not JSON: an Echo without a relay, or a proxy's error page
+      }
+      ok = r.ok;
+      if (ok) text = "Released to " + (a.to || to) + ". The release is logged in the inbox.";
+      else if (a.error) text = a.error;
+      else if (r.status === 401) text = "Releasing needs Echo's token or a sign-in.";
+      else text = "Echo answered " + r.status + "; nothing was sent.";
+    } catch (_) {
+      text = "Echo could not be reached; nothing was sent.";
+    }
+    $("r-send").disabled = false;
+    if (state.selected !== id) return;
+    note.className = "r-note " + (ok ? "ok" : "error");
+    note.textContent = text;
   }
 
   function renderHeaders(h) {
@@ -411,6 +463,11 @@
     showTab("html", true);
   });
   $("d-delete").addEventListener("click", () => state.selected && remove(state.selected));
+  $("release").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const to = $("r-to").value.trim();
+    if (state.selected && to) release(state.selected, to);
+  });
   document.addEventListener("keydown", (e) => {
     const typingIn = e.target.matches("input, select, textarea");
     if (e.key === "Escape" && typingIn) {

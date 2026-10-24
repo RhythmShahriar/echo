@@ -27,6 +27,7 @@ import (
 	"github.com/RhythmShahriar/echo/client"
 	"github.com/RhythmShahriar/echo/config"
 	"github.com/RhythmShahriar/echo/model"
+	"github.com/RhythmShahriar/echo/web"
 	"github.com/RhythmShahriar/echo/wire"
 )
 
@@ -279,7 +280,8 @@ func TestUpMountsTheRelay(t *testing.T) {
 		t.Errorf("a relay no one could use: %d %s", code, errOut)
 	}
 	t.Setenv("RHYTHM_ECHO_TOKEN", "relay-test-token")
-	out, _, stop := startUp(t, "--listen", api, "--smtp", "off")
+	t.Setenv(loginEnv, "")
+	out, _, stop := startUp(t, "--listen", api, "--smtp", "off", "--login", "client:correct horse")
 	defer stop()
 	if !strings.Contains(out.String(), "Relay: releases go out through 127.0.0.1:21349, only to *@client.test") ||
 		strings.Contains(out.String(), "pass") {
@@ -296,6 +298,74 @@ func TestUpMountsTheRelay(t *testing.T) {
 	if code, body := apiCall(t, http.MethodPost, release, "relay-test-token", `{"to":"x@evil.test"}`); code != http.StatusForbidden ||
 		!strings.Contains(body, "x@evil.test isn't on the relay's allowlist; nothing was sent") {
 		t.Errorf("an address off the allowlist: %d %s", code, body)
+	}
+
+	// Echo Inbox learns the allowlist, so its email detail offers Release.
+	if code, body := apiCall(t, http.MethodGet, base+web.PathMessages, "relay-test-token", ""); code != http.StatusOK ||
+		!strings.Contains(body, `"relay":["*@client.test"]`) {
+		t.Errorf("the page doesn't offer Release: %d %s", code, body)
+	}
+
+	// rhythm echo release: refused addresses exit 2, a relay that can't
+	// be reached exits 3 (nothing listens on its port).
+	if code, _, errOut := runCLI(t, "release", d.ID, "--to", "x@evil.test", "--url", base); code != exitUsage ||
+		!strings.Contains(errOut, "rhythm echo: x@evil.test isn't on the relay's allowlist; nothing was sent") {
+		t.Errorf("release off the allowlist: %d %s", code, errOut)
+	}
+	if code, _, errOut := runCLI(t, "release", d.ID, "--to", "ann@client.test", "--url", base); code != exitError ||
+		!strings.Contains(errOut, "rhythm echo: the relay at 127.0.0.1:21349 didn't take it") {
+		t.Errorf("release through a dead relay: %d %s", code, errOut)
+	}
+	if code, _, errOut := runCLI(t, "release", d.ID); code != exitUsage || !strings.Contains(errOut, "usage: rhythm echo release <id> --to <address>") {
+		t.Errorf("release without --to: %d %s", code, errOut)
+	}
+
+	// A signed-in viewer releases from Echo Inbox, on the agency's own
+	// name too; another page can't use the session.
+	form := strings.NewReader("user=client&password=correct+horse&next=%2F")
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodPost, base+web.PathLogin, form)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	resp, err := (&http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}).Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = resp.Body.Close()
+	var session *http.Cookie
+	for _, c := range resp.Cookies() {
+		if c.Name == web.SessionCookie {
+			session = c
+		}
+	}
+	if session == nil {
+		t.Fatalf("no session: %d", resp.StatusCode)
+	}
+	viewer := func(host, origin string) (int, string) {
+		req, _ := http.NewRequestWithContext(context.Background(), http.MethodPost, release, strings.NewReader(`{"to":"x@evil.test"}`))
+		req.Header.Set("Content-Type", "application/json")
+		req.Host = host
+		if origin != "" {
+			req.Header.Set("Origin", origin)
+		}
+		if session != nil && host != "" {
+			req.AddCookie(session)
+		}
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = resp.Body.Close() }()
+		b, _ := io.ReadAll(resp.Body)
+		return resp.StatusCode, string(b)
+	}
+	if code, body := viewer("echo.agency.test", "http://echo.agency.test"); code != http.StatusForbidden || !strings.Contains(body, "isn't on the relay's allowlist") {
+		t.Errorf("a signed-in viewer on the agency's name: %d %s", code, body)
+	}
+	if code, body := viewer(api, "http://evil.test"); code != http.StatusForbidden || !strings.Contains(body, "refuses requests from other pages") {
+		t.Errorf("another page with the session: %d %s", code, body)
+	}
+	session = nil
+	if code, body := viewer("echo.agency.test", ""); code != http.StatusForbidden || !strings.Contains(body, "Echo answers only to localhost") {
+		t.Errorf("no session on the agency's name: %d %s", code, body)
 	}
 }
 

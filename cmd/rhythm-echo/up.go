@@ -160,7 +160,7 @@ func cmdUp(s *session) int {
 	// Without either, --hostname and --private-network widen the Host
 	// check the same way for the Inbox as for the API.
 	ui := web.New(web.Options{Inbox: inbox, Mode: cfg.Mode, Checks: checks, AnyHost: token != "" || login != nil,
-		Hosts: names, PrivateNetwork: private})
+		Hosts: names, PrivateNetwork: private, Relay: relayAllow(cfg)})
 	log.issues = ui.Issues // checked once, for the log and the page
 	scorer := newSpamScorer(spamd, inbox)
 	inbox.OnAdd(func(m model.Message) {
@@ -171,7 +171,7 @@ func cmdUp(s *session) int {
 	stack.push(func(context.Context) { scorer.wait() })
 	routes := upRoutes(srv, inbox, ui, cfg.Mode, checks)
 	relayLine := ""
-	if rel, line, err := releaseRoute(s, inbox, token, login, names); err != nil {
+	if rel, line, err := releaseRoute(s, inbox, ui, token, login, names); err != nil {
 		return s.fail(err)
 	} else if rel != nil {
 		routes, relayLine = append(routes, *rel), line

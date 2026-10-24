@@ -603,6 +603,8 @@ var commands = []cmdSpec{
 			{"wait", "how long to wait for a message (default 10s, at most 1m;\n0: don't wait)"},
 			{"code", ""}, {"link", ""}, {"kind", ""},
 			{"json", "the message, its codes and links, as JSON"}}, echoFlags)},
+	{name: "release", use: "release <id> --to <address>", about: "send one caught email to a client through the relay",
+		flags: flags([]flagUse{{"to", "who gets the email: an address on relay: allow"}}, echoFlags)},
 	{name: "check", use: "check <domain>", about: "SPF, DKIM, DMARC and MX for the domain you send from",
 		flags: flags([]flagUse{{"from-mail", ""}, {"provider", ""}, {"selector", ""}, {"return-path", ""}, {"smtp-host", ""},
 			{"mta-sts-fetch", ""}, {"resolver", ""}, {"fail-on", failOnIssues}}, reportFlags)},

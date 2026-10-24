@@ -14,6 +14,7 @@ import (
 
 	"github.com/RhythmShahriar/echo/catcher"
 	"github.com/RhythmShahriar/echo/check"
+	"github.com/RhythmShahriar/echo/relay"
 )
 
 // TestAPIContract drives the paths app.js fetches against a real
@@ -115,4 +116,62 @@ func TestAPIContract(t *testing.T) {
 		t.Errorf("the catcher still has the deleted message: %d", code)
 	}
 	ui.Close()
+}
+
+// TestReleaseContract: the email detail's Release form posts what the
+// relay's route takes (package relay), to the path it serves, and shows
+// the relay's own error text. The Page names the allowlist only when up
+// has a relay.
+func TestReleaseContract(t *testing.T) {
+	js, _ := static.ReadFile("static/app.js")
+	for _, want := range []string{`const RELEASE = "` + PathRelease + `"`, `method: "POST"`,
+		`"Content-Type": "application/json"`, `JSON.stringify({ to: to })`, `else if (a.error) text = a.error;`} {
+		if !strings.Contains(string(js), want) {
+			t.Errorf("app.js lacks %s", want)
+		}
+	}
+	html, _ := static.ReadFile("static/index.html")
+	for _, id := range []string{`id="release"`, `id="r-to"`, `id="r-allow"`, `id="r-note"`} {
+		if !strings.Contains(string(html), id) {
+			t.Errorf("index.html lacks %s", id)
+		}
+	}
+
+	inbox := catcher.NewInbox(10)
+	m := inbox.Add(sample(0))
+	ui := New(Options{Inbox: inbox, Mode: catcher.Seal, Relay: []string{"*@client.test"}})
+	h, err := relay.Handler(inbox, relay.Config{URL: "smtp://127.0.0.1:21349", Allow: []string{"*@client.test"}, ReadToken: "tok"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	mux := http.NewServeMux()
+	mux.Handle("POST "+PathRelease, ui.Protect(h))
+	mux.Handle("/", ui)
+	base := testServer(t, mux)
+
+	var p Page
+	if w := get(ui, PathMessages); json.Unmarshal(w.Body.Bytes(), &p) != nil || len(p.Relay) != 1 || p.Relay[0] != "*@client.test" {
+		t.Errorf("page without the relay's allowlist: %s", w.Body)
+	}
+	if w := get(New(Options{Inbox: inbox}), PathMessages); strings.Contains(w.Body.String(), `"relay"`) {
+		t.Errorf("no relay, yet the page offers Release: %s", w.Body)
+	}
+
+	// The request app.js sends, from Echo Inbox's own origin.
+	req, _ := http.NewRequest(http.MethodPost, base+strings.Replace(PathRelease, "{id}", m.ID, 1), //nolint:noctx // test
+		strings.NewReader(`{"to":"x@evil.test"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Origin", base)
+	req.Header.Set("X-Echo-Token", "tok") // the cookie stands in for it under up
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	var a struct{ Error string }
+	if err := json.NewDecoder(resp.Body).Decode(&a); err != nil || resp.StatusCode != http.StatusForbidden ||
+		a.Error != "x@evil.test isn't on the relay's allowlist; nothing was sent" {
+		t.Errorf("release: %d %q %v", resp.StatusCode, a.Error, err)
+	}
 }

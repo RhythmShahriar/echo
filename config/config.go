@@ -724,6 +724,13 @@ flush: []               # run after each action so queued mail and webhooks go o
 quiet: 2s               # an action is done when nothing new arrives for this long (at most 30s)
 timeout: 30s            # longest wait per action (at least quiet, at most 1m)
 
+# Client sign-off: up lets Echo Inbox's Release button (or rhythm echo release
+# <id> --to <address>) send one caught email through your SMTP account, only to
+# allow. It needs --token or --login. Keep the account out of this file:
+# RHYTHM_ECHO_RELAY=smtp://user:pass@smtp.agency.example:587
+# relay:
+#   allow: ["*@client.example"]
+
 # What snapshot and compare run. Each action makes the site send something.
 # Form submits and multi-step journeys are better run by Soundcheck with --echo.
 actions: []

@@ -60,6 +60,9 @@ type Page struct {
 	// ReadOnly is set for a viewer signed in with a Login: the page then
 	// hides Delete and offers Sign out.
 	ReadOnly bool `json:"read_only,omitempty"`
+	// Relay lists the addresses the relay may release to, when up has
+	// one (Options.Relay): the email detail then offers Release.
+	Relay []string `json:"relay,omitempty"`
 }
 
 // Facets are the values the filters offer, from the whole inbox.
@@ -100,7 +103,7 @@ func (u *UI) list(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	p := Page{Messages: []Summary{}, Inbox: len(all), Mode: u.o.Mode, ReadOnly: ReadOnly(r.Context())}
+	p := Page{Messages: []Summary{}, Inbox: len(all), Mode: u.o.Mode, ReadOnly: ReadOnly(r.Context()), Relay: u.o.Relay}
 	var facets facetSet
 	// Content checks cost up to a few ms for a large email, so they're
 	// only run here for the rows on the page and for a query that needs

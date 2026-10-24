@@ -103,6 +103,8 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		return command(c, cmdSnapshots, args[1:], stdout, stderr)
 	case "latest":
 		return command(c, cmdLatest, args[1:], stdout, stderr)
+	case "release":
+		return command(c, cmdRelease, args[1:], stdout, stderr)
 	case "providers":
 		return command(c, cmdProviders, args[1:], stdout, stderr)
 	case "checks":
@@ -201,6 +203,8 @@ Usage:
   rhythm echo replay <event> --to <url>  send a signed test webhook (Stripe, Standard Webhooks…)
   rhythm echo latest --to <address> [--code | --link]
                                          print the one-time code or link just sent to someone
+  rhythm echo release <id> --to <address>
+                                         send one caught email to a client through the relay
   rhythm echo check <domain>             SPF, DKIM, DMARC and MX for the domain you send from
   rhythm echo headers <file.eml | ->     check a real received email's authentication
   rhythm echo init [--stack s] [--force]
@@ -330,6 +334,15 @@ Latest (latest --to <address>; prints only the code or link, for scripts and tes
   Exits 1 when nothing arrives in time, or it has no code or link. A test that signs
   the same user in again should pass --run or a short --since, or clear --to first:
   Echo answers the newest match at once, which may be the previous one.
+
+Relay (release <id> --to <address>; Echo Inbox's Release button does the same):
+      --to <address>         who gets the email: an address on relay: allow
+  up sends a release through your own SMTP account over TLS, only to the addresses
+  relay: allow lists, and logs each one in the inbox. It needs Echo's token or a
+  viewer --login. Keep the account's password in RHYTHM_ECHO_RELAY, not the config:
+    relay:
+      allow: ["*@client.example"]
+    RHYTHM_ECHO_RELAY=smtp://user:pass@smtp.agency.example:587 rhythm echo up --login ann:secret
 
 Deliverability (check, headers; never sends anything):
       --from-mail <file.eml> learn the real sender from a received email

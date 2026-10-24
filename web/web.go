@@ -4,7 +4,8 @@
 // Package web is Echo Inbox, the live view `rhythm echo up` serves at /:
 // one list of everything captured (email, SMS, chat, webhooks, payments,
 // analytics), a detail pane with HTML, Text, Headers, Raw, JSON, Checks
-// and Attachments tabs, search, filters, delete and live updates.
+// and Attachments tabs, search, filters, delete, live updates and, when
+// up has a relay, Release for one email.
 //
 // The page is static and embedded (HTML, CSS and plain JavaScript, no
 // CDN), so it costs the same whatever the inbox holds. It reads the inbox
@@ -39,6 +40,9 @@ const CSP = "default-src 'self'; img-src 'self' data:; style-src 'self'; frame-s
 const (
 	PathMessages = "/ui/messages" // GET: a page of summaries; /{id}: one message; DELETE /{id}
 	PathEvents   = "/ui/events"   // GET: server-sent events
+	// PathRelease is the relay's route (package relay), which the email
+	// detail's Release form posts {"to": address} to as JSON.
+	PathRelease = "/v1/messages/{id}/release"
 )
 
 // Options configures the UI.
@@ -56,6 +60,10 @@ type Options struct {
 	// private peer.
 	Hosts          []string
 	PrivateNetwork bool
+	// Relay lists the addresses a release may go to (up's relay: allow).
+	// When it is set, the email detail offers Release, to a viewer
+	// signed in with a Login too.
+	Relay []string
 }
 
 // UI serves Echo Inbox. Feed it every new or updated message with Notify

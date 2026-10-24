@@ -147,6 +147,14 @@ kbd {
 #d-fields { display: grid; grid-template-columns: max-content 1fr; gap: 1px 12px; margin: 0; font-size: 13px; }
 #d-fields dt { color: var(--muted); }
 #d-fields dd { margin: 0; overflow-wrap: anywhere; }
+.release { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin: 8px 0 0; font-size: 13px; }
+.release[hidden] { display: none; }
+.release input { min-width: 0; flex: 1 1 200px; max-width: 320px; padding: 3px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); }
+.r-allow { color: var(--muted); }
+.r-note { flex-basis: 100%; margin: 0; }
+.r-note:empty { display: none; }
+.r-note.ok { color: var(--ok); }
+.r-note.error { color: var(--error); }
 .tabs { display: flex; gap: 2px; padding: 0 12px; border-bottom: 1px solid var(--line); overflow-x: auto; }
 .tabs button {
   border: 0;
