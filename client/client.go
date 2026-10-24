@@ -7,6 +7,8 @@
 package client
 
 import (
+	"bufio"
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -80,11 +82,20 @@ type Filter struct {
 	Channel     model.Channel
 	To          string
 	Since       time.Time
+	// Q is a search, such as `to:buyer@example.com has:attachment
+	// subject:"order shipped"` (see catcher.ParseQuery). An Echo without
+	// the "search" capability ignores it.
+	Q string
+	// Limit and Before page through the messages, newest first: List
+	// takes them, the other calls ignore them. Limit defaults to 50;
+	// Before is the Next of the page before.
+	Limit  int
+	Before string
 }
 
 func (f Filter) query() url.Values {
 	q := url.Values{}
-	for k, v := range map[string]string{"run": f.Run, "action": f.Action, "channel": string(f.Channel), "to": f.To} {
+	for k, v := range map[string]string{"run": f.Run, "action": f.Action, "channel": string(f.Channel), "to": f.To, "q": f.Q} {
 		if v != "" {
 			q.Set(k, v)
 		}
@@ -99,6 +110,96 @@ func (f Filter) query() url.Values {
 func (c *Client) Messages(ctx context.Context, f Filter) ([]model.Message, error) {
 	var out []model.Message
 	return out, c.do(ctx, http.MethodGet, "/v1/messages", f.query(), nil, &out)
+}
+
+// Page is one page of messages, newest first.
+type Page struct {
+	Messages []model.Message `json:"messages"`
+	Next     string          `json:"next,omitempty"` // Filter.Before for the next page; empty on the last
+}
+
+// List returns a page of the messages matching f, newest first.
+func (c *Client) List(ctx context.Context, f Filter) (Page, error) {
+	q := f.query()
+	q.Set("limit", strconv.Itoa(cmp.Or(f.Limit, 50)))
+	if f.Before != "" {
+		q.Set("before", f.Before)
+	}
+	var p Page
+	err := c.do(ctx, http.MethodGet, "/v1/messages", q, nil, &p)
+	if p.Messages == nil {
+		p.Messages = []model.Message{}
+	}
+	return p, err
+}
+
+// DeleteOne deletes the message with id. Echo answers 404 (IsNotFound)
+// when it has no such message.
+func (c *Client) DeleteOne(ctx context.Context, id string) error {
+	return c.do(ctx, http.MethodDelete, "/v1/messages/"+url.PathEscape(id), nil, nil, nil)
+}
+
+// Event types.
+const (
+	EventAdd    = "add"
+	EventUpdate = "update"
+	EventDelete = "delete"
+	EventReset  = "reset" // changes were missed: read the messages again
+)
+
+// Event is one change in Echo's inbox.
+type Event struct {
+	Type string `json:"type"`
+	ID   string `json:"id,omitempty"` // the message's
+}
+
+// Events streams the changes in Echo's inbox from now on, until ctx ends
+// or the connection drops; the channel is closed then. Call it again to
+// reconnect, and read the messages again since some may be missed in
+// between.
+func (c *Client) Events(ctx context.Context) (<-chan Event, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.URL+"/v1/events", nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Accept", "text/event-stream")
+	if c.Token != "" {
+		req.Header.Set(wire.TokenHeader, c.Token)
+	}
+	hc := *c.HTTP
+	hc.Timeout = 0 // the stream stays open: ctx ends it
+	resp, err := hc.Do(req)
+	if err != nil {
+		if ctx.Err() == nil {
+			return nil, fmt.Errorf("%w at %s (start it with: rhythm echo up)", ErrNotRunning, c.URL)
+		}
+		return nil, err
+	}
+	if resp.StatusCode != http.StatusOK {
+		defer func() { _ = resp.Body.Close() }()
+		msg, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+		return nil, &APIError{Method: http.MethodGet, Path: "/v1/events", StatusCode: resp.StatusCode, Status: resp.Status,
+			Message: strings.TrimSpace(string(msg))}
+	}
+	out := make(chan Event)
+	go func() {
+		defer close(out)
+		defer func() { _ = resp.Body.Close() }()
+		sc := bufio.NewScanner(resp.Body)
+		for sc.Scan() {
+			data, ok := strings.CutPrefix(sc.Text(), "data: ")
+			var e Event
+			if !ok || json.Unmarshal([]byte(data), &e) != nil {
+				continue // ids, comments, retry, blank lines between events
+			}
+			select {
+			case out <- e:
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+	return out, nil
 }
 
 // Message returns one message by ID.

@@ -108,6 +108,8 @@ func NewServer(inbox *Inbox, cfg Config) *Server {
 	s.mux.HandleFunc("GET /v1/messages", s.list)
 	s.mux.HandleFunc("GET /v1/messages/{id}", s.get)
 	s.mux.HandleFunc("DELETE /v1/messages", s.clear)
+	s.mux.HandleFunc("DELETE /v1/messages/{id}", s.deleteOne)
+	s.mux.HandleFunc("GET /v1/events", s.events)
 	s.mux.HandleFunc("GET /v1/wait", s.wait)
 	s.mux.HandleFunc("POST /v1/actions/begin", s.begin)
 	s.mux.HandleFunc("POST /v1/actions/end", s.end)
@@ -151,6 +153,8 @@ var capabilities = []string{
 	"leases", // begin answers a lease that end takes
 	"issues", // every message carries the checks' findings
 	"late",   // untagged mail dated before the open action is credited to the one before
+	"search", // /v1/messages takes q, limit and before, and since as a duration
+	"events", // GET /v1/events streams changes; DELETE /v1/messages/{id}
 }
 
 // health is what GET /v1/health answers, in this order.
@@ -457,18 +461,139 @@ func runeStart(v string, i int) int {
 	return i
 }
 
-func filterFrom(q url.Values) Filter {
+// filterFrom reads the filter of a request: run, action, channel, to,
+// since (a time, or a duration back from now such as 10m) and q (a
+// search, see ParseQuery).
+func filterFrom(q url.Values) (Filter, error) {
 	f := Filter{Run: q.Get("run"), Action: q.Get("action"), Channel: model.Channel(q.Get("channel")), To: q.Get("to")}
-	if s := q.Get("since"); s != "" {
-		if t, err := time.Parse(time.RFC3339Nano, s); err == nil {
+	if v := q.Get("since"); v != "" {
+		if t, err := time.Parse(time.RFC3339Nano, v); err == nil {
 			f.Since = t
+		} else if d, err := time.ParseDuration(v); err == nil && d > 0 {
+			f.Since = time.Now().Add(-d)
+		}
+		// Anything else is ignored, as it always was.
+	}
+	if v := q.Get("q"); v != "" {
+		var err error
+		if f.Q, err = ParseQuery(v); err != nil {
+			return f, fmt.Errorf("q: %w", err)
 		}
 	}
-	return f
+	return f, nil
 }
 
+// filter is filterFrom for a handler: on a bad search it answers 400 and
+// returns false.
+func filter(w http.ResponseWriter, r *http.Request) (Filter, bool) {
+	f, err := filterFrom(r.URL.Query())
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return f, false
+	}
+	return f, true
+}
+
+// Page sizes for GET /v1/messages.
+const (
+	defaultPage = 50
+	maxPage     = 1000
+)
+
+// page is what GET /v1/messages answers when asked for a page.
+type page struct {
+	Messages []model.Message `json:"messages"`
+	Next     string          `json:"next,omitempty"` // pass as before for the next page
+}
+
+// list answers every matching message oldest first, as a plain array.
+// With limit or before it answers a page instead, newest first:
+// {"messages": [...], "next": "<id>"}.
 func (s *Server) list(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, nonNil(s.Inbox.List(filterFrom(r.URL.Query()))))
+	f, ok := filter(w, r)
+	if !ok {
+		return
+	}
+	q := r.URL.Query()
+	if !q.Has("limit") && !q.Has("before") {
+		writeJSON(w, http.StatusOK, nonNil(s.Inbox.List(f)))
+		return
+	}
+	limit := defaultPage
+	if v := q.Get("limit"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n <= 0 {
+			http.Error(w, "limit: want a number above 0", http.StatusBadRequest)
+			return
+		}
+		limit = min(n, maxPage)
+	}
+	ms, next, err := s.Inbox.Page(f, q.Get("before"), limit)
+	if err != nil {
+		http.Error(w, "before: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, http.StatusOK, page{Messages: ms, Next: next})
+}
+
+// deleteOne deletes one message: 204, or 404 when there's no such
+// message.
+func (s *Server) deleteOne(w http.ResponseWriter, r *http.Request) {
+	if !s.Inbox.Remove(r.PathValue("id")) {
+		http.NotFound(w, r)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// heartbeat is how often an idle event stream sends a comment, so proxies
+// and browsers don't take it for dead.
+var heartbeat = 20 * time.Second
+
+// events streams changes to the inbox as server-sent events, one per
+// change: `data: {"type":"add","id":"..."}` with type add, update, delete
+// or reset (the stream fell behind: read the messages again). Each event
+// has an ID; a client that reconnects with Last-Event-ID gets what it
+// missed.
+func (s *Server) events(w http.ResponseWriter, r *http.Request) {
+	rc := http.NewResponseController(w)
+	seq := s.Inbox.LastEvent()
+	if v := r.Header.Get("Last-Event-ID"); v != "" {
+		if n, err := strconv.ParseUint(v, 10, 64); err == nil {
+			seq = n
+		}
+	}
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("X-Accel-Buffering", "no") // nginx in front: don't hold events back
+	w.WriteHeader(http.StatusOK)
+	if _, err := io.WriteString(w, "retry: 2000\n\n"); err != nil || rc.Flush() != nil {
+		return
+	}
+	tick := time.NewTicker(heartbeat)
+	defer tick.Stop()
+	for {
+		evs, next, changed := s.Inbox.Events(seq)
+		seq = next
+		for _, e := range evs {
+			b, _ := json.Marshal(e)
+			if _, err := fmt.Fprintf(w, "id: %d\ndata: %s\n\n", e.Seq, b); err != nil {
+				return
+			}
+		}
+		if len(evs) > 0 && rc.Flush() != nil {
+			return
+		}
+		select {
+		case <-r.Context().Done():
+			return
+		case <-changed:
+		case <-tick.C:
+			if _, err := io.WriteString(w, ": ping\n\n"); err != nil || rc.Flush() != nil {
+				return
+			}
+		}
+	}
 }
 
 func (s *Server) get(w http.ResponseWriter, r *http.Request) {
@@ -481,19 +606,27 @@ func (s *Server) get(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) clear(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]int{"deleted": s.Inbox.Clear(filterFrom(r.URL.Query()))})
+	f, ok := filter(w, r)
+	if !ok {
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]int{"deleted": s.Inbox.Clear(f)})
 }
 
 // wait blocks until count messages match and none arrive for quiet (both
 // optional), up to timeout.
 func (s *Server) wait(w http.ResponseWriter, r *http.Request) {
+	f, ok := filter(w, r)
+	if !ok {
+		return
+	}
 	q := r.URL.Query()
 	count, _ := strconv.Atoi(q.Get("count"))
 	timeout := duration(q.Get("timeout"), 10*time.Second, time.Minute)
 	quiet := duration(q.Get("quiet"), 1500*time.Millisecond, 30*time.Second)
 	ctx, cancel := context.WithTimeout(r.Context(), timeout)
 	defer cancel()
-	writeJSON(w, http.StatusOK, nonNil(s.Inbox.Wait(ctx, filterFrom(q), count, quiet)))
+	writeJSON(w, http.StatusOK, nonNil(s.Inbox.Wait(ctx, f, count, quiet)))
 }
 
 type actionBody struct {

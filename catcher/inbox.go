@@ -7,8 +7,10 @@
 package catcher
 
 import (
+	"cmp"
 	"context"
 	"crypto/rand"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -24,11 +26,14 @@ const DefaultMaxBytes = 256 << 20
 // Inbox holds captured messages in memory, newest last.
 type Inbox struct {
 	mu       sync.Mutex
-	msgs     []model.Message
+	msgs     []*entry          // oldest first
+	index    map[string]*entry // by message ID, so Get and Update don't scan
 	max      int
 	maxBytes int64
 	bytes    int64            // sum of size(m) over msgs
-	changed  chan struct{}    // closed and replaced whenever a message is added or updated
+	changed  chan struct{}    // closed and replaced whenever the inbox changes
+	events   []Event          // the latest changes, oldest first, for subscribers
+	eventSeq uint64           // the Seq of the latest event
 	scopes   []scope          // the actions in progress, oldest first, for messages that don't say
 	closed   map[string]scope // the last action each run closed, for mail that arrives late
 	seq      int
@@ -38,6 +43,12 @@ type Inbox struct {
 	// Wait's quiet period doesn't depend on how fast the machine is.
 	after func(time.Duration) <-chan time.Time
 	now   func() time.Time // time.Now, swapped by tests that date mail around Begin and End
+}
+
+// entry is a stored message and its place in the inbox.
+type entry struct {
+	seq int // rises with every message: a page cursor finds its place by it
+	m   model.Message
 }
 
 // scope is one action in progress, opened by Begin.
@@ -53,7 +64,7 @@ type scope struct {
 // NewInbox keeps at most max messages and DefaultMaxBytes of them (oldest
 // dropped first).
 func NewInbox(max int) *Inbox {
-	return &Inbox{max: max, maxBytes: DefaultMaxBytes, changed: make(chan struct{}), closed: map[string]scope{},
+	return &Inbox{max: max, maxBytes: DefaultMaxBytes, changed: make(chan struct{}), index: map[string]*entry{}, closed: map[string]scope{},
 		after: time.After, now: time.Now}
 }
 
@@ -79,7 +90,7 @@ func (in *Inbox) Bytes() int64 {
 func (in *Inbox) evict() {
 	n := 0
 	for len(in.msgs)-n > 1 && (len(in.msgs)-n > in.max || in.bytes > in.maxBytes) {
-		in.bytes -= size(in.msgs[n])
+		in.forget(in.msgs[n])
 		n++
 	}
 	if n > 0 {
@@ -270,8 +281,11 @@ func (in *Inbox) Add(m model.Message) model.Message {
 	}
 	in.mu.Lock()
 	in.attribute(&m)
-	in.msgs = append(in.msgs, m)
+	e := &entry{seq: seq, m: m}
+	in.msgs = append(in.msgs, e)
+	in.index[m.ID] = e
 	in.bytes += size(m)
+	in.record(EventAdd, m.ID)
 	in.evict()
 	in.notify()
 	in.mu.Unlock()
@@ -286,20 +300,16 @@ func (in *Inbox) Add(m model.Message) model.Message {
 func (in *Inbox) Update(id string, fn func(*model.Message)) bool {
 	in.mu.Lock()
 	var out model.Message
-	found := false
-	for i := range in.msgs {
-		if in.msgs[i].ID == id {
-			before := size(in.msgs[i])
-			fn(&in.msgs[i])
-			if in.check != nil { // a failed send is a problem the capture didn't have
-				in.msgs[i].Issues = in.check(in.msgs[i])
-			}
-			in.bytes += size(in.msgs[i]) - before
-			out, found = in.msgs[i], true
-			break
-		}
-	}
+	e, found := in.index[id]
 	if found {
+		before := size(e.m)
+		fn(&e.m)
+		if in.check != nil { // a failed send is a problem the capture didn't have
+			e.m.Issues = in.check(e.m)
+		}
+		in.bytes += size(e.m) - before
+		out = e.m
+		in.record(EventUpdate, id)
 		in.evict()
 		in.notify()
 	}
@@ -319,10 +329,8 @@ func (in *Inbox) notify() {
 func (in *Inbox) Get(id string) (model.Message, bool) {
 	in.mu.Lock()
 	defer in.mu.Unlock()
-	for _, m := range in.msgs {
-		if m.ID == id {
-			return m, true
-		}
+	if e, ok := in.index[id]; ok {
+		return e.m, true
 	}
 	return model.Message{}, false
 }
@@ -337,6 +345,7 @@ type Filter struct {
 	Channel model.Channel
 	To      string // substring of any recipient, case-insensitive
 	Since   time.Time
+	Q       Query // a search (see ParseQuery)
 }
 
 func (f Filter) match(m model.Message) bool {
@@ -349,9 +358,11 @@ func (f Filter) match(m model.Message) bool {
 	}
 	if f.To != "" {
 		to := strings.ToLower(f.To)
-		return slices.ContainsFunc(m.To, func(r string) bool { return strings.Contains(strings.ToLower(r), to) })
+		if !slices.ContainsFunc(m.To, func(r string) bool { return strings.Contains(strings.ToLower(r), to) }) {
+			return false
+		}
 	}
-	return true
+	return f.Q.Match(m)
 }
 
 // List returns the messages matching f, oldest first.
@@ -359,12 +370,45 @@ func (in *Inbox) List(f Filter) []model.Message {
 	in.mu.Lock()
 	defer in.mu.Unlock()
 	var out []model.Message
-	for _, m := range in.msgs {
-		if f.match(m) {
-			out = append(out, m)
+	for _, e := range in.msgs {
+		if f.match(e.m) {
+			out = append(out, e.m)
 		}
 	}
 	return out
+}
+
+// ErrUnknownCursor means a page cursor names a message the inbox no
+// longer has: it was deleted or dropped to make room.
+var ErrUnknownCursor = errors.New("no message with that ID; it was deleted or dropped, so start again without a cursor")
+
+// Page returns up to limit messages matching f, newest first, starting
+// after the message before names (from the newest when empty). next is
+// the cursor for the following page, empty on the last. Messages added
+// meanwhile land before the first page, so paging on never repeats or
+// skips one.
+func (in *Inbox) Page(f Filter, before string, limit int) (page []model.Message, next string, err error) {
+	in.mu.Lock()
+	defer in.mu.Unlock()
+	end := len(in.msgs)
+	if before != "" {
+		e, ok := in.index[before]
+		if !ok {
+			return nil, "", ErrUnknownCursor
+		}
+		end, _ = slices.BinarySearchFunc(in.msgs, e.seq, func(e *entry, seq int) int { return cmp.Compare(e.seq, seq) })
+	}
+	page = []model.Message{}
+	for i := end - 1; i >= 0; i-- {
+		if !f.match(in.msgs[i].m) {
+			continue
+		}
+		if len(page) == limit { // one more: there's a next page
+			return page, page[len(page)-1].ID, nil
+		}
+		page = append(page, in.msgs[i].m)
+	}
+	return page, "", nil
 }
 
 // Wait returns the messages matching f once at least min of them have
@@ -400,10 +444,7 @@ func (in *Inbox) Wait(ctx context.Context, f Filter, min int, quiet time.Duratio
 func (in *Inbox) Clear(f Filter) int {
 	in.mu.Lock()
 	defer in.mu.Unlock()
-	n := len(in.msgs)
-	in.msgs = slices.DeleteFunc(in.msgs, func(m model.Message) bool { return in.drop(f.match(m), m) })
-	in.notify()
-	return n - len(in.msgs)
+	return in.remove(func(m model.Message) bool { return f.match(m) })
 }
 
 // Delete removes the messages of channel with the given IDs and returns
@@ -411,19 +452,97 @@ func (in *Inbox) Clear(f Filter) int {
 func (in *Inbox) Delete(channel model.Channel, ids []string) int {
 	in.mu.Lock()
 	defer in.mu.Unlock()
+	return in.remove(func(m model.Message) bool { return m.Channel == channel && slices.Contains(ids, m.ID) })
+}
+
+// Remove deletes the message with id and reports whether it was there.
+func (in *Inbox) Remove(id string) bool {
+	in.mu.Lock()
+	defer in.mu.Unlock()
+	if _, ok := in.index[id]; !ok {
+		return false
+	}
+	return in.remove(func(m model.Message) bool { return m.ID == id }) > 0
+}
+
+// remove deletes the messages del picks and returns how many. Called with
+// in.mu held.
+func (in *Inbox) remove(del func(model.Message) bool) int {
 	n := len(in.msgs)
-	in.msgs = slices.DeleteFunc(in.msgs, func(m model.Message) bool {
-		return in.drop(m.Channel == channel && slices.Contains(ids, m.ID), m)
+	in.msgs = slices.DeleteFunc(in.msgs, func(e *entry) bool {
+		if !del(e.m) {
+			return false
+		}
+		in.forget(e)
+		return true
 	})
 	in.notify()
 	return n - len(in.msgs)
 }
 
-// drop returns del, taking m's size off the total when it's deleted.
-// Called with in.mu held.
-func (in *Inbox) drop(del bool, m model.Message) bool {
-	if del {
-		in.bytes -= size(m)
+// forget takes e out of the index and the byte total and tells
+// subscribers it's gone; the caller takes it out of msgs. Called with
+// in.mu held.
+func (in *Inbox) forget(e *entry) {
+	in.bytes -= size(e.m)
+	if in.index[e.m.ID] == e {
+		delete(in.index, e.m.ID)
 	}
-	return del
+	in.record(EventDelete, e.m.ID)
+}
+
+// Event types.
+const (
+	EventAdd    = "add"
+	EventUpdate = "update"
+	EventDelete = "delete"
+	// EventReset tells a subscriber that fell too far behind that it
+	// missed changes and should read the inbox again.
+	EventReset = "reset"
+)
+
+// maxEvents is how many recent changes the inbox keeps for subscribers.
+// One that falls further behind gets a reset instead.
+const maxEvents = 4096
+
+// Event is one change to the inbox.
+type Event struct {
+	Seq  uint64 `json:"-"` // rises with every change; GET /v1/events sends it as the event ID
+	Type string `json:"type"`
+	ID   string `json:"id,omitempty"` // the message's
+}
+
+// record notes a change for subscribers. Called with in.mu held.
+func (in *Inbox) record(typ, id string) {
+	in.eventSeq++
+	in.events = append(in.events, Event{Seq: in.eventSeq, Type: typ, ID: id})
+	if len(in.events) >= 2*maxEvents { // trimmed in bulk, so adding stays cheap
+		in.events = slices.Delete(in.events, 0, len(in.events)-maxEvents)
+	}
+}
+
+// LastEvent returns the Seq of the latest change: a new subscriber asks
+// Events for what comes after it.
+func (in *Inbox) LastEvent() uint64 {
+	in.mu.Lock()
+	defer in.mu.Unlock()
+	return in.eventSeq
+}
+
+// Events returns the changes after seq, the Seq to ask from next time and
+// a channel closed at the next change. When the changes after seq are no
+// longer kept, events is a single reset. Nothing a subscriber does holds
+// the inbox up: Add only appends to a list.
+func (in *Inbox) Events(seq uint64) (events []Event, next uint64, changed <-chan struct{}) {
+	in.mu.Lock()
+	defer in.mu.Unlock()
+	switch {
+	case seq == in.eventSeq:
+		return nil, in.eventSeq, in.changed
+	// Ahead of the inbox: a Last-Event-ID from before Echo restarted.
+	case seq > in.eventSeq, len(in.events) == 0, seq+1 < in.events[0].Seq:
+		return []Event{{Seq: in.eventSeq, Type: EventReset}}, in.eventSeq, in.changed
+	}
+	i, _ := slices.BinarySearchFunc(in.events, seq+1, func(e Event, seq uint64) int { return cmp.Compare(e.Seq, seq) })
+	return slices.Clone(in.events[i:]), in.eventSeq, in.changed
 }

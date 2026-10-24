@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"math/rand/v2"
 	"net/http"
 	"net/http/httptest"
@@ -234,4 +235,26 @@ func ids(ms []model.Message) []string {
 		out[i] = m.ID
 	}
 	return out
+}
+
+// BenchmarkGet shows Get doesn't scan: the time per Get is the same with
+// 100 messages as with 10,000.
+func BenchmarkGet(b *testing.B) {
+	for _, n := range []int{100, 10000} {
+		b.Run(fmt.Sprint(n), func(b *testing.B) {
+			in := NewInbox(n)
+			var first string
+			for i := range n {
+				m := in.Add(model.Message{Channel: model.Email, Subject: fmt.Sprint(i)})
+				if i == 0 {
+					first = m.ID // the oldest: the far end of a scan
+				}
+			}
+			for b.Loop() {
+				if _, ok := in.Get(first); !ok {
+					b.Fatal("not found")
+				}
+			}
+		})
+	}
 }
