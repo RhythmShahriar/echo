@@ -41,6 +41,7 @@ type options struct {
 	allow         cli.ListFlag
 
 	channel, runID, to string
+	since              time.Duration // ls and watch: also the messages from this long ago
 
 	// check, headers and replay
 	fromMail, provider, selector, returnPath, smtpHost, resolver string
@@ -85,6 +86,7 @@ func flagSet(o *options) *flag.FlagSet {
 	fs.StringVar(&o.channel, "channel", "", "")
 	fs.StringVar(&o.runID, "run", "", "")
 	fs.StringVar(&o.to, "to", "", "")
+	fs.DurationVar(&o.since, "since", 0, "")
 
 	fs.StringVar(&o.fromMail, "from-mail", "", "")
 	fs.StringVar(&o.provider, "provider", "", "")
@@ -177,6 +179,9 @@ func parse(args []string) (*plan, error) {
 	}
 	if o.channel != "" && !slices.Contains(channels, model.Channel(o.channel)) {
 		return nil, cli.Usagef("--channel %q: use one of %s", o.channel, joinChannels())
+	}
+	if o.since < 0 {
+		return nil, cli.Usagef("--since %s: give how long ago, e.g. 10m", o.since)
 	}
 	if o.name != "" && !store.ValidName(o.name) {
 		return nil, cli.Usagef("--name %q: use letters, digits, dots, dashes and underscores", o.name)

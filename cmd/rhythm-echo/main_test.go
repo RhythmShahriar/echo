@@ -5,6 +5,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -13,7 +14,9 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/RhythmShahriar/echo/catcher"
 	"github.com/RhythmShahriar/echo/config"
@@ -406,5 +409,140 @@ func TestFailedSnapshotKeepsTheBaseline(t *testing.T) {
 	}
 	if read() == good {
 		t.Error("--force didn't replace the snapshot")
+	}
+}
+
+// syncBuffer is a bytes.Buffer safe to read while watch writes to it.
+type syncBuffer struct {
+	mu sync.Mutex
+	b  bytes.Buffer
+}
+
+func (b *syncBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.b.Write(p)
+}
+
+func (b *syncBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.b.String()
+}
+
+// startWatch runs watch with args against a fresh Echo until the test ends.
+func startWatch(t *testing.T, args ...string) (*catcher.Inbox, *syncBuffer) {
+	t.Helper()
+	t.Chdir(t.TempDir())
+	in := catcher.NewInbox(100)
+	srv := httptest.NewServer(catcher.NewServer(in, catcher.Config{Version: "test"}))
+	t.Cleanup(srv.Close)
+	p, err := parse(append([]string{"--url", srv.URL, "--plain"}, args...))
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, errb := &syncBuffer{}, &syncBuffer{}
+	s := p.begin(out, errb)
+	ctx, cancel := context.WithCancel(context.Background())
+	s.ctx = ctx
+	done := make(chan int)
+	go func() { done <- cmdWatch(s) }()
+	t.Cleanup(func() {
+		cancel()
+		if code := <-done; code != exitOK {
+			t.Errorf("watch exited %d: %s", code, errb.String())
+		}
+		s.stop()
+	})
+	waitFor(t, func() bool { return strings.Contains(errb.String(), "Watching") }, "the watch to start")
+	return in, out
+}
+
+func waitFor(t *testing.T, ok func() bool, what string) {
+	t.Helper()
+	for deadline := time.Now().Add(5 * time.Second); time.Now().Before(deadline); time.Sleep(20 * time.Millisecond) {
+		if ok() {
+			return
+		}
+	}
+	t.Fatalf("timed out waiting for %s", what)
+}
+
+func TestWatchJSONStreamsLines(t *testing.T) {
+	in, out := startWatch(t, "--json")
+	m := in.Add(model.Message{Channel: model.Email, To: []string{"ann@shop.test"}, Subject: "Hi {first_name}",
+		Text: "Hello {first_name}", Status: model.Faked})
+	waitFor(t, func() bool { return strings.Count(out.String(), "\n") >= 1 }, "the message line")
+	in.Update(m.ID, func(m *model.Message) { m.Status = model.Blocked })
+	waitFor(t, func() bool { return strings.Count(out.String(), "\n") >= 2 }, "the update line")
+	var lines []watchLine
+	for _, l := range strings.Split(strings.TrimSpace(out.String()), "\n") {
+		var wl watchLine
+		if err := json.Unmarshal([]byte(l), &wl); err != nil {
+			t.Fatalf("not JSON: %q: %v", l, err)
+		}
+		lines = append(lines, wl)
+	}
+	if len(lines) != 2 || lines[0].Type != "message" || lines[0].Message.ID != m.ID ||
+		lines[1].Type != "update" || lines[1].Message.Status != model.Blocked || lines[1].Was != model.Faked {
+		t.Fatalf("lines = %+v", lines)
+	}
+	found := false
+	for _, i := range lines[0].Issues {
+		found = found || i.Check == "content/placeholder"
+	}
+	if !found {
+		t.Errorf("no placeholder issue: %+v", lines[0].Issues)
+	}
+}
+
+func TestWatchShowsStatusChangesAndIssues(t *testing.T) {
+	in, out := startWatch(t)
+	m := in.Add(model.Message{Channel: model.Email, To: []string{"ann@shop.test"}, Subject: "Hi {first_name}",
+		Text: "Hello {first_name}", Status: model.Faked})
+	clean := in.Add(model.Message{Channel: model.Email, To: []string{"bob@shop.test"}, Subject: "Receipt", Text: "Thanks", Status: model.Faked})
+	waitFor(t, func() bool { return strings.Contains(out.String(), "Receipt") }, "both messages")
+	in.Update(m.ID, func(m *model.Message) { m.Status = model.Blocked })
+	in.Update(clean.ID, func(m *model.Message) { m.Subject = "Receipt" }) // no visible change
+	waitFor(t, func() bool { return strings.Contains(out.String(), "is now blocked (was faked)") }, "the update")
+	got := out.String()
+	if strings.Count(got, "Hi {first_name}") != 1 || strings.Count(got, "Receipt") != 1 {
+		t.Errorf("a message was printed twice:\n%s", got)
+	}
+	if !strings.Contains(got, "[ERROR]") || strings.Count(got, "Update:") != 1 {
+		t.Errorf("want one issue marker and one update:\n%s", got)
+	}
+}
+
+func TestStatusLRUForgetsTheOldest(t *testing.T) {
+	c := newStatusLRU(2)
+	c.put("a", model.Faked)
+	c.put("b", model.Faked)
+	if prev, seen := c.put("a", model.Blocked); !seen || prev != model.Faked {
+		t.Errorf("a: %q %v", prev, seen)
+	}
+	c.put("c", model.Faked) // b is the least recently seen
+	if _, seen := c.put("b", model.Faked); seen {
+		t.Error("b should have been forgotten")
+	}
+	if _, seen := c.put("a", model.Blocked); seen {
+		t.Error("a should have been forgotten when b came back") // c, a + b -> b, c
+	}
+}
+
+func TestListSince(t *testing.T) {
+	t.Chdir(t.TempDir())
+	in := catcher.NewInbox(100)
+	srv := httptest.NewServer(catcher.NewServer(in, catcher.Config{Version: "test"}))
+	defer srv.Close()
+	in.Add(model.Message{Channel: model.Email, To: []string{"old@shop.test"}, Subject: "Old", At: time.Now().Add(-time.Hour)})
+	in.Add(model.Message{Channel: model.Email, To: []string{"new@shop.test"}, Subject: "New"})
+	code, out, errOut := runCLI(t, "ls", "--url", srv.URL, "--json", "--since", "10m")
+	var ms []model.Message
+	if err := json.Unmarshal([]byte(out), &ms); code != 0 || err != nil || len(ms) != 1 || ms[0].Subject != "New" {
+		t.Errorf("ls --since 10m: %d %v %s\n%s", code, err, errOut, out)
+	}
+	if code, _, errOut := runCLI(t, "ls", "--since", "-5m"); code != exitUsage || !strings.Contains(errOut, "--since") {
+		t.Errorf("negative --since: %d %q", code, errOut)
 	}
 }

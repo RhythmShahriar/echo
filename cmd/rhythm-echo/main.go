@@ -99,7 +99,7 @@ Usage:
   rhythm echo up [flags]                 start the catcher (API :8025, SMTP :1025)
   rhythm echo install <stack> [path]     connect a site: wordpress, laravel, next, node, generic
   rhythm echo doctor                     check that every capture layer works
-  rhythm echo watch                      show messages as they arrive
+  rhythm echo watch                      show messages as they arrive (--json: one per line)
   rhythm echo ls                         list captured messages (--json for all fields)
   rhythm echo show <id>                  one message, as JSON
   rhythm echo clear                      delete captured messages
@@ -146,6 +146,7 @@ Messages (watch, ls, clear):
                              push or http
       --run <id>             only messages from this run
       --to <address>         only messages to this recipient
+      --since <d>            ls, watch: messages from this long ago on, e.g. 10m
 
 Output:
       --json --md --junit --html   report format

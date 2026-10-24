@@ -5,11 +5,14 @@ package main
 
 import (
 	"cmp"
+	"container/list"
 	"context"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -22,6 +25,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/muesli/termenv"
 
+	"github.com/RhythmShahriar/echo/check"
 	"github.com/RhythmShahriar/echo/client"
 	"github.com/RhythmShahriar/echo/compare"
 	"github.com/RhythmShahriar/echo/config"
@@ -407,7 +411,11 @@ func cmdReport(s *session) int {
 	return s.finish(res, "")
 }
 
-// cmdWatch prints messages as they arrive at a running Echo.
+// cmdWatch prints messages as they arrive at a running Echo, the
+// problems found in each, and a line when one changes status (an
+// observed request gets its answer, a check blocks it). With --json it
+// writes one JSON object per line instead: {"type": "message" or
+// "update", "message": {...}}.
 func cmdWatch(s *session) int {
 	h, err := s.echo.Health(s.ctx)
 	if err != nil {
@@ -416,25 +424,137 @@ func cmdWatch(s *session) int {
 	if !s.o.quiet {
 		fmt.Fprintf(s.stderr, "Watching %s (%s mode). Ctrl+C to stop.\n", s.echo.URL, h.Mode)
 	}
-	since := time.Now().UTC()
-	seen := map[string]bool{}
+	w := &watcher{s: s, status: newStatusLRU(watchMemory), enc: json.NewEncoder(s.stdout)}
+	w.enc.SetEscapeHTML(false)
+	if u, err := url.Parse(s.cfg.Site); err == nil {
+		w.opts.SiteHost = u.Hostname()
+	}
+	w.opts.AllowRecipients = s.cfg.AllowRecipients
+	start := time.Now().UTC()
+	if s.o.since > 0 {
+		start = start.Add(-s.o.since)
+	}
+	newest, known := start, 0
 	for s.ctx.Err() == nil {
-		ms, err := s.echo.Wait(s.ctx, s.filter(since), 1, 200*time.Millisecond, 25*time.Second)
+		// Status changes keep a message's time, so each poll asks again
+		// for the last few minutes: that's where updates happen. Asking
+		// for one more message than last time returns as soon as a new
+		// one arrives, and after a second otherwise, to show updates.
+		since := newest.Add(-watchWindow)
+		if since.Before(start) {
+			since = start
+		}
+		ms, err := s.echo.Wait(s.ctx, s.filter(since), known+1, 200*time.Millisecond, time.Second)
 		if err != nil {
 			if s.ctx.Err() != nil {
 				break
 			}
 			return s.fail(err)
 		}
+		known = len(ms)
 		for _, m := range ms {
-			if !seen[m.ID] {
-				seen[m.ID] = true
-				s.view.Message(m)
-				since = m.At
+			if err := w.show(m); err != nil {
+				return s.fail(err)
+			}
+			if m.At.After(newest) {
+				newest = m.At
 			}
 		}
 	}
 	return exitOK
+}
+
+const (
+	watchMemory = 20000           // statuses watch remembers; the inbox keeps 10000 messages
+	watchWindow = 2 * time.Minute // how far back watch looks for status changes
+)
+
+// watcher prints each message once, and again as an update when its
+// status changes.
+type watcher struct {
+	s      *session
+	status *statusLRU
+	enc    *json.Encoder
+	opts   check.Options
+}
+
+// watchLine is one line of watch --json.
+type watchLine struct {
+	Type    string        `json:"type"` // message or update
+	Message model.Message `json:"message"`
+	Was     model.Status  `json:"was,omitempty"`    // update: the status before
+	Issues  []model.Issue `json:"issues,omitempty"` // message: problems found in it
+}
+
+func (w *watcher) show(m model.Message) error {
+	prev, seen := w.status.put(m.ID, m.Status)
+	switch {
+	case !seen:
+		issues := check.Message(m, w.opts)
+		if w.s.o.json {
+			return w.enc.Encode(watchLine{Type: "message", Message: m, Issues: issues})
+		}
+		w.s.view.Message(m)
+		printIssues(w.s.stdout, issues, w.s.plain)
+	case prev != m.Status:
+		if w.s.o.json {
+			return w.enc.Encode(watchLine{Type: "update", Message: m, Was: prev})
+		}
+		w.s.view.Step("Update", updateLine(m, prev))
+	}
+	return nil
+}
+
+// updateLine says what changed, in the words up's live log uses.
+func updateLine(m model.Message, prev model.Status) string {
+	what := check.Describe(m) // names the host for webhooks and requests
+	if c := m.Channel; len(m.To) > 0 && (c == model.Email || c == model.SMS || c == model.WhatsApp) {
+		what += " to " + strings.Join(m.To, ", ")
+	}
+	return fmt.Sprintf("%s %s is now %s (was %s)", m.At.Local().Format("15:04:05"), what, m.Status, prev)
+}
+
+// printIssues lists the problems in a message under its line.
+func printIssues(w io.Writer, issues []model.Issue, plain bool) {
+	for _, i := range issues {
+		if plain {
+			fmt.Fprintf(w, "  [%s] %s\n", strings.ToUpper(string(i.Level)), i.Title)
+			continue
+		}
+		mark := lipgloss.NewStyle().Foreground(report.LevelColor(i.Level)).Bold(true).Render("! " + string(i.Level))
+		fmt.Fprintf(w, "            %s  %s\n", mark, i.Title)
+	}
+}
+
+// statusLRU remembers the last status of the most recently seen
+// messages, forgetting the least recently seen beyond max, so a long
+// watch doesn't grow without bound.
+type statusLRU struct {
+	max   int
+	order *list.List // of string IDs, most recent first
+	at    map[string]*list.Element
+	value map[string]model.Status
+}
+
+func newStatusLRU(max int) *statusLRU {
+	return &statusLRU{max: max, order: list.New(), at: map[string]*list.Element{}, value: map[string]model.Status{}}
+}
+
+// put records id's status and returns the one before, if id was known.
+func (c *statusLRU) put(id string, st model.Status) (prev model.Status, seen bool) {
+	if e, ok := c.at[id]; ok {
+		prev, seen = c.value[id], true
+		c.order.MoveToFront(e)
+	} else {
+		c.at[id] = c.order.PushFront(id)
+	}
+	c.value[id] = st
+	for c.order.Len() > c.max {
+		old := c.order.Remove(c.order.Back()).(string) //nolint:forcetypeassert // the list only holds IDs
+		delete(c.at, old)
+		delete(c.value, old)
+	}
+	return prev, seen
 }
 
 func (s *session) filter(since time.Time) client.Filter {
@@ -442,7 +562,11 @@ func (s *session) filter(since time.Time) client.Filter {
 }
 
 func cmdList(s *session) int {
-	ms, err := s.echo.Messages(s.ctx, s.filter(time.Time{}))
+	since := time.Time{}
+	if s.o.since > 0 {
+		since = time.Now().UTC().Add(-s.o.since)
+	}
+	ms, err := s.echo.Messages(s.ctx, s.filter(since))
 	if err != nil {
 		return s.fail(err)
 	}
