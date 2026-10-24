@@ -167,3 +167,12 @@ func TestHTMLIsSafeAndComplete(t *testing.T) {
 		t.Error("a value was rejected by html/template")
 	}
 }
+
+func TestActionLineUnmetExpect(t *testing.T) {
+	var b strings.Builder
+	p := NewPretty(&b, &b, PrettyOptions{Plain: true})
+	p.Action(&model.Action{Label: "Order", Issues: []model.Issue{{Check: "expect/email", Level: model.Error}}}, 1, 1)
+	if !strings.Contains(b.String(), "nothing sent (fewer than expected)") {
+		t.Errorf("unmet expect not shown: %q", b.String())
+	}
+}

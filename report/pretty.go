@@ -146,6 +146,16 @@ func (p *Pretty) Message(m model.Message) {
 	}
 }
 
+// unmet reports whether an action sent fewer messages than its expect asks.
+func unmet(a *model.Action) bool {
+	for _, i := range a.Issues {
+		if strings.HasPrefix(i.Check, "expect/") {
+			return true
+		}
+	}
+	return false
+}
+
 // Action reports a finished action.
 func (p *Pretty) Action(a *model.Action, done, total int) {
 	if p.o.Quiet {
@@ -155,17 +165,23 @@ func (p *Pretty) Action(a *model.Action, done, total int) {
 	if n := len(a.Messages); n > 0 {
 		got = Tally(&model.Run{Actions: []model.Action{*a}})
 	}
+	short := unmet(a)
 	if p.o.Plain {
 		line := fmt.Sprintf("[%d/%d] %s: %s", done, total, a.Label, got)
 		if a.Error != "" {
 			line += " (failed: " + a.Error + ")"
+		} else if short {
+			line += " (fewer than expected)"
 		}
 		fmt.Fprintln(p.w, line)
 		return
 	}
 	mark := ui.Good.Render("✓")
-	if a.Error != "" {
+	if a.Error != "" || short {
 		mark = lipgloss.NewStyle().Foreground(lipgloss.Color(ui.Danger)).Render("✗")
+	}
+	if short && a.Error == "" {
+		got += ", fewer than expected"
 	}
 	fmt.Fprintf(p.w, "  %s %s %s\n", mark, ui.Pad(bold.Render(ui.Truncate(a.Label, 34)), 36), muted.Render(got))
 	if a.Error != "" {
