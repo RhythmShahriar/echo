@@ -4,8 +4,10 @@
 package main
 
 import (
+	"archive/tar"
 	"bufio"
 	"bytes"
+	"compress/gzip"
 	"context"
 	"encoding/json"
 	"errors"
@@ -1377,5 +1379,180 @@ func TestInstallNodeAndNextNeedAProject(t *testing.T) {
 		if code != exitUsage || out != "" || !strings.Contains(errOut, "this folder has no package.json; run this in the") {
 			t.Errorf("install %s outside a project: %d %q %q", stack, code, out, errOut)
 		}
+	}
+}
+
+// captureConfig is a config whose one action posts an email with subject
+// to the Echo at echoURL.
+func captureConfig(echoURL, subject string) string {
+	capture := fmt.Sprintf(`curl -s -X POST %s/v1/capture -d "{\"v\":1,\"kind\":\"email\",\"run\":\"$RHYTHM_ECHO_RUN\",\"source\":{\"via\":\"test\"},\"email\":{\"from\":\"shop@shop.test\",\"to\":[\"admin@shop.test\"],\"subject\":\"%s\",\"text\":\"New order\"}}" >/dev/null`, echoURL, subject)
+	return fmt.Sprintf("quiet: 300ms\ntimeout: 5s\nactions:\n  - name: New order\n    command: |\n      %s\n", capture)
+}
+
+func TestBaselinesTravel(t *testing.T) {
+	if _, err := exec.LookPath("curl"); err != nil {
+		t.Skip("no curl")
+	}
+	echo := fixtureServer(t, 20467, catcher.NewServer(catcher.NewInbox(1000), catcher.Config{Version: "test"}))
+	root := t.TempDir()
+	t.Setenv("HOME", root)
+	a, b := filepath.Join(root, "a"), filepath.Join(root, "b")
+	writeConfigAt(t, a, captureConfig(echo.URL, "Order received"))
+	writeConfigAt(t, b, captureConfig(echo.URL, "Order received"))
+
+	t.Chdir(a)
+	if code, out, errOut := runCLI(t, "snapshot", "--url", echo.URL, "--name", "base", "--plain"); code != 0 {
+		t.Fatalf("snapshot: %d\n%s\n%s", code, out, errOut)
+	}
+	tgz := filepath.Join(root, "base.tgz")
+	code, out, errOut := runCLI(t, "snapshot", "--export", tgz)
+	if code != 0 || !strings.Contains(out, "Exported snapshot base to "+tgz) {
+		t.Fatalf("export: %d\n%s\n%s", code, out, errOut)
+	}
+	assertArchive(t, tgz, "base/run.json", "base/report.html")
+	runJSON := filepath.Join(a, config.Dir, "snapshots", "base", "run.json")
+
+	// A fresh checkout imports it and compares as the first one would.
+	t.Chdir(b)
+	if code, out, errOut := runCLI(t, "snapshot", "--import", tgz); code != 0 || !strings.Contains(out, "Imported snapshot base") {
+		t.Fatalf("import: %d\n%s\n%s", code, out, errOut)
+	}
+	assertPrivate(t, filepath.Join(config.Dir, "snapshots"))
+	for _, args := range [][]string{{}, {"--against", tgz}, {"--against", runJSON}, {"--against", filepath.Dir(runJSON)}} {
+		code, out, errOut := runCLI(t, append([]string{"compare", "--url", echo.URL, "--plain", "--fail-on", "changed"}, args...)...)
+		if code != 0 || !strings.Contains(out, "Everything is still sent the same way") {
+			t.Errorf("compare %v: %d\n%s\n%s", args, code, out, errOut)
+		}
+	}
+	writeConfigAt(t, b, captureConfig(echo.URL, "Your order"))
+	if code, out, _ := runCLI(t, "compare", "--url", echo.URL, "--plain", "--against", runJSON); code != 0 || !strings.Contains(out, "subject changed") {
+		t.Errorf("compare --against run.json after a change: %d\n%s", code, out)
+	}
+
+	// Importing over a snapshot needs --force; --name renames.
+	if code, _, errOut := runCLI(t, "snapshot", "--import", tgz); code != exitUsage || !strings.Contains(errOut, "snapshot base already exists (--force replaces it") {
+		t.Errorf("import over base: %d %q", code, errOut)
+	}
+	if code, _, errOut := runCLI(t, "snapshot", "--import", tgz, "--name", "from-ci"); code != 0 {
+		t.Errorf("import --name: %d %q", code, errOut)
+	}
+	if r, err := store.LoadRun(filepath.Join(config.Dir, "snapshots", "from-ci")); err != nil || r.Name != "from-ci" {
+		t.Errorf("renamed import: %v %+v", err, r)
+	}
+	if code, _, _ := runCLI(t, "snapshot", "--import", tgz, "--force"); code != 0 {
+		t.Error("import --force")
+	}
+	for _, tc := range []struct {
+		args []string
+		want string
+	}{
+		{[]string{"snapshot", "--export", "x.tgz", "--import", tgz}, "pick --export or --import, not both"},
+		{[]string{"snapshot", "--export", "x.tgz", "--json"}, "take only --name"},
+		{[]string{"compare", "--against", runJSON, "--snapshot", "base"}, "pick --snapshot or --against, not both"},
+		{[]string{"compare", "--against", "missing.json"}, "--against missing.json:"},
+		{[]string{"snapshot", "--export", "x.tgz", "--name", "nope"}, `no snapshot named "nope"`},
+	} {
+		if code, _, errOut := runCLI(t, tc.args...); code != exitUsage || !strings.Contains(errOut, tc.want) {
+			t.Errorf("%v: %d %q; want 2 and %q", tc.args, code, errOut, tc.want)
+		}
+	}
+}
+
+// assertArchive checks the tgz holds the names, and only files that
+// are private to their owner.
+func assertArchive(t *testing.T, tgz string, names ...string) {
+	t.Helper()
+	f, err := os.Open(tgz)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	gz, err := gzip.NewReader(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tr := tar.NewReader(gz)
+	seen := map[string]bool{}
+	for {
+		h, err := tr.Next()
+		if err != nil {
+			break
+		}
+		seen[h.Name] = true
+		if h.Typeflag == tar.TypeReg && h.Mode != 0o600 {
+			t.Errorf("%s is %o in the archive, want 600", h.Name, h.Mode)
+		}
+	}
+	for _, n := range names {
+		if !seen[n] {
+			t.Errorf("the archive has no %s: %v", n, seen)
+		}
+	}
+}
+
+// evilArchive is a gzipped tar with one entry of the given header.
+func evilArchive(t *testing.T, h tar.Header, body string) string {
+	t.Helper()
+	var buf bytes.Buffer
+	gz := gzip.NewWriter(&buf)
+	tw := tar.NewWriter(gz)
+	run := `{"schema":"` + model.Schema + `","tool":"rhythm-echo","name":"base","actions":[]}`
+	_ = tw.WriteHeader(&tar.Header{Typeflag: tar.TypeReg, Name: "base/run.json", Mode: 0o600, Size: int64(len(run))})
+	_, _ = tw.Write([]byte(run))
+	if h.Typeflag == tar.TypeReg {
+		h.Size = int64(len(body))
+	}
+	if err := tw.WriteHeader(&h); err != nil {
+		t.Fatal(err)
+	}
+	_, _ = tw.Write([]byte(body))
+	_ = tw.Close()
+	_ = gz.Close()
+	p := filepath.Join(t.TempDir(), "evil.tgz")
+	if err := os.WriteFile(p, buf.Bytes(), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return p
+}
+
+func TestImportRefusesArchivesThatEscape(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("HOME", root)
+	work := filepath.Join(root, "work")
+	writeConfigAt(t, work, noopConfig)
+	t.Chdir(work)
+	for _, tc := range []struct {
+		h    tar.Header
+		want string
+	}{
+		{tar.Header{Typeflag: tar.TypeReg, Name: "../evil", Mode: 0o600}, "points outside the snapshot"},
+		{tar.Header{Typeflag: tar.TypeReg, Name: "base/../../evil", Mode: 0o600}, "points outside the snapshot"},
+		{tar.Header{Typeflag: tar.TypeReg, Name: "/tmp/evil", Mode: 0o600}, "points outside the snapshot"},
+		{tar.Header{Typeflag: tar.TypeSymlink, Name: "base/evil", Linkname: "/etc/passwd"}, "isn't a plain file"},
+		{tar.Header{Typeflag: tar.TypeLink, Name: "base/evil", Linkname: "base/run.json"}, "isn't a plain file"},
+		{tar.Header{Typeflag: tar.TypeReg, Name: "other/evil", Mode: 0o600}, "more than one snapshot"},
+		{tar.Header{Typeflag: tar.TypeReg, Name: "evil", Mode: 0o600}, "isn't in a snapshot folder"},
+	} {
+		tgz := evilArchive(t, tc.h, "pwned")
+		code, _, errOut := runCLI(t, "snapshot", "--import", tgz)
+		if code != exitUsage || !strings.Contains(errOut, "not a snapshot archive: ") || !strings.Contains(errOut, tc.want) {
+			t.Errorf("%s: %d %q; want 2 and %q", tc.h.Name, code, errOut, tc.want)
+		}
+		if code, _, errOut := runCLI(t, "compare", "--against", tgz); code != exitUsage || !strings.Contains(errOut, tc.want) {
+			t.Errorf("compare --against %s: %d %q", tc.h.Name, code, errOut)
+		}
+	}
+	for _, p := range []string{filepath.Join(root, "evil"), filepath.Join(work, "evil"), "/tmp/evil"} {
+		if _, err := os.Lstat(p); err == nil {
+			t.Errorf("%s was written", p)
+		}
+	}
+	if names, _ := os.ReadDir(filepath.Join(config.Dir, "snapshots")); len(names) > 0 {
+		t.Errorf("a refused import left %v behind", names)
+	}
+	notGz := filepath.Join(root, "plain.tgz")
+	_ = os.WriteFile(notGz, []byte("not gzip"), 0o600)
+	if code, _, errOut := runCLI(t, "snapshot", "--import", notGz); code != exitUsage || !strings.Contains(errOut, "not a snapshot archive") {
+		t.Errorf("import of a non-archive: %d %q", code, errOut)
 	}
 }

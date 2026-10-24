@@ -281,6 +281,9 @@ func defaultFailOn(compared bool) string {
 }
 
 func cmdSnapshot(s *session) int {
+	if s.o.export != "" || s.o.importFile != "" {
+		return s.moveSnapshot()
+	}
 	if len(s.args) > 0 {
 		return s.fail(usageErr("snapshot takes no arguments; actions come from %s", s.configName()))
 	}
@@ -330,6 +333,54 @@ func cmdSnapshot(s *session) int {
 	return s.finish(report.Result{Run: run, Dir: final}, "next: make your change, then run: rhythm echo compare")
 }
 
+// moveSnapshot is snapshot --export and --import: they move a snapshot
+// in or out of the store and run nothing, so they need no config.
+func (s *session) moveSnapshot() int {
+	o := s.o
+	switch {
+	case o.export != "" && o.importFile != "":
+		return s.fail(usageErr("pick --export or --import, not both"))
+	case len(s.args) > 0:
+		return s.fail(usageErr("snapshot takes no arguments; name the snapshot with --name"))
+	case len(o.actions) > 0 || o.failOn != "" || s.format != "" || o.open:
+		return s.fail(usageErr("--export and --import run no actions, so they take only --name, --force, --config and --store"))
+	}
+	archiveErr := func(err error) int {
+		if errors.Is(err, errArchive) {
+			err = cli.UsageError{Msg: fmt.Sprintf("%s: %v", o.importFile, err)}
+		}
+		return s.fail(err)
+	}
+	if o.importFile != "" {
+		name, err := importSnapshot(s.st, o.importFile, o.name, o.force)
+		if err != nil {
+			return archiveErr(err)
+		}
+		if !o.quiet {
+			fmt.Fprintf(s.stdout, "Imported snapshot %s from %s; compare uses it now.\n", name, o.importFile)
+		}
+		return exitOK
+	}
+	dir, err := s.st.Snapshot(o.name)
+	if err != nil {
+		return s.fail(cli.UsageError{Msg: err.Error()})
+	}
+	name := filepath.Base(dir)
+	write := func(w io.Writer) error { return exportSnapshot(w, dir, name) }
+	if o.export == "-" {
+		err = write(s.stdout)
+	} else {
+		err = writeFile(o.export, write)
+	}
+	if err != nil {
+		return s.fail(err)
+	}
+	if o.export != "-" && !o.quiet {
+		fmt.Fprintf(s.stdout, "Exported snapshot %s to %s. Elsewhere: rhythm echo compare --against %s\n", name, o.export, o.export)
+	}
+	return exitOK
+}
+
 func cmdCompare(s *session) int {
 	if len(s.args) > 0 {
 		return s.fail(usageErr("compare takes no arguments; pick a snapshot with --snapshot"))
@@ -340,15 +391,29 @@ func cmdCompare(s *session) int {
 	if err := s.needConfig(); err != nil {
 		return s.fail(err)
 	}
-	snapDir, err := s.st.Snapshot(s.o.snapshot)
-	if err != nil {
-		return s.fail(cli.UsageError{Msg: err.Error()})
+	if s.o.against != "" && s.o.snapshot != "" {
+		return s.fail(usageErr("pick --snapshot or --against, not both"))
+	}
+	var before *model.Run
+	snapDir := s.o.against
+	if snapDir != "" {
+		var err error
+		if before, err = loadBaseline(snapDir); err != nil {
+			if errors.Is(err, errArchive) {
+				err = cli.UsageError{Msg: fmt.Sprintf("--against %s: %v", snapDir, err)}
+			}
+			return s.fail(err)
+		}
+	} else {
+		var err error
+		if snapDir, err = s.st.Snapshot(s.o.snapshot); err != nil {
+			return s.fail(cli.UsageError{Msg: err.Error()})
+		}
+		if before, err = store.LoadRun(snapDir); err != nil {
+			return s.fail(err)
+		}
 	}
 	if err := s.selectActions(); err != nil {
-		return s.fail(err)
-	}
-	before, err := store.LoadRun(snapDir)
-	if err != nil {
 		return s.fail(err)
 	}
 	dir, err := s.st.NewDir("runs", store.Stamp(time.Now()))

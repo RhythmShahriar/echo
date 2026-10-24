@@ -223,6 +223,12 @@ Actions (snapshot, compare, run):
       --name <name>          snapshot: its name (default the date and time)
       --force                snapshot: save it even when every action failed
       --snapshot <name>      compare: which snapshot (default the latest)
+      --against <path>       compare: with this run instead (a run folder, its run.json or
+                             a .tgz from snapshot --export)
+      --export <file.tgz>    snapshot: write one (--name, default the latest) to a .tgz;
+                             - writes it to stdout
+      --import <file.tgz>    snapshot: add one from --export and make it the latest
+                             (--name renames it, --force replaces one of that name)
 
 Replay (inbound webhooks, sent only to staging and local addresses, with Echo sealed):
       --to <url>             where to send (absolute, or relative to site:)

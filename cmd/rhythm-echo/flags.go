@@ -34,7 +34,9 @@ type options struct {
 	storeDir               string // --store: where snapshots and runs go
 	name, snapshot         string
 	actions                cli.RepeatFlag
-	force                  bool // snapshot: save even when every action failed
+	force                  bool   // snapshot: save even when every action failed; with --import, replace
+	export, importFile     string // snapshot: write one to, or add one from, a .tgz
+	against                string // compare: a baseline from anywhere
 
 	seal, observe bool
 	listen, smtp  string
@@ -77,6 +79,9 @@ func flagSet(o *options) *flag.FlagSet {
 	fs.StringVar(&o.snapshot, "snapshot", "", "")
 	fs.Var(&o.actions, "action", "")
 	fs.BoolVar(&o.force, "force", false, "")
+	fs.StringVar(&o.export, "export", "", "")
+	fs.StringVar(&o.importFile, "import", "", "")
+	fs.StringVar(&o.against, "against", "", "")
 
 	fs.BoolVar(&o.seal, "seal", false, "")
 	fs.BoolVar(&o.observe, "observe", false, "")
@@ -377,6 +382,9 @@ var flagDocs = map[string]flagDoc{
 	"snapshot": {"--snapshot <name>", "which snapshot to compare with (default the latest)"},
 	"action":   {"--action <name>", "run only this action (repeatable)"},
 	"force":    {"--force", "save the snapshot even when every action failed"},
+	"export":   {"--export <file.tgz>", "write a snapshot (--name, default the latest) to a .tgz,\nto compare with elsewhere; - writes it to stdout"},
+	"import":   {"--import <file.tgz>", "add a snapshot from --export and make it the latest\n(--name renames it)"},
+	"against":  {"--against <path>", "compare with this run instead: a run folder, its run.json\nor a .tgz written by snapshot's export"},
 
 	"seal":    {"--seal", "nothing leaves; Echo answers for every service (default)"},
 	"observe": {"--observe", "record everything and send it for real"},
@@ -443,9 +451,12 @@ var commands = []cmdSpec{
 	{name: "show", use: "show <id>", about: "one message, as JSON", flags: echoFlags},
 	{name: "clear", use: "clear", about: "delete captured messages", flags: flags(echoFlags, messageFlags)},
 	{name: "snapshot", aliases: []string{"snap"}, use: "snapshot [--name N]", about: "run the actions in .echo/config.yaml and save what they sent",
-		flags: flags(echoFlags, []flagUse{{"store", ""}, {"action", ""}, {"name", ""}, {"force", ""}, {"fail-on", ""}}, reportFlags)},
+		flags: flags(echoFlags, []flagUse{{"store", ""}, {"action", ""}, {"name", ""},
+			{"force", "save the snapshot even when every action failed; with --import,\nreplace one of the same name"},
+			{"export", ""}, {"import", ""}, {"fail-on", ""}}, reportFlags)},
 	{name: "compare", aliases: []string{"cmp"}, use: "compare [--snapshot N]", about: "run the actions again and show what changed since a snapshot",
-		flags: flags(echoFlags, []flagUse{{"store", ""}, {"action", ""}, {"snapshot", ""}, {"fail-on", failOnChanges}}, reportFlags)},
+		flags: flags(echoFlags, []flagUse{{"store", ""}, {"action", ""}, {"snapshot", ""}, {"against", ""},
+			{"fail-on", failOnChanges}}, reportFlags)},
 	{name: "run", use: "run", about: "run the actions once, no comparison",
 		flags: flags(echoFlags, []flagUse{{"store", ""}, {"action", ""}, {"fail-on", ""}}, reportFlags)},
 	{name: "report", use: "report [run | snapshot]", about: "show the last result again (--open, -o)",
