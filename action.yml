@@ -298,6 +298,7 @@ runs:
         md="$RUNNER_TEMP/echo-summary.md"
         json="$RUNNER_TEMP/echo-report.json"
         errf="$RUNNER_TEMP/echo-error.txt"
+        outf="$RUNNER_TEMP/echo-output.txt"
         mkdir -p "$out"
         rm -f "$json"
         : > "$errf"
@@ -328,7 +329,7 @@ runs:
           else
             echo "::warning::No Echo to stop: run the Action with mode up first."
           fi
-          if ! rhythm-echo report --json -o "$json" -q 2>/dev/null; then
+          if ! rhythm-echo report --json -o "$json" -q >/dev/null 2>&1; then
             printf '## ♪ Echo\n\nEcho stopped. There was no run in %s to report.\n' "$PWD" > "$md"
             cat "$md" >> "$GITHUB_STEP_SUMMARY"
             { echo "exit-code=0"; echo "summary=$md"; } >> "$GITHUB_OUTPUT"
@@ -378,8 +379,13 @@ runs:
         esac
         [ "$MODE" = stop ] || cmd+=(${config[@]+"${config[@]}"})
         # stderr goes to a file for the summary, then to the step log.
-        "${cmd[@]}" ${fail[@]+"${fail[@]}"} ${extra[@]+"${extra[@]}"} --plain 2> "$errf"
+        # stdout names recipients, phone numbers and the text of messages,
+        # and anyone can read a public repository's step log, so it goes to
+        # the log only with summary-details: true; otherwise the masked
+        # summary is printed there below.
+        "${cmd[@]}" ${fail[@]+"${fail[@]}"} ${extra[@]+"${extra[@]}"} --plain > "$outf" 2> "$errf"
         code=$?
+        [ "$DETAILS" = true ] && cat "$outf"
         cat "$errf" >&2
         # Without --fail-on the CLI still exits 1 on a failed action or at
         # its default level. none never fails; Echo 1.0.0 refuses
@@ -391,7 +397,9 @@ runs:
         # The summary is masked unless summary-details: true. A copy stays
         # outside the uploaded folder for the summary output; so does the JSON
         # for the pull request comment.
-        rhythm-echo report ${which[@]+"${which[@]}"} --json -o "$json" -q || true
+        # The reports written to files below print the unmasked results on
+        # stdout too, which must stay out of the step log.
+        rhythm-echo report ${which[@]+"${which[@]}"} --json -o "$json" -q > /dev/null || true
         if [ "$DETAILS" = true ]; then
           rhythm-echo report ${which[@]+"${which[@]}"} --md > "$md" || true
         elif [ -s "$json" ]; then
@@ -399,12 +407,13 @@ runs:
         fi
         [ -s "$md" ] || printf '## ♪ Echo\n\nThe report could not be written; see the step log.\n' > "$md"
         cat "$md" >> "$GITHUB_STEP_SUMMARY"
+        [ "$DETAILS" = true ] || cat "$md"
         echo "summary=$md" >> "$GITHUB_OUTPUT"
         if [ "$UPLOAD" = true ] && [ "$PRIVATE" = false ]; then
           echo "::warning::upload is on in a public repository: anyone can download the echo-report artifact, with every captured recipient, subject and message. Turn upload off, or keep the repository private."
         fi
-        rhythm-echo report ${which[@]+"${which[@]}"} ${fail[@]+"${fail[@]}"} --junit -o "$out/echo-junit.xml" -q || true
-        rhythm-echo report ${which[@]+"${which[@]}"} --html -o "$out/echo-report.html" -q || true
+        rhythm-echo report ${which[@]+"${which[@]}"} ${fail[@]+"${fail[@]}"} --junit -o "$out/echo-junit.xml" -q > /dev/null || true
+        rhythm-echo report ${which[@]+"${which[@]}"} --html -o "$out/echo-report.html" -q > /dev/null || true
         echo "report=$out/echo-report.html" >> "$GITHUB_OUTPUT"
         exit 0
 

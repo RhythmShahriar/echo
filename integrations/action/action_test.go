@@ -172,6 +172,10 @@ func TestActionMonorepo(t *testing.T) {
 	}
 	contains(t, "compare summary", res.summary, "**Something broke.**", "| 1 | 1 | 0 | 0 |", "### ✗ BROKE (1)", "### ▲ NEW (1)")
 	lacks(t, "compare summary", res.summary, "customer@example.com", "Order W-1001 received", "New order W-1001")
+	// The step log is as public as the summary: the CLI's own output, which
+	// names recipients and texts, stays out of it.
+	lacks(t, "compare step log", res.log, "customer@example.com", "owner@shop.example", "Order W-1001 received", "New order W-1001")
+	contains(t, "compare step log", res.log, "**Something broke.**")
 	if got, _ := os.ReadFile(res.outputs["summary"]); string(got) != res.summary {
 		t.Errorf("the summary output differs from the job summary")
 	}
@@ -196,6 +200,7 @@ func TestActionMonorepo(t *testing.T) {
 		t.Fatalf("fail-on none failed: %+v\n%s", details.outputs, details.log)
 	}
 	contains(t, "detailed summary", details.summary, "New order W-1001")
+	contains(t, "detailed step log", details.log, "Order form: 1 email")
 	if !slices.Contains(details.ran, "Upload reports") {
 		t.Errorf("upload: true didn't upload: %q", details.ran)
 	}
