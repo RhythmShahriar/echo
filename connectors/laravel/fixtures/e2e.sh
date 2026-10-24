@@ -1,0 +1,170 @@
+#!/usr/bin/env bash
+# End-to-end test of the Laravel connector against Echo's real catcher.
+#
+# It runs the catcher on the host (GOWORK=off go run ./fixtures/catcher),
+# creates a stock Laravel app in fixtures/app the first time (composer
+# create-project in Docker) with this package from a path repository,
+# serves it in a php:8.3-cli container on the host network, hits one route
+# with an X-Echo-Run header, flushes the queue the way Echo does, and checks
+# what arrived.
+#
+#   connectors/laravel/fixtures/e2e.sh          # or: make -C connectors/laravel e2e
+#   E2E_FRESH=1 connectors/laravel/fixtures/e2e.sh   # recreate the app first
+#
+# Needs docker, go, curl and jq. Uses ports 18960-18962 on 127.0.0.1.
+set -euo pipefail
+
+here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+pkg=$(cd "$here/.." && pwd)
+root=$(cd "$pkg/../.." && pwd) # the Echo Go module
+app="$here/app"
+api_port=${E2E_API_PORT:-18960}
+smtp_port=${E2E_SMTP_PORT:-18961}
+app_port=${E2E_APP_PORT:-18962}
+api="http://127.0.0.1:$api_port"
+site="http://127.0.0.1:$app_port"
+name="rhythm-echo-laravel-e2e-$$"
+cache=${E2E_CACHE:-$here/.cache}
+php_image=php:8.3-cli
+export PATH="/usr/local/go/bin:$PATH"
+
+catcher_pid=""
+cleanup() {
+	docker rm -f "$name" >/dev/null 2>&1 || true
+	if [ -n "$catcher_pid" ]; then
+		kill "$catcher_pid" 2>/dev/null || true
+		wait "$catcher_pid" 2>/dev/null || true
+	fi
+}
+trap cleanup EXIT
+
+fail() {
+	echo "FAIL: $*" >&2
+	exit 1
+}
+
+# in_app runs a command in Docker inside fixtures/app, as the current user,
+# on the host network so the app reaches the catcher on 127.0.0.1.
+in_app() {
+	local image=$1
+	shift
+	docker run --rm -u "$(id -u):$(id -g)" --network host \
+		-e COMPOSER_HOME=/cache -e HOME=/tmp \
+		-e APP_ENV=staging -e APP_URL="$site" \
+		-e MAIL_MAILER=smtp -e MAIL_HOST=127.0.0.1 -e MAIL_PORT="$smtp_port" -e MAIL_SCHEME= \
+		-e QUEUE_CONNECTION=database \
+		-e RHYTHM_ECHO_URL="$api" \
+		-e RHYTHM_ECHO_RUN="${RHYTHM_ECHO_RUN:-}" -e RHYTHM_ECHO_ENABLED="${RHYTHM_ECHO_ENABLED:-}" \
+		-v "$cache":/cache -v "$pkg":/pkg -w /pkg/fixtures/app "$image" "$@"
+}
+
+composer() { in_app composer:2 composer "$@"; }
+artisan() { in_app "$php_image" php artisan "$@"; }
+
+# messages prints the catcher's messages for a run as JSON.
+messages() { curl -fsS "$api/v1/messages?run=$1"; }
+
+check() { # check <description> <jq filter that must be true> <json>
+	if [ "$(jq -r "$2" <<<"$3" 2>/dev/null)" != "true" ]; then
+		jq . <<<"$3" >&2 2>/dev/null || echo "$3" >&2
+		fail "$1"
+	fi
+	echo "ok: $1"
+}
+
+mkdir -p "$cache"
+
+# 1. The catcher.
+(cd "$root" && GOWORK=off go build -o "$cache/catcher" ./connectors/laravel/fixtures/catcher)
+if curl -fsS "$api/v1/health" >/dev/null 2>&1; then
+	fail "something already listens on $api; stop it or set E2E_API_PORT"
+fi
+"$cache/catcher" -http "127.0.0.1:$api_port" -smtp "127.0.0.1:$smtp_port" -mode seal &
+catcher_pid=$!
+for _ in $(seq 50); do
+	curl -fsS "$api/v1/health" >/dev/null 2>&1 && break
+	sleep 0.1
+done
+curl -fsS "$api/v1/health" >/dev/null || fail "the catcher did not start"
+
+# 2. The app, created once.
+if [ -n "${E2E_FRESH:-}" ]; then
+	rm -rf "$app"
+fi
+if [ ! -f "$app/artisan" ]; then
+	rm -rf "$app"
+	mkdir -p "$app"
+	composer create-project --no-install --no-scripts --prefer-dist laravel/laravel . >/dev/null
+	composer config platform.php 8.3.0
+	composer config repositories.echo '{"type": "path", "url": "../..", "options": {"symlink": true}}'
+	composer require --no-interaction --no-progress 'rhythm/echo-laravel:*@dev'
+	cp "$app/.env.example" "$app/.env"
+	artisan key:generate --force
+	touch "$app/database/database.sqlite"
+fi
+cp -R "$here/overlay/." "$app/"
+artisan migrate --force >/dev/null
+artisan optimize:clear >/dev/null
+artisan package:discover >/dev/null
+grep -q 'Rhythm\\\\Echo\\\\EchoServiceProvider' "$app/bootstrap/cache/packages.php" ||
+	fail "the service provider was not auto-discovered"
+echo "ok: the service provider is auto-discovered"
+
+# 3. Serve it.
+docker run -d --name "$name" -u "$(id -u):$(id -g)" --network host \
+	-e APP_ENV=staging -e APP_URL="$site" \
+	-e MAIL_MAILER=smtp -e MAIL_HOST=127.0.0.1 -e MAIL_PORT="$smtp_port" -e MAIL_SCHEME= \
+	-e QUEUE_CONNECTION=database -e RHYTHM_ECHO_URL="$api" \
+	-v "$pkg":/pkg -w /pkg/fixtures/app/public "$php_image" \
+	php -S "127.0.0.1:$app_port" ../vendor/laravel/framework/src/Illuminate/Foundation/resources/server.php >/dev/null
+for _ in $(seq 50); do
+	curl -fsS "$site/" >/dev/null 2>&1 && break
+	sleep 0.1
+done
+
+artisan echo:status
+echo "ok: echo:status"
+
+# 4. One action, tagged the way Soundcheck and `echo run` tag it.
+out=$(curl -fsS -H "X-Echo-Run: e2e1/checkout" "$site/echo-e2e") || {
+	docker logs "$name" >&2
+	fail "the route failed"
+}
+check "the Twilio call got Echo's fake 201" '.twilio == 201 and (.twilio_body.sid | startswith("SM"))' "$out"
+before=$(messages e2e1)
+check "the queued notification waits for the worker" '[.[] | select(.channel == "email")] | length == 1' "$before"
+
+# 5. Flush the queue as Echo does; the worker has no request, only the
+#    Context Laravel stored in the job.
+artisan queue:work --stop-when-empty >/dev/null
+
+got=$(messages e2e1)
+check "two emails from the connector" '[.[] | select(.channel == "email" and .source.via == "laravel")] | length == 2' "$got"
+check "the Mailable's subject" 'any(.[]; .subject == "Your order #1001 has shipped")' "$got"
+check "the queued notification's subject" 'any(.[]; .subject == "We received order #1001")' "$got"
+check "the mailer name is the plugin" 'all(.[] | select(.channel == "email"); .source.plugin == "smtp")' "$got"
+check "the Twilio SMS was recognised and faked" \
+	'any(.[]; .channel == "sms" and .provider == "twilio" and .status == "faked" and .source.via == "laravel")' "$got"
+check "the SMS recipient" 'any(.[] | select(.channel == "sms"); .to == ["+15555550100"])' "$got"
+check "every capture carries the action" 'length == 3 and all(.[]; .run == "e2e1" and .action == "checkout")' "$got"
+check "the Twilio auth header was masked" \
+	'all(.[] | select(.channel == "sms"); (.headers.authorization // "") | contains("fake-auth-token") | not)' "$got"
+all=$(curl -fsS "$api/v1/messages")
+check "nothing reached the SMTP sink (the connector sealed it)" 'all(.[]; .source.via != "smtp")' "$all"
+
+# 6. The doctor canary, run like Echo's action runner runs commands.
+RHYTHM_ECHO_RUN=e2e2/doctor artisan echo:canary
+canary=$(messages e2e2)
+check "echo:canary sent one mail and one HTTP call" \
+	'length == 2 and any(.[]; .to == ["canary@echo.invalid"]) and any(.[]; .url == "https://canary.echo.invalid/")' "$canary"
+check "the canary carries RHYTHM_ECHO_RUN" 'all(.[]; .action == "doctor")' "$canary"
+
+# 7. Control: with the connector off, the same mailer reaches the SMTP sink,
+#    so the "nothing reached the SMTP sink" check above means something.
+RHYTHM_ECHO_ENABLED=false artisan tinker --execute \
+	"Illuminate\\Support\\Facades\\Mail::raw('control', fn (\$m) => \$m->to('control@example.test')->subject('Echo off'));" >/dev/null
+all=$(curl -fsS "$api/v1/messages")
+check "control: with the connector off, mail goes out over SMTP" \
+	'any(.[]; .source.via == "smtp" and .subject == "Echo off")' "$all"
+
+echo "PASS: Laravel connector end to end ($(jq length <<<"$all") messages)"
