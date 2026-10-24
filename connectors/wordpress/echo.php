@@ -81,6 +81,9 @@ final class Rhythm_Echo {
 	const WIRE     = 2;
 	const WIRE_MIN = 1;
 
+	/** The longest run value taken, in bytes, signature included; the same in every connector. Longer is refused whole. */
+	const MAX_RUN = 512;
+
 	/** Bytes of request or response body reported to Echo. */
 	const MAX_BODY = 2097152;
 
@@ -402,7 +405,7 @@ final class Rhythm_Echo {
 
 	private static function clean_run( string $v ): string {
 		$v = trim( (string) preg_replace( '/[\x00-\x1f\x7f]/', '', $v ) );
-		return strlen( $v ) > 512 ? '' : $v;
+		return strlen( $v ) > self::MAX_RUN ? '' : $v;
 	}
 
 	/**
@@ -428,6 +431,10 @@ final class Rhythm_Echo {
 	 * value that does not count, logged once.
 	 */
 	public static function accept_run( string $value, string $remote, bool $forwarded ): string {
+		if ( strlen( $value ) > self::MAX_RUN ) {
+			self::run_ignored( 'long', 'ignored an X-Echo-Run longer than ' . self::MAX_RUN . ' bytes' );
+			return '';
+		}
 		$token                      = self::config()['token'];
 		list( $run, $action, $ok ) = self::verify_run( $token, $value );
 		if ( '' === $run ) {

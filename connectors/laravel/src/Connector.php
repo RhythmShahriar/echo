@@ -121,6 +121,11 @@ class Connector
      */
     public function acceptRun(string $value, string $remote, bool $forwarded): string
     {
+        if (strlen($value) > Wire::MAX_RUN) {
+            $this->runIgnored('long', 'ignored an X-Echo-Run longer than '.Wire::MAX_RUN.' bytes');
+
+            return '';
+        }
         $token = $this->runToken();
         [$run, $action, $ok] = Wire::verifyRun($token, $value);
         if ($run === '') {
@@ -194,7 +199,7 @@ class Connector
             return '';
         }
         $v = trim(rawurldecode($v));
-        if ($v === '' || strlen($v) > 256 || preg_match('/[\x00-\x1f\x7f]/', $v)) {
+        if ($v === '' || strlen($v) > Wire::MAX_RUN || preg_match('/[\x00-\x1f\x7f]/', $v)) {
             return '';
         }
 

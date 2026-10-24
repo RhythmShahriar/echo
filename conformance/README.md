@@ -38,7 +38,7 @@ Each `testdata/*.json` file other than `run-signature.json` is one vector:
 - `capture-*.json`: valid captures and the decision Echo's real catcher gives them (`decision` lists the fields that must match).
 - `broken-*.json`: captures the schema refuses, with the problems a validator must find.
 - `fail-*.json`: Echo gives no decision; `connector` says whether the connector must block or send.
-- `run-signature.json`: the `X-Echo-Run` signing vectors (`wire.SignRun`, `wire.VerifyRun`).
+- `run-signature.json`: the `X-Echo-Run` signing vectors (`wire.SignRun`, `wire.VerifyRun`) and which run a connector takes from a request. A run value longer than `max_run` (512 bytes, signature included) is ignored whole, never cut.
 
 The Go tests (`go test ./conformance/`) post every valid capture to Echo's real catcher and check the decision. The Node, Laravel and WordPress suites check their own captures against `schema.json` and run the `fail-*` vectors through their hooks.
 

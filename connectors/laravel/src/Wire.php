@@ -24,6 +24,13 @@ final class Wire
     /** Set by Echo's action runner on commands it runs: no request to read. */
     public const RUN_ENV = 'RHYTHM_ECHO_RUN';
 
+    /**
+     * The longest run value taken, in bytes, signature included; the same
+     * in every connector. A longer one is refused whole: cutting it would
+     * cut the signature too.
+     */
+    public const MAX_RUN = 512;
+
     public const BEFORE = 'before';
 
     public const AFTER = 'after';

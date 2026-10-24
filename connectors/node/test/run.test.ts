@@ -6,11 +6,12 @@ import { readFileSync } from 'node:fs';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { resolveConfig } from '../src/config.js';
-import { accept, contextFromHeaders, verifyRun } from '../src/run.js';
+import { accept, contextFromHeaders, MAX_RUN, verifyRun } from '../src/run.js';
 import { state } from '../src/state.js';
 import { silent } from './helpers.js';
 
 interface Vectors {
+  max_run: number;
   verify: { name: string; token: string; value: string; run: string; action: string; ok: boolean }[];
   accept: { name: string; token: string; value: string; remote: string; forwarded: boolean; run: string }[];
 }
@@ -52,6 +53,24 @@ describe('accept (shared vectors)', () => {
     expect(await accept({ value: v.value, remote: v.remote, forwarded: v.forwarded })).toBe(v.run || undefined);
   });
 
+  it('says when it has no Web Crypto rather than that the signature is wrong', async () => {
+    const lines: string[] = [];
+    withToken('secret', { info: () => {}, warn: (m: string) => void lines.push(m) });
+    const hmac = state().hmac;
+    const crypto = Object.getOwnPropertyDescriptor(globalThis, 'crypto');
+    state().hmac = undefined;
+    Object.defineProperty(globalThis, 'crypto', { value: undefined, configurable: true });
+    try {
+      expect(await accept({ value: vectors.verify[0]!.value, remote: '203.0.113.9', forwarded: false })).toBeUndefined();
+    } finally {
+      state().hmac = hmac;
+      if (crypto) Object.defineProperty(globalThis, 'crypto', crypto);
+    }
+    expect(lines).toEqual([
+      '[rhythm-echo] ignored a signed X-Echo-Run: this runtime has neither node:crypto nor Web Crypto (crypto.subtle) to check its signature',
+    ]);
+  });
+
   it('logs an ignored value once', async () => {
     const lines: string[] = [];
     withToken('secret', { info: () => {}, warn: (m: string) => void lines.push(m) });
@@ -68,5 +87,14 @@ describe('contextFromHeaders', () => {
       claim: { value: 'r/a', remote: undefined, forwarded: true },
     });
     expect(contextFromHeaders({})).toEqual({});
+  });
+
+  it('refuses a value over MAX_RUN bytes whole, never cutting it', () => {
+    expect(MAX_RUN).toBe(vectors.max_run);
+    const at = 'r1/' + 'a'.repeat(MAX_RUN - 3);
+    expect(contextFromHeaders({ 'x-echo-run': at }, '127.0.0.1')).toEqual({ claim: { value: at, remote: '127.0.0.1', forwarded: false } });
+    expect(contextFromHeaders({ 'x-echo-run': at + 'a' }, '127.0.0.1')).toEqual({});
+    // Bytes, not characters: two-byte letters reach the limit at half the length.
+    expect(contextFromHeaders({ 'x-echo-run': 'r1/' + 'é'.repeat(MAX_RUN / 2) }, '127.0.0.1')).toEqual({});
   });
 });

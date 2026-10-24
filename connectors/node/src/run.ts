@@ -46,7 +46,20 @@ function header(h: HeadersLike, name: string): string | undefined {
   return undefined;
 }
 
-/** clean keeps a run tag printable and short; it ends up in Echo's UI and file names. */
+/**
+ * MAX_RUN is the longest run value (X-Echo-Run, its cookie or
+ * RHYTHM_ECHO_RUN) a connector takes, in bytes, signature included. Every
+ * connector uses the same limit and refuses a longer value whole: cutting
+ * it would cut the signature too.
+ */
+export const MAX_RUN = 512;
+
+/** bytes is v's length in UTF-8, as Echo and the PHP connectors count it. */
+function bytes(v: string): number {
+  return new TextEncoder().encode(v).length;
+}
+
+/** clean keeps a run tag printable; it ends up in Echo's UI and file names. A value over MAX_RUN is refused. */
 function clean(v: string | undefined): string | undefined {
   if (!v) return undefined;
   let s = v.trim();
@@ -56,8 +69,8 @@ function clean(v: string | undefined): string | undefined {
     // keep it as sent
   }
   // eslint-disable-next-line no-control-regex
-  s = s.replace(/[\u0000-\u001f\u007f]/g, '').slice(0, 200);
-  return s || undefined;
+  s = s.replace(/[\u0000-\u001f\u007f]/g, '');
+  return s && bytes(s) <= MAX_RUN ? s : undefined;
 }
 
 function cookie(h: HeadersLike, name: string): string | undefined {
@@ -170,13 +183,23 @@ export async function verifyRun(token: string, value: string): Promise<{ run: st
   return want !== undefined && equal(sig, want) ? { run, action, ok: true } : none;
 }
 
+/** webCrypto is the runtime's crypto.subtle, if it has one. */
+function webCrypto(): SubtleCrypto | undefined {
+  return (globalThis as { crypto?: Crypto }).crypto?.subtle;
+}
+
+/** canVerify reports whether this runtime can check a signature: node:crypto or Web Crypto. */
+function canVerify(): boolean {
+  return state().hmac !== undefined || webCrypto() !== undefined;
+}
+
 async function runSig(token: string, v: string): Promise<string | undefined> {
   const s = state();
   let mac: Uint8Array;
   if (s.hmac) {
     mac = s.hmac(token, v);
   } else {
-    const subtle = (globalThis as { crypto?: Crypto }).crypto?.subtle;
+    const subtle = webCrypto();
     if (!subtle) return undefined;
     const enc = new TextEncoder();
     const key = await subtle.importKey('raw', enc.encode(token), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
@@ -219,6 +242,15 @@ function isLoopbackAddr(a: string | undefined): boolean {
  */
 export async function accept(c: RunClaim): Promise<string | undefined> {
   const token = state().cfg?.token ?? '';
+  if (bytes(c.value) > MAX_RUN) {
+    warnOnce('run-long', `ignored an X-Echo-Run longer than ${MAX_RUN} bytes`);
+    return undefined;
+  }
+  const dot = c.value.lastIndexOf('.');
+  if (token && dot >= 0 && sigShape.test(c.value.slice(dot + 1)) && !canVerify()) {
+    warnOnce('run-crypto', 'ignored a signed X-Echo-Run: this runtime has neither node:crypto nor Web Crypto (crypto.subtle) to check its signature');
+    return undefined;
+  }
   const { run, action, ok } = await verifyRun(token, c.value);
   if (run === '') {
     warnOnce('run-bad', `ignored an X-Echo-Run whose signature does not verify (${token ? 'not signed with this token' : 'RHYTHM_ECHO_TOKEN is not set here'})`);
