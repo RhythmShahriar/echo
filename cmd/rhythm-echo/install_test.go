@@ -124,3 +124,32 @@ func TestDoctorChecksEchoAndSMTP(t *testing.T) {
 		t.Errorf("doctor without Echo: %d\n%s", code, out)
 	}
 }
+
+func TestInstallGenericNamesAnOtherSink(t *testing.T) {
+	t.Chdir(t.TempDir())
+	if code, out, _ := runCLI(t, "install", "generic"); code != 0 || strings.Contains(out, "RHYTHM_ECHO_SMTP") {
+		t.Errorf("the default sink needs no variable: %d\n%s", code, out)
+	}
+	cfg := filepath.Join(t.TempDir(), "echo.yaml")
+	_ = os.WriteFile(cfg, []byte("smtp: 127.0.0.1:2525\n"), 0o600)
+	code, out, errOut := runCLI(t, "install", "generic", "--config", cfg)
+	if code != 0 {
+		t.Fatalf("%d %s", code, errOut)
+	}
+	for _, want := range []string{
+		`sendmail_path = "RHYTHM_ECHO_SMTP=127.0.0.1:2525 ` + binaryPath() + ` sendmail -t -i"`,
+		"Mail (scripts):   RHYTHM_ECHO_SMTP=127.0.0.1:2525",
+		"host 127.0.0.1, port 2525",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("missing %q:\n%s", want, out)
+		}
+	}
+	win := sendmailLines("127.0.0.1:2525", `C:\echo\rhythm-echo.exe`, "windows", false)
+	if strings.Contains(win, "RHYTHM_ECHO_SMTP=127.0.0.1:2525 C:") || !strings.Contains(win, "set RHYTHM_ECHO_SMTP=127.0.0.1:2525 in the environment") {
+		t.Errorf("windows has no sh -c, so no prefix:\n%s", win)
+	}
+	if remote := sendmailLines("10.0.0.5:1025", "/bin/rhythm-echo", "linux", true); !strings.Contains(remote, "set RHYTHM_ECHO_TOKEN") {
+		t.Errorf("a sink beyond loopback asks for the token:\n%s", remote)
+	}
+}

@@ -15,11 +15,13 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 
 	"github.com/RhythmShahriar/echo/config"
 	"github.com/RhythmShahriar/echo/connectors/wordpress"
 	"github.com/RhythmShahriar/echo/proxy"
+	"github.com/RhythmShahriar/echo/sendmail"
 	"github.com/RhythmShahriar/rhythm/kit/cli"
 )
 
@@ -136,8 +138,7 @@ Express/Fastify: app.use(echoMiddleware()) ties messages to the request that cau
 		fmt.Fprintf(stdout, `Any stack: point mail and outbound HTTPS at Echo.
 
   Mail (SMTP):      host %s, port %s, %s
-  Mail (PHP):       sendmail_path = "%s sendmail -t -i"   (php.ini or php-fpm pool)
-  HTTP(S):          rhythm echo up --proxy %s --mitm
+%s  HTTP(S):          rhythm echo up --proxy %s --mitm
                     HTTPS_PROXY=http://%s  https_proxy=http://%s
                     and trust Echo's CA: %s
                     (curl, PHP cURL, Python requests and Go honor these; Node needs
@@ -147,11 +148,36 @@ Express/Fastify: app.use(echoMiddleware()) ties messages to the request that cau
 
 For a seal that can't be bypassed, see docs/seal in the Echo repository: the app on an
 internal Docker network or behind a firewall, with Echo as its only way out.
-`, smtpHost, smtpPort, smtpLogin, binaryPath(), proxyAddr, proxyAddr, proxyAddr, caHint())
+`, smtpHost, smtpPort, smtpLogin, sendmailLines(smtpAddr, binaryPath(), runtime.GOOS, !loopback(smtpAddr)), proxyAddr, proxyAddr, proxyAddr, caHint())
 		return exitOK
 	}
 	fmt.Fprintf(stderr, "rhythm echo: install: unknown stack %q (wordpress, laravel, next, node, generic)\n", pos[0])
 	return exitUsage
+}
+
+// sendmailLines says how to point PHP's mail() at the shim. The shim
+// finds a sink on 127.0.0.1:1025 by itself, but php-fpm runs
+// sendmail_path with a bare environment, so any other address goes in
+// the command: PHP runs it through sh -c, which takes the VAR=value
+// prefix. Windows has no sh, so there the variable is set on its own.
+func sendmailLines(smtpAddr, bin, goos string, needsToken bool) string {
+	const pad = "                    "
+	var b strings.Builder
+	switch {
+	case smtpAddr == sendmail.DefaultSMTP:
+		fmt.Fprintf(&b, "  Mail (PHP):       sendmail_path = \"%s sendmail -t -i\"   (php.ini or php-fpm pool)\n", bin)
+	case goos == "windows":
+		fmt.Fprintf(&b, "  Mail (PHP):       sendmail_path = \"%s sendmail -t -i\"   (php.ini or php-fpm pool)\n", bin)
+		fmt.Fprintf(&b, "%sand set %s=%s in the environment PHP runs in\n", pad, sendmail.EnvSMTP, smtpAddr)
+	default:
+		fmt.Fprintf(&b, "  Mail (PHP):       sendmail_path = \"%s=%s %s sendmail -t -i\"\n", sendmail.EnvSMTP, smtpAddr, bin)
+		fmt.Fprintf(&b, "%s(php.ini or php-fpm pool; Echo's SMTP sink isn't on %s)\n", pad, sendmail.DefaultSMTP)
+		fmt.Fprintf(&b, "  Mail (scripts):   %s=%s in the environment of cron jobs and scripts\n", sendmail.EnvSMTP, smtpAddr)
+	}
+	if needsToken {
+		fmt.Fprintf(&b, "%sthe sink asks for Echo's token: set %s in the same environment\n", pad, sendmail.EnvToken)
+	}
+	return b.String()
 }
 
 func installWordPress(target string, s wordpress.Settings, wpcli bool, container string, uninstall bool, stdout, stderr io.Writer) int {
