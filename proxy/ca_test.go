@@ -140,6 +140,60 @@ func TestLoadCARotatesWithOverlap(t *testing.T) {
 	}
 }
 
+// TestLoadCAResumesAnInterruptedRotation: a rotation that stopped after
+// the new key was written, before ca.pem, is redone on the next load. A
+// mismatched key with nothing saved to fall back on is still an error.
+func TestLoadCAResumesAnInterruptedRotation(t *testing.T) {
+	dir := t.TempDir()
+	clock := time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
+	now := func() time.Time { return clock }
+	first, err := loadCA(dir, "", now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	clock = first.Cert.NotAfter.Add(-20 * 24 * time.Hour)
+	// What loadCA leaves when it stops just before rewriting ca.pem.
+	if err := writeKey(filepath.Join(dir, caPrevKeyFile), first.Key); err != nil {
+		t.Fatal(err)
+	}
+	if err := writeAtomic(filepath.Join(dir, caPrevCertFile), certPEM(first.Cert), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	half, err := newCA(clock)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := writeKey(filepath.Join(dir, caKeyFile), half.Key); err != nil {
+		t.Fatal(err)
+	}
+
+	rot, err := loadCA(dir, "", now)
+	if err != nil {
+		t.Fatalf("interrupted rotation: %v", err)
+	}
+	if rot.Cert.Equal(first.Cert) || !rot.prev.Equal(first.Cert) || len(rot.Notices) != 1 {
+		t.Fatalf("not rotated again: notices %q", rot.Notices)
+	}
+	if certs := parseCerts(rot.PEM); len(certs) != 2 || !certs[0].Equal(rot.Cert) {
+		t.Error("ca.pem does not hold the new CA first")
+	}
+	if again, err := loadCA(dir, "", now); err != nil || !again.Cert.Equal(rot.Cert) {
+		t.Errorf("reload: %v", err)
+	}
+
+	// Negative: a stray key with no saved pair is not guessed around.
+	other := t.TempDir()
+	if _, err := loadCA(other, "", now); err != nil {
+		t.Fatal(err)
+	}
+	if err := writeKey(filepath.Join(other, caKeyFile), half.Key); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := loadCA(other, "", now); err == nil || !strings.Contains(err.Error(), "delete the directory") {
+		t.Errorf("mismatched key: %v", err)
+	}
+}
+
 // legacyCA writes a ten-year CA the way earlier versions did, with a
 // key that is wrongly world-readable.
 func legacyCA(t *testing.T, dir string) *x509.Certificate {

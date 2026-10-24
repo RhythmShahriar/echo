@@ -143,6 +143,11 @@ func loadCA(dir, legacy string, now func() time.Time) (*CA, error) {
 	certPath, keyPath := filepath.Join(dir, caCertFile), filepath.Join(dir, caKeyFile)
 	ca, err := readCA(certPath, keyPath)
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		if old := interruptedRotation(dir, certPath); old != nil {
+			ca, err = old, nil // rotate again, below
+		}
+	}
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return nil, fmt.Errorf("reading Echo's CA in %s: %w (delete the directory to make a new one)", dir, err)
 	}
 	if err := os.MkdirAll(dir, 0o700); err != nil {
@@ -163,8 +168,10 @@ func loadCA(dir, legacy string, now func() time.Time) (*CA, error) {
 			return nil, err
 		}
 		ca.prev, ca.prevKey = old.Cert, old.Key
-		// The old CA goes first: if Echo stops halfway, ca.pem and its
-		// key still match and the next start rotates again.
+		// The old CA is saved first. ca.pem gets the new certificate only
+		// at the end, after its key, so a stop in between leaves the old
+		// ca.pem next to the new key: interruptedRotation spots that on
+		// the next start, which then rotates again from the saved pair.
 		if err := writeKey(filepath.Join(dir, caPrevKeyFile), old.Key); err != nil {
 			return nil, err
 		}
@@ -219,6 +226,31 @@ func (ca *CA) signer(t time.Time) (*x509.Certificate, *ecdsa.PrivateKey) {
 		return ca.prev, ca.prevKey
 	}
 	return ca.Cert, ca.Key
+}
+
+// interruptedRotation returns the saved previous CA when ca.pem still
+// holds it (only as its current certificate) but ca-key.pem doesn't
+// match: a rotation that stopped after the new key was written and
+// before ca.pem was. It returns nil for any other broken state.
+func interruptedRotation(dir, certPath string) *CA {
+	prev, err := readCA(filepath.Join(dir, caPrevCertFile), filepath.Join(dir, caPrevKeyFile))
+	if err != nil {
+		return nil
+	}
+	on, err := os.ReadFile(certPath) //nolint:gosec // our own config directory
+	if err != nil {
+		return nil
+	}
+	b, _ := pem.Decode(on)
+	if b == nil {
+		return nil
+	}
+	cur, err := x509.ParseCertificate(b.Bytes)
+	if err != nil || !cur.Equal(prev.Cert) {
+		return nil
+	}
+	prev.CertPath = certPath
+	return prev
 }
 
 // readPrev loads the previous CA kept for overlap, or nothing when it is
