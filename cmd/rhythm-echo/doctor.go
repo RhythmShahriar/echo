@@ -15,6 +15,7 @@ import (
 
 	"github.com/RhythmShahriar/echo/client"
 	"github.com/RhythmShahriar/echo/connectors/wordpress"
+	"github.com/RhythmShahriar/echo/sendmail"
 	"github.com/RhythmShahriar/echo/wire"
 )
 
@@ -40,7 +41,11 @@ func cmdDoctor(s *session) int {
 	if s.cfg.SMTP != "" && s.cfg.SMTP != "off" {
 		action := "smtp"
 		msg := "From: doctor@echo.invalid\r\nTo: canary@echo.invalid\r\nSubject: Echo doctor\r\n" + wire.RunHeader + ": " + run + "/" + action + "\r\n\r\ncanary\r\n"
-		if err := smtp.SendMail(s.cfg.SMTP, nil, "doctor@echo.invalid", []string{"canary@echo.invalid"}, []byte(msg)); err != nil {
+		var auth smtp.Auth
+		if s.echo.Token != "" {
+			auth = sendmail.TokenAuth(s.echo.Token)
+		}
+		if err := smtp.SendMail(s.cfg.SMTP, auth, "doctor@echo.invalid", []string{"canary@echo.invalid"}, []byte(msg)); err != nil {
 			fail("SMTP", fmt.Sprintf("%s: %v (is Echo running with this config?)", s.cfg.SMTP, err))
 		} else if got := s.wait(run, action, 1); got >= 1 {
 			pass("SMTP", s.cfg.SMTP+" receives mail")

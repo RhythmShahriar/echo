@@ -5,7 +5,7 @@
 // their mail without touching the app.
 //
 // Delivery goes to Echo's SMTP sink (RHYTHM_ECHO_SMTP, default
-// 127.0.0.1:1025), or to the capture API when only RHYTHM_ECHO_URL is set.
+// 127.0.0.1:1025, logging in with RHYTHM_ECHO_TOKEN when it's set), or to the capture API when only RHYTHM_ECHO_URL is set.
 // Nothing is ever delivered for real. A message without its own X-Echo-Run
 // header is tagged with RHYTHM_ECHO_RUN, which Echo sets on the commands
 // its actions run, so cron jobs and scripts are tied to their action.
@@ -97,7 +97,7 @@ func Main(args []string, stdin io.Reader, stderr io.Writer) int {
 		if smtpAddr == "" {
 			smtpAddr = DefaultSMTP
 		}
-		err = viaSMTP(smtpAddr, msg, from, rcpts)
+		err = viaSMTP(smtpAddr, os.Getenv(EnvToken), msg, from, rcpts)
 	}
 	if err != nil {
 		fmt.Fprintf(stderr, "rhythm-echo sendmail: %v\n", err)
@@ -335,7 +335,23 @@ func localUser() string {
 
 var errUnreachable = errors.New("can't reach Echo")
 
-func viaSMTP(addr string, msg []byte, from string, rcpts []string) error {
+// TokenAuth is SMTP AUTH PLAIN with Echo's token as the password, which
+// the sink asks for when it listens beyond loopback. Unlike net/smtp's
+// PlainAuth it also works without TLS: the sink is the operator's own Echo.
+type TokenAuth string
+
+func (t TokenAuth) Start(*smtp.ServerInfo) (string, []byte, error) {
+	return "PLAIN", []byte("\x00echo\x00" + string(t)), nil
+}
+
+func (TokenAuth) Next(_ []byte, more bool) ([]byte, error) {
+	if more {
+		return nil, errors.New("unexpected SMTP AUTH challenge")
+	}
+	return nil, nil
+}
+
+func viaSMTP(addr, token string, msg []byte, from string, rcpts []string) error {
 	conn, err := net.DialTimeout("tcp", addr, 10*time.Second) //nolint:gosec // the address is the operator's own Echo
 	if err != nil {
 		return fmt.Errorf("%w at %s (is `rhythm echo up` running? set %s): %w", errUnreachable, addr, EnvSMTP, err)
@@ -350,6 +366,11 @@ func viaSMTP(addr string, msg []byte, from string, rcpts []string) error {
 	defer func() { _ = c.Close() }()
 	if err := c.Hello("localhost"); err != nil {
 		return err
+	}
+	if ok, _ := c.Extension("AUTH"); ok && token != "" {
+		if err := c.Auth(TokenAuth(token)); err != nil {
+			return fmt.Errorf("logging in with %s: %w", EnvToken, err)
+		}
 	}
 	if err := c.Mail(from); err != nil {
 		return err

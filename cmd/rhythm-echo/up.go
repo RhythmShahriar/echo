@@ -23,6 +23,13 @@ func cmdUp(s *session) int {
 	if !loopback(cfg.Listen) && token == "" {
 		return s.fail(usageErr("--listen %s is reachable from other machines; set --token (or RHYTHM_ECHO_TOKEN) so only your connectors can post", cfg.Listen))
 	}
+	smtpOn := cfg.SMTP != "" && cfg.SMTP != "off"
+	if smtpOn && !loopback(cfg.SMTP) && token == "" {
+		return s.fail(usageErr("--smtp %s is reachable from other machines; set --token (or RHYTHM_ECHO_TOKEN): the sink then asks for it as the SMTP password", cfg.SMTP))
+	}
+	if cfg.Proxy != "" && cfg.Proxy != "off" && !loopback(cfg.Proxy) && token == "" {
+		return s.fail(usageErr("--proxy %s is reachable from other machines; set --token (or RHYTHM_ECHO_TOKEN) so it isn't an open relay", cfg.Proxy))
+	}
 	inbox := catcher.NewInbox(10000)
 	srv := catcher.NewServer(inbox, catcher.Config{Mode: cfg.Mode, Allow: cfg.Allow, Token: token, Version: version})
 	inbox.OnAdd(s.view.Message)
@@ -42,15 +49,20 @@ func cmdUp(s *session) int {
 	s.view.Step("Mode", modeLine(cfg.Mode))
 	s.view.Step("API", "http://"+cfg.Listen+"  (connectors post here; open it for the live view)")
 	stopSMTP := func() {}
-	if cfg.SMTP != "" && cfg.SMTP != "off" {
+	if smtpOn {
 		sl, err := net.Listen("tcp", cfg.SMTP)
 		if err != nil {
 			return s.fail(fmt.Errorf("SMTP on %s: %w", cfg.SMTP, err))
 		}
 		sink := catcher.NewSMTP(srv, cfg.SMTP)
+		line := cfg.SMTP + "  (point a mailer or sendmail_path here)"
+		if !loopback(cfg.SMTP) {
+			sink.Backend = tokenBackend{inner: sink.Backend, token: token}
+			line = cfg.SMTP + "  (log in with any username and the token as the password)"
+		}
 		go func() { errs <- sink.Serve(sl) }()
 		stopSMTP = func() { _ = sink.Close() }
-		s.view.Step("SMTP", cfg.SMTP+"  (point a mailer or sendmail_path here)")
+		s.view.Step("SMTP", line)
 	}
 	stopProxy, err := startProxy(s, srv)
 	if err != nil {

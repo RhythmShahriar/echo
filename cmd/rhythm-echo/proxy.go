@@ -20,9 +20,6 @@ func startProxy(s *session, srv *catcher.Server) (func(), error) {
 	if cfg.Proxy == "" || cfg.Proxy == "off" {
 		return func() {}, nil
 	}
-	if !loopback(cfg.Proxy) && s.echo.Token == "" {
-		return nil, usageErr("--proxy %s is reachable from other machines; set --token so it isn't an open relay", cfg.Proxy)
-	}
 	var ca *proxy.CA
 	if cfg.MITM {
 		var err error

@@ -50,6 +50,8 @@ func TestUsageErrors(t *testing.T) {
 	}{
 		{[]string{"up", "--seal", "--observe"}, "not both"},
 		{[]string{"up", "--listen", "0.0.0.0:18999"}, "--token"},
+		{[]string{"up", "--listen", "127.0.0.1:0", "--smtp", "0.0.0.0:18998"}, "--smtp 0.0.0.0:18998"},
+		{[]string{"up", "--listen", "127.0.0.1:0", "--smtp", "off", "--proxy", "0.0.0.0:18997"}, "open relay"},
 		{[]string{"snapshot", "extra"}, "no arguments"},
 		{[]string{"snapshot", "--json", "--md"}, "one output format"},
 		{[]string{"snapshot", "--name", "../x"}, "--name"},
