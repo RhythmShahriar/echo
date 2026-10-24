@@ -1,0 +1,37 @@
+{
+  "name": "a sealed Twilio call is faked",
+  "about": "Echo answers with Twilio's own response shape; the connector hands it to the app and sends nothing.",
+  "valid": true,
+  "mode": "seal",
+  "echo": "up",
+  "capture": {
+    "v": 2,
+    "kind": "http",
+    "phase": "before",
+    "run": "r1/checkout",
+    "source": {
+      "via": "node",
+      "stack": "node",
+      "plugin": "twilio",
+      "hook": "fetch",
+      "host": "shop.test"
+    },
+    "http": {
+      "method": "POST",
+      "url": "https://api.twilio.com/2010-04-01/Accounts/AC0000/Messages.json",
+      "headers": {
+        "authorization": "Basic •••••",
+        "content-type": "application/x-www-form-urlencoded"
+      },
+      "body": "To=%2B15551230000&From=%2B15550000000&Body=Your+order+has+shipped"
+    }
+  },
+  "decision": {
+    "mode": "seal",
+    "action": "fake",
+    "response": {
+      "status": 201
+    }
+  },
+  "connector": "fake"
+}

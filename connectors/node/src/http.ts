@@ -22,10 +22,10 @@ import { syncBuiltinESMExports } from 'node:module';
 import { Duplex } from 'node:stream';
 import zlib from 'node:zlib';
 
-import { guessPackage, maskHeaders, skipHost } from './capture.js';
+import { guessPackage, maskHeaders, siteHost, skipHost } from './capture.js';
 import { errText, send, sealed, sendLater } from './client.js';
 import { currentContext } from './run.js';
-import { als, state } from './state.js';
+import { state } from './state.js';
 import type { Capture, Decision } from './wire.js';
 
 type Mod = typeof http | typeof https;
@@ -108,7 +108,7 @@ function planFor(args: unknown[], mod: Mod, protocol: string): Plan | null {
   if (proto !== protocol) return null; // Node will throw ERR_INVALID_PROTOCOL itself
   const hostname = opts.hostname ?? (opts.host ? opts.host.replace(/:\d+$/, '') : undefined) ?? url?.hostname ?? 'localhost';
   const port = String(opts.port ?? url?.port ?? '');
-  if (skipHost(hostname, port, cfg, als()?.getStore() ?? {})) return null;
+  if (skipHost(hostname, port, cfg)) return null;
 
   let real = opts.agent as (Agent & { [REAL]?: Agent }) | false | undefined;
   if (real === false) {
@@ -181,12 +181,12 @@ function hold(req: http.ClientRequest, plan: Plan, protocol: string, hook: strin
       const ctx = await currentContext();
       const hostHeader = String(req.getHeader('host') ?? req.host);
       const target = new URL(`${protocol}//${hostHeader}`);
-      if (skipHost(target.hostname, target.port, cfg, ctx)) return plan.real.addRequest(req, opts);
+      if (skipHost(target.hostname, target.port, cfg)) return plan.real.addRequest(req, opts);
       summary = { method: req.method, url: `${protocol}//${hostHeader}${req.path}` };
       base = {
         kind: 'http',
         run: ctx.run,
-        source: { via: 'node', stack: 'node', hook, plugin: plugin || undefined, host: ctx.host },
+        source: { via: 'node', stack: 'node', hook, plugin: plugin || undefined, host: siteHost(target.hostname, target.port, cfg), site: cfg.siteId || undefined },
       };
       d = await send({
         ...base,

@@ -54,7 +54,7 @@ class NotificationTest extends TestCase
         $c = $this->captures('http');
         $this->assertCount(1, $c);
         $this->assertSame('https://slack.com/api/chat.postMessage', $c[0]['http']['url']);
-        $this->assertSame('•••••', $c[0]['http']['headers']['Authorization']);
+        $this->assertSame('Bearer •••••', $c[0]['http']['headers']['Authorization']);
         $this->assertSame('http', $c[0]['source']['hook']);
     }
 

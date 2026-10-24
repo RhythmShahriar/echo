@@ -28,7 +28,7 @@ class MailTest extends TestCase
         $c = $this->captures('email');
         $this->assertCount(1, $c);
         $e = $c[0]['email'];
-        $this->assertSame(1, $c[0]['v']);
+        $this->assertSame(2, $c[0]['v']);
         $this->assertSame('"Site" <shop@site.test>', $e['from']);
         $this->assertSame(['"Ada" <ada@example.test>'], $e['to']);
         $this->assertSame(['ops@site.test'], $e['cc']);

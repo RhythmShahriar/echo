@@ -2,9 +2,11 @@
 # Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
 # SPDX-License-Identifier: MIT
 
-# End-to-end test of the Laravel connector against Echo's real catcher.
+# End-to-end test of the Laravel connector against Echo's conformance
+# stand-in: Echo's real catcher behind a check of every capture against the
+# wire schema.
 #
-# It runs the catcher on the host (GOWORK=off go run ./fixtures/catcher),
+# It runs the stand-in on the host (go build ./conformance/cmd/conformance),
 # creates a stock Laravel app in fixtures/app the first time (composer
 # create-project in Docker) with this package from a path repository,
 # serves it in a php:8.3-cli container on the host network, hits one route
@@ -71,13 +73,14 @@ artisan() { in_app "$php_image" php artisan "$@"; }
 # messages prints the catcher's messages for a run as JSON.
 messages() { curl -fsS "$api/v1/messages?run=$1"; }
 
-# start_catcher <api port> <smtp port> <mode> starts a catcher and waits.
+# start_catcher <api port> <smtp port> <mode> <scenarios> starts a stand-in
+# Echo that expects those scenarios, then waits.
 start_catcher() {
 	local url="http://127.0.0.1:$1"
 	if curl -fsS "$url/v1/health" >/dev/null 2>&1; then
 		fail "something already listens on $url; stop it or pick other E2E_*_PORT values"
 	fi
-	"$cache/catcher" -http "127.0.0.1:$1" -smtp "127.0.0.1:$2" -mode "$3" &
+	"$cache/conformance" --listen "127.0.0.1:$1" --smtp "127.0.0.1:$2" --mode "$3" --expect "$4" &
 	pids+=("$!")
 	for _ in $(seq 50); do
 		curl -fsS "$url/v1/health" >/dev/null 2>&1 && return
@@ -102,10 +105,10 @@ check() { # check <description> <jq filter that must be true> <json>
 
 mkdir -p "$cache"
 
-# 1. The catcher.
-(cd "$root" && GOWORK=off go build -o "$cache/catcher" ./connectors/laravel/fixtures/catcher)
-start_catcher "$api_port" "$smtp_port" seal
-start_catcher "$obs_api_port" "$obs_smtp_port" observe
+# 1. The stand-in Echo, sealed and observing.
+(cd "$root" && GOWORK=off go build -o "$cache/conformance" ./conformance/cmd/conformance)
+start_catcher "$api_port" "$smtp_port" seal email,http-before,run,wire-2
+start_catcher "$obs_api_port" "$obs_smtp_port" observe email,email-after
 
 # 2. The app, created once.
 if [ -n "${E2E_FRESH:-}" ]; then
@@ -202,5 +205,12 @@ obs=$(curl -fsS "$obs_api/v1/messages")
 check "observe: the failed mail is marked failed, with the transport's error" \
 	'any(.[]; .subject == "Observed fail" and .status == "failed" and (.error | contains("'"$closed_port"'")))' "$obs"
 check "observe: one message per mail, not a duplicate" '[.[] | select(.subject == "Observed fail")] | length == 1' "$obs"
+
+# 9. Every capture followed the wire protocol.
+for u in "$api" "$obs_api"; do
+	report=$(curl -fsS "$u/v1/conformance")
+	check "conformance at $u" '.ok' "$report"
+	jq -r '.rows[] | "  \(.check)  \(.result | ascii_upcase)  \(.detail)"' <<<"$report"
+done
 
 echo "PASS: Laravel connector end to end ($(jq length <<<"$all") sealed, $(jq length <<<"$obs") observed messages)"

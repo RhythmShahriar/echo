@@ -11,7 +11,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { flush, register, withEchoRun } from '../src/index.js';
 import { state } from '../src/state.js';
-import { afters, befores, fakeEcho, silent, target, type FakeEcho, type Target } from './helpers.js';
+import { afters, befores, fakeEcho, loopback, silent, target, type FakeEcho, type Target } from './helpers.js';
 
 let echo: FakeEcho;
 let api: Target;
@@ -109,7 +109,7 @@ describe('http.request, sealed', () => {
   });
 
   it('carries the run', async () => {
-    await withEchoRun({ headers: { 'x-echo-run': 'r9/order' } }, () => call(http, `${api.url}/run`));
+    await withEchoRun({ headers: { 'x-echo-run': 'r9/order' }, socket: loopback }, () => call(http, `${api.url}/run`));
     const [c] = await echo.waitFor(befores);
     expect(c!.run).toBe('r9/order');
   });

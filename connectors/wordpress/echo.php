@@ -20,17 +20,20 @@
  *   SMTP): a sealed site must not hand mail to a real mailer. Observed mail
  *   is sent the way core sends it, with core's filters and actions. If
  *   something defined wp_mail() first, Echo falls back to pre_wp_mail and
- *   phpmailer_init and says so in its warnings.
+ *   phpmailer_init and says so in its warnings. Attachments are described
+ *   (name, type, size, SHA-256), never sent.
  * - HTTP: pre_http_request sees every wp_remote_*() call (API mailers, SMS
  *   plugins, WooCommerce webhooks, Slack, GA4, Meta CAPI) before it is sent;
  *   Echo answers allow, fake or block. Allowed requests are reported again
  *   from http_api_debug with their response. The site's own host is never
  *   reported (cron and Action Scheduler loopbacks).
  * - Runs: the X-Echo-Run header or cookie of the request that caused a send
- *   ties it to an action, then RHYTHM_ECHO_RUN in the environment (WP-CLI,
- *   cron and queue flushes Echo runs), then a run stored with the scheduled
- *   cron event or Action Scheduler action when it was queued. Anything else
- *   falls in Echo's open action window.
+ *   ties it to an action, then a run stored with the scheduled cron event or
+ *   Action Scheduler action when it was queued, then RHYTHM_ECHO_RUN in the
+ *   environment (WP-CLI, cron and queue flushes Echo runs). A request's
+ *   value counts only when signed with the token (Echo signs it when a token
+ *   is set) or, with no token, when it came straight from loopback with no
+ *   forwarding headers. Anything else falls in Echo's open action window.
  * - Fail closed: if Echo can't be reached while sealed, nothing is sent and
  *   the reason goes to the PHP error log.
  * - Production: on a production site (wp_get_environment_type(), which is
@@ -41,11 +44,23 @@
  *   request (SDKs that skip the HTTP API) goes through Echo's proxy, and
  *   RHYTHM_ECHO_CA (Echo's CA PEM) is added to the HTTP API's CA bundle.
  *
+ * - Streamed downloads (stream => true: plugin and theme updates,
+ *   download_url()) are never faked: a fake would be saved as the file.
+ *   When Echo would fake one, the request fails with "sealed by Echo".
+ * - Token: sent as plain HTTP to Echo. Beyond loopback or a private
+ *   network, put TLS in front of Echo: anyone on the path can read the
+ *   token and answer for Echo.
+ * - Hub: RHYTHM_ECHO_SITE_ID names this site in every capture
+ *   (source.site) when one Echo serves many. RHYTHM_ECHO_WRITE_TOKEN is a
+ *   token that can only send captures. It is sent instead of
+ *   RHYTHM_ECHO_TOKEN; without one it also checks X-Echo-Run.
+ *
  * Settings, first found wins: define() constants RHYTHM_ECHO_URL,
- * RHYTHM_ECHO_TOKEN, RHYTHM_ECHO_MODE, RHYTHM_ECHO_FORCE, RHYTHM_ECHO_PROXY,
- * RHYTHM_ECHO_CA; the same names in
- * the environment; mu-plugins/rhythm-echo/settings.php (written by the
- * installer, returns an array).
+ * RHYTHM_ECHO_TOKEN, RHYTHM_ECHO_WRITE_TOKEN, RHYTHM_ECHO_SITE_ID,
+ * RHYTHM_ECHO_MODE, RHYTHM_ECHO_FORCE, RHYTHM_ECHO_PROXY, RHYTHM_ECHO_CA;
+ * the same names in the environment; mu-plugins/rhythm-echo/settings.php
+ * (written by the installer, returns an array); inside Echo Staging Seal,
+ * what its settings screen saved.
  *
  * PHP 7.4 or later, WordPress 5.7 or later.
  */
@@ -61,16 +76,22 @@ if ( ! defined( 'ABSPATH' ) ) {
 final class Rhythm_Echo {
 
 	const VERSION = '1.0.0';
-	const WIRE    = 1;
+
+	/** The wire version captures are sent in; WIRE_MIN to an Echo that speaks only that. */
+	const WIRE     = 2;
+	const WIRE_MIN = 1;
 
 	/** Bytes of request or response body reported to Echo. */
 	const MAX_BODY = 2097152;
+
+	/** Header names whose whole value is a credential, as Echo's catcher has it. */
+	const SECRET_HEADER = '/token|secret|key|auth|signature|session|password|cookie|credential/i';
 
 	/** The canary address and URL `rhythm echo doctor` expects to see caught. */
 	const CANARY_EMAIL = 'canary@echo.invalid';
 	const CANARY_URL   = 'https://canary.echo.invalid/';
 
-	/** @var array{url: string, token: string, mode: string, force: bool, proxy: string, ca: string}|null */
+	/** @var array{url: string, token: string, send_token: string, site_id: string, mode: string, force: bool, proxy: string, ca: string}|null */
 	private static $config = null;
 
 	/** @var bool */
@@ -91,11 +112,20 @@ final class Rhythm_Echo {
 	/** @var string|null the run stored with the cron event or queued action running now */
 	private static $context_run = null;
 
+	/** @var string|null this request's accepted X-Echo-Run, once checked */
+	private static $request_run = null;
+
+	/** @var array<string, bool> reasons an ignored X-Echo-Run was logged for in this request */
+	private static $run_logged = array();
+
 	/** @var array<string, string> request key → capture ID, for the after phase */
 	private static $pending = array();
 
 	/** @var int a counter making request keys unique */
 	private static $seq = 0;
+
+	/** @var int|null the wire version Echo speaks, once it refused a newer one */
+	private static $wire = null;
 
 	/** @var bool fallback layer: pre_wp_mail already reported the mail now being sent */
 	private static $mail_reported = false;
@@ -105,13 +135,14 @@ final class Rhythm_Echo {
 	 */
 	public static function boot(): void {
 		$cfg = self::config();
-		add_action( 'rest_api_init', array( __CLASS__, 'routes' ) );
 		if ( 'production' === self::environment() && ! $cfg['force'] ) {
 			self::$reason = 'production';
 			add_action( 'admin_notices', array( __CLASS__, 'production_notice' ) );
 			return;
 		}
 		self::$active = true;
+		// Only an active connector has routes: on production they don't exist.
+		add_action( 'rest_api_init', array( __CLASS__, 'routes' ) );
 
 		add_filter( 'http_request_args', array( __CLASS__, 'http_request_args' ), PHP_INT_MAX, 2 );
 		if ( '' !== $cfg['proxy'] ) {
@@ -165,31 +196,59 @@ final class Rhythm_Echo {
 	// Settings.
 
 	/**
-	 * @return array{url: string, token: string, mode: string, force: bool, proxy: string, ca: string}
+	 * The settings. token is what X-Echo-Run signatures and the doctor
+	 * routes are checked with: RHYTHM_ECHO_TOKEN, else the write token.
+	 * send_token is what goes to Echo as X-Echo-Token: RHYTHM_ECHO_WRITE_TOKEN
+	 * (a hub's per-site token, which can send captures and nothing else),
+	 * else the token.
+	 *
+	 * @return array{url: string, token: string, send_token: string, site_id: string, mode: string, force: bool, proxy: string, ca: string}
 	 */
 	public static function config(): array {
 		if ( null !== self::$config ) {
 			return self::$config;
 		}
-		$file = array();
-		$path = __DIR__ . '/rhythm-echo/settings.php';
-		if ( is_readable( $path ) ) {
-			$loaded = include $path;
-			if ( is_array( $loaded ) ) {
-				$file = $loaded;
+		$file = self::settings_file();
+		// Echo Staging Seal (the regular plugin that carries this file) adds
+		// what was saved on its settings screen here.
+		if ( function_exists( 'apply_filters' ) ) {
+			$filtered = apply_filters( 'rhythm_echo_settings', $file );
+			if ( is_array( $filtered ) ) {
+				$file = $filtered;
 			}
 		}
-		$url  = self::setting( 'RHYTHM_ECHO_URL', $file, 'url' );
-		$mode = strtolower( self::setting( 'RHYTHM_ECHO_MODE', $file, 'mode' ) );
+		$url          = self::setting( 'RHYTHM_ECHO_URL', $file, 'url' );
+		$mode         = strtolower( self::setting( 'RHYTHM_ECHO_MODE', $file, 'mode' ) );
+		$token        = self::setting( 'RHYTHM_ECHO_TOKEN', $file, 'token' );
+		$write        = self::setting( 'RHYTHM_ECHO_WRITE_TOKEN', $file, 'write_token' );
 		self::$config = array(
-			'url'   => '' !== $url ? rtrim( $url, '/' ) : 'http://127.0.0.1:8025',
-			'token' => self::setting( 'RHYTHM_ECHO_TOKEN', $file, 'token' ),
-			'mode'  => 'observe' === $mode ? 'observe' : 'seal',
-			'force' => self::truthy( self::setting( 'RHYTHM_ECHO_FORCE', $file, 'force' ) ),
-			'proxy' => self::setting( 'RHYTHM_ECHO_PROXY', $file, 'proxy' ),
-			'ca'    => self::setting( 'RHYTHM_ECHO_CA', $file, 'ca' ),
+			'url'        => '' !== $url ? rtrim( $url, '/' ) : 'http://127.0.0.1:8025',
+			'token'      => '' !== $token ? $token : $write,
+			'send_token' => '' !== $write ? $write : $token,
+			'site_id'    => self::setting( 'RHYTHM_ECHO_SITE_ID', $file, 'site_id' ),
+			'mode'       => 'observe' === $mode ? 'observe' : 'seal',
+			'force'      => self::truthy( self::setting( 'RHYTHM_ECHO_FORCE', $file, 'force' ) ),
+			'proxy'      => self::setting( 'RHYTHM_ECHO_PROXY', $file, 'proxy' ),
+			'ca'         => self::setting( 'RHYTHM_ECHO_CA', $file, 'ca' ),
 		);
 		return self::$config;
+	}
+
+	/**
+	 * The installer's settings file: mu-plugins/rhythm-echo/settings.php,
+	 * for this file as a mu-plugin and inside Echo Staging Seal alike, so
+	 * a plugin update never takes the settings with it.
+	 *
+	 * @return array<string, mixed>
+	 */
+	public static function settings_file(): array {
+		$dir  = defined( 'WPMU_PLUGIN_DIR' ) ? WPMU_PLUGIN_DIR : __DIR__;
+		$path = $dir . '/rhythm-echo/settings.php';
+		if ( ! is_readable( $path ) ) {
+			return array();
+		}
+		$loaded = include $path;
+		return is_array( $loaded ) ? $loaded : array();
 	}
 
 	/**
@@ -197,7 +256,7 @@ final class Rhythm_Echo {
 	 *
 	 * @param array<string, mixed> $file
 	 */
-	private static function setting( string $name, array $file, string $key ): string {
+	public static function setting( string $name, array $file, string $key ): string {
 		if ( defined( $name ) ) {
 			$v = constant( $name );
 			return is_bool( $v ) ? ( $v ? '1' : '' ) : trim( (string) $v );
@@ -217,11 +276,11 @@ final class Rhythm_Echo {
 		return in_array( strtolower( $v ), array( '1', 'true', 'yes', 'on' ), true );
 	}
 
-	private static function environment(): string {
+	public static function environment(): string {
 		return function_exists( 'wp_get_environment_type' ) ? wp_get_environment_type() : 'production';
 	}
 
-	private static function sealed(): bool {
+	public static function sealed(): bool {
 		return 'observe' !== self::config()['mode'];
 	}
 
@@ -273,7 +332,7 @@ final class Rhythm_Echo {
 	 * not through Echo's proxy: otherwise they'd be captured twice, and
 	 * hosts only the site can resolve would fail at the proxy.
 	 *
-	 * @param resource|\CurlHandle $handle
+	 * @param resource|object $handle a CurlHandle on PHP 8 (PHPStan checks as 7.4, which has no such class)
 	 * @param array<string, mixed>  $args
 	 */
 	public static function http_api_curl( $handle, $args ): void {
@@ -319,19 +378,21 @@ final class Rhythm_Echo {
 
 	/**
 	 * The "<run>/<action>" this send belongs to: the triggering request's
-	 * header, its cookie, the environment, then the scheduled work's run.
+	 * header or cookie (once checked), the scheduled work's run, then the
+	 * environment.
 	 */
 	public static function run(): string {
+		if ( null === self::$request_run ) {
+			self::$request_run = self::request_run();
+		}
 		$candidates = array(
-			isset( $_SERVER['HTTP_X_ECHO_RUN'] ) ? (string) $_SERVER['HTTP_X_ECHO_RUN'] : '', // phpcs:ignore WordPress.Security.ValidatedSanitizedInput
-			isset( $_COOKIE['X-Echo-Run'] ) ? (string) $_COOKIE['X-Echo-Run'] : '', // phpcs:ignore WordPress.Security.ValidatedSanitizedInput
+			self::$request_run,
 			// A queued job's own run beats the environment's: a flush for
 			// action B must not claim jobs that action A queued.
 			(string) self::$context_run,
-			(string) getenv( 'RHYTHM_ECHO_RUN' ),
+			self::trusted_run( (string) getenv( 'RHYTHM_ECHO_RUN' ) ),
 		);
 		foreach ( $candidates as $v ) {
-			$v = self::clean_run( $v );
 			if ( '' !== $v ) {
 				return $v;
 			}
@@ -342,6 +403,132 @@ final class Rhythm_Echo {
 	private static function clean_run( string $v ): string {
 		$v = trim( (string) preg_replace( '/[\x00-\x1f\x7f]/', '', $v ) );
 		return strlen( $v ) > 512 ? '' : $v;
+	}
+
+	/**
+	 * The run this request's X-Echo-Run header (else cookie) names, if it
+	 * counts. A visitor can send one too and add messages to a baseline or
+	 * drop them from one, so see accept_run().
+	 */
+	private static function request_run(): string {
+		$header = self::clean_run( isset( $_SERVER['HTTP_X_ECHO_RUN'] ) ? (string) $_SERVER['HTTP_X_ECHO_RUN'] : '' ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput
+		$value  = '' !== $header ? $header : self::clean_run( isset( $_COOKIE['X-Echo-Run'] ) ? (string) $_COOKIE['X-Echo-Run'] : '' ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput
+		if ( '' === $value ) {
+			return '';
+		}
+		$forwarded = isset( $_SERVER['HTTP_X_FORWARDED_FOR'] ) || isset( $_SERVER['HTTP_FORWARDED'] ) || isset( $_SERVER['HTTP_X_REAL_IP'] );
+		$remote    = isset( $_SERVER['REMOTE_ADDR'] ) ? (string) $_SERVER['REMOTE_ADDR'] : ''; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput
+		return self::accept_run( $value, $remote, $forwarded );
+	}
+
+	/**
+	 * Whether a request's X-Echo-Run counts: signed with the token when one
+	 * is set, else sent straight from this machine (loopback, no forwarding
+	 * headers). Returns "<run>/<action>" without the signature, or "" for a
+	 * value that does not count, logged once.
+	 */
+	public static function accept_run( string $value, string $remote, bool $forwarded ): string {
+		$token                      = self::config()['token'];
+		list( $run, $action, $ok ) = self::verify_run( $token, $value );
+		if ( '' === $run ) {
+			self::run_ignored( 'bad', 'ignored an X-Echo-Run whose signature does not verify (' . ( '' !== $token ? 'not signed with this token' : 'no token is set here' ) . ')' );
+			return '';
+		}
+		if ( $ok ) {
+			return $run . '/' . $action;
+		}
+		if ( '' !== $token ) {
+			self::run_ignored( 'unsigned', 'ignored an unsigned X-Echo-Run: with a token set, only runs Echo signed with it count' );
+			return '';
+		}
+		if ( ! $forwarded && self::loopback_addr( $remote ) ) {
+			return $run . '/' . $action;
+		}
+		self::run_ignored( 'remote', sprintf( 'ignored an X-Echo-Run from %s%s: without a token only a direct call from this machine may set the run (set the same token here and in Echo)', '' !== $remote ? $remote : 'an unknown address', $forwarded ? ' behind a proxy' : '' ) );
+		return '';
+	}
+
+	/** How long an ignored X-Echo-Run stays quiet after it was logged. */
+	const RUN_LOG_QUIET = 600;
+
+	/**
+	 * Logs why an X-Echo-Run was ignored, once per reason every ten
+	 * minutes. Under PHP-FPM every request is a new process, so a static
+	 * alone would let any visitor add a log line per request with a forged
+	 * header; a transient remembers it across requests.
+	 */
+	private static function run_ignored( string $reason, string $message ): void {
+		if ( isset( self::$run_logged[ $reason ] ) ) {
+			return;
+		}
+		self::$run_logged[ $reason ] = true;
+		$key                         = 'rhythm_echo_runlog_' . $reason;
+		if ( function_exists( 'get_transient' ) && false !== get_transient( $key ) ) {
+			return;
+		}
+		if ( function_exists( 'set_transient' ) ) {
+			set_transient( $key, 1, self::RUN_LOG_QUIET );
+		}
+		error_log( 'Rhythm Echo: ' . $message ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions
+	}
+
+	/**
+	 * A run Echo's runner gave in RHYTHM_ECHO_RUN, which a visitor cannot
+	 * set. A signature, if Echo added one, is dropped from the run captures
+	 * carry.
+	 */
+	private static function trusted_run( string $v ): string {
+		$v   = self::clean_run( $v );
+		$dot = strrpos( $v, '.' );
+		return false !== $dot && 1 === preg_match( '/^[A-Za-z0-9_-]{22}$/', substr( $v, $dot + 1 ) ) ? substr( $v, 0, $dot ) : $v;
+	}
+
+	/**
+	 * Port of Echo's wire.VerifyRun: the run and action of a value and
+	 * whether it carries a valid signature for the token. An unsigned value
+	 * keeps its run and action with ok false; a signature that does not
+	 * verify gives nothing.
+	 *
+	 * @return array{0: string, 1: string, 2: bool}
+	 */
+	public static function verify_run( string $token, string $value ): array {
+		$v   = $value;
+		$sig = '';
+		$dot = strrpos( $value, '.' );
+		// The signature's shape tells it from an action with a dot in it (order.paid).
+		if ( false !== $dot && 1 === preg_match( '/^[A-Za-z0-9_-]{22}$/', substr( $value, $dot + 1 ) ) ) {
+			$v   = substr( $value, 0, $dot );
+			$sig = substr( $value, $dot + 1 );
+		}
+		$slash = strpos( $v, '/' );
+		if ( false === $slash || 0 === $slash ) {
+			return array( '', '', false );
+		}
+		$run    = substr( $v, 0, $slash );
+		$action = substr( $v, $slash + 1 );
+		if ( '' === $sig ) {
+			return array( $run, $action, false );
+		}
+		if ( '' === $token || ! hash_equals( self::run_sig( $token, $v ), $sig ) ) {
+			return array( '', '', false );
+		}
+		return array( $run, $action, true );
+	}
+
+	/**
+	 * Port of Echo's wire.SignRun for "<run>/<action>": unsigned without a token.
+	 */
+	public static function sign_run( string $token, string $run ): string {
+		return '' === $token ? $run : $run . '.' . self::run_sig( $token, $run );
+	}
+
+	/** The first 16 bytes of HMAC-SHA256(token, v) in unpadded base64url. */
+	private static function run_sig( string $token, string $v ): string {
+		return rtrim( strtr( base64_encode( substr( hash_hmac( 'sha256', $v, $token, true ), 0, 16 ) ), '+/', '-_' ), '=' ); // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions
+	}
+
+	private static function loopback_addr( string $ip ): bool {
+		return '::1' === $ip || 1 === preg_match( '/^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/', $ip ) || 1 === preg_match( '/^::ffff:127\./i', $ip );
 	}
 
 	/**
@@ -476,7 +663,8 @@ final class Rhythm_Echo {
 		}
 		$run = self::run();
 		if ( '' !== $run && self::own_host( (string) $url ) && is_array( $args['headers'] ?? null ) && ! isset( $args['headers']['X-Echo-Run'] ) ) {
-			$args['headers']['X-Echo-Run'] = $run;
+			// Signed again, so the site's own request accepts it.
+			$args['headers']['X-Echo-Run'] = self::sign_run( self::config()['token'], $run );
 		}
 		return $args;
 	}
@@ -511,8 +699,14 @@ final class Rhythm_Echo {
 		}
 		$action = isset( $d['action'] ) ? (string) $d['action'] : '';
 		if ( 'fake' === $action ) {
+			if ( ! empty( $args['stream'] ) ) {
+				// A streamed request saves its body as a file: a plugin or
+				// theme update, a backup, an import. A stand-in body must
+				// never become one, whoever answered for Echo on the way.
+				return new WP_Error( 'http_request_failed', sprintf( 'Rhythm Echo: sealed by Echo, so %s was not downloaded. Echo answers for services, not with files.', (string) wp_parse_url( (string) $url, PHP_URL_HOST ) ) );
+			}
 			$r = isset( $d['response'] ) && is_array( $d['response'] ) ? $d['response'] : array();
-			return self::wp_response( $r, $args, (string) $url );
+			return self::wp_response( $r, (string) $url );
 		}
 		if ( 'allow' === $action ) {
 			if ( isset( $d['id'], $args['_rhythm_echo'] ) ) {
@@ -643,10 +837,9 @@ final class Rhythm_Echo {
 	 * own so wp_remote_retrieve_*() and SDK wrappers work unchanged.
 	 *
 	 * @param array<string, mixed> $r
-	 * @param array<string, mixed> $args
 	 * @return array<string, mixed>
 	 */
-	private static function wp_response( array $r, array $args, string $url ): array {
+	private static function wp_response( array $r, string $url ): array {
 		$status  = isset( $r['status'] ) ? (int) $r['status'] : 200;
 		$body    = isset( $r['body'] ) ? (string) $r['body'] : '';
 		$headers = array();
@@ -654,11 +847,6 @@ final class Rhythm_Echo {
 			foreach ( $r['headers'] as $k => $v ) {
 				$headers[ strtolower( (string) $k ) ] = (string) $v;
 			}
-		}
-		$filename = null;
-		if ( ! empty( $args['stream'] ) && ! empty( $args['filename'] ) ) {
-			$filename = (string) $args['filename'];
-			file_put_contents( $filename, $body ); // phpcs:ignore WordPress.WP.AlternativeFunctions
 		}
 		if ( class_exists( 'WpOrg\Requests\Utility\CaseInsensitiveDictionary' ) ) {
 			$dict = new WpOrg\Requests\Utility\CaseInsensitiveDictionary( $headers );
@@ -675,7 +863,7 @@ final class Rhythm_Echo {
 				'message' => get_status_header_desc( $status ),
 			),
 			'cookies'       => array(),
-			'filename'      => $filename,
+			'filename'      => null,
 			'http_response' => null,
 		);
 		if ( class_exists( 'WP_HTTP_Requests_Response' ) && class_exists( 'WpOrg\Requests\Response' ) ) {
@@ -687,50 +875,48 @@ final class Rhythm_Echo {
 			foreach ( $headers as $k => $v ) {
 				$rr->headers[ $k ] = $v;
 			}
-			$out['http_response'] = new WP_HTTP_Requests_Response( $rr, (string) $filename );
+			$out['http_response'] = new WP_HTTP_Requests_Response( $rr, '' );
 		}
 		return $out;
 	}
 
 	// ---------------------------------------------------------------------
-	// Masking: captures never carry raw credentials. Like Echo's own
-	// masking, a few leading characters stay so the kind of key shows
-	// (sk_live_ vs sk_test_ decides whether a payment call may be faked).
+	// Masking: captures never carry raw credentials. A masked value keeps
+	// nothing but a Stripe key's mode prefix (sk_live_ vs sk_test_ decides
+	// whether a payment call may be faked), which carries no secret.
 
-	public static function mask( string $v, int $keep = 8 ): string {
-		$len  = function_exists( 'mb_strlen' ) ? mb_strlen( $v ) : strlen( $v );
-		$keep = min( $keep, intdiv( $len, 3 ) );
-		$head = function_exists( 'mb_substr' ) ? mb_substr( $v, 0, $keep ) : substr( $v, 0, $keep );
-		return $head . "\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}";
+	public static function mask( string $v ): string {
+		if ( '' === $v ) {
+			return '';
+		}
+		$mode = preg_match( '/^[spr]k_(?:live|test)_/', $v, $m ) ? $m[0] : '';
+		return $mode . "\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}";
 	}
 
 	private static function secret_name( string $name ): bool {
 		return 1 === preg_match( '/(passw(or)?d|secret|token|api[_-]?key|apikey|auth[_-]?key|access[_-]?key|^key$|^authorization$|^cookie$)/i', $name );
 	}
 
+	/**
+	 * A header's value as a capture may carry it. Authorization keeps its
+	 * scheme. Basic is decoded so the user name (a Stripe key there)
+	 * keeps its mode prefix.
+	 */
 	private static function mask_header( string $name, string $value ): string {
-		$lower = strtolower( $name );
-		if ( 'x-echo-run' === $lower || 'content-type' === $lower ) {
+		if ( '' === $value || 1 !== preg_match( self::SECRET_HEADER, $name ) ) {
 			return $value;
 		}
-		if ( 'authorization' === $lower || 'proxy-authorization' === $lower ) {
-			if ( preg_match( '/^(basic)\s+(\S+)$/i', $value, $m ) ) {
-				$plain = base64_decode( $m[2], true ); // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions
-				if ( false !== $plain && false !== strpos( $plain, ':' ) ) {
-					list( $user, $pass ) = explode( ':', $plain, 2 );
-					return $m[1] . ' ' . base64_encode( self::mask( $user ) . ':' . ( '' === $pass ? '' : self::mask( $pass, 0 ) ) ); // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions
-				}
-				return $m[1] . ' ' . self::mask( $m[2], 0 );
-			}
-			if ( preg_match( '/^([A-Za-z][A-Za-z0-9-]*)\s+(\S+)$/', $value, $m ) ) {
-				return $m[1] . ' ' . self::mask( $m[2] );
-			}
+		$lower = strtolower( $name );
+		if ( ( 'authorization' !== $lower && 'proxy-authorization' !== $lower ) || ! preg_match( '/^([A-Za-z][A-Za-z0-9-]*)\s+(\S+)$/', trim( $value ), $m ) ) {
 			return self::mask( $value );
 		}
-		if ( self::secret_name( $lower ) ) {
-			return self::mask( $value );
+		if ( 'basic' === strtolower( $m[1] ) ) {
+			$plain = base64_decode( $m[2], true ); // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions
+			if ( false !== $plain && false !== strpos( $plain, ':' ) ) {
+				return $m[1] . ' ' . self::mask( explode( ':', $plain, 2 )[0] );
+			}
 		}
-		return $value;
+		return $m[1] . ' ' . self::mask( $m[2] );
 	}
 
 	private static function mask_url( string $url ): string {
@@ -1135,14 +1321,17 @@ final class Rhythm_Echo {
 		};
 		$headers = array();
 		foreach ( $mailer->getCustomHeaders() as $h ) {
-			$headers[ (string) $h[0] ] = (string) $h[1];
+			$headers[ (string) $h[0] ] = self::mask_header( (string) $h[0], (string) $h[1] );
 		}
 		$headers['From']         = '' !== $mailer->FromName ? sprintf( '%s <%s>', $mailer->FromName, $mailer->From ) : $mailer->From;
 		$headers['Content-Type'] = $mailer->ContentType . ( '' !== $mailer->CharSet && false === strpos( $mailer->ContentType, 'multipart/' ) ? '; charset=' . $mailer->CharSet : '' );
 		$files                   = array();
+		$described               = array();
 		foreach ( $mailer->getAttachments() as $a ) {
 			if ( 'inline' !== ( $a[6] ?? '' ) ) {
-				$files[] = (string) ( '' !== (string) $a[2] ? $a[2] : $a[1] );
+				$name        = (string) ( '' !== (string) $a[2] ? $a[2] : $a[1] );
+				$files[]     = $name;
+				$described[] = self::attachment( $name, (string) ( $a[4] ?? '' ), ! empty( $a[5] ) ? (string) $a[0] : null, ! empty( $a[5] ) ? '' : (string) $a[0] );
 			}
 		}
 		if ( $files ) {
@@ -1158,6 +1347,9 @@ final class Rhythm_Echo {
 			'subject'  => $mailer->Subject,
 			'headers'  => (object) $headers,
 		);
+		if ( $described ) {
+			$email['attachments'] = $described;
+		}
 		$type = strtolower( $mailer->ContentType );
 		if ( 'text/html' === $type ) {
 			$email['html'] = self::cap( $mailer->Body, self::MAX_BODY );
@@ -1171,6 +1363,43 @@ final class Rhythm_Echo {
 			$email['text'] = self::cap( $mailer->Body, self::MAX_BODY );
 		}
 		return $email;
+	}
+
+	/**
+	 * One attached file as Echo's wire protocol has it: name, type, size and
+	 * the SHA-256 of its content, never the content. Captures carry no full
+	 * MIME, so this is how Echo learns what was attached. A file that can't
+	 * be read here goes with its name and type only.
+	 *
+	 * @param string|null $data the content of a string attachment, else null
+	 * @param string      $path the file, for a file attachment
+	 * @return array<string, string|int>
+	 */
+	private static function attachment( string $name, string $type, ?string $data, string $path ): array {
+		if ( '' === $type ) {
+			$type = function_exists( 'wp_check_filetype' ) ? (string) wp_check_filetype( $name )['type'] : '';
+		}
+		$out = array(
+			'name' => $name,
+			'type' => '' !== $type ? $type : 'application/octet-stream',
+		);
+		if ( null !== $data ) {
+			$out['size']   = strlen( $data );
+			$out['sha256'] = hash( 'sha256', $data );
+		} elseif ( '' !== $path && is_file( $path ) && is_readable( $path ) ) {
+			$sha = hash_file( 'sha256', $path );
+			$len = filesize( $path );
+			if ( false !== $sha && false !== $len ) {
+				$out['size']   = $len;
+				$out['sha256'] = $sha;
+			}
+		}
+		return array_filter(
+			$out,
+			static function ( $v ): bool {
+				return '' !== $v;
+			}
+		);
 	}
 
 	/**
@@ -1229,8 +1458,18 @@ final class Rhythm_Echo {
 		$from   = (string) apply_filters( 'wp_mail_from', null !== $parsed['from_email'] ? $parsed['from_email'] : self::default_from() );
 		$type   = (string) apply_filters( 'wp_mail_content_type', null !== $parsed['content_type'] ? $parsed['content_type'] : 'text/plain' );
 		$body   = (string) ( $atts['message'] ?? '' );
-		$files  = array_map( 'basename', self::list_of( $atts['attachments'] ?? array(), "\n" ) );
-		$hdrs   = $parsed['headers'];
+
+		$files     = array();
+		$described = array();
+		foreach ( self::list_of( $atts['attachments'] ?? array(), "\n" ) as $key => $path ) {
+			$name        = is_string( $key ) ? $key : basename( $path );
+			$files[]     = $name;
+			$described[] = self::attachment( $name, '', null, $path );
+		}
+		$hdrs = array();
+		foreach ( $parsed['headers'] as $name => $value ) {
+			$hdrs[ $name ] = self::mask_header( (string) $name, (string) $value );
+		}
 		if ( $files ) {
 			$hdrs['X-Echo-Attachments'] = implode( ', ', $files );
 		}
@@ -1245,6 +1484,9 @@ final class Rhythm_Echo {
 			'subject'  => (string) ( $atts['subject'] ?? '' ),
 			'headers'  => (object) $hdrs,
 		);
+		if ( $described ) {
+			$email['attachments'] = $described;
+		}
 		if ( 'text/html' === $type ) {
 			$email['html'] = self::cap( $body, self::MAX_BODY );
 		} else {
@@ -1332,6 +1574,10 @@ final class Rhythm_Echo {
 				'host'   => $port ? $host . ':' . $port : $host,
 			),
 		);
+		$site = self::config()['site_id'];
+		if ( '' !== $site ) {
+			$c['source']['site'] = $site;
+		}
 		return array_merge( $c, $fields );
 	}
 
@@ -1343,12 +1589,19 @@ final class Rhythm_Echo {
 	 * @return array<string, mixed>|null
 	 */
 	private static function send( array $capture ): ?array {
-		$body = wp_json_encode( $capture, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE );
-		if ( ! is_string( $body ) ) {
-			error_log( 'Rhythm Echo: could not encode a capture as JSON' ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions
-			return null;
+		$version                    = self::wire();
+		list( $status, $out, $err ) = self::post( self::for_version( $capture, $version ) );
+		if ( 400 === $status && false !== strpos( $out, 'newer than Echo' ) && self::WIRE === $version ) {
+			// An older Echo refuses a newer wire version: ask which it
+			// speaks and send that, this request and the next hour.
+			$older = self::older_wire();
+			if ( null !== $older ) {
+				self::$wire = $older;
+				set_transient( self::wire_key(), $older, HOUR_IN_SECONDS );
+				error_log( sprintf( 'Rhythm Echo: Echo at %s speaks wire %d: sending that (rhythm update gets a newer Echo)', self::config()['url'], $older ) ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions
+				list( $status, $out, $err ) = self::post( self::for_version( $capture, $older ) );
+			}
 		}
-		list( $status, $out, $err ) = self::call( 'POST', '/v1/capture', $body );
 		if ( 200 !== $status ) {
 			error_log( sprintf( 'Rhythm Echo: %s %s/v1/capture failed (%s); %s', $capture['kind'], self::config()['url'], '' !== $err ? $err : 'HTTP ' . $status, self::sealed() ? 'sealed, so it was not sent' : 'observe mode, so it was sent anyway' ) ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions
 			return null;
@@ -1358,18 +1611,77 @@ final class Rhythm_Echo {
 	}
 
 	/**
+	 * Posts one capture, encoded.
+	 *
+	 * @param array<string, mixed> $capture
+	 * @return array{0: int, 1: string, 2: string}
+	 */
+	private static function post( array $capture ): array {
+		$body = wp_json_encode( $capture, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE );
+		if ( ! is_string( $body ) ) {
+			return array( 0, '', 'could not encode the capture as JSON' );
+		}
+		return self::call( 'POST', '/v1/capture', $body );
+	}
+
+	/**
+	 * The capture in wire version $v: wire 1 has no source.site and no
+	 * email.attachments, so an Echo that speaks only wire 1 gets neither.
+	 *
+	 * @param array<string, mixed> $capture
+	 * @return array<string, mixed>
+	 */
+	public static function for_version( array $capture, int $v ): array {
+		$capture['v'] = $v;
+		if ( $v < 2 ) {
+			if ( isset( $capture['source'] ) && is_array( $capture['source'] ) ) {
+				unset( $capture['source']['site'] );
+			}
+			if ( isset( $capture['email'] ) && is_array( $capture['email'] ) ) {
+				unset( $capture['email']['attachments'] );
+			}
+		}
+		return $capture;
+	}
+
+	/** The wire version to send in: the newest, unless Echo said otherwise. */
+	private static function wire(): int {
+		if ( null === self::$wire ) {
+			$cached     = function_exists( 'get_transient' ) ? get_transient( self::wire_key() ) : false;
+			self::$wire = is_numeric( $cached ) && (int) $cached >= self::WIRE_MIN && (int) $cached < self::WIRE ? (int) $cached : self::WIRE;
+		}
+		return self::$wire;
+	}
+
+	/** Remembered per Echo URL: another Echo may be newer. */
+	private static function wire_key(): string {
+		return 'rhythm_echo_wire_' . md5( self::config()['url'] );
+	}
+
+	/** The wire version /v1/health names, when it is one to fall back to. */
+	private static function older_wire(): ?int {
+		list( $status, $body ) = self::call( 'GET', '/v1/health' );
+		$health                = 200 === $status ? json_decode( $body, true ) : null;
+		$wire                  = is_array( $health ) && isset( $health['wire'] ) && is_int( $health['wire'] ) ? $health['wire'] : 0;
+		return $wire >= self::WIRE_MIN && $wire < self::WIRE ? $wire : null;
+	}
+
+	/**
 	 * One request to Echo, with a short timeout and no proxy. Raw cURL when
 	 * it is there, so nothing else hooked into the WordPress HTTP API sees
-	 * or changes Echo's own traffic; the HTTP API otherwise.
+	 * or changes Echo's own traffic; the HTTP API otherwise. $token, when
+	 * given, is sent instead of the configured one (Echo Staging Seal reads
+	 * the log with its own).
 	 *
 	 * @return array{0: int, 1: string, 2: string}
 	 */
-	private static function call( string $method, string $path, string $body = '' ): array {
+	public static function call( string $method, string $path, string $body = '', ?string $token = null ): array {
 		$cfg     = self::config();
 		$url     = $cfg['url'] . $path;
+		$token   = null !== $token ? $token : $cfg['send_token'];
 		$headers = array( 'Content-Type: application/json', 'User-Agent: rhythm-echo-wordpress/' . self::VERSION );
-		if ( '' !== $cfg['token'] ) {
-			$headers[] = 'X-Echo-Token: ' . $cfg['token'];
+		if ( '' !== $token ) {
+			$headers[] = 'X-Echo-Token: ' . $token;
 		}
 		if ( function_exists( 'curl_init' ) ) {
 			$ch = curl_init( $url );
@@ -1490,23 +1802,48 @@ final class Rhythm_Echo {
 	}
 
 	/**
-	 * With a token configured, only X-Echo-Token opens the routes. Without
-	 * one, an administrator or a request from this machine or a private
-	 * network (Echo on the Docker host) may.
+	 * Who may call the routes: a request with X-Echo-Token equal to the
+	 * configured token, or a logged-in administrator. With no token
+	 * configured, a request from this machine may too if it came straight
+	 * in: behind a reverse proxy or Docker's port mapping,
+	 * REMOTE_ADDR is the proxy or the bridge gateway (172.17.0.1), not the
+	 * visitor, so a private address proves nothing.
 	 *
 	 * @param WP_REST_Request<array<string, mixed>> $request
+	 * @return true|WP_Error
 	 */
-	public static function allowed( $request ): bool {
+	public static function allowed( $request ) {
 		$token = self::config()['token'];
 		if ( '' !== $token ) {
 			$given = (string) $request->get_header( 'X-Echo-Token' );
-			return '' !== $given && hash_equals( $token, $given );
+			if ( '' !== $given && hash_equals( $token, $given ) ) {
+				return true;
+			}
 		}
 		if ( current_user_can( 'manage_options' ) ) {
 			return true;
 		}
-		$ip = isset( $_SERVER['REMOTE_ADDR'] ) ? (string) $_SERVER['REMOTE_ADDR'] : ''; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput
-		return '' !== $ip && false === filter_var( $ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE );
+		if ( '' === $token && self::direct_loopback( $request ) ) {
+			return true;
+		}
+		$why = '' !== $token
+			? 'send X-Echo-Token with the token in Rhythm Echo\'s settings'
+			: 'call from this machine without a proxy, or set a token (rhythm echo install wordpress --token)';
+		return new WP_Error( 'rhythm_echo_forbidden', 'Rhythm Echo: ' . $why . '.', array( 'status' => 403 ) );
+	}
+
+	/**
+	 * Whether the request came from loopback with no proxy in between.
+	 *
+	 * @param WP_REST_Request<array<string, mixed>> $request
+	 */
+	private static function direct_loopback( $request ): bool {
+		foreach ( array( 'X-Forwarded-For', 'Forwarded', 'X-Real-IP' ) as $h ) {
+			if ( null !== $request->get_header( $h ) ) {
+				return false;
+			}
+		}
+		return self::loopback_addr( isset( $_SERVER['REMOTE_ADDR'] ) ? (string) $_SERVER['REMOTE_ADDR'] : '' ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput
 	}
 
 	/**
@@ -1533,12 +1870,14 @@ final class Rhythm_Echo {
 			'ca'          => '' !== $cfg['ca'] && is_readable( $cfg['ca'] ),
 			'warnings'    => self::$warnings,
 			'site'        => home_url(),
+			'site_id'     => $cfg['site_id'],
 			'run'         => self::run(),
 			'echo'        => array(
 				'url'       => $cfg['url'],
 				'reachable' => 200 === $status,
 				'error'     => 200 === $status ? '' : ( '' !== $err ? $err : 'HTTP ' . $status ),
 				'mode'      => is_array( $health ) && isset( $health['mode'] ) ? (string) $health['mode'] : '',
+				'wire'      => is_array( $health ) && isset( $health['wire'] ) && is_int( $health['wire'] ) ? $health['wire'] : 0,
 			),
 		);
 	}

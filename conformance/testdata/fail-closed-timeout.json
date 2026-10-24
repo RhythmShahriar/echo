@@ -1,0 +1,29 @@
+{
+  "name": "Echo times out while sealed",
+  "about": "Echo accepts the connection but never answers. After the connector's timeout (seconds, not the app's), it is no decision: sealed, nothing is sent.",
+  "valid": true,
+  "mode": "seal",
+  "echo": "timeout",
+  "capture": {
+    "v": 2,
+    "kind": "http",
+    "phase": "before",
+    "source": {
+      "via": "node",
+      "stack": "node",
+      "plugin": "twilio",
+      "hook": "fetch",
+      "host": "shop.test"
+    },
+    "http": {
+      "method": "POST",
+      "url": "https://api.twilio.com/2010-04-01/Accounts/AC0000/Messages.json",
+      "headers": {
+        "authorization": "Basic •••••",
+        "content-type": "application/x-www-form-urlencoded"
+      },
+      "body": "To=%2B15551230000&From=%2B15550000000&Body=Your+order+has+shipped"
+    }
+  },
+  "connector": "block"
+}

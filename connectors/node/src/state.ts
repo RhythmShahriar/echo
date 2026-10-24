@@ -10,10 +10,19 @@
 import type { Config } from './config.js';
 
 export interface Context {
-  /** "<run>/<action>" from X-Echo-Run. */
+  /** "<run>/<action>" from X-Echo-Run, once accepted. */
   run?: string;
-  /** The incoming request's host: the site itself, never captured. */
-  host?: string;
+  /** The X-Echo-Run a request sent, not yet checked (see run.ts accept). */
+  claim?: RunClaim;
+}
+
+/** An X-Echo-Run value as a request sent it, with what is known about where it came from. */
+export interface RunClaim {
+  value: string;
+  /** The peer's address, when the request object has a socket. */
+  remote?: string;
+  /** Whether X-Forwarded-For, Forwarded or X-Real-IP was sent. */
+  forwarded: boolean;
 }
 
 export type Resolver = () => Context | undefined | Promise<Context | undefined>;
@@ -28,6 +37,10 @@ export interface State {
   active: boolean;
   /** Echo's mode from its last answer; seal until Echo says otherwise, so an unreachable Echo fails closed. */
   mode: string;
+  /** The wire version Echo speaks, once it refused a newer one; unset means the newest. */
+  wire?: number;
+  /** When wire was learned (Date.now()), so an upgraded Echo gets the newest version again. */
+  wireAt?: number;
   origFetch?: typeof fetch;
   patched: Set<string>;
   als?: ALS<Context>;
@@ -36,6 +49,8 @@ export interface State {
   warned: Set<string>;
   /** "after" captures still on their way, for flush(). */
   inflight: Set<Promise<unknown>>;
+  /** HMAC-SHA256, set on Node from node:crypto; elsewhere Web Crypto is used. */
+  hmac?: (key: string, msg: string) => Uint8Array;
 }
 
 const KEY = Symbol.for('rhythm.echo.state');

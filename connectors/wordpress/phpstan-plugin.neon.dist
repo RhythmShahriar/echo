@@ -1,0 +1,15 @@
+# PHPStan for Echo Staging Seal (plugin/echo-staging-seal), level max with
+# the WordPress stubs. The connector it carries is checked by
+# phpstan.neon.dist at level 6; here it is only scanned for its types. Run
+# as phpstan.neon.dist says, with -c phpstan-plugin.neon.dist.
+parameters:
+  level: max
+  phpVersion: 70400
+  treatPhpDocTypesAsCertain: false
+  bootstrapFiles:
+    - testdata/phpstan-bootstrap.php
+    - testdata/phpstan-plugin-bootstrap.php
+  scanFiles:
+    - echo.php
+  paths:
+    - plugin/echo-staging-seal

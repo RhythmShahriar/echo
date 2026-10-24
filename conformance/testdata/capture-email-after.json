@@ -1,0 +1,23 @@
+{
+  "name": "a real send's outcome",
+  "about": "After an observed send, the connector reports how it went with the ID Echo gave the email.",
+  "valid": true,
+  "mode": "observe",
+  "echo": "up",
+  "capture": {
+    "v": 2,
+    "kind": "email",
+    "phase": "after",
+    "id": "m1",
+    "source": {
+      "via": "laravel",
+      "hook": "mail"
+    },
+    "error": "535 authentication failed"
+  },
+  "decision": {
+    "mode": "observe",
+    "action": "allow"
+  },
+  "connector": "send"
+}

@@ -1,0 +1,30 @@
+{
+  "name": "a wire 1 capture with wire 2 fields",
+  "about": "An older Echo does not know these fields: leave them out when sending v 1.",
+  "valid": false,
+  "problems": [
+    "capture.email.attachments: new in wire 2",
+    "capture.source.site: new in wire 2"
+  ],
+  "capture": {
+    "v": 1,
+    "kind": "email",
+    "source": {
+      "via": "node",
+      "site": "client-a"
+    },
+    "email": {
+      "from": "shop@shop.test",
+      "to": [
+        "ann@example.test"
+      ],
+      "subject": "Your receipt",
+      "text": "Thanks for your order.",
+      "attachments": [
+        {
+          "name": "a.pdf"
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,277 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/RhythmShahriar/echo/blob/master/wire/schema.json",
+  "title": "Rhythm Echo wire protocol",
+  "description": "Package wire is the small JSON protocol between Echo and the connectors inside a site (the WordPress mu-plugin, the Laravel package, the Node package): a connector reports each email and each outbound HTTP request. Generated from wire/wire.go by conformance/gen: do not edit.",
+  "x-version": 2,
+  "x-min-version": 1,
+  "anyOf": [
+    {
+      "$ref": "#/$defs/Capture"
+    },
+    {
+      "$ref": "#/$defs/Decision"
+    }
+  ],
+  "$defs": {
+    "Capture": {
+      "type": "object",
+      "description": "Capture is one email or HTTP request a connector saw.",
+      "properties": {
+        "v": {
+          "type": "integer",
+          "description": "the wire version this capture follows",
+          "minimum": 1,
+          "maximum": 2
+        },
+        "kind": {
+          "type": "string",
+          "description": "email or http",
+          "enum": [
+            "email",
+            "http"
+          ]
+        },
+        "phase": {
+          "type": "string",
+          "description": "http: before or after; email: after (with id) reports a real send's outcome",
+          "enum": [
+            "before",
+            "after"
+          ]
+        },
+        "id": {
+          "type": "string",
+          "description": "after: the ID Echo returned for before"
+        },
+        "run": {
+          "type": "string",
+          "description": "from X-Echo-Run, \"\u003crun\u003e/\u003caction\u003e\""
+        },
+        "source": {
+          "$ref": "#/$defs/Source"
+        },
+        "email": {
+          "$ref": "#/$defs/Email"
+        },
+        "http": {
+          "$ref": "#/$defs/HTTP"
+        },
+        "error": {
+          "type": "string",
+          "description": "the send failed (wp_mail_failed, a transport error)"
+        }
+      },
+      "required": [
+        "v",
+        "kind",
+        "source"
+      ],
+      "additionalProperties": false
+    },
+    "Source": {
+      "type": "object",
+      "description": "Source describes the connector and what it hooked.",
+      "properties": {
+        "via": {
+          "type": "string",
+          "description": "wordpress, laravel, node, smtp, proxy"
+        },
+        "stack": {
+          "type": "string",
+          "description": "wordpress, laravel, node, php"
+        },
+        "plugin": {
+          "type": "string",
+          "description": "best guess at the sender: a plugin slug, a package"
+        },
+        "hook": {
+          "type": "string",
+          "description": "wp_mail, pre_http_request, fetch, nodemailer…"
+        },
+        "host": {
+          "type": "string",
+          "description": "the site's own host (always allowed)"
+        },
+        "site": {
+          "type": "string",
+          "description": "the site's ID when one Echo serves many sites",
+          "x-since": 2
+        }
+      },
+      "required": [
+        "via"
+      ],
+      "additionalProperties": false
+    },
+    "Email": {
+      "type": "object",
+      "description": "Email is a message handed to the site's mailer.",
+      "properties": {
+        "from": {
+          "type": "string"
+        },
+        "to": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "cc": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "bcc": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "reply_to": {
+          "type": "string"
+        },
+        "subject": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        },
+        "html": {
+          "type": "string"
+        },
+        "headers": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "raw": {
+          "type": "string",
+          "description": "full MIME, when the connector has it"
+        },
+        "attachments": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Attachment"
+          },
+          "description": "Attachments lists the files attached to the message, for connectors that send no Raw MIME. With Raw set, Echo reads them from the MIME.",
+          "x-since": 2
+        }
+      },
+      "additionalProperties": false
+    },
+    "Attachment": {
+      "type": "object",
+      "description": "Attachment describes one attached file. Connectors send what they know about it, never its content.",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string",
+          "description": "MIME type, application/pdf"
+        },
+        "size": {
+          "type": "integer",
+          "description": "decoded size in bytes"
+        },
+        "sha256": {
+          "type": "string",
+          "description": "hex digest of the decoded content"
+        }
+      },
+      "additionalProperties": false
+    },
+    "HTTP": {
+      "type": "object",
+      "description": "HTTP is an outbound request and, after sending, its response.",
+      "properties": {
+        "method": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        },
+        "headers": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "body": {
+          "type": "string"
+        },
+        "status": {
+          "type": "integer",
+          "description": "after"
+        },
+        "response": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "method",
+        "url"
+      ],
+      "additionalProperties": false
+    },
+    "Decision": {
+      "type": "object",
+      "description": "Decision is Echo's answer to a capture.",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "mode": {
+          "type": "string",
+          "enum": [
+            "seal",
+            "observe"
+          ]
+        },
+        "action": {
+          "type": "string",
+          "description": "http: allow, fake or block; email: fake (don't send) or allow",
+          "enum": [
+            "allow",
+            "fake",
+            "block"
+          ]
+        },
+        "response": {
+          "$ref": "#/$defs/Response",
+          "description": "for fake"
+        }
+      },
+      "required": [
+        "id",
+        "mode"
+      ],
+      "additionalProperties": false
+    },
+    "Response": {
+      "type": "object",
+      "description": "Response is the answer a connector gives the site instead of sending.",
+      "properties": {
+        "status": {
+          "type": "integer"
+        },
+        "headers": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "body": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "status"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

@@ -4,12 +4,18 @@
 package wordpress
 
 import (
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/RhythmShahriar/echo/wire"
 )
 
 func site(t *testing.T) string {
@@ -168,5 +174,349 @@ func TestScriptInstalls(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(mu, "rhythm-echo.php")); !os.IsNotExist(err) {
 		t.Error("uninstall script left the plugin")
+	}
+}
+
+// The REST routes doctor uses exist only while the connector is active and
+// open only to the token, an administrator or a direct loopback call when
+// no token is set. Checked with the plugin loaded in a faked WordPress.
+func TestRESTRoutesLocked(t *testing.T) {
+	php, err := exec.LookPath("php")
+	if err != nil {
+		t.Skip("php not installed")
+	}
+	const ok, forbidden = "true", `{"code":"rhythm_echo_forbidden","status":403}`
+	for _, tc := range []struct {
+		name, env, token, addr, admin, headers string
+		routes                                 bool
+		want                                   string
+	}{
+		{"production has no routes", "production", "tok", "127.0.0.1", "0", `{}`, false, forbidden},
+		{"token", "staging", "tok", "172.17.0.1", "0", `{"X-Echo-Token":"tok"}`, true, ok},
+		{"no token from the Docker gateway", "staging", "tok", "172.17.0.1", "0", `{}`, true, forbidden},
+		{"wrong token", "staging", "tok", "172.17.0.1", "0", `{"X-Echo-Token":"nope"}`, true, forbidden},
+		{"loopback is not enough with a token set", "staging", "tok", "127.0.0.1", "0", `{}`, true, forbidden},
+		{"administrator", "staging", "tok", "203.0.113.9", "1", `{}`, true, ok},
+		{"no token: loopback", "development", "", "127.0.0.1", "0", `{}`, true, ok},
+		{"no token: IPv6 loopback", "development", "", "::1", "0", `{}`, true, ok},
+		{"no token: private address", "development", "", "172.17.0.1", "0", `{}`, true, forbidden},
+		{"no token: 10/8", "local", "", "10.0.0.5", "0", `{}`, true, forbidden},
+		{"no token: loopback behind a proxy", "development", "", "127.0.0.1", "0", `{"X-Forwarded-For":"198.51.100.7"}`, true, forbidden},
+		{"no token: loopback with Forwarded", "development", "", "127.0.0.1", "0", `{"Forwarded":"for=198.51.100.7"}`, true, forbidden},
+		{"no token: administrator", "development", "", "198.51.100.7", "1", `{}`, true, ok},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, err := exec.Command(php, "testdata/rest-harness.php", "echo.php", tc.env, tc.token, tc.addr, tc.admin, tc.headers).CombinedOutput()
+			if err != nil {
+				t.Fatalf("%v: %s", err, out)
+			}
+			var got struct {
+				Routes  bool            `json:"routes"`
+				Allowed json.RawMessage `json:"allowed"`
+			}
+			if err := json.Unmarshal(out, &got); err != nil {
+				t.Fatalf("not JSON: %s", out)
+			}
+			if got.Routes != tc.routes || string(got.Allowed) != tc.want {
+				t.Errorf("routes %v, allowed %s; want routes %v, allowed %s", got.Routes, got.Allowed, tc.routes, tc.want)
+			}
+		})
+	}
+}
+
+// PHPStan at level 6 with the WordPress stubs. It needs a phpstan whose
+// vendor directory has szepeviktor/phpstan-wordpress and
+// phpstan/extension-installer, named by ECHO_PHPSTAN:
+//
+//	ECHO_PHPSTAN=/path/to/vendor/bin/phpstan go test -run PHPStan ./connectors/wordpress/
+func TestPHPStan(t *testing.T) {
+	phpstan := os.Getenv("ECHO_PHPSTAN")
+	if phpstan == "" {
+		t.Skip("set ECHO_PHPSTAN to a phpstan with the WordPress extension")
+	}
+	out, err := exec.Command(phpstan, "analyze", "--no-progress", "--memory-limit=1G", "-c", "phpstan.neon.dist").CombinedOutput()
+	if err != nil {
+		t.Fatalf("phpstan: %v\n%s", err, out)
+	}
+}
+
+// callPHP runs one Rhythm_Echo method through testdata/call-harness.php,
+// decodes its JSON result into out and returns what PHP logged.
+func callPHP(t *testing.T, setup, method string, out any, args ...any) (logged string) {
+	t.Helper()
+	php, err := exec.LookPath("php")
+	if err != nil {
+		t.Skip("php not installed")
+	}
+	if args == nil {
+		args = []any{}
+	}
+	a, err := json.Marshal(args)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var stderr strings.Builder
+	cmd := exec.Command(php, "testdata/call-harness.php", "echo.php", setup, method, string(a))
+	cmd.Stderr = &stderr
+	b, err := cmd.Output()
+	if err != nil {
+		t.Fatalf("%s: %v\n%s%s", method, err, b, stderr.String())
+	}
+	if err := json.Unmarshal(b, out); err != nil {
+		t.Fatalf("%s: not JSON: %s", method, b)
+	}
+	return stderr.String()
+}
+
+func TestMaskHeader(t *testing.T) {
+	const secret = "Zq9TOPSECRETvalue77abcdefghijkl"
+	basic := func(s string) string { return "Basic " + base64.StdEncoding.EncodeToString([]byte(s)) }
+	for _, tc := range []struct{ name, value, want string }{
+		{"X-Auth-Token", secret, "•••••"},
+		{"x-amz-security-token", secret, "•••••"},
+		{"Private-Token", secret, "•••••"},
+		{"X-Goog-Api-Key", secret, "•••••"},
+		{"X-Shopify-Access-Token", secret, "•••••"},
+		{"X-WC-Webhook-Signature", secret, "•••••"},
+		{"X-Session-Id", secret, "•••••"},
+		{"X-Db-Password", secret, "•••••"},
+		{"Cookie", "sid=" + secret, "•••••"},
+		{"X-Client-Credential", secret, "•••••"},
+		{"X-Auth-Token", "", ""},
+		{"Authorization", "Bearer " + secret, "Bearer •••••"},
+		{"Authorization", "Bearer sk_test_" + secret, "Bearer sk_test_•••••"},
+		{"Authorization", basic("sk_live_" + secret + ":"), "Basic sk_live_•••••"},
+		{"Authorization", basic("user:" + secret), "Basic •••••"},
+		{"Proxy-Authorization", secret, "•••••"},
+		// negative fixtures: kept as they are
+		{"X-Request-Id", "req-1234567890abcdef", "req-1234567890abcdef"},
+		{"Content-Type", "application/json", "application/json"},
+		{"X-Echo-Run", "r1/checkout.NhOp3HY0JQ76wSoPnn3sZg", "r1/checkout.NhOp3HY0JQ76wSoPnn3sZg"},
+	} {
+		var got string
+		callPHP(t, `{}`, "mask_header", &got, tc.name, tc.value)
+		if got != tc.want {
+			t.Errorf("mask_header(%q, %q) = %q, want %q", tc.name, tc.value, got, tc.want)
+		}
+		// Beyond the scheme and a Stripe mode prefix, at most 4 characters show.
+		shown := strings.ReplaceAll(got, "•", "")
+		for _, p := range []string{"Bearer ", "Basic ", "sk_test_", "sk_live_"} {
+			shown = strings.TrimPrefix(shown, p)
+		}
+		if tc.want != tc.value && len(shown) > 4 {
+			t.Errorf("mask_header(%q) shows more than 4 characters: %q", tc.name, got)
+		}
+	}
+}
+
+// Email headers are masked by the same rule as request headers.
+func TestMaskMailHeaders(t *testing.T) {
+	var got struct {
+		Headers map[string]string `json:"headers"`
+	}
+	callPHP(t, `{}`, "email_from_atts", &got, map[string]any{
+		"to":      "ann@example.test",
+		"subject": "Hi",
+		"message": "Hello",
+		"headers": []string{"X-Auth-Token: Zq9TOPSECRETvalue77", "X-Request-Id: req-1"},
+	})
+	if got.Headers["X-Auth-Token"] != "•••••" || got.Headers["X-Request-Id"] != "req-1" {
+		t.Errorf("headers = %v", got.Headers)
+	}
+}
+
+// runVectors is conformance/testdata/run-signature.json, shared with Echo's
+// wire package and the Node and Laravel connectors.
+type runVectors struct {
+	Verify []struct {
+		Name, Token, Value, Run, Action string
+		OK                              bool
+	}
+	Accept []struct {
+		Name, Token, Value, Remote, Run string
+		Forwarded                       bool
+	}
+}
+
+func loadRunVectors(t *testing.T) runVectors {
+	t.Helper()
+	b, err := os.ReadFile("../../conformance/testdata/run-signature.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var v runVectors
+	if err := json.Unmarshal(b, &v); err != nil {
+		t.Fatal(err)
+	}
+	return v
+}
+
+func TestVerifyRun(t *testing.T) {
+	for _, v := range loadRunVectors(t).Verify {
+		var got []any
+		callPHP(t, `{}`, "verify_run", &got, v.Token, v.Value)
+		if want := []any{v.Run, v.Action, v.OK}; fmt.Sprint(got) != fmt.Sprint(want) {
+			t.Errorf("%s: verify_run = %v, want %v", v.Name, got, want)
+		}
+		if v.OK {
+			var signed string
+			callPHP(t, `{}`, "sign_run", &signed, v.Token, v.Run+"/"+v.Action)
+			if signed != v.Value {
+				t.Errorf("%s: sign_run = %q, want %q", v.Name, signed, v.Value)
+			}
+		}
+	}
+}
+
+func TestAcceptRun(t *testing.T) {
+	for _, v := range loadRunVectors(t).Accept {
+		setup, _ := json.Marshal(map[string]any{"token": v.Token})
+		var got string
+		callPHP(t, string(setup), "accept_run", &got, v.Value, v.Remote, v.Forwarded)
+		if got != v.Run {
+			t.Errorf("%s: accept_run = %q, want %q", v.Name, got, v.Run)
+		}
+	}
+}
+
+// TestRequestRun reads the run the way a request brings it: header first,
+// then cookie, checked against REMOTE_ADDR and the forwarding headers.
+func TestRequestRun(t *testing.T) {
+	signed := "r1/checkout.NhOp3HY0JQ76wSoPnn3sZg"
+	for _, tc := range []struct{ name, setup, want string }{
+		{"signed header", `{"token":"secret","server":{"REMOTE_ADDR":"203.0.113.9","HTTP_X_ECHO_RUN":"` + signed + `"}}`, "r1/checkout"},
+		{"signed cookie", `{"token":"secret","server":{"REMOTE_ADDR":"203.0.113.9"},"cookie":{"X-Echo-Run":"` + signed + `"}}`, "r1/checkout"},
+		{"tampered header", `{"token":"secret","server":{"REMOTE_ADDR":"127.0.0.1","HTTP_X_ECHO_RUN":"r1/refund.NhOp3HY0JQ76wSoPnn3sZg"}}`, ""},
+		{"unsigned from a public IP", `{"token":"","server":{"REMOTE_ADDR":"203.0.113.9","HTTP_X_ECHO_RUN":"r1/checkout"}}`, ""},
+		{"unsigned from loopback", `{"token":"","server":{"REMOTE_ADDR":"127.0.0.1","HTTP_X_ECHO_RUN":"r1/checkout"}}`, "r1/checkout"},
+		{"unsigned from loopback via a proxy", `{"token":"","server":{"REMOTE_ADDR":"127.0.0.1","HTTP_X_FORWARDED_FOR":"203.0.113.9","HTTP_X_ECHO_RUN":"r1/checkout"}}`, ""},
+		{"environment is trusted", `{"token":"secret","getenv":{"RHYTHM_ECHO_RUN":"env1/cron"}}`, "env1/cron"},
+		{"environment loses its signature", `{"token":"secret","getenv":{"RHYTHM_ECHO_RUN":"` + signed + `"}}`, "r1/checkout"},
+	} {
+		var got string
+		callPHP(t, tc.setup, "run", &got)
+		if got != tc.want {
+			t.Errorf("%s: run = %q, want %q", tc.name, got, tc.want)
+		}
+	}
+}
+
+// An ignored value is logged once per reason, then stays quiet for ten
+// minutes across requests: under PHP-FPM a forged header must not add a log
+// line to every request.
+func TestRequestRunLogsOnce(t *testing.T) {
+	const line = "Rhythm Echo: ignored an unsigned X-Echo-Run: with a token set, only runs Echo signed with it count"
+	var got string
+	logged := callPHP(t, `{"token":"secret"}`, "accept_run,accept_run", &got, "r1/checkout", "127.0.0.1", false)
+	if n := strings.Count(logged, line); n != 1 {
+		t.Errorf("logged %d times:\n%s", n, logged)
+	}
+	if !strings.Contains(logged, "harness: set_transient rhythm_echo_runlog_unsigned 600\n") {
+		t.Errorf("did not remember it for the next request:\n%s", logged)
+	}
+
+	// the next request, within ten minutes
+	logged = callPHP(t, `{"token":"secret","transients":{"rhythm_echo_runlog_unsigned":1}}`, "accept_run", &got, "r1/checkout", "127.0.0.1", false)
+	if strings.Contains(logged, "Rhythm Echo:") {
+		t.Errorf("logged again within ten minutes:\n%s", logged)
+	}
+
+	// another reason is still logged
+	logged = callPHP(t, `{"token":"","transients":{"rhythm_echo_runlog_unsigned":1}}`, "accept_run", &got, "r1/checkout", "203.0.113.9", false)
+	if !strings.Contains(logged, "Rhythm Echo: ignored an X-Echo-Run from 203.0.113.9") {
+		t.Errorf("a different reason was not logged:\n%s", logged)
+	}
+}
+
+// The fallback layer (pre_wp_mail) sees wp_mail()'s attachment paths.
+func TestMailAttachments(t *testing.T) {
+	dir := t.TempDir()
+	pdf := filepath.Join(dir, "invoice-42.pdf")
+	content := []byte("%PDF-1.7\n" + strings.Repeat("x", 4096) + "\n%%EOF\n")
+	if err := os.WriteFile(pdf, content, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	type att struct {
+		Name   string `json:"name"`
+		Type   string `json:"type"`
+		Size   int    `json:"size"`
+		SHA256 string `json:"sha256"`
+	}
+	var got struct {
+		Attachments []att             `json:"attachments"`
+		Headers     map[string]string `json:"headers"`
+	}
+	mail := map[string]any{"to": "ann@example.test", "subject": "Invoice", "message": "Attached", "attachments": []string{pdf}}
+	callPHP(t, `{}`, "email_from_atts", &got, mail)
+	sum := sha256.Sum256(content)
+	want := []att{{"invoice-42.pdf", "application/pdf", len(content), hex.EncodeToString(sum[:])}}
+	if fmt.Sprint(got.Attachments) != fmt.Sprint(want) {
+		t.Errorf("attachments = %+v, want %+v", got.Attachments, want)
+	}
+	if got.Headers["X-Echo-Attachments"] != "invoice-42.pdf" {
+		t.Errorf("X-Echo-Attachments = %q", got.Headers["X-Echo-Attachments"])
+	}
+
+	// A name given as the key (wp_mail allows it) wins; a missing file
+	// keeps its name and type only.
+	mail["attachments"] = map[string]string{"bill.pdf": pdf, "gone.csv": filepath.Join(dir, "gone.csv")}
+	got.Attachments = nil
+	callPHP(t, `{}`, "email_from_atts", &got, mail)
+	want = []att{want[0], {Name: "gone.csv", Type: "text/csv"}}
+	want[0].Name = "bill.pdf"
+	if fmt.Sprint(got.Attachments) != fmt.Sprint(want) {
+		t.Errorf("attachments = %+v, want %+v", got.Attachments, want)
+	}
+
+	// Without files there is no field.
+	var bare map[string]any
+	delete(mail, "attachments")
+	callPHP(t, `{}`, "email_from_atts", &bare, mail)
+	if _, ok := bare["attachments"]; ok {
+		t.Errorf("attachments without files: %v", bare["attachments"])
+	}
+}
+
+// A hub site: the write token goes to Echo while the token (else the
+// write token) checks runs. The site ID comes from the environment, a
+// constant or the settings file.
+func TestHubSettings(t *testing.T) {
+	type cfg struct {
+		Token     string `json:"token"`
+		SendToken string `json:"send_token"`
+		SiteID    string `json:"site_id"`
+	}
+	for _, tc := range []struct {
+		name, setup string
+		want        cfg
+	}{
+		{"write token only", `{"getenv":{"RHYTHM_ECHO_WRITE_TOKEN":"w","RHYTHM_ECHO_SITE_ID":"client-a"}}`, cfg{"w", "w", "client-a"}},
+		{"both tokens", `{"token":"t","getenv":{"RHYTHM_ECHO_WRITE_TOKEN":"w"}}`, cfg{"t", "w", ""}},
+		{"token only", `{"token":"t"}`, cfg{"t", "t", ""}},
+	} {
+		var got cfg
+		callPHP(t, tc.setup, "config", &got)
+		if got != tc.want {
+			t.Errorf("%s: config = %+v, want %+v", tc.name, got, tc.want)
+		}
+	}
+	// With only a write token, Echo signs this site's runs with it.
+	var run string
+	callPHP(t, `{"getenv":{"RHYTHM_ECHO_WRITE_TOKEN":"w"}}`, "accept_run", &run, wire.SignRun("w", "hub1", "checkout"), "203.0.113.9", false)
+	if run != "hub1/checkout" {
+		t.Errorf("a run signed with the write token = %q", run)
+	}
+}
+
+// The settings file carries the hub fields for the installer.
+func TestSettingsPHPHubFields(t *testing.T) {
+	b, err := SettingsPHP(Settings{WriteToken: "w", SiteID: "client-a"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{`'write_token' => 'w'`, `'site_id' => 'client-a'`} {
+		if !strings.Contains(string(b), want) {
+			t.Errorf("no %s in\n%s", want, b)
+		}
 	}
 }

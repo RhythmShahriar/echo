@@ -23,7 +23,9 @@ Everything can be set from the environment. If you want the file, run `php artis
 |---|---|---|---|
 | `enabled` | `RHYTHM_ECHO_ENABLED` | unset | Unset means on, except in `production` and `testing`. Set it to `true` to capture in your test suite. |
 | `url` | `RHYTHM_ECHO_URL` | `http://127.0.0.1:8025` | Where Echo listens. |
-| `token` | `RHYTHM_ECHO_TOKEN` | none | Sent as `X-Echo-Token` when Echo listens beyond loopback. |
+| `token` | `RHYTHM_ECHO_TOKEN` | none | Sent as `X-Echo-Token` when Echo listens beyond loopback. `X-Echo-Run` signatures are checked with it. |
+| `write_token` | `RHYTHM_ECHO_WRITE_TOKEN` | none | A token that can send captures and nothing else (a hub's per-site token). Sent as `X-Echo-Token` instead of `token`. Without `token` it also checks `X-Echo-Run` signatures. |
+| `site_id` | `RHYTHM_ECHO_SITE_ID` | none | Names the site in every capture (`source.site`) when one Echo serves many. |
 | `force` | `RHYTHM_ECHO_FORCE` | `false` | Run even when `APP_ENV=production`. Only for a production-like box that isn't production. |
 | `mode` | `RHYTHM_ECHO_MODE` | `seal` | What to assume when Echo can't be reached. `seal` fails closed and `observe` lets traffic through. When Echo answers, its own mode decides. |
 | `timeout` | `RHYTHM_ECHO_TIMEOUT` | `2` | Seconds to wait for Echo. |
@@ -32,6 +34,8 @@ Everything can be set from the environment. If you want the file, run `php artis
 **Production guard.** When `app()->environment('production')`, the connector does nothing unless `force` is set. `php artisan echo:status` says why it's off.
 
 **Testing.** The app's own test suite keeps its `Mail::fake()` and `Http::fake()` untouched, because `testing` is off by default.
+
+**The token over a network.** The token travels as a plain HTTP header. Echo's answers are trusted as they come. On loopback or a private network you control that is fine. When the site reaches Echo across a network you don't trust (a hub on another host, a tunnel), put TLS in front of Echo and use an `https://` URL: anyone on the path could otherwise read the token or answer for Echo.
 
 ## What it covers
 
@@ -43,12 +47,12 @@ Everything can be set from the environment. If you want the file, run `php artis
 | Vonage SMS notifications | `vonage.http_client` points at the container's Guzzle client, unless you set your own | yes, when `guzzle` is on |
 | `new GuzzleHttp\Client()`, raw cURL, SDKs with their own HTTP stack (the Twilio and Stripe PHP SDKs, AWS SDK) | not hooked | **no**: use Echo's proxy, see below |
 
-**Captures.** An email capture carries from, to, cc, bcc, reply-to, subject, text, HTML, headers and the full MIME, with the mailer name in `source.plugin`. An HTTP capture carries the method, URL, headers and the first 256 KiB of the body, with the calling package in `source.plugin` when one can be found. Credential headers (`Authorization`, `Cookie`, `X-Api-Key` and others) are masked before anything leaves the app. Echo redacts secrets in bodies.
+**Captures.** An email capture carries from, to, cc, bcc, reply-to, subject, text, HTML, headers and the full MIME, with the mailer name in `source.plugin`. The MIME is left out above 2 MiB: then `email.attachments` lists each attached file's name, type, size and SHA-256 (never its content) so Echo still knows what was attached. Inline images are left out. An HTTP capture carries the method, URL, headers and the first 256 KiB of the body, with the calling package in `source.plugin` when one can be found. Credential headers are masked before anything leaves the app: any header whose name contains `token`, `secret`, `key`, `auth`, `signature`, `session`, `password`, `cookie` or `credential` (any case), so `X-Auth-Token` becomes `•••••` while `X-Request-Id` is kept. `Authorization` keeps only its scheme (`Bearer •••••`). A Stripe key keeps its mode prefix (`Bearer sk_test_•••••`), which holds no secret and tells Echo whether it may fake the call. Echo redacts secrets in bodies.
 
 **HTTP decisions.** Echo answers each request before it's sent:
 - `fake`: the app gets Echo's response, and nothing is sent.
 - `block`: the request fails with Laravel's `ConnectionException`, as if the network were down.
-- `allow`: the request is sent, and the response is reported afterwards. Echo always allows the site's own host, loopback, and the hosts in its allowlist.
+- `allow`: the request is sent and the response is reported afterwards. Echo always allows the site's own host (the host of `APP_URL`, never the request's `Host` header), loopback and the hosts in its allowlist.
 
 **Mail decisions.** Sealed, Echo keeps the message and the app sees a normal send. Observed, the real transport sends it, and the connector then reports the outcome against the same message: sent, or failed with the transport's error (a dead SMTP server, a rejected API key). The exception still reaches the app as usual.
 
@@ -79,6 +83,13 @@ Echo ties every message to the action that caused it, such as "Contact form on /
 3. the [Context](https://laravel.com/docs/context) a queued job carried over from that request
 4. the `RHYTHM_ECHO_RUN` environment variable, which Echo sets on the artisan commands it runs
 
+A visitor can send `X-Echo-Run` too and add messages to a baseline or drop them from one, so the header and cookie count only when Echo vouches for them:
+
+- with `RHYTHM_ECHO_TOKEN` set, the value must carry Echo's signature (`<run>/<action>.<signature>`, which Echo adds when it has the same token). Unsigned or tampered values are ignored.
+- without a token, the value counts only on a request straight from this machine: `REMOTE_ADDR` is loopback (127.0.0.0/8 or ::1) and there is no `X-Forwarded-For`, `Forwarded` or `X-Real-IP` header. Behind a reverse proxy or Docker's port mapping, set a token.
+
+An ignored value is logged as a warning once per reason every ten minutes (remembered in the app's cache, so a forged header can't add a line to every request), for example `Rhythm Echo: ignored an unsigned X-Echo-Run: with RHYTHM_ECHO_TOKEN set, only runs Echo signed with it count`. `RHYTHM_ECHO_RUN` is always taken as given: a visitor cannot set it.
+
 A global middleware stores the run as a *hidden* Context value, so it never appears in log lines. Laravel serialises Context into every job queued during the request and restores it in the worker. Queued mail, queued notifications and jobs therefore keep the run without any change to your code.
 
 ## Queues
@@ -96,10 +107,15 @@ Queued mail and jobs are sent when the worker runs them. For staging checks, eit
 ## Development
 
 ```sh
-make install   # composer:2 in Docker
-make check     # php -l, Larastan level 6, PHPUnit + Testbench (fake Echo on PHP's built-in server)
-make e2e       # a fresh Laravel app against Echo's real catcher (needs Go, Docker, jq)
+make test      # composer install, PHPUnit + Testbench (fake Echo on PHP's built-in server), Larastan level 6: what CI runs
+make check     # php -l on every file, then make test
+make phpunit   # only PHPUnit, after make install
+make e2e       # a fresh Laravel app against Echo's conformance stand-in (needs Go, Docker, jq)
 ```
+
+Everything runs in Docker (`composer:2` and `php:8.3-cli`); `PHP_VERSION=8.2 make test` picks another PHP image. `make test COMPOSER=composer PHP=php` runs on the host's PHP, as CI does. Composer's download cache is `COMPOSER_CACHE_DIR` from the environment (default `~/.cache/composer`), mounted into Docker, so CI can keep it between runs; with `COMPOSER_DISABLE_NETWORK=1` the install uses only that cache. The tests talk only to a fake Echo they start on 127.0.0.1. It checks every capture against Echo's wire schema (`wire/schema.json`, or the file `ECHO_WIRE_SCHEMA` names) and refuses one that breaks it, which fails the test that sent it. Other tests read Echo's shared vectors from `conformance/` in the Echo repository (or the folder `ECHO_CONFORMANCE` names: run signatures, captures and the fail-closed cases) and skip without them.
+
+The connector sends wire version 2. An older Echo that refuses it gets asked which version it speaks (`/v1/health`) and then gets that version, without the fields it lacks, for an hour. The version is kept in the app's cache (per Echo URL) as well as in the process, so under PHP-FPM a request does not pay a refused capture and a health call first. It logs a warning once: `Rhythm Echo: Echo at <url> speaks wire 1: sending that (rhythm update gets a newer Echo)`.
 
 ## License
 

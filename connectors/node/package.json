@@ -11,7 +11,10 @@
     "webhook",
     "nodemailer",
     "fetch",
-    "testing"
+    "testing",
+    "playwright",
+    "cypress",
+    "otp"
   ],
   "license": "MIT",
   "author": "Rhythm Shahriar",
@@ -59,6 +62,26 @@
         "default": "./dist/cjs/register.js"
       }
     },
+    "./playwright": {
+      "import": {
+        "types": "./dist/esm/playwright.d.ts",
+        "default": "./dist/esm/playwright.js"
+      },
+      "require": {
+        "types": "./dist/cjs/playwright.d.ts",
+        "default": "./dist/cjs/playwright.js"
+      }
+    },
+    "./cypress": {
+      "import": {
+        "types": "./dist/esm/cypress.d.ts",
+        "default": "./dist/esm/cypress.js"
+      },
+      "require": {
+        "types": "./dist/cjs/cypress.d.ts",
+        "default": "./dist/cjs/cypress.js"
+      }
+    },
     "./package.json": "./package.json"
   },
   "files": [
@@ -68,7 +91,9 @@
   ],
   "sideEffects": [
     "./dist/esm/register.js",
-    "./dist/cjs/register.js"
+    "./dist/cjs/register.js",
+    "./dist/esm/cypress.js",
+    "./dist/cjs/cypress.js"
   ],
   "engines": {
     "node": ">=18"
@@ -83,6 +108,7 @@
     "lint": "tsc -p tsconfig.json",
     "pretest": "npm run build",
     "test": "vitest run",
+    "test:ci": "npm ci --ignore-scripts --no-audit --no-fund && npm run typecheck && npm test",
     "test:e2e": "npm run build && node fixtures/e2e.mjs",
     "prepack": "npm run build"
   },

@@ -9,4 +9,6 @@ use RuntimeException;
 /** Echo didn't answer, or answered with something that isn't a decision. */
 final class EchoUnreachable extends RuntimeException
 {
+    /** Echo's HTTP status, 0 when it did not answer at all. */
+    public int $status = 0;
 }

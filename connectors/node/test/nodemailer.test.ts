@@ -1,11 +1,16 @@
 // Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
 // SPDX-License-Identifier: MIT
 
+import { createHash } from 'node:crypto';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import nodemailer from 'nodemailer';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { register, withEchoRun } from '../src/index.js';
+import { attachments, toEmail } from '../src/nodemailer.js';
 import { fakeEcho, silent, type FakeEcho } from './helpers.js';
 
 const require = createRequire(import.meta.url);
@@ -51,6 +56,59 @@ const message = {
 };
 
 describe('nodemailer', () => {
+  it('masks credential headers by name', () => {
+    const e = toEmail({ headers: { 'X-Auth-Token': 'Zq9TOPSECRETvalue77', 'X-Request-Id': 'req-1' } });
+    expect(e.headers).toEqual({ 'X-Auth-Token': '•••••', 'X-Request-Id': 'req-1' });
+  });
+
+  it('describes a PDF attachment, never sending its content', async () => {
+    const pdf = Buffer.concat([Buffer.from('%PDF-1.7\n'), Buffer.alloc(4096, 7), Buffer.from('\n%%EOF\n')]);
+    const t = nodemailer.createTransport(recorder().transport as never);
+    await t.sendMail({ ...message, attachments: [{ filename: 'invoice-42.pdf', content: pdf }] });
+    const [c] = await echo.waitFor((c) => c.kind === 'email');
+    expect(c!.email!.attachments).toEqual([
+      { name: 'invoice-42.pdf', type: 'application/pdf', size: pdf.length, sha256: createHash('sha256').update(pdf).digest('hex') },
+    ]);
+    expect(JSON.stringify(c)).not.toContain(pdf.toString('base64').slice(0, 40));
+  });
+
+  it('leaves the field out without attachments', async () => {
+    const t = nodemailer.createTransport(recorder().transport as never);
+    await t.sendMail(message);
+    const [c] = await echo.waitFor((c) => c.kind === 'email');
+    expect(c!.email).not.toHaveProperty('attachments');
+  });
+
+  it('reads files, data URIs and encoded strings; skips inline images', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'echo-att-'));
+    const file = join(dir, 'report.csv');
+    writeFileSync(file, 'a,b\n1,2\n');
+    const big = join(dir, 'big.zip');
+    const bigBody = Buffer.alloc(300 << 10, 7);
+    writeFileSync(big, bigBody);
+    const sha = (b: string | Buffer) => createHash('sha256').update(b).digest('hex');
+    const got = await attachments([
+      { path: file },
+      { filename: 'hi.txt', path: 'data:text/plain;base64,aGk=' },
+      { filename: 'b.bin', content: 'aGk=', encoding: 'base64' },
+      { filename: 'logo.png', content: Buffer.from('png'), cid: 'logo@shop' },
+      { filename: 'remote.pdf', path: 'https://files.example.test/remote.pdf' },
+      { path: big },
+      { path: join(dir, 'missing.pdf') },
+    ]);
+    rmSync(dir, { recursive: true, force: true });
+    expect(got).toEqual([
+      { name: 'report.csv', type: 'text/csv', size: 8, sha256: sha('a,b\n1,2\n') },
+      { name: 'hi.txt', type: 'text/plain', size: 2, sha256: sha('hi') },
+      { name: 'b.bin', type: 'application/octet-stream', size: 2, sha256: sha('hi') },
+      { name: 'remote.pdf', type: 'application/pdf' },
+      // streamed in chunks: the hash still covers the whole file
+      { name: 'big.zip', type: 'application/zip', size: bigBody.length, sha256: sha(bigBody) },
+      // unreadable: name and type only, Nodemailer reports the error when it sends
+      { name: 'missing.pdf', type: 'application/pdf' },
+    ]);
+  });
+
   it('announces the hook', () => {
     expect(log.lines.join('\n')).toContain('nodemailer');
   });

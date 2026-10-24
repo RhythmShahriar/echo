@@ -1,0 +1,15 @@
+{
+  "name": "a kind that is not email or http",
+  "about": "An SMS is an HTTP request to the SMS provider: report the request, Echo recognizes it.",
+  "valid": false,
+  "problems": [
+    "capture.kind: \"sms\" is not one of email, http"
+  ],
+  "capture": {
+    "v": 2,
+    "kind": "sms",
+    "source": {
+      "via": "node"
+    }
+  }
+}

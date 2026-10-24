@@ -1,17 +1,20 @@
 // Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
 // SPDX-License-Identifier: MIT
 
-// End-to-end: the packed package in a real Next.js app, against Echo's real
-// Go catcher, sealed. Every provider request goes to its real hostname, so
-// next start runs with all other egress routed to a dead proxy: a request
-// that slipped past the connector fails instead of leaving the machine.
+// End-to-end: the packed package in a real Next.js app, against Echo's
+// conformance stand-in (Echo's real catcher behind a check of every capture
+// against the wire schema), sealed. Every provider request goes to its real
+// hostname, so next start runs with all other egress routed to a dead
+// proxy: a request that slipped past the connector fails instead of
+// leaving the machine.
 //
 //   npm run test:e2e                      (needs Go: /usr/local/go/bin or on PATH)
 //   E2E_BUNDLER=webpack npm run test:e2e  (the webpack build instead of Turbopack)
 //
-// Ports: catcher 18925, Next.js 18926.
+// Ports: Echo 18925, Next.js 18926 (E2E_ECHO_PORT, E2E_SITE_PORT move them).
 
 import { execFileSync, spawn } from 'node:child_process';
+import { createHmac } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -21,8 +24,16 @@ const here = dirname(fileURLToPath(import.meta.url));
 const pkgDir = join(here, '..');
 const app = join(here, 'next-app');
 const repo = join(pkgDir, '..', '..');
-const ECHO = 'http://127.0.0.1:18925';
-const SITE = 'http://127.0.0.1:18926';
+const ECHO_PORT = process.env.E2E_ECHO_PORT ?? '18925';
+const SITE_PORT = process.env.E2E_SITE_PORT ?? '18926';
+const ECHO = `http://127.0.0.1:${ECHO_PORT}`;
+const SITE = `http://127.0.0.1:${SITE_PORT}`;
+// Echo and the connector share a token, so X-Echo-Run is signed as Echo
+// signs it. Unsigned, it would be ignored even from loopback: next start
+// adds X-Forwarded-For to every request.
+const TOKEN = 'e2e-token';
+const auth = { 'X-Echo-Token': TOKEN };
+const signed = (v) => `${v}.${createHmac('sha256', TOKEN).update(v).digest().subarray(0, 16).toString('base64url')}`;
 const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 const children = [];
 
@@ -73,36 +84,42 @@ async function main() {
   if (!existsSync(join(app, 'node_modules', 'next'))) sh(npm, ['ci', '--no-audit', '--no-fund'], { cwd: app });
   sh(npm, ['install', '--no-save', '--no-audit', '--no-fund', join(packDir, tgz)], { cwd: app });
 
-  // 2. Echo's real catcher, sealed
+  // 2. Echo's conformance stand-in, sealed
   // built first, then run directly: `go run` would leave the server behind when killed
   const goBin = existsSync('/usr/local/go/bin/go') ? '/usr/local/go/bin/go' : 'go';
-  const catcherBin = join(packDir, process.platform === 'win32' ? 'catcher.exe' : 'catcher');
-  sh(goBin, ['build', '-o', catcherBin, './connectors/node/fixtures/catcher'], { cwd: repo, env: { ...process.env, GOWORK: 'off' } });
-  const catcher = start('catcher', catcherBin, ['-addr', '127.0.0.1:18925', '-mode', 'seal'], { cwd: repo });
-  await until('the catcher', async () => (await fetch(`${ECHO}/v1/health`)).ok, 180000).catch((e) => {
+  const standinBin = join(packDir, process.platform === 'win32' ? 'conformance.exe' : 'conformance');
+  sh(goBin, ['build', '-o', standinBin, './conformance/cmd/conformance'], { cwd: repo, env: { ...process.env, GOWORK: 'off' } });
+  const catcher = start(
+    'echo',
+    standinBin,
+    ['--listen', `127.0.0.1:${ECHO_PORT}`, '--mode', 'seal', '--token', TOKEN, '--expect', 'email,http-before,run,wire-2'],
+    { cwd: repo },
+  );
+  await until('the stand-in Echo', async () => (await fetch(`${ECHO}/v1/health`, { headers: auth })).ok, 180000).catch((e) => {
     throw new Error(`${e.message}\n${catcher.log}`);
   });
 
   // 3. next build with RHYTHM_ECHO_URL set: the guard keeps the build untouched
-  const env = { ...process.env, RHYTHM_ECHO_URL: ECHO, NEXT_TELEMETRY_DISABLED: '1' };
+  const env = { ...process.env, RHYTHM_ECHO_URL: ECHO, RHYTHM_ECHO_TOKEN: TOKEN, NEXT_TELEMETRY_DISABLED: '1' };
   delete env.NODE_ENV;
   delete env.VERCEL_ENV;
   // E2E_BUNDLER=webpack checks the webpack build; Turbopack is the default
   sh(join(app, 'node_modules', '.bin', 'next'), ['build', ...(process.env.E2E_BUNDLER === 'webpack' ? ['--webpack'] : [])], { cwd: app, env });
 
-  // 4. next start, with every escaped request sent to a dead proxy
-  const next = start('next', join(app, 'node_modules', '.bin', 'next'), ['start', '-p', '18926', '-H', '127.0.0.1'], {
+  // 4. next start, with every escaped request sent to a dead proxy. It runs
+  // with NODE_ENV=production, which the guard only lets through when forced.
+  const next = start('next', join(app, 'node_modules', '.bin', 'next'), ['start', '-p', SITE_PORT, '-H', '127.0.0.1'], {
     cwd: app,
-    env: { ...env, NODE_USE_ENV_PROXY: '1', HTTP_PROXY: 'http://127.0.0.1:9', HTTPS_PROXY: 'http://127.0.0.1:9', NO_PROXY: '127.0.0.1,localhost' },
+    env: { ...env, RHYTHM_ECHO_FORCE: '1', NODE_USE_ENV_PROXY: '1', HTTP_PROXY: 'http://127.0.0.1:9', HTTPS_PROXY: 'http://127.0.0.1:9', NO_PROXY: '127.0.0.1,localhost' },
   });
   await until('next start', async () => (await fetch(`${SITE}/`)).ok).catch((e) => {
     throw new Error(`${e.message}\n${next.log}`);
   });
-  await fetch(`${ECHO}/v1/messages`, { method: 'DELETE' });
+  await fetch(`${ECHO}/v1/messages`, { method: 'DELETE', headers: auth });
 
   const results = {};
   // a Node route handler: Resend + Twilio fetches and a Nodemailer email
-  const notify = await fetch(`${SITE}/api/notify`, { method: 'POST', headers: { 'X-Echo-Run': 'e2e/notify' } });
+  const notify = await fetch(`${SITE}/api/notify`, { method: 'POST', headers: { 'X-Echo-Run': signed('e2e/notify') } });
   results.notify = { status: notify.status, body: await notify.json().catch(() => null) };
   assert.equal(notify.status, 200, `notify: ${JSON.stringify(results.notify)}\n${next.log}`);
   assert.equal(results.notify.body.resend.status, 200);
@@ -110,7 +127,7 @@ async function main() {
   assert.match(results.notify.body.mail.response, /Captured by Echo/);
 
   // an Edge route
-  const edge = await fetch(`${SITE}/api/edge`, { headers: { 'X-Echo-Run': 'e2e/edge' } });
+  const edge = await fetch(`${SITE}/api/edge`, { headers: { 'X-Echo-Run': signed('e2e/edge') } });
   results.edge = { status: edge.status, body: await edge.json().catch(() => null) };
   assert.equal(edge.status, 200, `edge: ${JSON.stringify(results.edge)}\n${next.log}`);
   assert.equal(results.edge.body.runtime, 'edge');
@@ -120,7 +137,7 @@ async function main() {
   const actionId = Object.entries(manifest.node).find(([, v]) => v.exportedName === 'notifyTeam')?.[0] ?? Object.keys(manifest.node)[0];
   const action = await fetch(`${SITE}/action`, {
     method: 'POST',
-    headers: { 'Next-Action': actionId, 'Content-Type': 'text/plain;charset=UTF-8', Origin: SITE, Cookie: 'X-Echo-Run=e2e%2Faction', Accept: 'text/x-component' },
+    headers: { 'Next-Action': actionId, 'Content-Type': 'text/plain;charset=UTF-8', Origin: SITE, Cookie: `X-Echo-Run=${encodeURIComponent(signed('e2e/action'))}`, Accept: 'text/x-component' },
     body: '[]',
   });
   results.action = { status: action.status };
@@ -128,7 +145,7 @@ async function main() {
 
   // 5. what Echo caught
   const msgs = await until('captures', async () => {
-    const all = await (await fetch(`${ECHO}/v1/messages`)).json();
+    const all = await (await fetch(`${ECHO}/v1/messages`, { headers: auth })).json();
     return all.length >= 5 ? all : null;
   }, 15000);
   const by = (action, pred = () => true) => msgs.filter((m) => m.run === 'e2e' && m.action === action && pred(m));
@@ -155,8 +172,14 @@ async function main() {
   assert.match(next.log, /\[rhythm-echo\] active .*edge\): capturing fetch/);
   assert.doesNotMatch(next.log, /ECONNREFUSED 127\.0\.0\.1:9/, 'a request escaped the connector');
 
+  // 6. every capture followed the wire protocol
+  const report = await (await fetch(`${ECHO}/v1/conformance`, { headers: auth })).json();
+  assert.ok(report.ok, `conformance: ${JSON.stringify(report, null, 1)}`);
+
   console.log('\ne2e ok:');
   for (const m of msgs) console.log(`  ${m.run}/${m.action}  ${m.status.padEnd(6)} ${m.channel.padEnd(8)} ${m.provider ?? ''} ${m.url ?? m.subject}`);
+  console.log('\nconformance:');
+  for (const r of report.rows) console.log(`  ${r.check.padEnd(12)} ${r.result.toUpperCase().padEnd(5)} ${r.detail}`);
 }
 
 main().then(

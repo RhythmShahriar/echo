@@ -1,0 +1,30 @@
+{
+  "name": "a wire 1 capture",
+  "about": "What a connector sends to an Echo whose /v1/health says wire 1: v 1 and none of the fields wire 2 added.",
+  "valid": true,
+  "mode": "seal",
+  "echo": "up",
+  "capture": {
+    "v": 1,
+    "kind": "email",
+    "source": {
+      "via": "wordpress",
+      "stack": "wordpress",
+      "hook": "wp_mail",
+      "host": "shop.test"
+    },
+    "email": {
+      "from": "shop@shop.test",
+      "to": [
+        "ann@example.test"
+      ],
+      "subject": "Your receipt",
+      "text": "Thanks for your order."
+    }
+  },
+  "decision": {
+    "mode": "seal",
+    "action": "fake"
+  },
+  "connector": "fake"
+}

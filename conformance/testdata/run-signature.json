@@ -1,0 +1,30 @@
+{
+  "about": "Shared X-Echo-Run vectors. verify: wire.VerifyRun(token, value) and its PHP and Node ports. accept: which run a connector takes from a request (remote is REMOTE_ADDR, forwarded says whether X-Forwarded-For, Forwarded or X-Real-IP was sent); an empty run means the value is ignored.",
+  "verify": [
+    {"name": "valid", "token": "secret", "value": "r1/checkout.NhOp3HY0JQ76wSoPnn3sZg", "run": "r1", "action": "checkout", "ok": true},
+    {"name": "valid, dotted action", "token": "secret", "value": "r1/order.paid.tWc6Vn2xEZ-jg4c9KGKGTg", "run": "r1", "action": "order.paid", "ok": true},
+    {"name": "valid, space in action", "token": "secret", "value": "20261024-1/sign up.cSk4n0F0yJzML0oQN_MKDQ", "run": "20261024-1", "action": "sign up", "ok": true},
+    {"name": "tampered action", "token": "secret", "value": "r1/refund.NhOp3HY0JQ76wSoPnn3sZg", "run": "", "action": "", "ok": false},
+    {"name": "tampered run", "token": "secret", "value": "r2/checkout.NhOp3HY0JQ76wSoPnn3sZg", "run": "", "action": "", "ok": false},
+    {"name": "tampered signature", "token": "secret", "value": "r1/checkout.MhOp3HY0JQ76wSoPnn3sZg", "run": "", "action": "", "ok": false},
+    {"name": "wrong token", "token": "other", "value": "r1/checkout.NhOp3HY0JQ76wSoPnn3sZg", "run": "", "action": "", "ok": false},
+    {"name": "signed, no token", "token": "", "value": "r1/checkout.NhOp3HY0JQ76wSoPnn3sZg", "run": "", "action": "", "ok": false},
+    {"name": "unsigned", "token": "secret", "value": "r1/checkout", "run": "r1", "action": "checkout", "ok": false},
+    {"name": "unsigned, dotted action", "token": "secret", "value": "r1/order.paid", "run": "r1", "action": "order.paid", "ok": false},
+    {"name": "no action separator", "token": "secret", "value": "r1", "run": "", "action": "", "ok": false},
+    {"name": "no run", "token": "secret", "value": "/checkout", "run": "", "action": "", "ok": false},
+    {"name": "empty", "token": "secret", "value": "", "run": "", "action": "", "ok": false}
+  ],
+  "accept": [
+    {"name": "token: valid from a public IP", "token": "secret", "value": "r1/checkout.NhOp3HY0JQ76wSoPnn3sZg", "remote": "203.0.113.9", "forwarded": false, "run": "r1/checkout"},
+    {"name": "token: valid behind a proxy", "token": "secret", "value": "r1/checkout.NhOp3HY0JQ76wSoPnn3sZg", "remote": "172.17.0.1", "forwarded": true, "run": "r1/checkout"},
+    {"name": "token: tampered", "token": "secret", "value": "r1/refund.NhOp3HY0JQ76wSoPnn3sZg", "remote": "127.0.0.1", "forwarded": false, "run": ""},
+    {"name": "token: unsigned from loopback", "token": "secret", "value": "r1/checkout", "remote": "127.0.0.1", "forwarded": false, "run": ""},
+    {"name": "no token: unsigned from loopback", "token": "", "value": "r1/checkout", "remote": "127.0.0.1", "forwarded": false, "run": "r1/checkout"},
+    {"name": "no token: unsigned from IPv6 loopback", "token": "", "value": "r1/checkout", "remote": "::1", "forwarded": false, "run": "r1/checkout"},
+    {"name": "no token: unsigned from a public IP", "token": "", "value": "r1/checkout", "remote": "203.0.113.9", "forwarded": false, "run": ""},
+    {"name": "no token: unsigned from the Docker gateway", "token": "", "value": "r1/checkout", "remote": "172.17.0.1", "forwarded": false, "run": ""},
+    {"name": "no token: unsigned from loopback behind a proxy", "token": "", "value": "r1/checkout", "remote": "127.0.0.1", "forwarded": true, "run": ""},
+    {"name": "no token: signed", "token": "", "value": "r1/checkout.NhOp3HY0JQ76wSoPnn3sZg", "remote": "127.0.0.1", "forwarded": false, "run": ""}
+  ]
+}

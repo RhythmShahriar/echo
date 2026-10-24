@@ -14,8 +14,17 @@ return [
     // Where `rhythm-echo up` listens.
     'url' => env('RHYTHM_ECHO_URL', 'http://127.0.0.1:8025'),
 
-    // Sent as X-Echo-Token when Echo listens beyond loopback.
+    // Sent as X-Echo-Token when Echo listens beyond loopback, unless a
+    // write token is set. X-Echo-Run signatures are checked with it.
     'token' => env('RHYTHM_ECHO_TOKEN'),
+
+    // A token that may only send captures (a hub's per-site token). Sent
+    // as X-Echo-Token instead of the token; with no token it also checks
+    // X-Echo-Run signatures.
+    'write_token' => env('RHYTHM_ECHO_WRITE_TOKEN'),
+
+    // This site's ID when one Echo serves many sites, sent as source.site.
+    'site_id' => env('RHYTHM_ECHO_SITE_ID'),
 
     // Run even when APP_ENV is production. Only for a production-like
     // staging box that you are sure is not production.
