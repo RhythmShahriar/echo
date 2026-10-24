@@ -6,9 +6,9 @@ The testbed (`testbed/`) is a WordPress shop, a Laravel app, a Next.js app and a
 
 We wrote both Echo and the testbed, so read this as a regression suite with a scoreboard, not an independent review: every scenario is something we built Echo to catch. Each one is still a real failure mode, in a real WordPress, Laravel or Next.js, and it passes only when Echo reports the expected change through its normal commands. The other tools run on the same states, and anyone can rerun it all from a clean checkout (see [Run it](#run-it)).
 
-**Echo caught 20 of 20 site scenarios and 12 of 15 environment scenarios.**
+**Echo caught 20 of 20 site scenarios and 14 of 15 environment scenarios.**
 
-Run on 2026-10-24 with rhythm-echo dev (linux/amd64); the run took 10m47s.
+Run on 2026-10-24 with rhythm-echo dev (linux/amd64); the run took 10m37s.
 
 ## Site scenarios
 
@@ -48,8 +48,8 @@ Run on 2026-10-24 with rhythm-echo dev (linux/amd64); the run took 10m47s.
 | e05 | The PDF invoice is no longer attached | local | the invoice plugin stops attaching invoice-1042.pdf after an update; the receipt itself is still sent | compare: exit 0, BROKE message/attachment-lost “invoice-1042.pdf” | **caught** |
 | e06 | A large newsletter through the Laravel connector | testbed | the newsletter grows to 2 MB of HTML with a 5 MB PDF; the connector waits 2 s for Echo (laravel/overlay/routes/web.php) | snapshot: exit 0, says “message: email to”, never “[blocked]”, never “[failed]”, never “action error” | **caught** |
 | e07 | Echo restarts in the middle of a compare | local | Echo is stopped and started again while the first of two actions runs; its inbox is in memory | compare: says “echo restarted during the run” | **caught** |
-| e08 | The sites can't reach Echo while it is sealed | testbed | Echo moves off the ports the gate forwards (18863-18865), so every connector and the sendmail stand-in fail to reach it; the CLI still can | wordpress: says “can't reach echo”, BROKE message/missing<br>laravel: says “can't reach echo”, BROKE message/missing<br>next: says “can't reach echo”, BROKE message/missing<br>php: never “nothing broke”, BROKE message/missing | missed |
-| e09 | Order numbers, dates and links change on every run | testbed | s10, s11 and s12 broken, whose emails carry an order number and a date that differ on every run, compared with their good state | s10: BROKE content/placeholder “{customer_first_name}”, no CHANGED<br>s11: BROKE content/php-error “PHP error”, no CHANGED<br>s12: NEW content/dev-link “staging.shop.test”, no CHANGED | missed |
+| e08 | The sites can't reach Echo while it is sealed | testbed | Echo moves off the ports the gate forwards (18863-18865), so every connector and the sendmail stand-in fail to reach it; the CLI still can | wordpress: says “can't reach echo”, BROKE message/missing<br>laravel: says “can't reach echo”, BROKE message/missing<br>next: says “can't reach echo”, BROKE message/missing<br>php: never “nothing broke”, BROKE message/missing | **caught** |
+| e09 | Order numbers, dates and links change on every run | testbed | s10, s11 and s12 broken, whose emails carry an order number and a date that differ on every run, compared with their good state | s10: BROKE content/placeholder “{customer_first_name}”, no CHANGED<br>s11: BROKE content/php-error “PHP error”, no CHANGED<br>s12: NEW content/dev-link “staging.shop.test”, no CHANGED | **caught** |
 | e10 | Connector and Echo versions differ | testbed | the WordPress connector of Echo 1.0.0 (wire 1) against this Echo, then this connector against Echo 1.0.0, both built from this repository | old connector: exit 0, says “message: email to”, never “action error”<br>old Echo: exit 0, says “message: email to”, never “action error” | **caught** |
 | e11 | The snapshot was taken by an older Echo | local | the baseline is a real snapshot from each released schema (bench/testdata/runs/<version>/run.json), from before an upgrade | compare: exit 0, never “take a new snapshot”, never “incompatible”, no BROKE | **caught** |
 | e12 | Two action names collide | local | a second action is named contact-form next to Contact form, so both would get the ID action:contact-form | snapshot: exit 2, says “both get the ID action:contact-form” | **caught** |
@@ -62,15 +62,15 @@ Run on 2026-10-24 with rhythm-echo dev (linux/amd64); the run took 10m47s.
 ## How the other tools are judged
 
 - **Mailpit** (`axllent/mailpit:v1.29.2`) is the usual staging mail catcher: it receives mail over SMTP and shows it in an inbox. It has no notion of a baseline, so it can't report a change; the question here is whether a person reading the Mailpit inbox would have seen the problem. For each state, the benchmark delivers into the testbed's Mailpit, over SMTP, the emails Echo captured that the site would have handed to an SMTP server (mail sent through a provider's API, such as Resend's, never reaches an SMTP catcher), then reads them back through Mailpit's API. It counts as **caught** when the broken-state inbox visibly shows the problem (the scenario's `mailpit` text is in a message's From, To, Subject or body and wasn't in the good state's). A message that is no longer sent is a **miss**: the inbox just has one email fewer. SMS, chat, webhooks, analytics and DNS are **can't see**.
-- **Buggregator** (`ghcr.io/buggregator/server:2.4.1`) is a debug hub for PHP with an SMTP catcher, HTTP dumps and an SMS module. Its SMTP inbox is judged as Mailpit's is: the same emails go in over SMTP and come back through its API (`GET /api/events?type=smtp`, cleared between states). Its HTTP dump and SMS modules only receive what a site is re-pointed to send them, one SDK at a time, which a staging copy of a live site isn't: SMS, chat, webhooks, analytics and DNS are **can't see**. Not run this time: buggregator isn't reachable at http://127.0.0.1:18857 (make -C testbed up TOOLS=buggregator): GET http://127.0.0.1:18857/api/events?type=smtp: 502 Bad Gateway.
-- **Staging Shield** (1.0.2, free, from wordpress.org) is a WordPress plugin that detects a staging copy and stops its email. It keeps no record of what a site sends and no baseline, so a lost, changed or new message is **can't see** for it. For the staging scenarios the benchmark activates it in the testbed's WordPress, runs the scenario's action in its broken state with Echo observing (so mail really goes out, to the testbed's Mailpit) and counts it **caught** when the email to the real address did not leave. A control run first, with the plugin inactive, must deliver that email to Mailpit, or the scenario is an error rather than a catch. Not run this time: staging-shield isn't installed in the testbed's WordPress (make -C testbed up TOOLS=staging-shield): Error: The 'staging-shield' plugin could not be found..
+- **Buggregator** (`ghcr.io/buggregator/server:2.4.1`) is a debug hub for PHP with an SMTP catcher, HTTP dumps and an SMS module. Its SMTP inbox is judged as Mailpit's is: the same emails go in over SMTP and come back through its API (`GET /api/events?type=smtp`, cleared between states). Its HTTP dump and SMS modules only receive what a site is re-pointed to send them, one SDK at a time, which a staging copy of a live site isn't: SMS, chat, webhooks, analytics and DNS are **can't see**.
+- **Staging Shield** (1.0.2, free, from wordpress.org) is a WordPress plugin that detects a staging copy and stops its email. It keeps no record of what a site sends and no baseline, so a lost, changed or new message is **can't see** for it. For the staging scenarios the benchmark activates it in the testbed's WordPress, runs the scenario's action in its broken state with Echo observing (so mail really goes out, to the testbed's Mailpit) and counts it **caught** when the email to the real address did not leave. A control run first, with the plugin inactive, must deliver that email to Mailpit, or the scenario is an error rather than a catch.
 - **MessagePit** is not run: it has no published Docker image (`docker search messagepit` finds none) or release binary we could run without building it, so it has no column rather than a guess.
 
 ## Details
 
 ### Lost messages
 
-**s01 The contact form stops emailing the shop owner** (wordpress, action “Contact form”, seal mode, 43 s). Broken state: the 2.0 update reset “Notify the site owner” to off (wp/plugins/testbed-forms).
+**s01 The contact form stops emailing the shop owner** (wordpress, action “Contact form”, seal mode, 42 s). Broken state: the 2.0 update reset “Notify the site owner” to off (wp/plugins/testbed-forms).
 Echo: BROKE message/missing: Email to owner@shop.example.com is no longer sent (sent → not sent). Also reported: BROKE expect/unmet: Sent fewer emails than expected.
 Mailpit: the inbox has 1 email instead of 2; Mailpit keeps no baseline, so nothing says one is missing.
 
@@ -98,7 +98,7 @@ Mailpit: the inbox has 0 emails instead of 1; Mailpit keeps no baseline, so noth
 Echo: BROKE message/missing: Resend email to the test submitter is no longer sent (sent → not sent).
 Mailpit: 1 email in the inbox and the problem isn't visible there.
 
-**s08 The receipt is never sent because cron is off** (wordpress, action “Checkout”, seal mode, 15 s). Broken state: the server's crontab line fails (wp: not found), so WP-Cron never runs the deferred receipt (bin/cron, Echo's flush).
+**s08 The receipt is never sent because cron is off** (wordpress, action “Checkout”, seal mode, 14 s). Broken state: the server's crontab line fails (wp: not found), so WP-Cron never runs the deferred receipt (bin/cron, Echo's flush).
 Echo: BROKE message/missing: Email to the test submitter is no longer sent (sent → not sent).
 Mailpit: the inbox has 0 emails instead of 1; Mailpit keeps no baseline, so nothing says one is missing.
 
@@ -110,42 +110,18 @@ Mailpit: the inbox shows "webmaster@old-agency.example.net" in “New message fr
 
 **s10 A merge tag is left unreplaced in the receipt** (wordpress, action “Checkout”, seal mode, 14 s). Broken state: the 2.0 receipt template uses {customer_first_name}, a tag the mailer doesn't know (wp/plugins/testbed-shop).
 Echo: BROKE content/placeholder: Unfilled placeholder {customer_first_name} in email.
-Mailpit: the inbox shows "{customer_first_name}" in “Your Bean & Leaf order #1010”.
+Mailpit: the inbox shows "{customer_first_name}" in “Your Bean & Leaf order #1018”.
 
 **s11 A PHP warning is printed into the order email (plain PHP)** (php, action “Wholesale order (plain PHP)”, seal mode, 15 s). Broken state: the new receipt template prints $total, which the page never sets, with display_errors on (php/site/templates/receipt-2.php).
 Echo: BROKE content/php-error: PHP error printed in email.
-Mailpit: the inbox shows "Warning: Undefined variable" in “Wholesale order W-3976 received”.
+Mailpit: the inbox shows "Warning: Undefined variable" in “Wholesale order W-4179 received”.
 
-**s12 The receipt links to the staging site** (wordpress, action “Checkout”, seal mode, 15 s). Broken state: the order link is built from a URL copied from staging (wp/plugins/testbed-shop).
-Echo: NEW content/dev-link: Email links to a development address (staging.shop.test). Also reported: CHANGED message/text: Email to the test submitter: text changed (Hi echo-test,
-
-Thanks for your order #1011.
-
-  1 × Colombia Huila, 1 kg  $39.99
-  1 × V60 filters, 100  $10.00
-
-Total: $49.99
-
-View your order: https://shop.example.com/my-account/orders/1011/
-
-Bean & Leaf
- → Hi echo-test,
-
-Thanks for your order #1012.
-
-  1 × Colombia Huila, 1 kg  $39.99
-  1 × V60 filters, 100  $10.00
-
-Total: $49.99
-
-View your order: https://staging.shop.test/my-account/orders/1012/
-
-Bean & Leaf
-).
-Mailpit: the inbox shows "staging.shop.test" in “Your Bean & Leaf order #1012”.
+**s12 The receipt links to the staging site** (wordpress, action “Checkout”, seal mode, 14 s). Broken state: the order link is built from a URL copied from staging (wp/plugins/testbed-shop).
+Echo: NEW content/dev-link: Email links to a development address (staging.shop.test).
+Mailpit: the inbox shows "staging.shop.test" in “Your Bean & Leaf order #1020”.
 
 **s13 The order SMS is now 3 segments** (wordpress, action “Checkout”, seal mode, 14 s). Broken state: the SMS gained a greeting with emoji and curly quotes: UCS-2, 3 parts (wp/plugins/testbed-shop).
-Echo: NEW sms/parts: SMS needs more than one part. Also reported: CHANGED message/text: Twilio SMS to the test number: text changed (Bean & Leaf: order #1013 is confirmed. Track it at https://shop.example.com/t/1013 → 🎉 Hi echo-test! Thanks so much for your order #1014 with Bean & Leaf ☕️ We’re roasting your beans now and they’ll ship tomorrow. Track it any time at https://shop.example.com/t/1014 🚚).
+Echo: NEW sms/parts: SMS needs more than one part. Also reported: CHANGED message/text: Twilio SMS to the test number: text changed (Bean & Leaf: order #1021 is confirmed. Track it at https://shop.example.com/t/1021 → 🎉 Hi echo-test! Thanks so much for your order #1022 with Bean & Leaf ☕️ We’re roasting your beans now and they’ll ship tomorrow. Track it any time at https://shop.example.com/t/1022 🚚).
 Mailpit: Mailpit only receives email; SMS never reach it.
 
 **s14 A field is removed from the order webhook payload** (wordpress, action “Checkout”, seal mode, 14 s). Broken state: order.created no longer carries billing.email (wp/plugins/testbed-shop).
@@ -174,13 +150,13 @@ Mailpit: Mailpit only receives email; DNS records never reach it.
 
 ### Staging safety
 
-**s19 A staging refresh brings a real customer address** (wordpress, action “Resend the receipt for order 1000”, observe mode, 15 s). Broken state: the staging database was refreshed from production, so order 1000's customer is a real address (wp/plugins/testbed-shop).
+**s19 A staging refresh brings a real customer address** (wordpress, action “Resend the receipt for order 1000”, observe mode, 16 s). Broken state: the staging database was refreshed from production, so order 1000's customer is a real address (wp/plugins/testbed-shop).
 Echo: NEW seal/real-recipient: Email really sent to an address outside the allowlist. Also reported: BROKE message/missing: Email to jamie@example.net is no longer sent (sent → not sent); NEW message/new: Email to jamie.rivera@gmail.com is now sent.
 Mailpit: the inbox shows "jamie.rivera@gmail.com" in “Your Bean & Leaf order #1000”.
 
 ### Inbound
 
-**s20 A Stripe payment no longer triggers the payment email** (wordpress, action “Stripe payment succeeded”, seal mode, 14 s). Broken state: gateway 9.0 handles charge.succeeded instead of payment_intent.succeeded; Stripe still gets its 200 (wp/plugins/testbed-stripe).
+**s20 A Stripe payment no longer triggers the payment email** (wordpress, action “Stripe payment succeeded”, seal mode, 15 s). Broken state: gateway 9.0 handles charge.succeeded instead of payment_intent.succeeded; Stripe still gets its 200 (wp/plugins/testbed-stripe).
 Echo: BROKE message/missing: Email to jamie@example.net is no longer sent (sent → not sent).
 Mailpit: the inbox has 0 emails instead of 1; Mailpit keeps no baseline, so nothing says one is missing.
 
@@ -201,41 +177,17 @@ Echo: compare: exit 0, says “after the action ended and is counted with it”,
 **e05 The PDF invoice is no longer attached** (needs local, probe `attachment`, 4 s). Broken state: the invoice plugin stops attaching invoice-1042.pdf after an update; the receipt itself is still sent.
 Echo: compare: exit 0, BROKE message/attachment-lost “invoice-1042.pdf”.
 
-**e06 A large newsletter through the Laravel connector** (needs testbed, probe `large-laravel`, 12 s). Broken state: the newsletter grows to 2 MB of HTML with a 5 MB PDF; the connector waits 2 s for Echo (laravel/overlay/routes/web.php).
+**e06 A large newsletter through the Laravel connector** (needs testbed, probe `large-laravel`, 10 s). Broken state: the newsletter grows to 2 MB of HTML with a 5 MB PDF; the connector waits 2 s for Echo (laravel/overlay/routes/web.php).
 Echo: snapshot: exit 0, says “message: email to”, never “[blocked]”, never “[failed]”, never “action error”.
 
-**e07 Echo restarts in the middle of a compare** (needs local, probe `restart`, 12 s). Broken state: Echo is stopped and started again while the first of two actions runs; its inbox is in memory.
+**e07 Echo restarts in the middle of a compare** (needs local, probe `restart`, 11 s). Broken state: Echo is stopped and started again while the first of two actions runs; its inbox is in memory.
 Echo: compare: says “echo restarted during the run”.
 
-**e08 The sites can't reach Echo while it is sealed** (needs testbed, probe `unreachable`, 107 s). Broken state: Echo moves off the ports the gate forwards (18863-18865), so every connector and the sendmail stand-in fail to reach it; the CLI still can.
-Echo: missed: laravel: doesn't say "can't reach echo".
+**e08 The sites can't reach Echo while it is sealed** (needs testbed, probe `unreachable`, 103 s). Broken state: Echo moves off the ports the gate forwards (18863-18865), so every connector and the sendmail stand-in fail to reach it; the CLI still can.
+Echo: wordpress: says “can't reach echo”, BROKE message/missing; laravel: says “can't reach echo”, BROKE message/missing; next: says “can't reach echo”, BROKE message/missing; php: never “nothing broke”, BROKE message/missing.
 
-**e09 Order numbers, dates and links change on every run** (needs testbed, probe `noise`, 86 s). Broken state: s10, s11 and s12 broken, whose emails carry an order number and a date that differ on every run, compared with their good state.
-Echo: missed: s12: reports CHANGED message/text: Email to the test submitter: text changed (Hi echo-test,
-
-Thanks for your order #1023.
-
-  1 × Colombia Huila, 1 kg  $39.99
-  1 × V60 filters, 100  $10.00
-
-Total: $49.99
-
-View your order: https://shop.example.com/my-account/orders/1023/
-
-Bean & Leaf
- → Hi echo-test,
-
-Thanks for your order #1024.
-
-  1 × Colombia Huila, 1 kg  $39.99
-  1 × V60 filters, 100  $10.00
-
-Total: $49.99
-
-View your order: https://staging.shop.test/my-account/orders/1024/
-
-Bean & Leaf
-).
+**e09 Order numbers, dates and links change on every run** (needs testbed, probe `noise`, 83 s). Broken state: s10, s11 and s12 broken, whose emails carry an order number and a date that differ on every run, compared with their good state.
+Echo: s10: BROKE content/placeholder “{customer_first_name}”, no CHANGED; s11: BROKE content/php-error “PHP error”, no CHANGED; s12: NEW content/dev-link “staging.shop.test”, no CHANGED.
 
 **e10 Connector and Echo versions differ** (needs testbed, probe `version-skew`, 19 s). Broken state: the WordPress connector of Echo 1.0.0 (wire 1) against this Echo, then this connector against Echo 1.0.0, both built from this repository.
 Echo: old connector: exit 0, says “message: email to”, never “action error”; old Echo: exit 0, says “message: email to”, never “action error”.
