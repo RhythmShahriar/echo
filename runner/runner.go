@@ -202,7 +202,7 @@ func runAction(ctx context.Context, o Options, run *model.Run, a config.Action, 
 	act := model.Action{ID: ActionID(a.Name), Label: a.Name, Kind: kind(a)}
 	start := time.Now()
 	if err := refuse(cfg, a, run.Mode, fake); err != nil {
-		act.Error = err.Error()
+		act.Error = actionError(a, err)
 		return act, nil
 	}
 	// HTTP requests and commands carry the run signed with RunKey when
@@ -226,7 +226,7 @@ func runAction(ctx context.Context, o Options, run *model.Run, a config.Action, 
 		}
 	}
 	if err != nil {
-		act.Error = err.Error()
+		act.Error = actionError(a, err)
 	}
 	o.runFlush(ctx, runValue)
 	// Echo answers with what it has once the timeout passes; the grace
@@ -235,7 +235,7 @@ func runAction(ctx context.Context, o Options, run *model.Run, a config.Action, 
 	msgs, werr := wait(wctx, o.Client, client.Filter{Run: runID, Action: act.ID}, a.Expect, quiet, cfg.Timeout.Duration)
 	cancel()
 	if werr != nil && act.Error == "" {
-		act.Error = werr.Error()
+		act.Error = actionError(a, werr)
 	}
 	// Asked before end() so the window is exactly while this action was
 	// open. Not knowing only costs the warning.
@@ -432,6 +432,78 @@ func doHTTP(ctx context.Context, o Options, a config.Action, runValue string, fa
 // a key from ${env:...} in its query and an action's error goes to the
 // terminal, run.json and the HTML report, which are shared and exported.
 func shownURL(u string) string { return mask.URL(secrets.Redact(u)) }
+
+// actionError is the text of an action's error with every value its
+// ${env:…} placeholders resolved to masked. shownURL masks a value only
+// where it looks like a secret (an api_key= query, a signed URL); one in
+// the path or under an ordinary query key would reach the terminal,
+// run.json and the report as it is. Values under 4 characters are left:
+// masking every "1" would garble the error and hide nothing.
+func actionError(a config.Action, err error) string {
+	msg := err.Error()
+	vals := envValues(a)
+	slices.SortFunc(vals, func(x, y string) int { return len(y) - len(x) }) // a value inside another goes after it
+	for _, v := range vals {
+		msg = strings.ReplaceAll(msg, v, mask.Hidden)
+		if q := url.QueryEscape(v); q != v {
+			msg = strings.ReplaceAll(msg, q, mask.Hidden)
+		}
+		if p := url.PathEscape(v); p != v {
+			msg = strings.ReplaceAll(msg, p, mask.Hidden)
+		}
+	}
+	return msg
+}
+
+// envValues lists the values the ${env:…} placeholders in a's command,
+// URL, body, form, JSON and headers resolve to.
+func envValues(a config.Action) []string {
+	var out []string
+	add := func(s string) {
+		for _, m := range fakeRe.FindAllStringSubmatch(s, -1) {
+			if v := os.Getenv(m[2]); m[1] == "env" && len(v) >= 4 && !slices.Contains(out, v) {
+				out = append(out, v)
+			}
+		}
+	}
+	add(a.Command)
+	if h := a.HTTP; h != nil {
+		add(h.URL)
+		add(h.Body)
+		for k, v := range h.Form {
+			add(k)
+			add(v)
+		}
+		for _, v := range h.Headers {
+			add(v)
+		}
+		walkStrings(h.JSON, add)
+	}
+	return out
+}
+
+// walkStrings calls f with each string key and value of a JSON body as
+// YAML decoded it.
+func walkStrings(v any, f func(string)) {
+	switch v := v.(type) {
+	case string:
+		f(v)
+	case map[string]any:
+		for k, val := range v {
+			f(k)
+			walkStrings(val, f)
+		}
+	case map[any]any:
+		for k, val := range v {
+			f(fmt.Sprint(k))
+			walkStrings(val, f)
+		}
+	case []any:
+		for _, val := range v {
+			walkStrings(val, f)
+		}
+	}
+}
 
 // hideURL returns err with target shown as shownURL shows it.
 func hideURL(err error, target string) error {

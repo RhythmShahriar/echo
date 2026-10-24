@@ -15,6 +15,7 @@ import (
 
 	"github.com/RhythmShahriar/echo/check"
 	"github.com/RhythmShahriar/echo/config"
+	"github.com/RhythmShahriar/echo/mask"
 	"github.com/RhythmShahriar/echo/model"
 )
 
@@ -84,6 +85,33 @@ func TestErrorsHideTheTargetsSecrets(t *testing.T) {
 	wrapped := hideURL(fmt.Errorf("x: %w", context.Canceled), "http://a.test/")
 	if !errors.Is(wrapped, context.Canceled) {
 		t.Errorf("the masked error lost what it wraps: %v", wrapped)
+	}
+}
+
+// TestErrorsHideEnvValues: a value from ${env:...} is masked in an
+// action's error wherever it sits in the URL, not only under a query key
+// that looks like a secret.
+func TestErrorsHideEnvValues(t *testing.T) {
+	t.Setenv("ECHO_TEST_K", "supersecretvalue123")
+	t.Setenv("ECHO_TEST_SHORT", "2")
+	a := config.Action{Name: "x", HTTP: &config.HTTPAction{
+		URL:     "http://127.0.0.1:22303/x/${env:ECHO_TEST_K}?q=${env:ECHO_TEST_K}&page=${env:ECHO_TEST_SHORT}",
+		Headers: map[string]string{"X-A": "${env:ECHO_TEST_K}"},
+		JSON:    map[string]any{"a": []any{"${env:ECHO_TEST_K}"}},
+	}}
+	o := Options{Config: config.Default(), HTTP: &http.Client{Timeout: time.Second}}
+	err := doHTTP(context.Background(), o, a, "run/x", newFake())
+	if err == nil {
+		t.Fatal("a request to a closed port worked")
+	}
+	got := actionError(a, err)
+	if strings.Contains(got, "supersecretvalue123") || !strings.Contains(got, "/x/"+mask.Hidden+"?q="+mask.Hidden) || !strings.Contains(got, "page=2") {
+		t.Errorf("a failed request: %s", got)
+	}
+	t.Setenv("ECHO_TEST_K", "a b/c")
+	c := config.Action{Name: "c", Command: "curl http://a.test/${env:ECHO_TEST_K}"}
+	if got := actionError(c, errors.New(`GET http://a.test/a%20b%2Fc?x=a+b%2Fc: "a b/c" failed`)); strings.Contains(got, "a b") || strings.Contains(got, "a%20b") || strings.Contains(got, "a+b") {
+		t.Errorf("an escaped value: %s", got)
 	}
 }
 
