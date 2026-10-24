@@ -114,7 +114,7 @@ if [ ! -f "$app/artisan" ]; then
 	composer create-project --no-install --no-scripts --prefer-dist laravel/laravel . >/dev/null
 	composer config platform.php 8.3.0
 	composer config repositories.echo '{"type": "path", "url": "../..", "options": {"symlink": true}}'
-	composer require --no-interaction --no-progress 'rhythm/echo-laravel:*@dev'
+	composer require --no-interaction --no-progress 'rhythmsh/echo-laravel:*@dev'
 	cp "$app/.env.example" "$app/.env"
 	artisan key:generate --force
 	touch "$app/database/database.sqlite"

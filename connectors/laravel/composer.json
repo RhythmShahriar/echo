@@ -1,5 +1,5 @@
 {
-    "name": "rhythm/echo-laravel",
+    "name": "rhythmsh/echo-laravel",
     "description": "Rhythm Echo connector for Laravel: capture and seal the mail and HTTP calls a staging site sends.",
     "keywords": [
         "laravel",

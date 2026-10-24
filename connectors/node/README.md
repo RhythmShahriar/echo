@@ -1,4 +1,4 @@
-# @rhythm/echo
+# @rhythmsh/echo
 
 The Next.js and Node connector for [Echo](https://github.com/RhythmShahriar/echo), Rhythm's tool that captures and checks everything a site sends: email, SMS, webhooks, chat alerts, analytics and payment calls.
 
@@ -10,7 +10,7 @@ The connector reports every outbound request and email to a running Echo (`rhyth
 It has no runtime dependencies, does nothing in production, and works on Vercel preview deployments.
 
 ```sh
-npm install --save-dev @rhythm/echo   # or a regular dependency if previews build without dev deps
+npm install --save-dev @rhythmsh/echo   # or a regular dependency if previews build without dev deps
 ```
 
 ## Next.js (App Router)
@@ -18,14 +18,14 @@ npm install --save-dev @rhythm/echo   # or a regular dependency if previews buil
 ```ts
 // instrumentation.ts
 export async function register() {
-  const { register } = await import('@rhythm/echo/next');
+  const { register } = await import('@rhythmsh/echo/next');
   await register();
 }
 ```
 
 ```js
 // next.config.mjs: only needed if the app uses Nodemailer
-import { withEcho } from '@rhythm/echo/next';
+import { withEcho } from '@rhythmsh/echo/next';
 
 export default withEcho({
   /* your config */
@@ -44,17 +44,17 @@ Next.js bundles server dependencies, and the connector can't reach a bundled cop
 Load the connector before the app. Use either the command line:
 
 ```sh
-node --import @rhythm/echo/register server.js   # ESM or CJS app, Node >= 18.19
-node -r @rhythm/echo/register server.js         # CJS app
+node --import @rhythmsh/echo/register server.js   # ESM or CJS app, Node >= 18.19
+node -r @rhythmsh/echo/register server.js         # CJS app
 ```
 
-or put `import '@rhythm/echo/register'` as the app's first import.
+or put `import '@rhythmsh/echo/register'` as the app's first import.
 
 To tie captures to the request that caused them, add the middleware:
 
 ```js
 import express from 'express';
-import { echoMiddleware } from '@rhythm/echo';
+import { echoMiddleware } from '@rhythmsh/echo';
 
 const app = express();
 app.use(echoMiddleware());
@@ -65,7 +65,7 @@ For other frameworks, wrap the handler with `withEchoRun(req, () => handle(req))
 ## Scripts, cron jobs and workers
 
 ```sh
-node --import @rhythm/echo/register scripts/send-digest.js
+node --import @rhythmsh/echo/register scripts/send-digest.js
 ```
 
 When Echo's action runner starts a command, it sets `RHYTHM_ECHO_RUN`, and captures carry that run. A worker that handles queued jobs can pass the run along itself, for example `withEchoRun(job.data.echoRun, () => process(job))`.

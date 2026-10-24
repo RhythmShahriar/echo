@@ -1,5 +1,5 @@
 {
-  "name": "@rhythm/echo",
+  "name": "@rhythmsh/echo",
   "version": "0.1.0",
   "description": "Echo connector for Next.js and Node: captures outbound email and HTTP (fetch, http/https, Nodemailer) and seals staging sites.",
   "keywords": [

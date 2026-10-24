@@ -1,6 +1,6 @@
 // Everything that needs Node built-ins: the http/https hook, Nodemailer and
 // the Next.js request lookup on the Node runtime. Kept apart so the Edge
-// bundle of `@rhythm/echo/next` never reaches it.
+// bundle of `@rhythmsh/echo/next` never reaches it.
 
 import { createRequire } from 'node:module';
 import path from 'node:path';

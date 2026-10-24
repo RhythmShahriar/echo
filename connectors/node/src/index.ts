@@ -1,5 +1,5 @@
-// @rhythm/echo for Node: Express, Fastify, Nest, scripts and workers.
-// Next.js apps use @rhythm/echo/next from instrumentation.ts instead.
+// @rhythmsh/echo for Node: Express, Fastify, Nest, scripts and workers.
+// Next.js apps use @rhythmsh/echo/next from instrumentation.ts instead.
 
 import { activate, announce } from './activate.js';
 import type { Options } from './config.js';

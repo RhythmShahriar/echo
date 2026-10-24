@@ -179,7 +179,7 @@ class Connector
      */
     public static function caller(): string
     {
-        $skip = ['laravel/framework', 'rhythm/echo-laravel', 'laravel/serializable-closure'];
+        $skip = ['laravel/framework', 'rhythmsh/echo-laravel', 'laravel/serializable-closure'];
         $skipVendors = ['guzzlehttp', 'symfony', 'psr', 'php-http', 'nesbot', 'illuminate'];
         foreach (debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 64) as $frame) {
             $file = str_replace('\\', '/', $frame['file'] ?? '');

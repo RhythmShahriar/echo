@@ -1,4 +1,4 @@
-import { withEcho } from '@rhythm/echo/next';
+import { withEcho } from '@rhythmsh/echo/next';
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {

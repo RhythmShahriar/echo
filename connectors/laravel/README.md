@@ -1,4 +1,4 @@
-# rhythm/echo-laravel
+# rhythmsh/echo-laravel
 
 The Laravel connector for [Rhythm Echo](https://github.com/RhythmShahriar/echo). Echo captures everything a staging site **sends**, such as email, SMS, webhooks, Slack alerts and analytics calls, and checks it.
 
@@ -8,7 +8,7 @@ The Laravel connector for [Rhythm Echo](https://github.com/RhythmShahriar/echo).
 Laravel 11, 12 and 13 on PHP 8.2+.
 
 ```sh
-composer require rhythm/echo-laravel        # inert in production, so staging can install it with --no-dev
+composer require rhythmsh/echo-laravel        # inert in production, so staging can install it with --no-dev
 rhythm-echo up                               # Echo on 127.0.0.1:8025
 php artisan echo:status
 ```

@@ -1,7 +1,7 @@
-// @rhythm/echo/next, for instrumentation.ts:
+// @rhythmsh/echo/next, for instrumentation.ts:
 //
 //   export async function register() {
-//     const { register } = await import('@rhythm/echo/next');
+//     const { register } = await import('@rhythmsh/echo/next');
 //     await register();
 //   }
 //
@@ -65,7 +65,7 @@ type NextConfigInput = NextConfig | ((...args: unknown[]) => NextConfig | Promis
  * harmless in production.
  *
  *   // next.config.mjs
- *   import { withEcho } from '@rhythm/echo/next';
+ *   import { withEcho } from '@rhythmsh/echo/next';
  *   export default withEcho({ ... });
  */
 export function withEcho<T extends NextConfigInput>(config: T): T {

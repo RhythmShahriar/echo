@@ -1,7 +1,7 @@
 // Process-wide state. It lives on globalThis under a registered symbol, not
 // in module scope, because one process can load this package twice: the ESM
-// build through `node --import @rhythm/echo/register` and the CJS build
-// through the app's `require('@rhythm/echo')`, or a bundled copy next to an
+// build through `node --import @rhythmsh/echo/register` and the CJS build
+// through the app's `require('@rhythmsh/echo')`, or a bundled copy next to an
 // external one. Both copies must patch once and share one run context.
 
 import type { Config } from './config.js';
