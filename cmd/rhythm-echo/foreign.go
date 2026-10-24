@@ -56,7 +56,7 @@ func (e *bindError) Error() string {
 func (e *bindError) Unwrap() error { return e.err }
 
 // listenPair binds the API and, unless smtp is "", the SMTP address. On a
-// failure nothing stays open, and the error is a *bindError for the
+// failure nothing stays open and the error is a *bindError for the
 // first port that failed.
 func listenPair(api, smtp string) (ln, sl net.Listener, err error) {
 	if ln, err = net.Listen("tcp", api); err != nil {
