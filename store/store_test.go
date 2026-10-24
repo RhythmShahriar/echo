@@ -26,7 +26,7 @@ func TestSnapshotLifecycle(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err := Saver(dir)("shots/a.png", []byte("png")); err != nil {
+		if err := os.WriteFile(filepath.Join(dir, "notes.txt"), []byte("kept"), 0o600); err != nil {
 			t.Fatal(err)
 		}
 		if err := SaveRun(dir, &model.Run{Schema: model.Schema, Name: name, Target: "http://x.test/"}); err != nil {
@@ -47,7 +47,7 @@ func TestSnapshotLifecycle(t *testing.T) {
 	if err != nil || r.Name != "after-update" {
 		t.Fatalf("LoadRun: %+v %v", r, err)
 	}
-	if _, err := os.Stat(filepath.Join(dir, "shots", "a.png")); err != nil {
+	if _, err := os.Stat(filepath.Join(dir, "notes.txt")); err != nil {
 		t.Error("files didn't move with the snapshot")
 	}
 	names, _ := s.Snapshots()
@@ -59,15 +59,6 @@ func TestSnapshotLifecycle(t *testing.T) {
 	}
 	if _, err := s.Snapshot("../etc"); err == nil {
 		t.Error("path names must be rejected")
-	}
-}
-
-func TestSaverStaysInside(t *testing.T) {
-	save := Saver(t.TempDir())
-	for _, bad := range []string{"../x", "/etc/passwd", "a/../../x"} {
-		if err := save(bad, nil); err == nil {
-			t.Errorf("Saver wrote %q", bad)
-		}
 	}
 }
 
@@ -115,11 +106,52 @@ func TestExcludeFromGit(t *testing.T) {
 		t.Fatal(err)
 	}
 	ex := string(data)
-	if strings.Count(ex, "/.echo/snapshots/") != 1 || !strings.Contains(ex, "/.echo/runs/") {
+	if strings.Count(ex, "/.echo/snapshots/\n") != 1 || !strings.Contains(ex, "/.echo/runs/") {
 		t.Errorf("exclude file:\n%s", ex)
 	}
 	if strings.Contains(ex, "/.echo/\n") {
 		t.Error("config.yaml must stay visible to git")
+	}
+	want := "# Echo snapshots and reports\n/.echo/snapshots/\n/.echo/runs/\n/.echo/snapshots/.incoming-*\n"
+	if !strings.HasSuffix(ex, want) {
+		t.Errorf("exclude file:\n%s\nwant it to end in:\n%s", ex, want)
+	}
+	if strings.Contains(ex, "/.echo/.incoming/") {
+		t.Error("the old .incoming/ folder is gone; its line must not be written")
+	}
+	// Each line must match what it's meant for, and nothing else.
+	for path, ignored := range map[string]bool{
+		".echo/snapshots/before/run.json":                true,
+		".echo/snapshots/.incoming-before/run.json":      true,
+		".echo/runs/2026-01-01T00-00-00-abc123/run.json": true,
+		".echo/config.yaml":                              false,
+		".echo/flows/signup.yaml":                        false,
+	} {
+		err := exec.Command("git", "check-ignore", "-q", "--no-index", path).Run()
+		if (err == nil) != ignored {
+			t.Errorf("git check-ignore %s: ignored = %v, want %v", path, err == nil, ignored)
+		}
+	}
+}
+
+func TestExcludeFromGitAddsOnlyMissingLines(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("no git")
+	}
+	repo := t.TempDir()
+	if out, err := exec.Command("git", "init", "-q", repo).CombinedOutput(); err != nil {
+		t.Fatal(string(out))
+	}
+	t.Chdir(repo)
+	exclude := filepath.Join(repo, ".git", "info", "exclude")
+	old := "# Echo snapshots and reports\n/.echo/snapshots/\n/.echo/runs/\n/.echo/.incoming/" // no final newline
+	if err := os.WriteFile(exclude, []byte(old), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	Store{Root: ".echo"}.ExcludeFromGit()
+	data, _ := os.ReadFile(exclude)
+	if want := old + "\n/.echo/snapshots/.incoming-*\n"; string(data) != want {
+		t.Errorf("exclude file:\n%q\nwant:\n%q", data, want)
 	}
 }
 

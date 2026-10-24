@@ -3,7 +3,7 @@
 
 // Package store keeps Echo's files in the project's .echo/
 // folder: named snapshots, recent runs and comparisons, each a directory
-// with run.json (or comparison.json) and its screenshots.
+// holding run.json (or comparison.json).
 package store
 
 import (
@@ -118,17 +118,6 @@ func randomHex(n int) string {
 	b := make([]byte, n)
 	_, _ = rand.Read(b)
 	return hex.EncodeToString(b)
-}
-
-// Saver returns a function that writes files into dir.
-func Saver(dir string) func(name string, data []byte) error {
-	return func(name string, data []byte) error {
-		clean := filepath.Clean(filepath.FromSlash(name))
-		if filepath.IsAbs(clean) || strings.HasPrefix(clean, "..") {
-			return fmt.Errorf("refusing to write %q outside the run folder", name)
-		}
-		return cache.WriteFile(filepath.Join(dir, clean), data)
-	}
 }
 
 // SaveRun writes run.json into dir.
@@ -434,10 +423,14 @@ func (s Store) Prune(keep int) error {
 }
 
 // ExcludeFromGit adds the store's snapshots and runs to the repository's
-// local exclude list (.git/info/exclude), so screenshots never get
-// committed by accident and the project's .gitignore stays untouched.
-// config.yaml and flows/ stay visible to git, to share with the team. It
-// does nothing outside a git repository.
+// local exclude list (.git/info/exclude), so captured messages, which
+// can hold customer data, never get committed by accident and the
+// project's .gitignore stays untouched. Unfinished snapshots
+// (snapshots/.incoming-<name>) get a line of their own; older versions
+// wrote a .incoming/ line for a folder Echo no longer uses, and an
+// exclude list they wrote gets only the lines it lacks. config.yaml and
+// flows/ stay visible to git, to share with the team. It does nothing
+// outside a git repository.
 func (s Store) ExcludeFromGit() {
 	out, err := exec.Command("git", "rev-parse", "--git-path", "info/exclude").Output()
 	if err != nil {
@@ -461,9 +454,16 @@ func (s Store) ExcludeFromGit() {
 		return
 	}
 	base := "/" + filepath.ToSlash(rel) + "/"
-	lines := []string{base + "snapshots/", base + "runs/", base + Incoming + "/"}
+	lines := []string{base + "snapshots/", base + "runs/", base + "snapshots/" + Incoming + "-*"}
 	existing, _ := os.ReadFile(path) //nolint:gosec // the repository's own exclude file
-	if slices.Contains(strings.Split(string(existing), "\n"), lines[0]) {
+	have := strings.Split(string(existing), "\n")
+	var missing []string
+	for _, l := range lines {
+		if !slices.Contains(have, l) {
+			missing = append(missing, l)
+		}
+	}
+	if len(missing) == 0 {
 		return
 	}
 	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644) //nolint:gosec // the repository's own exclude file
@@ -474,5 +474,9 @@ func (s Store) ExcludeFromGit() {
 	if len(existing) > 0 && !strings.HasSuffix(string(existing), "\n") {
 		_, _ = f.WriteString("\n")
 	}
-	_, _ = f.WriteString("# Echo snapshots and reports\n" + strings.Join(lines, "\n") + "\n")
+	header := ""
+	if len(missing) == len(lines) {
+		header = "# Echo snapshots and reports\n"
+	}
+	_, _ = f.WriteString(header + strings.Join(missing, "\n") + "\n")
 }
