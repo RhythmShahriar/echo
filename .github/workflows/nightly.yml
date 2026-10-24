@@ -22,7 +22,7 @@ jobs:
           go-version-file: go.mod
       # The tests skip when an image is missing; pull them so they run.
       - name: Pull the test images
-        run: for i in php:8.3-cli nginx:1.27-alpine alpine:3.20; do docker pull -q "$i"; done
+        run: for i in php:8.3-cli nginx:1.27-alpine alpine:3.20 "$(awk '/^FROM /{print $2; exit}' Dockerfile)"; do docker pull -q "$i"; done
       - run: go test -tags docker -timeout 20m ./...
 
   plugin-check:

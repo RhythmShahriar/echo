@@ -13,3 +13,62 @@ jobs:
     permissions:
       contents: write
       id-token: write
+
+  # The container image, ghcr.io/rhythmshahriar/echo, until the shared
+  # release workflow can build it with GoReleaser (dockers_v2 in
+  # .goreleaser.yaml, off unless RELEASE_IMAGES=true). It builds the
+  # Dockerfile from the release's own signed Linux archives, so the image
+  # holds exactly the binaries users download. Nothing runs at build time,
+  # so arm64 needs no emulation.
+  images:
+    needs: release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write # keyless cosign signing
+    env:
+      IMAGE: ghcr.io/rhythmshahriar/echo
+      TAG: ${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: sigstore/cosign-installer@d58896d6a1865668819e1d91763c7751a165e159 # v3.9.2
+      - name: Download and verify the Linux binaries
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p dl
+          gh release download "$TAG" --dir dl --pattern checksums.txt --pattern checksums.txt.sigstore.json \
+            --pattern 'rhythm-echo_linux_amd64.tar.gz' --pattern 'rhythm-echo_linux_arm64.tar.gz'
+          for arch in amd64 arm64; do
+            .github/scripts/verify-release.sh dl "rhythm-echo_linux_${arch}.tar.gz"
+            mkdir -p "ctx/linux/$arch"
+            tar -xzf "dl/rhythm-echo_linux_${arch}.tar.gz" -C "ctx/linux/$arch" rhythm-echo
+          done
+      - name: Build, push and sign
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ACTOR: ${{ github.actor }}
+        run: |
+          set -euo pipefail
+          version=${TAG#v}
+          names=("$version")
+          # A prerelease (v1.2.0-rc1) gets only its own tag.
+          if [[ $version =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            names+=("${version%%.*}" latest)
+          fi
+          tags=()
+          for n in "${names[@]}"; do tags+=(--tag "$IMAGE:$n"); done
+          printf '%s' "$GH_TOKEN" | docker login ghcr.io -u "$ACTOR" --password-stdin
+          docker buildx create --use --name echo-release
+          docker buildx build --platform linux/amd64,linux/arm64 --push "${tags[@]}" \
+            --label org.opencontainers.image.source=https://github.com/RhythmShahriar/echo \
+            --label "org.opencontainers.image.version=$version" \
+            --label "org.opencontainers.image.revision=$GITHUB_SHA" \
+            --label org.opencontainers.image.licenses=MIT \
+            --label org.opencontainers.image.title=rhythm-echo \
+            --metadata-file meta.json -f Dockerfile ctx
+          digest=$(jq -r '."containerimage.digest"' meta.json)
+          cosign sign --yes "$IMAGE@$digest"
+          echo "Pushed and signed $IMAGE@$digest as ${names[*]}"

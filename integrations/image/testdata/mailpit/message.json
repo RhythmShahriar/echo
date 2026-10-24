@@ -1,0 +1,20 @@
+{
+  "ID": "9Wn3PrsDBRvkxQ4P8Ki9Ua",
+  "MessageID": "abc123@shop.test",
+  "From": { "Name": "Shop", "Address": "shop@shop.test" },
+  "To": [{ "Name": "Ann Buyer", "Address": "ann@example.com" }],
+  "Cc": [],
+  "Bcc": [],
+  "ReplyTo": [],
+  "ReturnPath": "shop@shop.test",
+  "Subject": "Your order",
+  "ListUnsubscribe": { "Header": "", "Links": [], "Errors": "", "HeaderPost": "" },
+  "Date": "2026-10-24T09:12:31Z",
+  "Tags": [],
+  "Username": "",
+  "Text": "Thanks for your order",
+  "HTML": "",
+  "Size": 412,
+  "Inline": [],
+  "Attachments": []
+}

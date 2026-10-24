@@ -1,9 +1,16 @@
 GOLANGCI := go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0
 
-.PHONY: build test test-connectors test-docker actionlint lint fmt check hooks testbed testbed-down bench
+IMAGE_ARCH ?= $(shell go env GOARCH)
+
+.PHONY: build image test test-connectors test-docker actionlint lint fmt check hooks testbed testbed-down bench
 
 build: ## build bin/rhythm-echo
 	go build -o bin/rhythm-echo ./cmd/rhythm-echo
+
+image: ## build the container image for this machine as rhythm-echo:dev (needs Docker with buildx)
+	rm -rf bin/image && mkdir -p bin/image/linux/$(IMAGE_ARCH)
+	CGO_ENABLED=0 GOOS=linux GOARCH=$(IMAGE_ARCH) go build -trimpath -o bin/image/linux/$(IMAGE_ARCH)/rhythm-echo ./cmd/rhythm-echo
+	docker buildx build --load --platform linux/$(IMAGE_ARCH) -t rhythm-echo:dev -f Dockerfile bin/image
 
 test: ## run the Go tests (the connector suites: make test-connectors)
 	go test -race ./...

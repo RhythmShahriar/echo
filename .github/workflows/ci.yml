@@ -90,3 +90,41 @@ jobs:
           php-version: "8.3"
           coverage: none
       - run: go test -race ./...
+
+  # The container image: build it from the Dockerfile, send a mail over
+  # SMTP and check the Mailpit API answers in Mailpit's shape.
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
+        with:
+          go-version-file: go.mod
+      - name: Pull the base image
+        run: docker pull -q "$(awk '/^FROM /{print $2; exit}' Dockerfile)"
+      - run: go test -tags docker -v ./integrations/image
+
+  # The DDEV add-on, with DDEV's own add-on test action and an image built
+  # from this commit (the published one may not have the change yet).
+  ddev:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
+        with:
+          go-version-file: go.mod
+      - name: Build the image
+        run: |
+          mkdir -p "$RUNNER_TEMP/ctx/linux/amd64"
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -o "$RUNNER_TEMP/ctx/linux/amd64/rhythm-echo" ./cmd/rhythm-echo
+          docker buildx build --load --platform linux/amd64 -t rhythm-echo:ci -f Dockerfile "$RUNNER_TEMP/ctx"
+      - uses: ddev/github-action-add-on-test@d614651ba8fffdb956ab7864f191c32353330d68 # v2.6.2
+        env:
+          ECHO_TEST_IMAGE: rhythm-echo:ci
+        with:
+          ddev_version: stable
+          token: ${{ secrets.GITHUB_TOKEN }}
+          addon_repository: ${{ github.repository }}
+          addon_ref: ${{ github.sha }}
+          disable_checkout_action: true
+          test_command: bats integrations/ddev/tests --filter-tags '!release'

@@ -27,3 +27,7 @@ updates:
     directory: /
     schedule:
       interval: weekly
+  - package-ecosystem: docker
+    directory: /   # the Dockerfile's distroless base, pinned by digest
+    schedule:
+      interval: weekly

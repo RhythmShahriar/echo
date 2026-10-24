@@ -1,0 +1,27 @@
+{
+  "total": 1,
+  "unread": 1,
+  "messages_count": 1,
+  "messages_unread": 1,
+  "start": 0,
+  "tags": [],
+  "messages": [
+    {
+      "ID": "9Wn3PrsDBRvkxQ4P8Ki9Ua",
+      "MessageID": "abc123@shop.test",
+      "Read": false,
+      "From": { "Name": "Shop", "Address": "shop@shop.test" },
+      "To": [{ "Name": "Ann Buyer", "Address": "ann@example.com" }],
+      "Cc": [],
+      "Bcc": [],
+      "ReplyTo": [],
+      "Subject": "Your order",
+      "Created": "2026-10-24T09:12:31.415Z",
+      "Username": "",
+      "Tags": [],
+      "Size": 412,
+      "Attachments": 0,
+      "Snippet": "Thanks for your order"
+    }
+  ]
+}
