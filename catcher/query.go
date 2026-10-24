@@ -43,7 +43,8 @@ var hasValues = []string{"attachment", "issue"}
 //	provider: twilio, sendgrid, slack…
 //	check:    a problem found in the message: check:content/dev-link, or
 //	          check:content for every content check
-//	site:     part of the sending site's name or host
+//	site:     the sending site: its ID, its host or whole labels of the
+//	          host (site:client-a finds client-a.test, not client-ab.test)
 //	has:      attachment or issue
 //
 // Free text is looked for in the subject, text, HTML, addresses, URL,
@@ -174,7 +175,7 @@ func (t term) match(m model.Message) bool {
 	case "subject":
 		return t.any(m.Subject)
 	case "site":
-		return t.any(m.Source.Site, m.Source.Host)
+		return siteMatches(t.value, m.Source)
 	case "channel":
 		return slices.Contains(strings.Split(t.value, ","), string(m.Channel))
 	case "action":
@@ -198,4 +199,28 @@ func (t term) match(m model.Message) bool {
 // any reports whether any of vs contains t's value.
 func (t term) any(vs ...string) bool {
 	return slices.ContainsFunc(vs, t.re.MatchString)
+}
+
+// siteMatches reports whether v names the site src came from: its ID or
+// the site's name for itself (Source.Site, a hub ID or a home URL) or its
+// host, whole or by whole dot-separated labels, so that site:client-a
+// finds client-a and client-a.test but never client-ab, another site of
+// the same hub.
+func siteMatches(v string, src model.Source) bool {
+	v = strings.ToLower(strings.TrimSpace(v))
+	if v == "" {
+		return false
+	}
+	var names []string
+	for _, n := range []string{src.Site, hostOnly(src.Site), src.Host} {
+		if n = strings.ToLower(n); n != "" {
+			names = append(names, n)
+		}
+	}
+	for _, n := range names {
+		if n == v || strings.HasPrefix(n, v+".") || strings.HasSuffix(n, "."+v) || strings.Contains(n, "."+v+".") {
+			return true
+		}
+	}
+	return false
 }

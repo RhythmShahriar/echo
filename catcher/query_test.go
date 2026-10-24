@@ -90,3 +90,26 @@ func TestParseQueryErrors(t *testing.T) {
 		}
 	}
 }
+
+// TestSiteMatchesWholeLabels: site:client-a finds client-a's messages
+// and never client-ab's, another site of the same hub.
+func TestSiteMatchesWholeLabels(t *testing.T) {
+	for _, c := range []struct {
+		v    string
+		src  model.Source
+		want bool
+	}{
+		{"client-a", model.Source{Site: "client-a"}, true},
+		{"CLIENT-A", model.Source{Site: "client-a"}, true},
+		{"client-a", model.Source{Site: "client-ab"}, false},
+		{"client-a", model.Source{Site: "https://client-a.test"}, true},
+		{"client-a", model.Source{Site: "https://client-ab.test"}, false},
+		{"shop.test", model.Source{Host: "staging.shop.test"}, true},
+		{"shop", model.Source{Host: "shopping.test"}, false},
+		{"", model.Source{Host: "shop.test"}, false},
+	} {
+		if got := siteMatches(c.v, c.src); got != c.want {
+			t.Errorf("site:%s on %+v = %v, want %v", c.v, c.src, got, c.want)
+		}
+	}
+}
