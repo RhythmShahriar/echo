@@ -86,6 +86,9 @@ func TestPersistedInboxSurvivesReopen(t *testing.T) {
 }
 
 func TestPersistedInboxFilesAreOwnerOnly(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows files have no Unix mode")
+	}
 	dir := filepath.Join(t.TempDir(), "inbox")
 	in := openInbox(t, InboxOptions{Dir: dir})
 	in.Add(model.Message{Channel: model.Email, Subject: "hello"})
@@ -378,5 +381,25 @@ func TestInboxFolderIsMadeOwnerOnly(t *testing.T) {
 	fi, err := os.Stat(dir)
 	if err != nil || fi.Mode().Perm() != 0o700 {
 		t.Errorf("mode %v, %v; want 0700", fi.Mode().Perm(), err)
+	}
+}
+
+func TestRefusedInboxFolderKeepsItsMode(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows folders have no Unix mode")
+	}
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "notes.txt"), []byte("mine"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := OpenInbox(InboxOptions{Dir: dir}); err == nil || !strings.Contains(err.Error(), "aren't Echo's") {
+		t.Fatalf("err = %v; want the folder refused", err)
+	}
+	fi, err := os.Stat(dir)
+	if err != nil || fi.Mode().Perm() != 0o755 {
+		t.Errorf("mode %v, %v; want 0755 kept", fi.Mode().Perm(), err)
 	}
 }

@@ -314,11 +314,28 @@ const marker = ".echo-inbox"
 // claim makes dir an inbox folder: created owner-only when missing,
 // tightened to owner-only when others may read it (messages are masked
 // yet still name people) and marked as Echo's. A folder that holds other
-// files and no marker is refused. One holding only journal files is an
-// inbox from before the marker: it's marked and kept.
+// files and no marker is refused and left as it was: its mode may be what
+// a web server or a group needs to read the other files. One holding only
+// journal files is an inbox from before the marker: it's marked and kept.
 func claim(dir string) error {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return fmt.Errorf("open inbox: %w", err)
+	}
+	mark := filepath.Join(dir, marker)
+	if _, err := os.Stat(mark); err != nil {
+		ents, err := os.ReadDir(dir)
+		if err != nil {
+			return fmt.Errorf("open inbox: %w", err)
+		}
+		for _, e := range ents {
+			if !journalFile(e.Name()) {
+				return fmt.Errorf("open inbox: %s holds files that aren't Echo's, such as %s; give the inbox a folder of its own", dir, e.Name())
+			}
+		}
+		err = os.WriteFile(mark, []byte("This folder holds an Echo inbox. Echo removes the journal files in it that it no longer needs.\n"), 0o600)
+		if err != nil {
+			return fmt.Errorf("open inbox: %w", err)
+		}
 	}
 	fi, err := os.Stat(dir)
 	if err != nil {
@@ -328,23 +345,6 @@ func claim(dir string) error {
 		if err := os.Chmod(dir, 0o700); err != nil { //nolint:gosec // a folder needs x to be entered; 0700 is owner-only
 			return fmt.Errorf("open inbox: make %s owner-only: %w", dir, err)
 		}
-	}
-	mark := filepath.Join(dir, marker)
-	if _, err := os.Stat(mark); err == nil {
-		return nil
-	}
-	ents, err := os.ReadDir(dir)
-	if err != nil {
-		return fmt.Errorf("open inbox: %w", err)
-	}
-	for _, e := range ents {
-		if !journalFile(e.Name()) {
-			return fmt.Errorf("open inbox: %s holds files that aren't Echo's, such as %s; give the inbox a folder of its own", dir, e.Name())
-		}
-	}
-	err = os.WriteFile(mark, []byte("This folder holds an Echo inbox. Echo removes the journal files in it that it no longer needs.\n"), 0o600)
-	if err != nil {
-		return fmt.Errorf("open inbox: %w", err)
 	}
 	return nil
 }
