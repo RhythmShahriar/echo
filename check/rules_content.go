@@ -6,8 +6,8 @@ package check
 import (
 	"fmt"
 	"slices"
-	"strings"
 
+	"github.com/RhythmShahriar/echo/mask"
 	"github.com/RhythmShahriar/echo/model"
 )
 
@@ -89,9 +89,11 @@ var secretInBody = Rule{
 	Channels: []model.Channel{model.SMS, model.WhatsApp, model.Chat, model.Webhook, model.Analytics, model.Payment, model.Push, model.HTTP},
 	Doc:      "A payload carries a credential (Echo masked it).",
 	// Whatever happened to the message: a sealed site's payload says what
-	// the live site would send.
+	// the live site would send. Only masks that stand for a credential
+	// count: a one-time code, a link token or a URL signature is meant to
+	// be in the message.
 	Run: func(m model.Message, _ Options) []model.Issue {
-		if !strings.Contains(m.Body, "•••••") {
+		if mask.Credentials(m.Body) == 0 {
 			return nil
 		}
 		return []model.Issue{{Title: fmt.Sprintf("%s carries a credential in its body", Capitalize(Describe(m))),

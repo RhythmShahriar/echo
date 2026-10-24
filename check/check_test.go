@@ -111,6 +111,28 @@ func TestSecretInPayloadWhateverTheStatus(t *testing.T) {
 	}
 }
 
+// A one-time code, a magic link token and a signed URL are masked in
+// storage too, but they are meant to be in the message: they aren't a
+// leaked credential.
+func TestSecretIgnoresCodesAndLinkTokens(t *testing.T) {
+	for _, m := range []model.Message{
+		{Channel: model.SMS, Provider: "twilio", Status: model.Faked, Body: "Your code is •••••"},
+		{Channel: model.SMS, Provider: "twilio", Status: model.Faked,
+			Body: "To=%2B15551234567&From=%2B15557654321&Body=Your+code+is+•••••"},
+		{Channel: model.SMS, Provider: "twilio", Status: model.Faked, Body: "••••• is your verification code"},
+		{Channel: model.Webhook, Status: model.Faked, Body: `{"otp":"•••••","link":"https://app.test/login?token=•••••"}`},
+		{Channel: model.Webhook, Status: model.Faked, Body: `{"file":"https://b.test/f.pdf?X-Amz-Signature=•••••"}`},
+	} {
+		if got := titles(Message(m, Options{})); strings.Contains(got, "content/secret") {
+			t.Errorf("%q: flagged as a credential:\n%s", m.Body, got)
+		}
+	}
+	m := model.Message{Channel: model.SMS, Provider: "twilio", Status: model.Faked, Body: "Body=hi&api_key=ab•••••"}
+	if !strings.Contains(titles(Message(m, Options{})), "content/secret") {
+		t.Error("a masked api_key in an SMS payload must be flagged")
+	}
+}
+
 func TestDescribeUsesDisplayNames(t *testing.T) {
 	for _, c := range []struct {
 		m          model.Message
