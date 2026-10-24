@@ -15,6 +15,7 @@ jobs:
     permissions:
       contents: write
       id-token: write
+      attestations: write # build provenance from the shared release workflow
 
   # The container image, ghcr.io/rhythmshahriar/echo, until the shared
   # release workflow can build it with GoReleaser (dockers_v2 in
