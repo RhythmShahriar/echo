@@ -411,9 +411,9 @@ func TestAllowedHosts(t *testing.T) {
 }
 
 // TestSealedSingleLabelAndPrivateHosts: a single-label name goes through
-// only to the private address it was checked against, and is recorded as
-// sent; one that resolves to a public address is faked, and so is the
-// metadata endpoint, even when a glob allows it.
+// only to the private address it was checked against and is recorded as
+// sent. One that resolves to a public address is faked, as is the
+// metadata endpoint even when a glob allows it.
 func TestSealedSingleLabelAndPrivateHosts(t *testing.T) {
 	up := http.Server{ReadHeaderTimeout: time.Second, Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = io.WriteString(w, `{"from":"`+r.Host+`"}`)

@@ -44,7 +44,7 @@ func cmdUp(s *session) int {
 	}
 
 	// Every port is taken before anything is printed, so a port in use
-	// fails with only its error, and whatever was started is stopped again
+	// fails with only its error. Whatever was started is stopped again
 	// (in reverse) on every way out.
 	var stack cleanups
 	defer stack.run()
@@ -149,8 +149,8 @@ func (c *cleanups) run() {
 }
 
 // upRoute is one route of up's API listener. upHandler puts every route
-// behind requireToken, and up_test probes each one without the token, so
-// a route added here can't be left open.
+// behind requireToken. up_test probes each one without the token, so a
+// route added here can't be left open.
 type upRoute struct {
 	pattern string
 	probe   string // a GET path that reaches the route, for the test
@@ -229,13 +229,13 @@ func requireToken(token string, next http.Handler) http.Handler {
 
 // liveLog prints each captured message once, with the problems the
 // content checks find in it. The inbox calls back again when a message
-// changes (an observed request gets its answer, a check blocks it); a new
-// status is printed as a marked update, and an update that changes
-// nothing visible isn't printed at all.
+// changes (an observed request gets its answer, a check blocks it). A new
+// status is printed as a marked update. An update that changes nothing
+// visible isn't printed at all.
 type liveLog struct {
 	view   *report.Pretty
 	checks check.Options
-	mu     sync.Mutex // guards seen, and keeps a message's lines together
+	mu     sync.Mutex // guards seen and keeps a message's lines together
 	seen   map[string]logged
 }
 
@@ -279,7 +279,7 @@ func (l *liveLog) add(m model.Message) {
 
 // markers names a message's errors and warnings in a few words for the
 // live log: "unfilled {first_name}, dev link localhost". Notices are left
-// out, and so is a failed send, which the status already shows.
+// out, as is a failed send (the status already shows it).
 func markers(issues []model.Issue) string {
 	var out []string
 	for _, i := range issues {
@@ -318,7 +318,7 @@ func markers(issues []model.Issue) string {
 }
 
 // liveChecks is what live messages are checked against: links to the
-// configured site are fine, and allow_recipients may really be messaged.
+// configured site are fine; allow_recipients may really be messaged.
 func liveChecks(cfg config.Config) check.Options {
 	o := check.Options{AllowRecipients: cfg.AllowRecipients}
 	if u, err := url.Parse(cfg.Site); err == nil {

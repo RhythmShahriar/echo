@@ -219,7 +219,7 @@ func (p *Proxy) ListenAndServe(addr string) error {
 	return p.Serve(l)
 }
 
-// Serve accepts proxy clients on l until Shutdown or Close, and then
+// Serve accepts proxy clients on l until Shutdown or Close. It then
 // returns http.ErrServerClosed.
 func (p *Proxy) Serve(l net.Listener) error {
 	return p.outer.Serve(l)

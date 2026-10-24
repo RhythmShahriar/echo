@@ -365,7 +365,7 @@ func TestStartProxyServesOnTheListener(t *testing.T) {
 }
 
 // TestLiveShowsContentChecks: the live view and the live log show what
-// the content checks find, and a clean email shows nothing.
+// the content checks find; a clean email shows nothing.
 func TestLiveShowsContentChecks(t *testing.T) {
 	post := func(t *testing.T, h http.Handler, subject, text string) {
 		t.Helper()
