@@ -42,7 +42,7 @@ func TestReportCSP(t *testing.T) {
 			t.Errorf("CSP %q lacks %q", csp, want)
 		}
 	}
-	// One inline script, and the policy allows exactly it.
+	// One inline script and the policy allows exactly it.
 	scripts := regexp.MustCompile(`(?s)<script>(.*?)</script>`).FindAllStringSubmatch(out, -1)
 	if len(scripts) != 1 {
 		t.Fatalf("want one inline script, got %d", len(scripts))

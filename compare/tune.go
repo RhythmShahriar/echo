@@ -49,7 +49,7 @@ func (o Options) ignored(a model.Action) []string {
 }
 
 // tune applies the Checks overrides to a change: it reports false for one
-// that is off, and otherwise returns it in its class.
+// that is off and otherwise returns it in its class.
 func (o Options) tune(c model.Change) (model.Change, bool) {
 	set, found := o.Checks[c.Check]
 	set = strings.ToLower(set)
@@ -97,7 +97,7 @@ func (o Options) coveredText(before, after []model.Issue) map[string]bool {
 }
 
 // Key names a change for Accept: 8 hex characters from what makes two
-// changes the same (class, check, title, and the edit or the values), so
+// changes the same (class, check, title and the edit or the values), so
 // the key stays the same from run to run until the change itself does.
 func Key(c model.Change) string {
 	sum := sha1.Sum([]byte(groupKey(c))) //nolint:gosec // not for security
@@ -269,7 +269,7 @@ func stripFields(body string, patterns []string) string {
 }
 
 // dropFields deletes ignored keys from a decoded JSON value, naming
-// paths as fields does, and reports whether it deleted any.
+// paths as fields does. It reports whether it deleted any.
 func dropFields(v any, prefix string, patterns []string) bool {
 	dropped := false
 	switch t := v.(type) {

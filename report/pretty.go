@@ -477,7 +477,7 @@ func (p *Pretty) diff(ch model.Change, pad string) bool {
 }
 
 // key is "key: 3f9a2c1b" with -v, the name that accepts the change as
-// intended (compare.Accept), and "" otherwise.
+// intended (compare.Accept) and "" otherwise.
 func (p *Pretty) key(ch model.Change) string {
 	if !p.o.Verbose {
 		return ""

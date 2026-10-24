@@ -17,7 +17,7 @@ import (
 	"github.com/RhythmShahriar/echo/model"
 )
 
-// Kind says what an Envelope holds, and which schema its data follows.
+// Kind says what an Envelope holds and which schema its data follows.
 type Kind string
 
 // The kinds of JSON output, one per command family.
@@ -42,7 +42,7 @@ const (
 )
 
 // Envelope is the one JSON shape every command's --json writes: what it
-// is, counts and a verdict that read the same for every kind, and the
+// is, counts and a verdict that read the same for every kind plus the
 // command's own data. Schema stays rhythm-echo/v1; fields are only added.
 type Envelope struct {
 	Schema   string  `json:"schema"`
@@ -92,7 +92,7 @@ type DoctorCheck struct {
 var ToolVersion = "dev"
 
 // comparisonData is a comparison as an envelope holds it: "actions" is
-// the compared run's actions, as in a run, and their count is in the
+// the compared run's actions, as in a run. Their count is in the
 // summary.
 type comparisonData struct {
 	*model.Comparison

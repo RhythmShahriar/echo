@@ -251,7 +251,7 @@ func TestFailedActionsAreNeverTheSame(t *testing.T) {
 	down := model.Action{ID: "a", Label: "Contact form", Error: "dial tcp 127.0.0.1:20449: connect: connection refused"}
 	works := model.Action{ID: "a", Label: "Contact form", Messages: []model.Message{email("admin@shop.com", "New lead", "x")}}
 
-	// Down at both ends: not "the same", and nothing else is compared.
+	// Down at both ends: not "the same" and nothing else is compared.
 	c := Compare(run(down), run(down), "", "", "test")
 	if got := titles(c.Changes); got != "broke: Action still fails" {
 		t.Errorf("down at both ends:\n%s", got)
@@ -272,7 +272,7 @@ func TestFailedActionsAreNeverTheSame(t *testing.T) {
 		t.Errorf("new and failing:\n%s", got)
 	}
 
-	// Fixed since the snapshot: FIXED, and what it sends now isn't listed
+	// Fixed since the snapshot: FIXED and what it sends now isn't listed
 	// as new, since the snapshot has nothing to compare it with.
 	c = Compare(run(down), run(works), "", "", "test")
 	if got := titles(c.Changes); got != "fixed: Action fails" {
