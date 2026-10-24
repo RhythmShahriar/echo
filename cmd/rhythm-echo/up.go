@@ -11,6 +11,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -18,6 +19,7 @@ import (
 
 	"github.com/RhythmShahriar/echo/catcher"
 	"github.com/RhythmShahriar/echo/check"
+	"github.com/RhythmShahriar/echo/config"
 	"github.com/RhythmShahriar/echo/model"
 	"github.com/RhythmShahriar/echo/proxy"
 	"github.com/RhythmShahriar/echo/report"
@@ -67,9 +69,12 @@ func cmdUp(s *session) int {
 
 	inbox := catcher.NewInbox(10000)
 	srv := catcher.NewServer(inbox, catcher.Config{Mode: cfg.Mode, Allow: cfg.Allow, Token: token, Version: version})
-	inbox.OnAdd(newLiveLog(s.view).add)
+	checks := liveChecks(cfg)
+	log := newLiveLog(s.view)
+	log.checks = checks
+	inbox.OnAdd(log.add)
 	errs := make(chan error, 3)
-	api := &http.Server{Addr: cfg.Listen, Handler: upHandler(upRoutes(srv, inbox, cfg.Mode), token), ReadHeaderTimeout: 10 * time.Second}
+	api := &http.Server{Addr: cfg.Listen, Handler: upHandler(upRoutes(srv, inbox, cfg.Mode, checks), token), ReadHeaderTimeout: 10 * time.Second}
 	go func() { errs <- api.Serve(ln) }()
 	stack.push(func(ctx context.Context) { _ = api.Shutdown(ctx) })
 	smtpLine := ""
@@ -122,7 +127,7 @@ func cmdUp(s *session) int {
 	}
 	stack.run()
 	if !s.o.quiet {
-		fmt.Fprintf(s.stderr, "\nStopped. Captured %s this session.\n", report.Tally(liveRun(inbox, cfg.Mode)))
+		fmt.Fprintf(s.stderr, "\nStopped. Captured %s this session.\n", report.Tally(liveRun(inbox, cfg.Mode, checks)))
 	}
 	return exitOK
 }
@@ -153,11 +158,11 @@ type upRoute struct {
 }
 
 // upRoutes lists everything the API listener serves.
-func upRoutes(srv *catcher.Server, inbox *catcher.Inbox, mode string) []upRoute {
+func upRoutes(srv *catcher.Server, inbox *catcher.Inbox, mode string, checks check.Options) []upRoute {
 	return []upRoute{
 		{"/v1/", "/v1/messages", srv},
 		{"/api/v1/", "/api/v1/messages", srv}, // Mailpit-compatible email API
-		{"GET /{$}", "/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { live(w, r, inbox, mode) })},
+		{"GET /{$}", "/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { live(w, r, inbox, mode, checks) })},
 	}
 }
 
@@ -222,39 +227,104 @@ func requireToken(token string, next http.Handler) http.Handler {
 	})
 }
 
-// liveLog prints each captured message once. The inbox calls back again
-// when a message changes (an observed request gets its answer, a check
-// blocks it); a new status is printed as a marked update, and an update
-// that changes nothing visible isn't printed at all.
+// liveLog prints each captured message once, with the problems the
+// content checks find in it. The inbox calls back again when a message
+// changes (an observed request gets its answer, a check blocks it); a new
+// status is printed as a marked update, and an update that changes
+// nothing visible isn't printed at all.
 type liveLog struct {
 	view   *report.Pretty
-	mu     sync.Mutex
-	status map[string]model.Status
+	checks check.Options
+	mu     sync.Mutex // guards seen, and keeps a message's lines together
+	seen   map[string]logged
 }
 
+// logged is what the log last printed for a message.
+type logged struct {
+	status model.Status
+	marks  string
+}
+
+// newLiveLog prints to v; set checks for what content checks expect.
 func newLiveLog(v *report.Pretty) *liveLog {
-	return &liveLog{view: v, status: map[string]model.Status{}}
+	return &liveLog{view: v, seen: map[string]logged{}}
 }
 
 func (l *liveLog) add(m model.Message) {
+	marks := markers(check.Message(m, l.checks))
 	l.mu.Lock()
-	prev, seen := l.status[m.ID]
-	if len(l.status) > 20000 { // the inbox keeps 10000; forget the oldest half's worth at once
-		clear(l.status)
+	defer l.mu.Unlock()
+	prev, seen := l.seen[m.ID]
+	if len(l.seen) > 20000 { // the inbox keeps 10000; forget the oldest half's worth at once
+		clear(l.seen)
 	}
-	l.status[m.ID] = m.Status
-	l.mu.Unlock()
+	l.seen[m.ID] = logged{m.Status, marks}
 	switch {
 	case !seen:
 		l.view.Message(m)
-	case prev != m.Status:
+	case prev.status != m.Status:
 		what := check.Describe(m) // names the host for webhooks and requests
 		if c := m.Channel; len(m.To) > 0 && (c == model.Email || c == model.SMS || c == model.WhatsApp) {
 			what += " to " + strings.Join(m.To, ", ")
 		}
 		l.view.Step("Update", fmt.Sprintf("%s %s is now %s (was %s)",
-			m.At.Local().Format("15:04:05"), what, m.Status, prev))
+			m.At.Local().Format("15:04:05"), what, m.Status, prev.status))
+	case prev.marks == marks:
+		return
 	}
+	if marks != "" && marks != prev.marks {
+		l.view.Step("Issues", marks)
+	}
+}
+
+// markers names a message's errors and warnings in a few words for the
+// live log: "unfilled {first_name}, dev link localhost". Notices are left
+// out, and so is a failed send, which the status already shows.
+func markers(issues []model.Issue) string {
+	var out []string
+	for _, i := range issues {
+		if i.Level == model.Notice || i.Check == "send/failed" {
+			continue
+		}
+		mark := i.Title
+		switch i.Check {
+		case "content/placeholder": // "Unfilled placeholder {x} in email"
+			tag, _, _ := strings.Cut(strings.TrimPrefix(i.Title, "Unfilled placeholder "), " in ")
+			mark = "unfilled " + tag
+		case "content/dev-link": // "Email links to a development address (localhost)"
+			if at := strings.LastIndex(i.Title, "("); at >= 0 {
+				mark = "dev link " + strings.TrimSuffix(i.Title[at+1:], ")")
+			}
+		case "content/php-error":
+			mark = "PHP error"
+		case "content/encoding":
+			mark = "garbled text"
+		case "content/secret":
+			mark = "credential in body"
+		case "email/no-subject":
+			mark = "no subject"
+		case "email/empty":
+			mark = "empty"
+		case "email/clipped":
+			mark = "clipped by Gmail"
+		case "seal/real-recipient":
+			mark = "real recipient"
+		}
+		if !slices.Contains(out, mark) {
+			out = append(out, mark)
+		}
+	}
+	return strings.Join(out, ", ")
+}
+
+// liveChecks is what live messages are checked against: links to the
+// configured site are fine, and allow_recipients may really be messaged.
+func liveChecks(cfg config.Config) check.Options {
+	o := check.Options{AllowRecipients: cfg.AllowRecipients}
+	if u, err := url.Parse(cfg.Site); err == nil {
+		o.SiteHost = u.Hostname()
+	}
+	return o
 }
 
 func modeLine(mode string) string {
@@ -268,8 +338,9 @@ func modeLine(mode string) string {
 func loopback(addr string) bool { return proxy.IsLoopbackAddr(addr) }
 
 // liveRun groups the inbox into actions (by run and action, "Live" for
-// messages outside any action) so the HTML report can show it.
-func liveRun(in *catcher.Inbox, mode string) *model.Run {
+// messages outside any action) with each message's content checks, so the
+// HTML report can show it.
+func liveRun(in *catcher.Inbox, mode string, checks check.Options) *model.Run {
 	r := &model.Run{Schema: model.Schema, Tool: "rhythm-echo", Version: version, Mode: mode, Started: time.Now()}
 	at := map[string]int{}
 	for _, m := range in.List(catcher.Filter{}) {
@@ -284,6 +355,8 @@ func liveRun(in *catcher.Inbox, mode string) *model.Run {
 			r.Actions = append(r.Actions, model.Action{ID: key, Label: label, Kind: "live"})
 		}
 		r.Actions[i].Messages = append(r.Actions[i].Messages, m)
+		// Checked here until the catcher keeps each message's issues.
+		r.Actions[i].Issues = append(r.Actions[i].Issues, check.Message(m, checks)...)
 		if m.At.Before(r.Started) {
 			r.Started = m.At
 		}
@@ -294,9 +367,9 @@ func liveRun(in *catcher.Inbox, mode string) *model.Run {
 
 // live serves the web view: the HTML report of what's been captured,
 // refreshed every few seconds.
-func live(w http.ResponseWriter, _ *http.Request, in *catcher.Inbox, mode string) {
+func live(w http.ResponseWriter, _ *http.Request, in *catcher.Inbox, mode string, checks check.Options) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Refresh", "5")
 	w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src * data:; frame-src 'self' data:")
-	_ = report.HTML(w, report.Result{Run: liveRun(in, mode)})
+	_ = report.HTML(w, report.Result{Run: liveRun(in, mode, checks)})
 }

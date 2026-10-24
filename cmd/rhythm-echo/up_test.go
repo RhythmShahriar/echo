@@ -18,6 +18,8 @@ import (
 	"time"
 
 	"github.com/RhythmShahriar/echo/catcher"
+	"github.com/RhythmShahriar/echo/check"
+	"github.com/RhythmShahriar/echo/model"
 	"github.com/RhythmShahriar/echo/report"
 	"github.com/RhythmShahriar/echo/wire"
 )
@@ -25,10 +27,15 @@ import (
 const testToken = "t0ken-for-tests"
 
 func testUpHandler(token string) (http.Handler, []upRoute) {
+	h, routes, _ := testUp(token)
+	return h, routes
+}
+
+func testUp(token string) (http.Handler, []upRoute, *catcher.Inbox) {
 	inbox := catcher.NewInbox(100)
 	srv := catcher.NewServer(inbox, catcher.Config{Mode: catcher.Seal, Token: token, Version: version})
-	routes := upRoutes(srv, inbox, catcher.Seal)
-	return upHandler(routes, token), routes
+	routes := upRoutes(srv, inbox, catcher.Seal, check.Options{SiteHost: "shop.example.com"})
+	return upHandler(routes, token), routes, inbox
 }
 
 func serve(h http.Handler, r *http.Request) *httptest.ResponseRecorder {
@@ -354,5 +361,85 @@ func TestStartProxyServesOnTheListener(t *testing.T) {
 	stop(context.Background())
 	if _, err := ln.dial(); err == nil {
 		t.Error("the listener still accepts after stop")
+	}
+}
+
+// TestLiveShowsContentChecks: the live view and the live log show what
+// the content checks find, and a clean email shows nothing.
+func TestLiveShowsContentChecks(t *testing.T) {
+	post := func(t *testing.T, h http.Handler, subject, text string) {
+		t.Helper()
+		body := fmt.Sprintf(`{"v":1,"kind":"email","source":{"via":"wordpress"},"email":{"from":"shop@shop.example.com","to":["ann@example.org"],"subject":%q,"text":%q}}`,
+			subject, text)
+		r := httptest.NewRequest(http.MethodPost, "/v1/capture", strings.NewReader(body))
+		r.Header.Set("Content-Type", "application/json")
+		if w := serve(h, r); w.Code != http.StatusOK {
+			t.Fatalf("capture: %d %s", w.Code, w.Body)
+		}
+	}
+	setup := func() (http.Handler, *bytes.Buffer) {
+		h, _, inbox := testUp("")
+		var log bytes.Buffer
+		l := newLiveLog(report.NewPretty(&log, &log, report.PrettyOptions{Plain: true}))
+		l.checks = check.Options{SiteHost: "shop.example.com"}
+		inbox.OnAdd(l.add)
+		return h, &log
+	}
+
+	t.Run("problems", func(t *testing.T) {
+		h, log := setup()
+		post(t, h, "Welcome, {first_name}", "Confirm here: http://localhost/confirm?k=1")
+		page := serve(h, httptest.NewRequest(http.MethodGet, "/", nil)).Body.String()
+		for _, want := range []string{"Unfilled placeholder {first_name} in email", "Email links to a development address (localhost)"} {
+			if !strings.Contains(page, want) {
+				t.Errorf("live view lacks %q", want)
+			}
+		}
+		if strings.Contains(strings.ToLower(page), "all clear") {
+			t.Error("live view says all clear")
+		}
+		if got := log.String(); !strings.Contains(got, "Issues: unfilled {first_name}, dev link localhost\n") {
+			t.Errorf("live log:\n%s", got)
+		}
+	})
+	t.Run("clean", func(t *testing.T) {
+		h, log := setup()
+		post(t, h, "Welcome, Ann", "Confirm here: https://shop.example.com/confirm?k=1")
+		page := serve(h, httptest.NewRequest(http.MethodGet, "/", nil)).Body.String()
+		if strings.Contains(page, "Unfilled placeholder") || strings.Contains(page, "development address") ||
+			!strings.Contains(strings.ToLower(page), "all clear") {
+			t.Error("a clean email shows problems")
+		}
+		if got := log.String(); strings.Contains(got, "Issues:") || !strings.Contains(got, "Welcome, Ann") {
+			t.Errorf("live log:\n%s", got)
+		}
+	})
+}
+
+func TestMarkers(t *testing.T) {
+	m := model.Message{ID: "m1", Channel: model.Email, Subject: "", Text: "Hi {first_name} {first_name}, see http://shop.test/ \nWarning: Undefined variable $x in /var/www/a.php on line 3",
+		HTML: "<p>x</p>", Status: model.Failed}
+	got := markers(check.Message(m, check.Options{}))
+	if got != "unfilled {first_name}, PHP error, dev link shop.test, no subject" {
+		t.Errorf("markers = %q", got)
+	}
+	if got := markers(nil); got != "" {
+		t.Errorf("no issues: %q", got)
+	}
+}
+
+func TestLiveLogReprintsChangedIssues(t *testing.T) {
+	var out bytes.Buffer
+	l := newLiveLog(report.NewPretty(&out, &out, report.PrettyOptions{Plain: true}))
+	m := model.Message{ID: "m1", Channel: model.Email, To: []string{"ann@example.org"}, Subject: "Hi {name}", Text: "x", Status: model.Faked}
+	l.add(m)
+	l.add(m)
+	if n := strings.Count(out.String(), "Issues: unfilled {name}"); n != 1 {
+		t.Errorf("issues printed %d times:\n%s", n, out.String())
+	}
+	m.Text = "<?php error: Fatal error: boom in /x.php on line 1"
+	l.add(m) // same status, new problem
+	if !strings.Contains(out.String(), "Issues: unfilled {name}, PHP error") {
+		t.Errorf("changed issues not printed:\n%s", out.String())
 	}
 }
