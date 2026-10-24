@@ -6,6 +6,8 @@ import (
 	"io"
 	"os"
 
+	"github.com/charmbracelet/x/term"
+
 	"github.com/RhythmShahriar/rhythm/kit"
 )
 
@@ -25,6 +27,10 @@ func main() { os.Exit(run(os.Args[1:], os.Stdin, os.Stdout, os.Stderr)) }
 
 func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	if len(args) == 0 {
+		// On a terminal, ask what to do; piped or in CI, show the usage.
+		if stdout == io.Writer(os.Stdout) && term.IsTerminal(os.Stdin.Fd()) && term.IsTerminal(os.Stdout.Fd()) {
+			return pick(stdin, stdout, stderr)
+		}
 		usage(stdout)
 		return exitOK
 	}

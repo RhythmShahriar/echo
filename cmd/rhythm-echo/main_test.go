@@ -254,3 +254,39 @@ func TestHelpListsEveryFlag(t *testing.T) {
 		t.Errorf("unknown channel: %d %q", code, errOut)
 	}
 }
+
+func TestPicker(t *testing.T) {
+	// Not a terminal: the usage, never a prompt.
+	if code, out, _ := runCLI(t); code != 0 || !strings.Contains(out, "Usage:") {
+		t.Errorf("no arguments off a terminal: %d\n%s", code, out)
+	}
+	values := func(ps pickState) []string {
+		var v []string
+		for _, o := range pickOptions(ps) {
+			v = append(v, o.Value)
+		}
+		return v
+	}
+	if got := strings.Join(values(pickState{}), " "); got != "up install doctor init" {
+		t.Errorf("fresh folder: %s", got)
+	}
+	ps := pickState{running: true, hasConfig: true, hasActions: true, snapshot: `"before", 2 hours ago`, hasResult: true}
+	if got := strings.Join(values(ps), " "); got != "watch compare snapshot run report install doctor" {
+		t.Errorf("set up: %s", got)
+	}
+	for _, tc := range []struct {
+		action, stack, site string
+		open                bool
+		want                string
+	}{
+		{"install", "wordpress", " /var/www/staging ", true, "install wordpress /var/www/staging"},
+		{"install", "laravel", ".", true, "install laravel"},
+		{"compare", "", "", true, "compare --open"},
+		{"snapshot", "", "", false, "snapshot"},
+		{"up", "", "", true, "up"},
+	} {
+		if got := strings.Join(pickArgs(tc.action, tc.stack, tc.site, tc.open), " "); got != tc.want {
+			t.Errorf("pickArgs(%s) = %q, want %q", tc.action, got, tc.want)
+		}
+	}
+}
