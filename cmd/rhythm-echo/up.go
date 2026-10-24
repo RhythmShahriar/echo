@@ -23,6 +23,7 @@ import (
 	"github.com/RhythmShahriar/echo/model"
 	"github.com/RhythmShahriar/echo/proxy"
 	"github.com/RhythmShahriar/echo/report"
+	"github.com/RhythmShahriar/echo/web"
 	"github.com/RhythmShahriar/echo/wire"
 )
 
@@ -80,11 +81,17 @@ func cmdUp(s *session) int {
 	checks := liveChecks(cfg)
 	log := newLiveLog(s.view)
 	log.checks = checks
-	inbox.OnAdd(log.add)
+	ui := web.New(web.Options{Inbox: inbox, Mode: cfg.Mode, Checks: checks, AnyHost: token != ""})
+	log.issues = ui.Issues // checked once, for the log and the page
+	inbox.OnAdd(func(m model.Message) {
+		ui.Notify(m)
+		log.add(m)
+	})
 	errs := make(chan error, 3)
-	api := &http.Server{Addr: cfg.Listen, Handler: upHandler(upRoutes(srv, inbox, cfg.Mode, checks), token), ReadHeaderTimeout: 10 * time.Second}
+	api := &http.Server{Addr: cfg.Listen, Handler: upHandler(upRoutes(srv, inbox, ui, cfg.Mode, checks), token), ReadHeaderTimeout: 10 * time.Second}
 	go func() { errs <- api.Serve(ln) }()
 	stack.push(func(ctx context.Context) { _ = api.Shutdown(ctx) })
+	stack.push(func(context.Context) { ui.Close() }) // runs first: Shutdown waits for open event streams
 	smtpLine := ""
 	if sl != nil {
 		sink := catcher.NewSMTP(srv, cfg.SMTP)
@@ -165,12 +172,16 @@ type upRoute struct {
 	handler http.Handler
 }
 
-// upRoutes lists everything the API listener serves.
-func upRoutes(srv *catcher.Server, inbox *catcher.Inbox, mode string, checks check.Options) []upRoute {
+// upRoutes lists everything the API listener serves: the catcher's API,
+// Echo Inbox at / and the session as an HTML report at /report.
+func upRoutes(srv *catcher.Server, inbox *catcher.Inbox, ui *web.UI, mode string, checks check.Options) []upRoute {
 	return []upRoute{
 		{"/v1/", "/v1/messages", srv},
 		{"/api/v1/", "/api/v1/messages", srv}, // Mailpit-compatible email API
-		{"GET /{$}", "/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { live(w, r, inbox, mode, checks) })},
+		{"GET /{$}", "/", ui},
+		{"GET /assets/", "/assets/app.js", ui},
+		{"/ui/", web.PathMessages, ui},
+		{"GET /report", "/report", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { liveReport(w, r, inbox, mode, checks) })},
 	}
 }
 
@@ -243,7 +254,8 @@ func requireToken(token string, next http.Handler) http.Handler {
 type liveLog struct {
 	view   *report.Pretty
 	checks check.Options
-	mu     sync.Mutex // guards seen and keeps a message's lines together
+	issues func(model.Message) []model.Issue // when set, used instead of running the checks
+	mu     sync.Mutex                        // guards seen and keeps a message's lines together
 	seen   map[string]logged
 }
 
@@ -259,7 +271,13 @@ func newLiveLog(v *report.Pretty) *liveLog {
 }
 
 func (l *liveLog) add(m model.Message) {
-	marks := markers(check.Message(m, l.checks))
+	var issues []model.Issue
+	if l.issues != nil {
+		issues = l.issues(m)
+	} else {
+		issues = check.Message(m, l.checks)
+	}
+	marks := markers(issues)
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	prev, seen := l.seen[m.ID]
@@ -373,11 +391,10 @@ func liveRun(in *catcher.Inbox, mode string, checks check.Options) *model.Run {
 	return r
 }
 
-// live serves the web view: the HTML report of what's been captured,
-// refreshed every few seconds.
-func live(w http.ResponseWriter, _ *http.Request, in *catcher.Inbox, mode string, checks check.Options) {
+// liveReport serves the session so far as the HTML report a run writes,
+// for saving or sharing; Echo Inbox at / is the live view.
+func liveReport(w http.ResponseWriter, _ *http.Request, in *catcher.Inbox, mode string, checks check.Options) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Header().Set("Refresh", "5")
 	w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src * data:; frame-src 'self' data:")
 	_ = report.HTML(w, report.Result{Run: liveRun(in, mode, checks)})
 }

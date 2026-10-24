@@ -7,6 +7,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net"
@@ -24,6 +25,7 @@ import (
 	"github.com/RhythmShahriar/echo/config"
 	"github.com/RhythmShahriar/echo/model"
 	"github.com/RhythmShahriar/echo/report"
+	"github.com/RhythmShahriar/echo/web"
 	"github.com/RhythmShahriar/echo/wire"
 )
 
@@ -37,7 +39,9 @@ func testUpHandler(token string) (http.Handler, []upRoute) {
 func testUp(token string) (http.Handler, []upRoute, *catcher.Inbox) {
 	inbox := catcher.NewInbox(100)
 	srv := catcher.NewServer(inbox, catcher.Config{Mode: catcher.Seal, Token: token, Version: version})
-	routes := upRoutes(srv, inbox, catcher.Seal, check.Options{SiteHost: "shop.example.com"})
+	checks := check.Options{SiteHost: "shop.example.com"}
+	ui := web.New(web.Options{Inbox: inbox, Mode: catcher.Seal, Checks: checks, AnyHost: token != ""})
+	routes := upRoutes(srv, inbox, ui, catcher.Seal, checks)
 	return upHandler(routes, token), routes, inbox
 }
 
@@ -120,8 +124,19 @@ func TestTokenQuerySetsCookieAndRedirects(t *testing.T) {
 func TestNoTokenLeavesLoopbackOpen(t *testing.T) {
 	h, routes := testUpHandler("")
 	for _, rt := range routes {
-		if w := serve(h, httptest.NewRequest(http.MethodGet, rt.probe, nil)); w.Code != http.StatusOK {
+		r := httptest.NewRequest(http.MethodGet, rt.probe, nil)
+		r.Host = "127.0.0.1:8025"
+		if w := serve(h, r); w.Code != http.StatusOK {
 			t.Errorf("%s: %d", rt.pattern, w.Code)
+		}
+	}
+	// Without a token, Echo Inbox answers only to loopback names, so a
+	// DNS-rebinding page can't read it.
+	for _, path := range []string{"/", web.PathMessages} {
+		r := httptest.NewRequest(http.MethodGet, path, nil)
+		r.Host = "rebind.evil.example:8025"
+		if w := serve(h, r); w.Code != http.StatusForbidden {
+			t.Errorf("%s for Host rebind.evil.example: %d, want 403", path, w.Code)
 		}
 	}
 }
@@ -370,8 +385,8 @@ func TestStartProxyServesOnTheListener(t *testing.T) {
 	}
 }
 
-// TestLiveShowsContentChecks: the live view and the live log show what
-// the content checks find; a clean email shows nothing.
+// TestLiveShowsContentChecks: Echo Inbox, the session report and the
+// live log show what the content checks find; a clean email shows nothing.
 func TestLiveShowsContentChecks(t *testing.T) {
 	post := func(t *testing.T, h http.Handler, subject, text string) {
 		t.Helper()
@@ -395,7 +410,7 @@ func TestLiveShowsContentChecks(t *testing.T) {
 	t.Run("problems", func(t *testing.T) {
 		h, log := setup()
 		post(t, h, "Welcome, {first_name}", "Confirm here: http://localhost/confirm?k=1")
-		page := serve(h, httptest.NewRequest(http.MethodGet, "/", nil)).Body.String()
+		page := serve(h, httptest.NewRequest(http.MethodGet, "/report", nil)).Body.String()
 		for _, want := range []string{"Unfilled placeholder {first_name} in email", "Email links to a development address (localhost)"} {
 			if !strings.Contains(page, want) {
 				t.Errorf("live view lacks %q", want)
@@ -404,6 +419,12 @@ func TestLiveShowsContentChecks(t *testing.T) {
 		if strings.Contains(strings.ToLower(page), "all clear") {
 			t.Error("live view says all clear")
 		}
+		r := httptest.NewRequest(http.MethodGet, web.PathMessages, nil)
+		r.Host = "127.0.0.1:8025"
+		var list web.Page
+		if err := json.Unmarshal(serve(h, r).Body.Bytes(), &list); err != nil || len(list.Messages) != 1 || list.Messages[0].Warnings+list.Messages[0].Errors < 2 {
+			t.Errorf("inbox list: %+v %v", list.Messages, err)
+		}
 		if got := log.String(); !strings.Contains(got, "Issues: unfilled {first_name}, dev link localhost\n") {
 			t.Errorf("live log:\n%s", got)
 		}
@@ -411,7 +432,7 @@ func TestLiveShowsContentChecks(t *testing.T) {
 	t.Run("clean", func(t *testing.T) {
 		h, log := setup()
 		post(t, h, "Welcome, Ann", "Confirm here: https://shop.example.com/confirm?k=1")
-		page := serve(h, httptest.NewRequest(http.MethodGet, "/", nil)).Body.String()
+		page := serve(h, httptest.NewRequest(http.MethodGet, "/report", nil)).Body.String()
 		if strings.Contains(page, "Unfilled placeholder") || strings.Contains(page, "development address") ||
 			!strings.Contains(strings.ToLower(page), "all clear") {
 			t.Error("a clean email shows problems")
@@ -450,7 +471,7 @@ func TestLiveLogReprintsChangedIssues(t *testing.T) {
 	}
 }
 
-// fakeMailpit serves Mailpit's /api/v1/info and page on addr, and its
+// fakeMailpit serves Mailpit's /api/v1/info and page on addr and its
 // SMTP greeting on smtp when that isn't "".
 func fakeMailpit(t *testing.T, addr, smtp string) {
 	t.Helper()
