@@ -369,16 +369,156 @@ func TestServesCAAndRefusesLoops(t *testing.T) {
 	}
 }
 
+// fakeResolver answers from a map; any other name doesn't resolve.
+type fakeResolver map[string][]string
+
+func (f fakeResolver) LookupHost(_ context.Context, host string) ([]string, error) {
+	if a, ok := f[host]; ok {
+		return a, nil
+	}
+	return nil, &net.DNSError{Err: "no such host", Name: host, IsNotFound: true}
+}
+
+var testNames = fakeResolver{
+	"wordpress": {"172.18.0.5"},            // a Docker service
+	"db":        {"172.18.0.5", "fd00::5"}, // private v4 and ULA
+	"api":       {"93.184.216.34"},         // a search domain made it public
+	"mixed":     {"10.0.0.1", "8.8.8.8"},   // one public address is enough to refuse
+	"meta":      {"169.254.169.254"},       // a name for the metadata endpoint
+	"linklocal": {"169.254.10.10"},         // link-local is neither loopback nor private
+}
+
 func TestAllowedHosts(t *testing.T) {
-	p := &Proxy{opt: Options{Allow: []string{"*.stripe.com"}}}
-	for host, want := range map[string]bool{
-		"127.0.0.1": true, "::1": true, "10.1.2.3": true, "192.168.1.5": true, "172.20.0.4": true, "169.254.1.1": true,
-		"localhost": true, "shop.localhost": true, "wordpress": true, "api.stripe.com": true,
-		"api.twilio.com": false, "8.8.8.8": false, "stripe.com.evil.test": false, "hooks.slack.com": false,
-	} {
-		if got := p.allowed(host); got != want {
-			t.Errorf("allowed(%q) = %v, want %v", host, got, want)
+	for _, mode := range []string{catcher.Seal, catcher.Observe} {
+		p, err := New(Options{Server: catcher.NewServer(catcher.NewInbox(1), catcher.Config{Mode: mode}),
+			Allow: []string{"*.stripe.com", "169.254.*"}, Resolver: testNames})
+		if err != nil {
+			t.Fatal(err)
 		}
+		for host, want := range map[string]bool{
+			"127.0.0.1": true, "::1": true, "10.1.2.3": true, "192.168.1.5": true, "172.20.0.4": true, "fd12::1": true,
+			"localhost": true, "shop.localhost": true, "wordpress": true, "db": true, "api.stripe.com": true,
+			"169.254.169.254": mode == catcher.Observe, "fd00:ec2::254": mode == catcher.Observe, "169.254.1.1": true, // by the glob
+			"api": false, "mixed": false, "meta": false, "linklocal": false, "unknown": false, "fe80::1": false,
+			"api.twilio.com": false, "8.8.8.8": false, "stripe.com.evil.test": false, "hooks.slack.com": false,
+		} {
+			if got, _ := p.allowed(context.Background(), host); got != want {
+				t.Errorf("%s: allowed(%q) = %v, want %v", mode, host, got, want)
+			}
+		}
+		_ = p.Close()
+	}
+}
+
+// TestSealedSingleLabelAndPrivateHosts: a single-label name goes through
+// only to the private address it was checked against, and is recorded as
+// sent; one that resolves to a public address is faked, and so is the
+// metadata endpoint, even when a glob allows it.
+func TestSealedSingleLabelAndPrivateHosts(t *testing.T) {
+	up := http.Server{ReadHeaderTimeout: time.Second, Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.WriteString(w, `{"from":"`+r.Host+`"}`)
+	})}
+	ul, _ := net.Listen("tcp", "127.0.0.1:0")
+	go func() { _ = up.Serve(ul) }()
+	t.Cleanup(func() { _ = up.Close() })
+
+	var dialed []string
+	dial := func(ctx context.Context, network, addr string) (net.Conn, error) {
+		dialed = append(dialed, addr)
+		if addr != "172.18.0.5:80" { // the only "private" address that exists here
+			return nil, &net.OpError{Op: "dial", Net: network, Err: errNoNet{addr}}
+		}
+		var d net.Dialer
+		return d.DialContext(ctx, network, ul.Addr().String())
+	}
+	inbox := catcher.NewInbox(20)
+	p, err := New(Options{Server: catcher.NewServer(inbox, catcher.Config{Mode: catcher.Seal, Allow: []string{"169.254.*"}}),
+		Allow: []string{"*.internal.test"}, Resolver: testNames, Dial: dial})
+	if err != nil {
+		t.Fatal(err)
+	}
+	l, _ := net.Listen("tcp", "127.0.0.1:0")
+	go func() { _ = p.Serve(l) }()
+	t.Cleanup(func() { _ = p.Close() })
+	pu, _ := url.Parse("http://" + l.Addr().String())
+	tr := &http.Transport{Proxy: http.ProxyURL(pu)}
+	t.Cleanup(tr.CloseIdleConnections)
+	c := &http.Client{Transport: tr, Timeout: 5 * time.Second}
+	get := func(rawURL string) (int, string, string) {
+		t.Helper()
+		resp, err := c.Get(rawURL) //nolint:noctx // test
+		if err != nil {
+			t.Fatal(err)
+		}
+		b, _ := io.ReadAll(resp.Body)
+		_ = resp.Body.Close()
+		return resp.StatusCode, string(b), resp.Header.Get("X-Echo-Id")
+	}
+
+	// db resolves to 172.18.0.5: forwarded to that address and recorded.
+	status, body, _ := get("http://db/orders")
+	if status != 200 || body != `{"from":"db"}` {
+		t.Fatalf("db: %d %s", status, body)
+	}
+	if len(dialed) != 1 || dialed[0] != "172.18.0.5:80" {
+		t.Errorf("dialed %v, want only the checked address", dialed)
+	}
+	ms := inbox.List(catcher.Filter{})
+	if len(ms) != 1 || ms[0].URL != "http://db/orders" || ms[0].Status != model.Sent || ms[0].Source.Via != "proxy" {
+		t.Fatalf("db capture = %+v", ms)
+	}
+
+	// A tunnel to db is pinned the same way and recorded as sent.
+	dialed = nil
+	conn, err := net.Dial("tcp", l.Addr().String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = conn.SetDeadline(time.Now().Add(5 * time.Second))
+	_, _ = io.WriteString(conn, "CONNECT db:80 HTTP/1.1\r\nHost: db:80\r\n\r\nGET / HTTP/1.1\r\nHost: db\r\nConnection: close\r\n\r\n")
+	br := bufioReader(conn)
+	if resp, err := http.ReadResponse(br, &http.Request{Method: http.MethodConnect}); err != nil || resp.StatusCode != 200 { //nolint:bodyclose // a CONNECT answer has no body
+		t.Fatalf("CONNECT db: %v %v", resp, err)
+	}
+	resp, err := http.ReadResponse(br, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, _ := io.ReadAll(resp.Body)
+	_ = resp.Body.Close()
+	_ = conn.Close()
+	if string(b) != `{"from":"db"}` || len(dialed) != 1 || dialed[0] != "172.18.0.5:80" {
+		t.Errorf("tunnel: %s, dialed %v", b, dialed)
+	}
+	if ms := inbox.List(catcher.Filter{}); len(ms) != 2 || ms[1].Method != http.MethodConnect || ms[1].Status != model.Sent {
+		t.Errorf("tunnel capture = %+v", ms)
+	}
+
+	// api resolves to a public address: faked, recorded, never dialed.
+	dialed = nil
+	status, _, id := get("http://api/v1/send")
+	if id == "" || len(dialed) != 0 {
+		t.Errorf("api: %d id %q, dialed %v", status, id, dialed)
+	}
+	if m, ok := inbox.Get(id); !ok || m.Status != model.Faked || m.URL != "http://api/v1/send" {
+		t.Errorf("api capture = %+v", m)
+	}
+
+	// The metadata endpoint is faked though the catcher's glob allows it.
+	status, _, id = get("http://169.254.169.254/latest/meta-data/iam/")
+	if status != http.StatusNotFound || id == "" || len(dialed) != 0 {
+		t.Errorf("metadata: %d id %q, dialed %v", status, id, dialed)
+	}
+	if m, ok := inbox.Get(id); !ok || m.Status != model.Faked {
+		t.Errorf("metadata capture = %+v", m)
+	}
+	// And a tunnel to it is refused, not opened.
+	req, _ := http.NewRequest(http.MethodGet, "https://169.254.169.254/", nil)
+	if _, err := c.Do(req); err == nil || !strings.Contains(err.Error(), "Forbidden") { //nolint:bodyclose // fails before a body
+		t.Errorf("metadata tunnel: %v", err)
+	}
+	if len(dialed) != 0 {
+		t.Errorf("dialed %v", dialed)
 	}
 }
 

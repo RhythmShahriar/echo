@@ -11,8 +11,11 @@
 // HTTPS is intercepted with a local CA (see LoadCA) when MITM is on;
 // clients must trust its certificate. Interception speaks HTTP/1.1 only:
 // the proxy offers just "http/1.1" in ALPN and clients fall back to it.
-// Loopback, private addresses, single-label names and Allow globs are
-// tunneled untouched, because the site's own host can't be known here.
+// Loopback and private addresses, single-label names that resolve only to
+// them (Docker services, the site calling itself) and Allow globs go
+// through unchanged, because the site's own host can't be known here.
+// Each of those requests is still recorded as sent. Cloud metadata
+// addresses never go through while sealed.
 //
 // This is best effort. The guarantee that nothing leaves a sealed site is
 // network egress control with Echo as the only way out (docs/seal).
@@ -64,10 +67,17 @@ type Options struct {
 	Token  string          // when set, clients must send it in Proxy-Authorization (Basic password or Bearer)
 	Log    *slog.Logger    // nil discards
 
+	Resolver Resolver // checks single-label names; default net.DefaultResolver
+
 	MaxBody     int64                                                             // request body limit; default DefaultMaxBody
 	CaptureBody int                                                               // response bytes kept per capture; default DefaultCaptureBody
-	Transport   http.RoundTripper                                                 // forwards allowed requests; default: a direct transport that ignores proxy env vars
+	Transport   http.RoundTripper                                                 // forwards allowed requests; default: a direct transport that ignores proxy env vars and dials checked addresses
 	Dial        func(ctx context.Context, network, addr string) (net.Conn, error) // opens tunnels; default net.Dialer
+}
+
+// Resolver resolves host names. *net.Resolver satisfies it.
+type Resolver interface {
+	LookupHost(ctx context.Context, host string) ([]string, error)
 }
 
 // Proxy is an http.Handler that speaks the forward-proxy protocol.
@@ -108,10 +118,14 @@ func New(opt Options) (*Proxy, error) {
 		d := &net.Dialer{Timeout: 15 * time.Second, KeepAlive: 30 * time.Second}
 		opt.Dial = d.DialContext
 	}
-	if opt.Transport == nil {
-		opt.Transport = &http.Transport{
+	if opt.Resolver == nil {
+		opt.Resolver = net.DefaultResolver
+	}
+	p := &Proxy{opt: opt, conns: newConnListener(), hijacked: map[net.Conn]struct{}{}}
+	if p.opt.Transport == nil {
+		p.opt.Transport = &http.Transport{
 			Proxy:                 nil, // never through HTTPS_PROXY: that may be us
-			DialContext:           opt.Dial,
+			DialContext:           p.dial,
 			TLSHandshakeTimeout:   15 * time.Second,
 			ResponseHeaderTimeout: 60 * time.Second,
 			IdleConnTimeout:       90 * time.Second,
@@ -119,7 +133,6 @@ func New(opt Options) (*Proxy, error) {
 			ForceAttemptHTTP2:     true,
 		}
 	}
-	p := &Proxy{opt: opt, conns: newConnListener(), hijacked: map[net.Conn]struct{}{}}
 	p.outer = &http.Server{
 		Handler:           p,
 		ReadHeaderTimeout: 30 * time.Second,
@@ -269,23 +282,83 @@ func (p *Proxy) authorized(r *http.Request) bool {
 	return subtle.ConstantTimeCompare([]byte(got), []byte(p.opt.Token)) == 1
 }
 
-// allowed reports whether host goes through untouched: loopback, private
-// and link-local addresses, localhost, single-label names (Docker
-// services, the site calling itself) and the Allow globs.
-func (p *Proxy) allowed(host string) bool {
+// allowed reports whether host goes through unchanged: loopback and
+// private (RFC 1918, ULA) addresses, localhost, the Allow globs, and
+// single-label names (Docker services, the site calling itself) whose
+// every address is loopback or private. Such a name is resolved here, once:
+// a resolv.conf search domain can turn "api" into a public host. The
+// returned context pins the name to the checked addresses, so the dial
+// can't resolve it differently. While sealed, cloud metadata addresses
+// are never allowed, even by a glob.
+func (p *Proxy) allowed(ctx context.Context, host string) (bool, context.Context) {
 	host = strings.ToLower(strings.TrimSuffix(host, "."))
-	if ip := net.ParseIP(host); ip != nil {
-		return ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast()
-	}
-	if host == "localhost" || strings.HasSuffix(host, ".localhost") || !strings.Contains(host, ".") {
-		return true
+	if p.sealed() && metadata(host) {
+		return false, ctx
 	}
 	for _, a := range p.opt.Allow {
 		if ok, _ := path.Match(strings.ToLower(a), host); ok {
-			return true
+			return true, ctx
 		}
 	}
-	return false
+	if ip := net.ParseIP(host); ip != nil {
+		return ip.IsLoopback() || ip.IsPrivate(), ctx
+	}
+	if host == "localhost" || strings.HasSuffix(host, ".localhost") {
+		return true, ctx
+	}
+	if host == "" || strings.Contains(host, ".") {
+		return false, ctx
+	}
+	addrs, err := p.opt.Resolver.LookupHost(ctx, host)
+	if err != nil || len(addrs) == 0 {
+		return false, ctx
+	}
+	for _, a := range addrs {
+		ip := net.ParseIP(a)
+		if ip == nil || (!ip.IsLoopback() && !ip.IsPrivate()) || (p.sealed() && metadata(ip.String())) {
+			p.opt.Log.Debug("single-label name resolves beyond private ranges", "host", host, "addr", a)
+			return false, ctx
+		}
+	}
+	return true, context.WithValue(ctx, pinKey{}, pin{host: host, addrs: addrs})
+}
+
+func (p *Proxy) sealed() bool { return p.opt.Server.Mode() == catcher.Seal }
+
+// metadata reports whether host is a cloud metadata endpoint (AWS, GCP,
+// Azure and others use 169.254.169.254; AWS also fd00:ec2::254, which is
+// a private ULA address). A sealed site must never read cloud credentials
+// from it.
+func metadata(host string) bool {
+	ip := net.ParseIP(strings.Trim(host, "[]"))
+	return ip != nil && (ip.Equal(net.IPv4(169, 254, 169, 254)) || ip.Equal(net.ParseIP("fd00:ec2::254")))
+}
+
+type pinKey struct{}
+
+// pin is a name allowed for the addresses it was checked against.
+type pin struct {
+	host  string
+	addrs []string
+}
+
+// dial opens a connection through Options.Dial, to the checked addresses
+// when allowed pinned the host.
+func (p *Proxy) dial(ctx context.Context, network, addr string) (net.Conn, error) {
+	pn, ok := ctx.Value(pinKey{}).(pin)
+	host, port, err := net.SplitHostPort(addr)
+	if !ok || err != nil || !strings.EqualFold(strings.TrimSuffix(host, "."), pn.host) {
+		return p.opt.Dial(ctx, network, addr)
+	}
+	var errs []error
+	for _, a := range pn.addrs {
+		c, err := p.opt.Dial(ctx, network, net.JoinHostPort(a, port))
+		if err == nil {
+			return c, nil
+		}
+		errs = append(errs, err)
+	}
+	return nil, errors.Join(errs...)
 }
 
 // connect handles CONNECT host:port: a blind tunnel for allowed hosts (and
@@ -300,6 +373,8 @@ func (p *Proxy) connect(w http.ResponseWriter, r *http.Request) {
 	}
 	host, _, _ := net.SplitHostPort(target)
 	run := runOf(r)
+	pass, ctx := p.allowed(r.Context(), host)
+	r = r.WithContext(ctx)
 	switch {
 	case blindPayment(host) && p.opt.MITM:
 		// Even when allowlisted: only inside can test and live keys be told apart.
@@ -310,7 +385,7 @@ func (p *Proxy) connect(w http.ResponseWriter, r *http.Request) {
 		p.markBlocked(d.ID, errPaymentTunnel)
 		p.opt.Log.Warn("refused a tunnel", "host", host, "reason", errPaymentTunnel)
 		http.Error(w, "rhythm-echo: "+host+": "+errPaymentTunnel, http.StatusForbidden)
-	case p.allowed(host) || (!p.opt.MITM && p.opt.Server.Mode() == catcher.Observe):
+	case pass || (!p.opt.MITM && !p.sealed()):
 		p.tunnel(w, r, target, "", run)
 	case p.opt.MITM:
 		p.intercept(w, r, target, host)
@@ -323,7 +398,7 @@ func (p *Proxy) connect(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "rhythm-echo proxy: "+err.Error(), http.StatusBadGateway)
 			return
 		}
-		if d.Action == wire.Allow {
+		if d.Action == wire.Allow && !metadata(host) {
 			p.tunnel(w, r, target, d.ID, run)
 			return
 		}
@@ -334,7 +409,7 @@ func (p *Proxy) connect(w http.ResponseWriter, r *http.Request) {
 
 // tunnel copies bytes both ways and records the host (not the content).
 func (p *Proxy) tunnel(w http.ResponseWriter, r *http.Request, target, id, run string) {
-	up, err := p.opt.Dial(r.Context(), "tcp", target)
+	up, err := p.dial(r.Context(), "tcp", target)
 	host, _, _ := net.SplitHostPort(target)
 	rec := func(status int, errMsg string) {
 		_, _ = p.opt.Server.Capture(wire.Capture{Version: wire.Version, Kind: "http", Phase: wire.After, ID: id, Run: run,
@@ -438,8 +513,8 @@ func (p *Proxy) handle(w http.ResponseWriter, r *http.Request, scheme, host, hoo
 	capt := &wire.HTTP{Method: r.Method, URL: u.String(), Headers: flatten(r.Header), Body: string(body)}
 	// Allowed hosts go straight through, except a live payment call: the
 	// catcher refuses those whatever the allowlist says.
-	if p.allowed(u.Hostname()) && !livePayment(r.Method, u, capt.Headers, body) {
-		p.forward(w, r, u, body, "", run, hook, capt)
+	if pass, ctx := p.allowed(r.Context(), u.Hostname()); pass && !livePayment(r.Method, u, capt.Headers, body) {
+		p.forward(w, r.WithContext(ctx), u, body, "", run, hook, capt)
 		return
 	}
 	d, err := p.opt.Server.Capture(wire.Capture{Version: wire.Version, Kind: "http", Phase: wire.Before, Run: run,
@@ -448,10 +523,18 @@ func (p *Proxy) handle(w http.ResponseWriter, r *http.Request, scheme, host, hoo
 		http.Error(w, "rhythm-echo proxy: "+err.Error(), http.StatusBadGateway)
 		return
 	}
-	switch d.Action {
-	case wire.Allow:
+	switch {
+	case d.Action == wire.Allow && p.sealed() && metadata(u.Hostname()):
+		// Allowlisted by a glob such as "*": still never reached.
+		if p.opt.Server.Inbox != nil {
+			p.opt.Server.Inbox.Update(d.ID, func(m *model.Message) {
+				m.Status, m.Response = model.Faked, &model.Response{Status: http.StatusNotFound}
+			})
+		}
+		writeFake(w, wire.Decision{ID: d.ID, Response: &wire.Response{Status: http.StatusNotFound}})
+	case d.Action == wire.Allow:
 		p.forward(w, r, u, body, d.ID, run, hook, capt)
-	case wire.Fake:
+	case d.Action == wire.Fake:
 		writeFake(w, d)
 	default:
 		w.Header().Set("X-Echo-Id", d.ID)
