@@ -53,6 +53,8 @@ go install github.com/RhythmShahriar/echo/cmd/rhythm-echo@latest
 
 Every download is checked against the release checksums, which are [signed with cosign](https://github.com/RhythmShahriar/rhythm/wiki/Verifying-Releases).
 
+`rhythm echo` and `rhythm-echo` are the same command: the `rhythm` CLI runs the `rhythm-echo` binary for you. Use either; the examples here use `rhythm echo`.
+
 ## Seal a site
 
 Start Echo, then connect the site. Nothing the site sends leaves the machine; Echo answers in each service's place, so the site carries on as if the email went out and the SMS was delivered.
@@ -76,6 +78,23 @@ Connectors switch themselves off in production. For a seal that can't be bypasse
 ## Check a change
 
 List the actions that make your site send things in `.echo/config.yaml` (`rhythm echo init` writes examples): HTTP requests, WP-CLI or artisan commands, or signed webhook replays. Forms and multi-step journeys are driven by [Soundcheck](https://github.com/RhythmShahriar/soundcheck) with `--echo`.
+
+```yaml
+# .echo/config.yaml: ask WordPress for a password reset, which sends one email
+site: https://staging.shop.test
+actions:
+  - name: Lost password
+    http:
+      method: POST
+      url: /wp-login.php?action=lostpassword
+      form: {user_login: admin}
+    expect: {email: 1}
+```
+
+Each action counts as done when nothing new arrives for `quiet` (default 2s), or after `timeout` (default 30s). Echo caps `quiet` at 30s and `timeout` at 60s: a longer value acts as the cap.
+
+> [!WARNING]
+> **`.echo/config.yaml` is code.** A `command` action or a `flush` entry runs in your shell on every `snapshot`, `compare` and `run`. `${env:NAME}` puts an environment variable into an `http` action, which sends it to the URL the action names. Read a config from a repository you didn't write before you run Echo in it, as you would a Makefile.
 
 ```sh
 rhythm echo snapshot --name before-update        # what each action sends now
@@ -119,7 +138,7 @@ Unfilled placeholders (`{first_name}`, `*|FNAME|*`, `[your-name]`), PHP warnings
 <td valign="top">
 
 ### 🔒 Staging that talks to real people
-Sealed by default: email, SMS, WhatsApp, webhooks, analytics and push are answered by Echo. Live-mode payment calls get the provider's own refusal, so a test can never charge a card. In observe mode, any real recipient outside your allowlist is flagged.
+Sealed by default: email, SMS, WhatsApp, webhooks, analytics and push are answered by Echo. Live-mode Stripe and PayPal calls get the provider's own refusal, so a test can't charge a card through either, even in observe mode. Other payment gateways are sealed like any other service, so in observe mode or on an allowlisted host they go through. In observe mode, any real recipient outside your allowlist is flagged.
 
 </td>
 <td valign="top">
