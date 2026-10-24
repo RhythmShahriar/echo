@@ -349,9 +349,12 @@ func TestStartProxyServesOnTheListener(t *testing.T) {
 	inbox := catcher.NewInbox(10)
 	srv := catcher.NewServer(inbox, catcher.Config{Mode: catcher.Seal})
 	ln := newPipeListener()
-	line, stop, err := startProxy(s, srv, ln)
+	line, notes, stop, err := startProxy(s, srv, ln)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if len(notes) != 0 {
+		t.Errorf("notes without --mitm = %v", notes)
 	}
 	if !strings.HasPrefix(line, "127.0.0.1:20419  (HTTPS_PROXY") {
 		t.Errorf("line = %q", line)

@@ -134,12 +134,13 @@ func cmdUp(s *session) int {
 		stack.push(func(context.Context) { _ = sink.Close() })
 	}
 	proxyLine := ""
+	var notes []caNote
 	if pl != nil {
-		line, stop, err := startProxy(s, srv, pl)
+		line, ns, stop, err := startProxy(s, srv, pl)
 		if err != nil {
 			return s.fail(err)
 		}
-		proxyLine = line
+		proxyLine, notes = line, ns
 		stack.push(stop)
 	}
 
@@ -155,6 +156,9 @@ func cmdUp(s *session) int {
 	}
 	if proxyLine != "" {
 		s.view.Step("Proxy", proxyLine)
+	}
+	for _, n := range notes {
+		s.view.Step(n.label, n.text)
 	}
 	if login != nil {
 		s.view.Step("Login", "viewers sign in as "+login.User()+" at http://"+cfg.Listen+web.PathLogin+" (read only, for 8 hours)")
