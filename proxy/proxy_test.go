@@ -16,7 +16,9 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -398,7 +400,8 @@ func TestAllowedHosts(t *testing.T) {
 		for host, want := range map[string]bool{
 			"127.0.0.1": true, "::1": true, "10.1.2.3": true, "192.168.1.5": true, "172.20.0.4": true, "fd12::1": true,
 			"localhost": true, "shop.localhost": true, "wordpress": true, "db": true, "api.stripe.com": true,
-			"169.254.169.254": mode == catcher.Observe, "fd00:ec2::254": mode == catcher.Observe, "169.254.1.1": true, // by the glob
+			"169.254.169.254": mode == catcher.Observe, "fd00:ec2::254": mode == catcher.Observe, "169.254.1.1": mode == catcher.Observe, // the glob, but link-local is faked while sealed
+			"169.254.170.2": mode == catcher.Observe, "169.254.170.23": mode == catcher.Observe,
 			"api": false, "mixed": false, "meta": false, "linklocal": false, "unknown": false, "fe80::1": false,
 			"api.twilio.com": false, "8.8.8.8": false, "stripe.com.evil.test": false, "hooks.slack.com": false,
 		} {
@@ -516,6 +519,57 @@ func TestSealedSingleLabelAndPrivateHosts(t *testing.T) {
 	req, _ := http.NewRequest(http.MethodGet, "https://169.254.169.254/", nil)
 	if _, err := c.Do(req); err == nil || !strings.Contains(err.Error(), "Forbidden") { //nolint:bodyclose // fails before a body
 		t.Errorf("metadata tunnel: %v", err)
+	}
+	if len(dialed) != 0 {
+		t.Errorf("dialed %v", dialed)
+	}
+}
+
+// TestSealedFakesEveryMetadataEndpoint: with "*" allowed everywhere, the
+// ECS and EKS credential endpoints, Alibaba's metadata address and the
+// usual 169.254.169.254 are faked while sealed, never dialed, and each is
+// recorded as faked from the start rather than sent and then faked.
+func TestSealedFakesEveryMetadataEndpoint(t *testing.T) {
+	var dialed []string
+	dial := func(_ context.Context, network, addr string) (net.Conn, error) {
+		dialed = append(dialed, addr)
+		return nil, &net.OpError{Op: "dial", Net: network, Err: errNoNet{addr}}
+	}
+	inbox := catcher.NewInbox(20)
+	var mu sync.Mutex
+	statuses := map[string][]model.Status{}
+	inbox.OnAdd(func(m model.Message) {
+		mu.Lock()
+		statuses[m.ID] = append(statuses[m.ID], m.Status)
+		mu.Unlock()
+	})
+	p, err := New(Options{Server: catcher.NewServer(inbox, catcher.Config{Mode: catcher.Seal, Allow: []string{"*"}}),
+		Allow: []string{"*"}, Resolver: testNames, Dial: dial})
+	if err != nil {
+		t.Fatal(err)
+	}
+	l, _ := net.Listen("tcp", "127.0.0.1:0")
+	go func() { _ = p.Serve(l) }()
+	t.Cleanup(func() { _ = p.Close() })
+	pu, _ := url.Parse("http://" + l.Addr().String())
+	tr := &http.Transport{Proxy: http.ProxyURL(pu)}
+	t.Cleanup(tr.CloseIdleConnections)
+	c := &http.Client{Transport: tr, Timeout: 5 * time.Second}
+	for _, u := range []string{"http://169.254.170.2/v2/credentials/x", "http://169.254.170.23/v1/credentials",
+		"http://100.100.100.200/latest/meta-data/ram/security-credentials/", "http://169.254.169.254/latest/meta-data/",
+		"http://metadata.google.internal/computeMetadata/v1/"} {
+		resp, err := c.Get(u) //nolint:noctx // test
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = resp.Body.Close()
+		id := resp.Header.Get("X-Echo-Id")
+		mu.Lock()
+		got := statuses[id]
+		mu.Unlock()
+		if resp.StatusCode != http.StatusNotFound || id == "" || len(got) == 0 || slices.Contains(got, model.Sent) {
+			t.Errorf("%s: %d, statuses %v", u, resp.StatusCode, got)
+		}
 	}
 	if len(dialed) != 0 {
 		t.Errorf("dialed %v", dialed)

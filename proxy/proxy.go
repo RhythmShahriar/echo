@@ -325,26 +325,12 @@ func (p *Proxy) allowed(ctx context.Context, host string) (bool, context.Context
 
 func (p *Proxy) sealed() bool { return p.opt.Server.Mode() == catcher.Seal }
 
-// metadataNames are the names clouds give their metadata endpoint.
-var metadataNames = map[string]bool{
-	"metadata.google.internal":   true,
-	"metadata.goog":              true,
-	"instance-data.ec2.internal": true,
-}
-
-// metadata reports whether host is a cloud metadata endpoint (AWS, GCP,
-// Azure and others use 169.254.169.254; AWS also fd00:ec2::254, which is
-// a private ULA address), by address or by one of metadataNames. A sealed
-// site must never read cloud credentials from it. Any other name can
-// resolve there too: sealedDial catches those.
-func metadata(host string) bool {
-	host = strings.ToLower(strings.TrimSuffix(strings.Trim(host, "[]"), "."))
-	if metadataNames[host] {
-		return true
-	}
-	ip := net.ParseIP(host)
-	return ip != nil && (ip.Equal(net.IPv4(169, 254, 169, 254)) || ip.Equal(net.ParseIP("fd00:ec2::254")))
-}
+// metadata reports whether host is a cloud metadata or credentials
+// endpoint (catcher.Metadata): all of 169.254.0.0/16, Alibaba's
+// 100.100.100.200, AWS's fd00:ec2::254 and the clouds' names for them. A
+// sealed site must never read cloud credentials from it. Any other name
+// can resolve there too: sealedDial catches those.
+func metadata(host string) bool { return catcher.Metadata(host) }
 
 // errMetadata refuses a dial that would reach a metadata endpoint.
 var errMetadata = errors.New("refused: the name resolves to a cloud metadata endpoint, which a sealed site never reaches")
