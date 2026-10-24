@@ -1750,3 +1750,165 @@ func TestQuietAndTimeoutFlags(t *testing.T) {
 		t.Errorf("ls --help lists the quiet window:\n%s", out)
 	}
 }
+
+// fakeLatest is an Echo with GET /v1/messages/latest as the catcher
+// answers it: Ann's login email with a code and a magic link, Bob's SMS
+// with neither, and for anyone else a 404 once wait has passed. Each
+// query it got is kept, to check what the flags sent.
+func fakeLatest(t *testing.T, token string, queries chan<- string) http.Handler {
+	t.Helper()
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/messages/latest" {
+			http.NotFound(w, r)
+			return
+		}
+		if r.Header.Get(wire.TokenHeader) != token {
+			http.Error(w, "this Echo needs its token", http.StatusUnauthorized)
+			return
+		}
+		q := r.URL.Query()
+		select {
+		case queries <- r.URL.RawQuery:
+		default:
+		}
+		var ans map[string]any
+		switch to := q.Get("to"); to {
+		case "ann@shop.test":
+			ans = map[string]any{"codes": []string{"482913"},
+				"links":   []map[string]string{{"kind": "reset", "url": "https://shop.test/reset?key=r1"}, {"kind": "magic", "url": "https://shop.test/login?token=m1"}},
+				"message": map[string]any{"id": "m-ann", "channel": "email", "subject": "Your code", "to": []string{to}}}
+		case "+15005550006":
+			ans = map[string]any{"codes": []string{}, "links": []any{},
+				"message": map[string]any{"id": "m-bob", "channel": "sms", "to": []string{to}}}
+		default:
+			wait, _ := time.ParseDuration(q.Get("wait"))
+			time.Sleep(wait)
+			msg := "no message matched"
+			if wait > 0 {
+				msg += " within " + wait.String()
+			}
+			http.Error(w, msg, http.StatusNotFound)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(ans)
+	})
+}
+
+func TestLatestPrintsTheCodeOrLink(t *testing.T) {
+	t.Chdir(t.TempDir())
+	queries := make(chan string, 1)
+	echo := fixtureServer(t, 20470, fakeLatest(t, "s3cret-token", queries))
+	t.Setenv("RHYTHM_ECHO_URL", echo.URL)
+	t.Setenv("RHYTHM_ECHO_TOKEN", "s3cret-token")
+	lastQuery := func() string {
+		select {
+		case q := <-queries:
+			return q
+		default:
+			return ""
+		}
+	}
+
+	for _, tc := range []struct {
+		args []string
+		want string
+	}{
+		{[]string{"--code"}, "482913\n"},
+		{nil, "482913\n"},
+		{[]string{"--link"}, "https://shop.test/reset?key=r1\n"},
+		{[]string{"--link", "--kind", "magic"}, "https://shop.test/login?token=m1\n"},
+		{[]string{"--kind", "magic"}, "https://shop.test/login?token=m1\n"},
+	} {
+		code, out, errOut := runCLI(t, append([]string{"latest", "--to", "ann@shop.test"}, tc.args...)...)
+		if code != exitOK || out != tc.want || errOut != "" {
+			t.Errorf("latest %v: exit %d, %q %q; want %q", tc.args, code, out, errOut, tc.want)
+		}
+		_ = lastQuery()
+	}
+
+	// The flags reach the query: channels as one list, the action by its
+	// ID, the run, how far back and the default 10s wait.
+	code, _, errOut := runCLI(t, "latest", "--to", "ann@shop.test", "--channel", "email,sms", "--action", "Log in", "--run", "r1", "--since", "5m")
+	q := lastQuery()
+	for _, want := range []string{"channel=email%2Csms", "action=action%3Alog-in", "run=r1", "since=", "wait=10s", "to=ann%40shop.test"} {
+		if code != exitOK || !strings.Contains(q, want) {
+			t.Errorf("latest sent %q (exit %d %s); want %s in it", q, code, errOut, want)
+		}
+	}
+
+	code, out, _ := runCLI(t, "latest", "--to", "ann@shop.test", "--json")
+	var data latestResult
+	if env := decodeEnvelope(t, []byte(out), kindLatest, &data); code != exitOK || data.Codes[0] != "482913" || len(data.Links) != 2 ||
+		data.Message.ID != "m-ann" || env.Summary.Messages != 1 || env.Verdict != verdictOK {
+		t.Errorf("latest --json: %d\n%s", code, out)
+	}
+	_ = lastQuery()
+
+	// Nothing arrives in time: exit 1, after about --wait.
+	start := time.Now()
+	code, out, errOut = runCLI(t, "latest", "--to", "nobody@shop.test", "--wait", "300ms")
+	if took := time.Since(start); code != exitFindings || out != "" || took < 300*time.Millisecond || took > 5*time.Second ||
+		errOut != "rhythm echo: no message to nobody@shop.test arrived within 300ms\n" {
+		t.Errorf("latest timeout: exit %d in %s, %q %q", code, took, out, errOut)
+	}
+	if !strings.Contains(lastQuery(), "wait=300ms") {
+		t.Error("latest didn't send --wait")
+	}
+	// --wait 0 asks once, without waiting.
+	if code, _, _ := runCLI(t, "latest", "--to", "nobody@shop.test", "--wait", "0"); code != exitFindings || strings.Contains(lastQuery(), "wait=") {
+		t.Errorf("latest --wait 0: exit %d", code)
+	}
+
+	// A message without what was asked for: exit 1, naming the message.
+	for _, args := range [][]string{{"--code"}, {}, {"--link"}} {
+		code, out, errOut := runCLI(t, append([]string{"latest", "--to", "+15005550006"}, args...)...)
+		if code != exitFindings || out != "" || !strings.Contains(errOut, "the newest message to +15005550006 has no") || !strings.Contains(errOut, "rhythm echo show m-bob") {
+			t.Errorf("latest %v with no code: exit %d %q %q", args, code, out, errOut)
+		}
+	}
+	if _, _, errOut := runCLI(t, "latest", "--to", "ann@shop.test", "--link", "--kind", "verify"); !strings.Contains(errOut, "has no verify link") {
+		t.Errorf("latest --kind verify: %q", errOut)
+	}
+
+	for _, tc := range []struct {
+		args []string
+		want string
+	}{
+		{[]string{"latest"}, "latest needs --to <address or phone>"},
+		{[]string{"latest", "ann@shop.test"}, "latest takes no arguments; name the recipient with --to"},
+		{[]string{"latest", "--to", "a", "--code", "--link"}, "pick --code or --link, not both"},
+		{[]string{"latest", "--to", "a", "--kind", "secret"}, `--kind "secret": use one of magic, verify, reset, login, unsubscribe`},
+		{[]string{"latest", "--to", "a", "--channel", "email,fax"}, `--channel "fax": use one or more of email, sms`},
+		{[]string{"latest", "--to", "a", "--wait", "2m"}, "--wait 2m: give 0 (don't wait) up to 1m"},
+		{[]string{"latest", "--to", "a", "--action", "x", "--action", "y"}, "latest takes one --action"},
+		{[]string{"latest", "--to", "a", "--fail-on", "none"}, "--fail-on has no effect on latest"},
+		{[]string{"ls", "--code"}, "--code has no effect on ls"},
+		{[]string{"ls", "--channel", "email,sms"}, `--channel "email,sms": use one of`},
+	} {
+		code, out, errOut := runCLI(t, tc.args...)
+		if code != exitUsage || out != "" || !strings.Contains(errOut, tc.want) {
+			t.Errorf("%v: exit %d, %q; want 2 and %q", tc.args, code, errOut, tc.want)
+		}
+	}
+
+	// A wrong token, an Echo from before codes, and no Echo at all.
+	t.Setenv("RHYTHM_ECHO_TOKEN", "wrong")
+	if code, _, errOut := runCLI(t, "latest", "--to", "ann@shop.test"); code != exitError || !strings.Contains(errOut, "401") {
+		t.Errorf("latest with a wrong token: %d %q", code, errOut)
+	}
+	t.Setenv("RHYTHM_ECHO_TOKEN", "")
+	old := fixtureServer(t, 20471, catcher.NewServer(catcher.NewInbox(10), catcher.Config{Version: "test"}))
+	if code, _, errOut := runCLI(t, "latest", "--to", "ann@shop.test", "--url", old.URL); code != exitError ||
+		!strings.Contains(errOut, "this Echo doesn't read codes and links; update it") {
+		t.Errorf("latest on an older Echo: %d %q", code, errOut)
+	}
+	if code, _, errOut := runCLI(t, "latest", "--to", "ann@shop.test", "--url", "http://127.0.0.1:20472"); code != exitError ||
+		!strings.Contains(errOut, "no Echo is running") {
+		t.Errorf("latest without Echo: %d %q", code, errOut)
+	}
+
+	if code, out, _ := runCLI(t, "latest", "--help"); code != exitOK || !strings.Contains(out, "--kind <k>") || !strings.Contains(out, "default 10s") {
+		t.Errorf("latest --help: %d\n%s", code, out)
+	}
+}

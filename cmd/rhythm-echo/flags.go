@@ -58,6 +58,12 @@ type options struct {
 	// the config's quiet: and timeout:. Each set flag is true when given.
 	quietFor, timeout       time.Duration
 	quietForSet, timeoutSet bool
+
+	// latest
+	code, link bool
+	kind       string
+	channels   []model.Channel // --channel, which latest takes as a comma-separated list
+	waitSet    bool            // --wait was given: latest's default differs from replay's
 }
 
 func flagSet(o *options) *flag.FlagSet {
@@ -118,6 +124,9 @@ func flagSet(o *options) *flag.FlagSet {
 	fs.StringVar(&o.typ, "type", "", "")
 	fs.DurationVar(&o.wait, "wait", 5*time.Second, "")
 	fs.DurationVar(&o.timeout, "timeout", 0, "")
+	fs.BoolVar(&o.code, "code", false, "")
+	fs.BoolVar(&o.link, "link", false, "")
+	fs.StringVar(&o.kind, "kind", "", "")
 	return fs
 }
 
@@ -149,7 +158,7 @@ func parse(c cmdSpec, args []string) (*plan, error) {
 	if bad := c.unused(fs); len(bad) > 0 {
 		return nil, noEffect(c.name, bad)
 	}
-	o.timeoutSet = visited(fs, "timeout")
+	o.timeoutSet, o.waitSet = visited(fs, "timeout"), visited(fs, "wait")
 	if o.quietForSet && !c.accepts("timeout") {
 		return nil, cli.Usagef("--quiet %s: only snapshot, compare and run take a duration; -q alone means results only", shortDuration(o.quietFor))
 	}
@@ -210,7 +219,17 @@ func parse(c cmdSpec, args []string) (*plan, error) {
 			return nil, cli.Usagef("can't tell the format of %s; add --json, --md, --junit or --html", o.output)
 		}
 	}
-	if o.channel != "" && !slices.Contains(channels, model.Channel(o.channel)) {
+	if c.name == "latest" {
+		for _, ch := range strings.Split(o.channel, ",") {
+			if ch = strings.TrimSpace(ch); ch == "" {
+				continue
+			}
+			if !slices.Contains(channels, model.Channel(ch)) {
+				return nil, cli.Usagef("--channel %q: use one or more of %s, comma-separated", ch, joinChannels())
+			}
+			o.channels = append(o.channels, model.Channel(ch))
+		}
+	} else if o.channel != "" && !slices.Contains(channels, model.Channel(o.channel)) {
 		return nil, cli.Usagef("--channel %q: use one of %s", o.channel, joinChannels())
 	}
 	if o.since < 0 {
@@ -432,6 +451,9 @@ var flagDocs = map[string]flagDoc{
 	"type":       {"--type <t>", `for JSON files: the event type (default the payload's "type")`},
 	"list":       {"--list", "list the built-in events"},
 	"wait":       {"--wait <d>", "how long to collect what the site sends back (default 5s)"},
+	"code":       {"--code", "print the one-time code (the default, else the first link)"},
+	"link":       {"--link", "print the first link instead (magic, verify, reset, login or\nunsubscribe)"},
+	"kind":       {"--kind <k>", "with --link: only this kind of link, e.g. magic or reset"},
 	"timeout":    {"--timeout <d>", "longest wait per action (overrides timeout:, at most 1m)"},
 }
 
@@ -503,6 +525,13 @@ var commands = []cmdSpec{
 		flags: flags([]flagUse{{"to", "where to send (absolute, or relative to site:)"}, {"set", ""}, {"header", ""}, {"secret-env", ""},
 			{"scheme", ""}, {"type", ""}, {"list", ""}, {"wait", ""}}, echoFlags,
 			[]flagUse{{"json", "the response and what the site sent, as JSON"}}, terminalFlags, []flagUse{{"verbose", ""}})},
+	{name: "latest", use: "latest --to <address> [--code | --link]", about: "print the one-time code or link just sent to someone",
+		flags: flags([]flagUse{{"to", "whose message: an email address or a phone number"},
+			{"channel", "only these channels, comma-separated, e.g. email,sms"},
+			{"action", "only messages from this action of a run (one)"}, {"run", ""}, {"since", ""},
+			{"wait", "how long to wait for a message (default 10s, at most 1m;\n0: don't wait)"},
+			{"code", ""}, {"link", ""}, {"kind", ""},
+			{"json", "the message, its codes and links, as JSON"}}, echoFlags)},
 	{name: "check", use: "check <domain>", about: "SPF, DKIM, DMARC and MX for the domain you send from",
 		flags: flags([]flagUse{{"from-mail", ""}, {"provider", ""}, {"selector", ""}, {"return-path", ""}, {"smtp-host", ""},
 			{"mta-sts-fetch", ""}, {"resolver", ""}, {"fail-on", failOnIssues}}, reportFlags)},

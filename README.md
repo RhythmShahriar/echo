@@ -118,6 +118,7 @@ rhythm echo compare --open                       # what changed, in a report
 | Check SPF, DKIM and DMARC for the sender you use | `rhythm echo check shop.com --from-mail received.eml` |
 | Fail CI when a message stops being sent | `rhythm echo compare` (exits 1 on BROKE by default; `--fail-on new` is stricter) |
 | Compare in CI with a baseline from another job | `rhythm echo snapshot --export base.tgz` there, `rhythm echo compare --against base.tgz` here |
+| Get the login code or magic link just sent, in a test | `code=$(rhythm echo latest --to ann@shop.test --code)` (`--link --kind magic` for the link; exits 1 when nothing arrives within `--wait`, default 10s) |
 | Stream what the site sends into a script | `rhythm echo watch --json` (one JSON object per line) |
 | Read any result in a script | `--json` on any command: one shape, with `kind`, `summary`, `verdict` and `data` |
 

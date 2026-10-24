@@ -11,11 +11,11 @@
 //	rhythm-echo <command> [flags]
 //
 // The commands are up (the catcher), install, doctor, watch, ls, show,
-// clear, snapshot, compare, run, report, snapshots, replay, check,
-// headers, init, ca and sendmail; `rhythm-echo help` lists their flags
-// and exit codes. Every command exits 0 when done, 1 for findings, 2 for
-// a usage error and 3 when it couldn't run, as Tuner and Soundcheck do;
-// sendmail uses sendmail's own codes instead.
+// clear, snapshot, compare, run, report, snapshots, replay, latest,
+// check, headers, init, ca and sendmail; `rhythm-echo help` lists their
+// flags and exit codes. Every command exits 0 when done, 1 for findings,
+// 2 for a usage error and 3 when it couldn't run, as Tuner and Soundcheck
+// do; sendmail uses sendmail's own codes instead.
 package main
 
 import (
@@ -95,6 +95,8 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		return command(c, cmdReplay, args[1:], stdout, stderr)
 	case "snapshots":
 		return command(c, cmdSnapshots, args[1:], stdout, stderr)
+	case "latest":
+		return command(c, cmdLatest, args[1:], stdout, stderr)
 	case "init":
 		return cmdInit(args[1:], stdout, stderr)
 	case "install":
@@ -159,6 +161,8 @@ Usage:
   rhythm echo report [run | snapshot]    show the last result again (--open, -o)
   rhythm echo snapshots [delete <name>]  list snapshots, or delete one
   rhythm echo replay <event> --to <url>  send a signed test webhook (Stripe, Standard Webhooks…)
+  rhythm echo latest --to <address> [--code | --link]
+                                         print the one-time code or link just sent to someone
   rhythm echo check <domain>             SPF, DKIM, DMARC and MX for the domain you send from
   rhythm echo headers <file.eml | ->     check a real received email's authentication
   rhythm echo init [--stack s] [--force]
@@ -244,6 +248,17 @@ Replay (inbound webhooks, sent only to staging and local addresses, with Echo se
       --list                 list the built-in events
       --wait <d>             how long to collect what the site sends back (default 5s)
 
+Latest (latest --to <address>; prints only the code or link, for scripts and tests):
+      --to <address>         whose message: an email address or a phone number
+      --channel <c,c>        only these channels, e.g. email,sms
+      --action <name>        only messages from this action of a run
+      --wait <d>             how long to wait for a message (default 10s, at most 1m)
+      --code                 print the one-time code (the default, else the first link)
+      --link                 print the first link instead (magic, verify, reset, login or
+                             unsubscribe)
+      --kind <k>             with --link: only this kind of link, e.g. magic or reset
+                             Exits 1 when nothing arrives in time, or it has no code or link.
+
 Deliverability (check, headers; never sends anything):
       --from-mail <file.eml> learn the real sender from a received email
       --provider <name>      or name it: sendgrid, mailgun, postmark, ses, resend, brevo,
@@ -275,6 +290,8 @@ Examples:
   rhythm echo install wordpress /var/www/staging   # add the WordPress connector
   rhythm echo snapshot --name before-update
   rhythm echo compare --fail-on broke
+  code=$(rhythm echo latest --to ann@shop.test --code)
+                                                   # the login code just sent, in a test
   rhythm soundcheck snapshot staging.shop.test --echo --level inspect,click,submit
                                                    # forms and flows, with what they send
 `)
