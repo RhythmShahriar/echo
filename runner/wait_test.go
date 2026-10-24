@@ -273,7 +273,7 @@ func TestLateMailGoesToItsAction(t *testing.T) {
 	}
 }
 
-// No late mail: no notes, and the actions keep what they had.
+// No late mail: no notes; the actions keep what they had.
 func TestNoLateMailNoNotes(t *testing.T) {
 	fake := &waitEcho{msgs: map[string][]json.RawMessage{"action:a": {json.RawMessage(`{"id":"m1","channel":"email","action":"action:a"}`)}}}
 	fake.list = func() string { return `[{"id":"m1","channel":"email","action":"action:a"}]` }

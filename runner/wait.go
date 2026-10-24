@@ -171,9 +171,9 @@ func (m listed) belongsTo() string {
 
 // creditLate gives an action the mail it caused that arrived after its
 // wait was over, sent by a queue or cron: mail the site tagged with the
-// action, and untagged mail Echo marked late for it. Without this the
+// action and untagged mail Echo marked late for it. Without this the
 // first kind was lost and the second went to the next action. Each one
-// gets a run warning saying how late it was, and the run gets one
+// gets a run warning saying how late it was; the run gets one
 // suggestion to make such senders send in time. The action's
 // expectations are checked again with the mail it got back. Not knowing
 // only costs the credit.

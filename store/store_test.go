@@ -119,7 +119,7 @@ func TestExcludeFromGit(t *testing.T) {
 	if strings.Contains(ex, "/.echo/.incoming/") {
 		t.Error("the old .incoming/ folder is gone; its line must not be written")
 	}
-	// Each line must match what it's meant for, and nothing else.
+	// Each line must match what it's meant for and nothing else.
 	for path, ignored := range map[string]bool{
 		".echo/snapshots/before/run.json":                true,
 		".echo/snapshots/.incoming-before/run.json":      true,

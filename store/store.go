@@ -427,7 +427,7 @@ func (s Store) Prune(keep int) error {
 // can hold customer data, never get committed by accident and the
 // project's .gitignore stays untouched. Unfinished snapshots
 // (snapshots/.incoming-<name>) get a line of their own; older versions
-// wrote a .incoming/ line for a folder Echo no longer uses, and an
+// wrote a .incoming/ line for a folder Echo no longer uses. An
 // exclude list they wrote gets only the lines it lacks. config.yaml and
 // flows/ stay visible to git, to share with the team. It does nothing
 // outside a git repository.

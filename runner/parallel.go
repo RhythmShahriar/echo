@@ -47,7 +47,7 @@ type finished struct {
 //   - after one shows up, up to Parallel actions run at once with shared
 //     leases, the next starting as soon as one finishes;
 //   - an action with parallel: false waits until every other action has
-//     ended, runs alone with an exclusive lease, and holds back the next.
+//     ended, runs alone with an exclusive lease and holds back the next.
 //
 // Actions still start in config order. Without Parallel nothing changes:
 // one by one, shared leases.
@@ -168,7 +168,7 @@ func (g *gate) enter(alone bool) (exclusive, ok bool) {
 }
 
 // leave counts a finished action out, learning from its messages whether
-// the site tags its mail, and says whether this run's actions ever
+// the site tags its mail. It says whether this run's actions ever
 // overlapped.
 func (g *gate) leave(alone bool, msgs []model.Message) bool {
 	g.mu.Lock()
