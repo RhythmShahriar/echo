@@ -132,7 +132,9 @@ func (s *session) dnsOptions(sender *dns.Sender) (dns.Options, *probe) {
 	return opts, pr
 }
 
-const (
+// Variables, not constants, so a test can wait on a dead resolver for
+// less than the real budget.
+var (
 	// dnsQuery is how long one lookup may take. Go's default (5 s, two
 	// tries per server) let a dead resolver hold check for a minute.
 	dnsQuery = 3 * time.Second

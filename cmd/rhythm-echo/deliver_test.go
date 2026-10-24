@@ -226,6 +226,14 @@ func closedPort(t *testing.T) string {
 }
 
 func TestCheckUnreachableResolverExitsThree(t *testing.T) {
+	// The real budget is what the help promises; the run below waits
+	// on a shorter one so a loaded runner has room to spare.
+	if dnsBudget > 15*time.Second || dnsQuery > dnsBudget {
+		t.Errorf("a dead resolver may hold check for %s (lookups %s), want at most 15s", dnsBudget, dnsQuery)
+	}
+	query, budget := dnsQuery, dnsBudget
+	dnsQuery, dnsBudget = 300*time.Millisecond, 2*time.Second
+	t.Cleanup(func() { dnsQuery, dnsBudget = query, budget })
 	addr := blackHole(t)
 	start := time.Now()
 	// --fail-on none must not turn "nothing was checked" into a pass.
@@ -234,8 +242,8 @@ func TestCheckUnreachableResolverExitsThree(t *testing.T) {
 	if code != exitError {
 		t.Errorf("black hole: exit %d, want %d\n%s\n%s", code, exitError, out, errOut)
 	}
-	if took >= 16*time.Second {
-		t.Errorf("black hole took %s, want under 16s", took)
+	if took >= 8*time.Second {
+		t.Errorf("black hole took %s with a %s budget, want under 8s", took, dnsBudget)
 	}
 	want := "rhythm echo: Could not reach the resolver " + addr
 	if !strings.Contains(errOut, want) || strings.Count(errOut, "rhythm echo:") != 1 || strings.Contains(errOut, "127.0.0.53") {
