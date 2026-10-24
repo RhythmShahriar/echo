@@ -18,17 +18,17 @@ error send/failed [s07b] Resend email fails
 == s10 merge tag (broken)
 error content/placeholder [s10] Unfilled placeholder {customer_first_name} in email
   detail: The template still contains the placeholder, so readers see it instead of their data.
-  fix: Check the tag's spelling against the plugin's list of tags, and that the data it needs exists when the message is sent.
+  fix: Check the tag's spelling against the plugin's list of tags. Make sure the data it needs exists when the message is sent.
   key: content/placeholder|Unfilled placeholder {customer_first_name} in email
 == s10 merge tag SMS (broken)
 error content/placeholder [s10s] Unfilled placeholder {first_name} in Twilio SMS
   detail: The template still contains the placeholder, so readers see it instead of their data.
-  fix: Check the tag's spelling against the plugin's list of tags, and that the data it needs exists when the message is sent.
+  fix: Check the tag's spelling against the plugin's list of tags. Make sure the data it needs exists when the message is sent.
   key: content/placeholder|Unfilled placeholder {first_name} in Twilio SMS
 == s11 PHP warning (broken)
 error content/php-error [s11] PHP error printed in email
   detail: PHP Warning: Undefined variable $total (order.php line 42)
-  fix: Fix the code the error points at, and turn display_errors off so errors never reach messages.
+  fix: Fix the code the error points at. Turn display_errors off so errors never reach messages.
   key: content/php-error|PHP error printed in email
 == s12 staging link (broken)
 warning content/dev-link [s12] Email links to a development address (staging.shop.test)
@@ -71,7 +71,7 @@ warning content/secret [s16] Webhook to crm.shop.test carries a credential in it
 == s17 From domain (broken)
 error content/placeholder [s17] Unfilled placeholder {{ order.id }} in email
   detail: The template still contains the placeholder, so readers see it instead of their data.
-  fix: Check the tag's spelling against the plugin's list of tags, and that the data it needs exists when the message is sent.
+  fix: Check the tag's spelling against the plugin's list of tags. Make sure the data it needs exists when the message is sent.
   key: content/placeholder|Unfilled placeholder {{ order.id }} in email
 warning content/encoding [s17] Garbled characters in email
   detail: found "â€™": text was encoded twice
@@ -105,7 +105,7 @@ warning email/clipped [big] Email is too big for Gmail and gets clipped
 == WhatsApp to local number
 error content/placeholder [wa] Unfilled placeholder [your-name] in WhatsApp message
   detail: The template still contains the placeholder, so readers see it instead of their data.
-  fix: Check the tag's spelling against the plugin's list of tags, and that the data it needs exists when the message is sent.
+  fix: Check the tag's spelling against the plugin's list of tags. Make sure the data it needs exists when the message is sent.
   key: content/placeholder|Unfilled placeholder [your-name] in WhatsApp message
 warning sms/number [wa] Message sent to a number that isn't in international format
   detail: 07700900123

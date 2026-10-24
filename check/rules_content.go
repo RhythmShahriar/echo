@@ -38,7 +38,7 @@ var placeholder = Rule{
 		for _, tag := range placeholders(m.Subject + "\n" + visibleText(m)) {
 			out = append(out, model.Issue{Title: fmt.Sprintf("Unfilled placeholder %s in %s", tag, Describe(m)),
 				Detail: "The template still contains the placeholder, so readers see it instead of their data.",
-				Fix:    "Check the tag's spelling against the plugin's list of tags, and that the data it needs exists when the message is sent."})
+				Fix:    "Check the tag's spelling against the plugin's list of tags. Make sure the data it needs exists when the message is sent."})
 		}
 		return out
 	},
@@ -53,7 +53,7 @@ var phpErrorRule = Rule{
 			return nil
 		}
 		return []model.Issue{{Title: fmt.Sprintf("PHP error printed in %s", Describe(m)), Detail: e,
-			Fix: "Fix the code the error points at, and turn display_errors off so errors never reach messages."}}
+			Fix: "Fix the code the error points at. Turn display_errors off so errors never reach messages."}}
 	},
 }
 
