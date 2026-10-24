@@ -115,15 +115,22 @@ func Run(ctx context.Context, o Options) (*model.Run, error) {
 	}
 	fake := newFake()
 	opts := check.Options{SiteHost: host(cfg.Site), AllowRecipients: cfg.AllowRecipients}
+	lost := map[string]bool{} // IDs of messages Echo couldn't credit to any action
 	for i, a := range actions {
 		if ctx.Err() != nil {
 			break
 		}
-		act := runAction(ctx, o, run, a, fake, opts)
+		act, unsure := runAction(ctx, o, run, a, fake, opts)
+		for _, id := range unsure {
+			lost[id] = true
+		}
 		run.Actions = append(run.Actions, act)
 		if o.Hooks.Action != nil {
 			o.Hooks.Action(&run.Actions[len(run.Actions)-1], i+1, len(actions))
 		}
+	}
+	if w := ambiguityWarning(len(lost)); w != "" {
+		run.Warnings = append(run.Warnings, w)
 	}
 	run.Duration = float64(time.Since(start).Milliseconds())
 	return run, ctx.Err()
@@ -147,18 +154,21 @@ func withWaits(cfg config.Config) config.Config {
 // makes sure every action's is unique and not empty.
 func ActionID(name string) string { return config.ActionID(name) }
 
-func runAction(ctx context.Context, o Options, run *model.Run, a config.Action, fake *fakeData, opts check.Options) model.Action {
+// runAction runs a and returns it, with the IDs of messages that arrived
+// while it was open but that Echo couldn't credit to it, because another
+// run had an action open too.
+func runAction(ctx context.Context, o Options, run *model.Run, a config.Action, fake *fakeData, opts check.Options) (model.Action, []string) {
 	cfg := o.Config
 	runID := run.ID
 	act := model.Action{ID: ActionID(a.Name), Label: a.Name, Kind: kind(a)}
 	start := time.Now()
 	if err := refuse(cfg, a, run.Mode, fake); err != nil {
 		act.Error = err.Error()
-		return act
+		return act, nil
 	}
 	runValue := client.RunValue(runID, act.ID)
-	_ = o.Client.Begin(ctx, runID, act.ID)
-	defer func() { _ = o.Client.End(context.WithoutCancel(ctx)) }()
+	end := begin(ctx, o.Client, runID, act.ID)
+	defer end()
 
 	var err error
 	switch {
@@ -188,13 +198,16 @@ func runAction(ctx context.Context, o Options, run *model.Run, a config.Action, 
 	if werr != nil && act.Error == "" {
 		act.Error = werr.Error()
 	}
+	// Asked before end() so the window is exactly while this action was
+	// open. Not knowing only costs the warning.
+	unsure, _ := ambiguousSince(ctx, o.Client, start)
 	act.Messages = msgs
 	for _, m := range msgs {
 		act.Issues = append(act.Issues, check.Message(m, opts)...)
 	}
 	act.Issues = append(act.Issues, expectations(a.Expect, msgs)...)
 	act.Duration = float64(time.Since(start).Milliseconds())
-	return act
+	return act, unsure
 }
 
 func kind(a config.Action) string {
