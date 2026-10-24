@@ -2125,7 +2125,7 @@ func TestLatestPrintsTheCodeOrLink(t *testing.T) {
 // from Echo's own /v1/messages/latest, as well as its "nothing came" answer.
 func TestLatestAgainstTheRealCatcher(t *testing.T) {
 	t.Chdir(t.TempDir())
-	echo := fixtureServer(t, 21300, catcher.NewServer(catcher.NewInbox(10), catcher.Config{Version: "test"}))
+	echo := fixtureServer(t, 20475, catcher.NewServer(catcher.NewInbox(10), catcher.Config{Version: "test"}))
 	t.Setenv("RHYTHM_ECHO_URL", echo.URL)
 	t.Setenv("RHYTHM_ECHO_TOKEN", "")
 	body := `{"v":1,"kind":"email","source":{"via":"wordpress"},"email":{"from":"shop@shop.test","to":["ann@shop.test"],` +
