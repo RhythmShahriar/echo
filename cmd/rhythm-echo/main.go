@@ -166,6 +166,7 @@ Actions (snapshot, compare, run):
       --url <url>            where Echo runs (default http://127.0.0.1:8025; RHYTHM_ECHO_URL)
       --action <name>        run only this action (repeatable)
       --name <name>          snapshot: its name (default the date and time)
+      --force                snapshot: save it even when every action failed
       --snapshot <name>      compare: which snapshot (default the latest)
 
 Replay (inbound webhooks, sent only to staging and local addresses, with Echo sealed):

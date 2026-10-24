@@ -32,6 +32,7 @@ type options struct {
 	configPath, url, token string
 	name, snapshot         string
 	actions                cli.RepeatFlag
+	force                  bool // snapshot: save even when every action failed
 
 	seal, observe bool
 	listen, smtp  string
@@ -71,6 +72,7 @@ func flagSet(o *options) *flag.FlagSet {
 	fs.StringVar(&o.name, "name", "", "")
 	fs.StringVar(&o.snapshot, "snapshot", "", "")
 	fs.Var(&o.actions, "action", "")
+	fs.BoolVar(&o.force, "force", false, "")
 
 	fs.BoolVar(&o.seal, "seal", false, "")
 	fs.BoolVar(&o.observe, "observe", false, "")

@@ -356,3 +356,55 @@ func TestFailedActionsFailTheRun(t *testing.T) {
 		t.Errorf("report of a failed run: exit %d %s", code, errOut)
 	}
 }
+
+func TestFailedSnapshotKeepsTheBaseline(t *testing.T) {
+	if _, err := exec.LookPath("sh"); err != nil {
+		t.Skip("no sh")
+	}
+	t.Chdir(t.TempDir())
+	srv := httptest.NewServer(catcher.NewServer(catcher.NewInbox(100), catcher.Config{Version: "test"}))
+	defer srv.Close()
+	runJSON := filepath.Join(config.Dir, "snapshots", "good", "run.json")
+	read := func() string {
+		t.Helper()
+		b, err := os.ReadFile(runJSON)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(b)
+	}
+	writeActions(t, "true")
+	if code, out, errOut := runCLI(t, "snapshot", "--url", srv.URL, "--plain", "--name", "good"); code != exitOK {
+		t.Fatalf("good snapshot: %d\n%s\n%s", code, out, errOut)
+	}
+	good := read()
+
+	writeActions(t, "exit 7")
+	code, out, errOut := runCLI(t, "snapshot", "--url", srv.URL, "--plain", "--name", "good")
+	if code != exitError || !strings.Contains(errOut, "not saved: every action failed; fix the site or pass --force") {
+		t.Errorf("failed snapshot: exit %d\n%s\n%s", code, out, errOut)
+	}
+	if strings.Contains(out, "saved") {
+		t.Errorf("the summary says it was saved:\n%s", out)
+	}
+	if read() != good {
+		t.Error("a failed snapshot replaced the good one")
+	}
+	if code, _, _ := runCLI(t, "snapshot", "--url", srv.URL, "--plain", "--name", "other"); code != exitError {
+		t.Errorf("failed snapshot under a new name: exit %d", code)
+	}
+	if code, out, _ := runCLI(t, "snapshots"); code != 0 || strings.Contains(out, "other") || !strings.Contains(out, "(latest)") {
+		t.Errorf("a failed snapshot was listed or moved latest:\n%s", out)
+	}
+	if _, err := os.Stat(filepath.Join(config.Dir, store.Incoming)); err == nil {
+		t.Error("the incoming folder was left behind")
+	}
+
+	code, _, errOut = runCLI(t, "snapshot", "--url", srv.URL, "--plain", "--name", "good", "--force")
+	if code != exitError || !strings.Contains(errOut, "saved anyway because of --force") {
+		t.Errorf("--force: exit %d %s", code, errOut)
+	}
+	if read() == good {
+		t.Error("--force didn't replace the snapshot")
+	}
+}

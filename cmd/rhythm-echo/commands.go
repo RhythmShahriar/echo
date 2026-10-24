@@ -277,6 +277,17 @@ func cmdSnapshot(s *session) int {
 	if err != nil {
 		return s.fail(err)
 	}
+	// A site that was down would replace a good baseline with one where
+	// nothing was sent, and the next compare would pass.
+	if failed, total := failedActions(run); total > 0 && failed == total {
+		if !s.o.force {
+			s.allFailed = "not saved: every action failed; fix the site or pass --force"
+			shown := *run
+			shown.Name = "" // the summary must not say it was saved
+			return s.finish(report.Result{Run: &shown}, "")
+		}
+		s.allFailed = "every action failed; saved anyway because of --force"
+	}
 	if err := store.SaveRun(dir, run); err != nil {
 		return s.fail(err)
 	}
