@@ -120,8 +120,11 @@ func (s *Server) Capture(c wire.Capture) (wire.Decision, error) {
 		}
 		m := s.email(c.Email)
 		m.Run, m.Action, m.Source = run, action, src
+		// Mail handed to Echo's own SMTP sink or sendmail stand-in ends
+		// there in every mode: nothing delivers it, so it's never "sent".
+		sent := s.cfg.Mode == Observe && !sink(c.Source.Via)
 		m.Status, m.Error = model.Faked, c.Error
-		if s.cfg.Mode == Observe {
+		if sent {
 			m.Status = model.Sent
 		}
 		if c.Error != "" {
@@ -129,7 +132,7 @@ func (s *Server) Capture(c wire.Capture) (wire.Decision, error) {
 		}
 		m = s.Inbox.Add(m)
 		act := wire.Fake
-		if s.cfg.Mode == Observe {
+		if sent {
 			act = wire.Allow
 		}
 		return wire.Decision{ID: m.ID, Mode: s.cfg.Mode, Action: act}, nil
@@ -202,6 +205,10 @@ func (s *Server) http(c wire.Capture, run, action string, src model.Source) (wir
 	d.ID = m.ID
 	return d, nil
 }
+
+// sink reports whether mail came in through one of Echo's own endpoints
+// (the SMTP sink, the sendmail stand-in), which keep it and never deliver.
+func sink(via string) bool { return via == "smtp" || via == "sendmail" }
 
 // allowed reports whether host may be reached when sealed: the site
 // itself (cron and loopback calls) and the configured allowlist.

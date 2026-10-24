@@ -21,8 +21,9 @@ import (
 const maxMail = 25 << 20
 
 // NewSMTP returns an SMTP server that captures every message it receives
-// into s. It never delivers anything: point a site's mailer (or
-// sendmail_path, through `rhythm-echo sendmail`) at it on staging.
+// into s. It never delivers anything, in observe mode too, so its mail is
+// recorded as faked: point a site's mailer (or sendmail_path, through
+// `rhythm-echo sendmail`) at it on staging.
 func NewSMTP(s *Server, addr string) *smtp.Server {
 	srv := smtp.NewServer(backend{s})
 	srv.Addr = addr

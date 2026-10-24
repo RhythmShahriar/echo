@@ -37,7 +37,7 @@ type Status string
 
 const (
 	Sent    Status = "sent"    // observed and delivered (observe mode)
-	Faked   Status = "faked"   // sealed: Echo answered instead of the real service
+	Faked   Status = "faked"   // Echo answered instead of the real service: sealed, or mail caught by Echo's SMTP sink in any mode
 	Blocked Status = "blocked" // sealed and refused (no fake available)
 	Failed  Status = "failed"  // the site tried and the send failed
 )

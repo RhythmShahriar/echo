@@ -251,3 +251,34 @@ func TestLivePaymentsRefusedWhenAllowedOrObserved(t *testing.T) {
 		})
 	}
 }
+
+// TestSinkMailIsNeverSent: the SMTP sink and the sendmail stand-in keep
+// mail in every mode, so observe mode must not call it sent (and
+// seal/real-recipient must not say it really went out).
+func TestSinkMailIsNeverSent(t *testing.T) {
+	s := NewServer(NewInbox(10), Config{Mode: Observe})
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	sink := NewSMTP(s, ln.Addr().String())
+	go func() { _ = sink.Serve(ln) }()
+	defer func() { _ = sink.Close() }()
+	msg := "From: shop@shop.test\r\nTo: jane@gmail.com\r\nSubject: Welcome\r\n\r\nHello\r\n"
+	if err := gosmtp.SendMail(ln.Addr().String(), nil, "shop@shop.test", []string{"jane@gmail.com"}, []byte(msg)); err != nil {
+		t.Fatal(err)
+	}
+	if got := s.Inbox.List(Filter{}); len(got) != 1 || got[0].Status != model.Faked {
+		t.Fatalf("observed SMTP mail = %+v", got)
+	}
+	d, err := s.Capture(wire.Capture{Version: 1, Kind: "email", Source: wire.Source{Via: "sendmail"},
+		Email: &wire.Email{To: []string{"jane@gmail.com"}, Subject: "x"}})
+	if m, _ := s.Inbox.Get(d.ID); err != nil || m.Status != model.Faked || d.Action != wire.Fake {
+		t.Errorf("observed sendmail mail = %+v, %+v, %v", m, d, err)
+	}
+	d, _ = s.Capture(wire.Capture{Version: 1, Kind: "email", Source: wire.Source{Via: "wordpress"},
+		Email: &wire.Email{To: []string{"jane@gmail.com"}, Subject: "x"}})
+	if m, _ := s.Inbox.Get(d.ID); m.Status != model.Sent || d.Action != wire.Allow {
+		t.Errorf("a connector's mail in observe mode is really sent: %+v, %+v", m, d)
+	}
+}
