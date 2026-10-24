@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/RhythmShahriar/echo/catcher"
+	"github.com/RhythmShahriar/echo/internal/flagtext"
 	"github.com/RhythmShahriar/rhythm/kit/cli"
 )
 
@@ -28,25 +29,29 @@ import (
 var Version = "dev"
 
 // Usage is the help for rhythm echo hub.
-const Usage = `usage: rhythm echo hub --store DIR --sites FILE [flags]
+const Usage = `rhythm echo hub: one Echo for many staging sites, each with its own write token
 
-One Echo for many staging sites. Each site sends with its own write token
-(captures only); the read token sees every site. The inbox is kept in the
-store across restarts. When the API or SMTP sink listens beyond loopback,
-every token needs 16 characters or more (openssl rand -hex 16).
+Usage:
+  rhythm echo hub --store DIR --sites FILE [flags]
 
-  --store <dir>        where the inbox, TLS files and results are kept (required)
-  --sites <file>       sites.yaml: id, token_env, config and schedule per site (required)
-  --listen <addr>      the API (default 127.0.0.1:8025)
-  --smtp <addr>        the SMTP sink (default 127.0.0.1:1025; off turns it off);
-                       log in with any username and the site's write token
-  --seal | --observe   seal (default): nothing leaves; observe: sent for real
-  --allow <host>       a host reachable while sealed (repeat, or a comma list)
-  --keep <n>           messages kept (default 10000)
-  --tls-cert <file> --tls-key <file>
-                       serve the API over HTTPS and offer STARTTLS on SMTP
-  --tls-self-signed    the same with a certificate the hub makes and keeps in the store
-  --tls-host <names>   more names or IPs for that certificate (comma list)
+Each site sends with its own write token (captures only); the read token
+sees every site. The inbox is kept in the store across restarts. When the
+API or SMTP sink listens beyond loopback, every token needs 16 characters
+or more (openssl rand -hex 16).
+
+Flags:
+      --store <dir>        where the inbox, TLS files and results are kept (required)
+      --sites <file>       sites.yaml: id, token_env, config and schedule per site (required)
+      --listen <addr>      the API (default 127.0.0.1:8025)
+      --smtp <addr>        the SMTP sink (default 127.0.0.1:1025; off turns it off);
+                           log in with any username and the site's write token
+      --seal | --observe   seal (default): nothing leaves; observe: sent for real
+      --allow <host>       a host reachable while sealed (repeat, or a comma list)
+      --keep <n>           messages kept (default 10000)
+      --tls-cert <file> --tls-key <file>
+                           serve the API over HTTPS and offer STARTTLS on SMTP
+      --tls-self-signed    the same with a certificate the hub makes and keeps in the store
+      --tls-host <names>   more names or IPs for that certificate (comma list)
 
 sites.yaml:
   read_token_env: ECHO_HUB_READ_TOKEN   # default RHYTHM_ECHO_TOKEN
@@ -59,7 +64,10 @@ sites.yaml:
 Reading: GET /v1/messages?site=client-a (or q=site:client-a), GET /v1/sites
 and the rest of Echo's API, with the read token in X-Echo-Token. Echo Inbox
 is at /: open /?token=<read token> once in a browser.
-`
+
+Exit codes: 0 stopped, 2 usage error or a bad sites file, 3 couldn't listen
+or keep the inbox.
+` + flagtext.Footer
 
 // Main runs the hub until interrupted, for rhythm echo hub. It returns 0
 // when stopped, 2 for a wrong command line or sites file and 3 when it
@@ -81,7 +89,7 @@ func Main(args []string, _ io.Reader, _ io.Writer, stderr io.Writer) int {
 	selfSigned := fs.Bool("tls-self-signed", false, "")
 	fs.Var(&tlsHosts, "tls-host", "")
 	usage := func(format string, a ...any) int {
-		fmt.Fprintf(stderr, "rhythm echo hub: "+format+"\n\n%s", append(a, Usage)...)
+		fmt.Fprintf(stderr, "rhythm echo hub: "+format+"\n", a...)
 		return 2
 	}
 	if err := fs.Parse(args); err != nil {
@@ -89,7 +97,7 @@ func Main(args []string, _ io.Reader, _ io.Writer, stderr io.Writer) int {
 			fmt.Fprint(stderr, Usage)
 			return 0
 		}
-		return usage("%v", err)
+		return usage("%s", flagtext.Error(err, fs))
 	}
 	switch {
 	case fs.NArg() > 0:
@@ -220,33 +228,37 @@ func loopback(addr string) bool {
 }
 
 // ScheduleUsage is the help for rhythm echo schedule.
-const ScheduleUsage = `usage: rhythm echo schedule "<when>" --store DIR --after "<command>" [flags]
+const ScheduleUsage = `rhythm echo schedule: snapshot, update and compare the hub's sites in a window
+
+Usage:
+  rhythm echo schedule "<when>" --store DIR --after "<command>" [flags]
 
 Runs an update window for the hub's sites: for each site in turn, a
 snapshot of what its actions send, the update command in the site's folder,
 then a compare. Results are kept in the store, per site.
 
-  <when>              "Tue 02:00", "Mon,Thu 03:30", "daily 02:00", "weekdays 22:00"
-                      (local time); not needed with --now
-  --store <dir>       the hub's store (required)
-  --sites <file>      sites.yaml, as rhythm echo hub reads it (default sites.yaml)
-  --only <ids>        all (default) or a comma list of site IDs
-  --after <command>   the update, run with sh -c and RHYTHM_ECHO_SITE set (required)
-  --after-timeout <d> stop the command after this long (default 30m)
-  --snapshot <name>   compare with this snapshot instead of taking one first
-  --url <url>         the hub's API (default http://127.0.0.1:8025)
-  --ca <file>         trust this certificate for an HTTPS hub (default: the
-                      hub's self-signed one in the store, when there is one)
-  --now               run one window now and exit
-  --once              wait for the next window, run it and exit
-
-Exit codes with --now and --once: 0 nothing broke, 1 a site broke or its
-update failed, 2 wrong command line or sites file, 3 couldn't run.
-
 The command never sees the hub's tokens. It still runs as your user and can
 read the store, which holds every site's mail. Run it as a user that can't
 read the store, like --after "sudo -u www-data wp plugin update --all".
-`
+
+Flags:
+      <when>              "Tue 02:00", "Mon,Thu 03:30", "daily 02:00", "weekdays 22:00"
+                          (local time); not needed with --now
+      --store <dir>       the hub's store (required)
+      --sites <file>      sites.yaml, as rhythm echo hub reads it (default sites.yaml)
+      --only <ids>        all (default) or a comma list of site IDs
+      --after <command>   the update, run with sh -c and RHYTHM_ECHO_SITE set (required)
+      --after-timeout <d> stop the command after this long (default 30m)
+      --snapshot <name>   compare with this snapshot instead of taking one first
+      --url <url>         the hub's API (default http://127.0.0.1:8025)
+      --ca <file>         trust this certificate for an HTTPS hub (default: the
+                          hub's self-signed one in the store, when there is one)
+      --now               run one window now and exit
+      --once              wait for the next window, run it and exit
+
+Exit codes (with --now and --once): 0 nothing broke, 1 a site broke or its
+update failed, 2 usage error or a bad sites file, 3 couldn't run.
+` + flagtext.Footer
 
 // ScheduleMain runs update windows, for rhythm echo schedule.
 func ScheduleMain(args []string, _ io.Reader, stdout, stderr io.Writer) int {
@@ -282,7 +294,7 @@ func scheduleMain(ctx context.Context, args []string, stdout, stderr io.Writer, 
 	runNow := fs.Bool("now", false, "")
 	once := fs.Bool("once", false, "")
 	usage := func(format string, a ...any) int {
-		fmt.Fprintf(stderr, "rhythm echo schedule: "+format+"\n\n%s", append(a, ScheduleUsage)...)
+		fmt.Fprintf(stderr, "rhythm echo schedule: "+format+"\n", a...)
 		return 2
 	}
 	pos, err := cli.ParseInterspersed(fs, args)
@@ -291,7 +303,7 @@ func scheduleMain(ctx context.Context, args []string, stdout, stderr io.Writer, 
 			fmt.Fprint(stderr, ScheduleUsage)
 			return 0
 		}
-		return usage("%v", err)
+		return usage("%s", flagtext.Error(err, fs))
 	}
 	var sched Schedule
 	switch {

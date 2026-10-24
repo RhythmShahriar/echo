@@ -31,6 +31,7 @@ import (
 	"github.com/RhythmShahriar/echo/config"
 	"github.com/RhythmShahriar/echo/dns"
 	"github.com/RhythmShahriar/echo/headers"
+	"github.com/RhythmShahriar/echo/internal/flagtext"
 	"github.com/RhythmShahriar/echo/model"
 	"github.com/RhythmShahriar/echo/replay"
 	"github.com/RhythmShahriar/echo/report"
@@ -828,10 +829,19 @@ func cmdSnapshots(s *session) int {
 	return exitOK
 }
 
-// initUsage is init's help and its usage line.
-const initUsage = `usage: rhythm echo init [--stack s] [--force]
-  --stack s   wordpress, laravel, next, node or php (default: from this folder's files)
-  --force     replace an existing .echo/config.yaml`
+// initUsage is init's help.
+const initUsage = `rhythm echo init: write .echo/config.yaml with an action for this stack
+
+Usage:
+  rhythm echo init [--stack s] [--force]
+
+Flags:
+      --stack <s>            wordpress, laravel, next, node or php (default: from this
+                             folder's files)
+      --force                replace an existing .echo/config.yaml
+
+Exit codes: 0 ok, 2 usage error or the config exists, 3 couldn't write it.
+` + flagtext.Footer
 
 // cmdInit writes .echo/config.yaml with one action for the project's
 // stack, so the first snapshot has something to run.
@@ -842,13 +852,14 @@ func cmdInit(args []string, stdout, stderr io.Writer) int {
 	stackFlag := fs.String("stack", "", "")
 	if err := fs.Parse(args); err != nil || fs.NArg() > 0 {
 		if errors.Is(err, flag.ErrHelp) {
-			fmt.Fprintln(stdout, initUsage)
+			fmt.Fprint(stdout, initUsage)
 			return exitOK
 		}
 		if err != nil {
 			fmt.Fprintln(stderr, "rhythm echo:", ownFlagError(err, fs))
+		} else {
+			fmt.Fprintf(stderr, "rhythm echo: init takes no arguments, got %q; rhythm echo help init lists its flags\n", fs.Arg(0))
 		}
-		fmt.Fprintln(stderr, initUsage)
 		return exitUsage
 	}
 	stack := detectStack(".")

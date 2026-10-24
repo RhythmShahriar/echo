@@ -29,12 +29,32 @@ func TestMCPHubAndScheduleAreCommands(t *testing.T) {
 	for _, c := range []struct {
 		name, want string
 	}{
-		{"mcp", "usage: rhythm echo mcp"},
-		{"hub", "usage: rhythm echo hub --store DIR --sites FILE"},
-		{"schedule", `usage: rhythm echo schedule "<when>"`},
+		{"mcp", "Usage:\n  rhythm echo mcp"},
+		{"hub", "Usage:\n  rhythm echo hub --store DIR --sites FILE"},
+		{"schedule", "Usage:\n  rhythm echo schedule \"<when>\""},
+		{"conformance", "Usage:\n  rhythm echo conformance [flags]"},
+		{"init", "Usage:\n  rhythm echo init [--stack s] [--force]"},
+		{"ca", "Usage:\n  rhythm echo ca [--pem | --untrust]"},
 	} {
-		if code, out, _ := runCLI(t, "help", c.name); code != exitOK || !strings.Contains(out, c.want) {
+		// Every command's help reads alike: what it does, Usage, its
+		// flags, the exit codes and the pointer to the rest.
+		code, out, _ := runCLI(t, "help", c.name)
+		if code != exitOK || !strings.HasPrefix(out, "rhythm echo "+c.name+": ") || !strings.Contains(out, c.want) ||
+			!strings.Contains(out, "\nFlags:\n") || !strings.Contains(out, "\nExit codes") || !strings.HasSuffix(out, "\nrhythm echo help lists every command.\n") {
 			t.Errorf("help %s: %d\n%s", c.name, code, out)
+		}
+	}
+	// Their flag errors read like the other commands', without the help.
+	for _, c := range []struct{ args, want string }{
+		{"hub --bogus", "rhythm echo hub: unknown flag --bogus\n"},
+		{"hub --stor x", "rhythm echo hub: unknown flag --stor; did you mean --store?\n"},
+		{"schedule --bogus", "rhythm echo schedule: unknown flag --bogus\n"},
+		{"conformance --bogus", "rhythm echo conformance: unknown flag --bogus\n"},
+		{"conformance --listen", "rhythm echo conformance: --listen needs a value\n"},
+		{"mcp --bogus", "rhythm echo mcp: unknown flag --bogus\n"},
+	} {
+		if code, _, errOut := runCLI(t, strings.Fields(c.args)...); code != exitUsage || errOut != c.want {
+			t.Errorf("%s: %d %q, want %q", c.args, code, errOut, c.want)
 		}
 	}
 	if code, _, errOut := runCLI(t, "hub"); code != exitUsage || !strings.Contains(errOut, "--store and --sites are required") {

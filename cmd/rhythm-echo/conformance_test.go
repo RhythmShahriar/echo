@@ -10,7 +10,7 @@ import (
 )
 
 func TestConformanceIsACommand(t *testing.T) {
-	if code, out, _ := runCLI(t, "help", "conformance"); code != exitOK || !strings.Contains(out, "Usage: rhythm echo conformance") {
+	if code, out, _ := runCLI(t, "help", "conformance"); code != exitOK || !strings.Contains(out, "Usage:\n  rhythm echo conformance") {
 		t.Errorf("help conformance: %d\n%s", code, out)
 	}
 	if code, _, _ := runCLI(t, "conformance", "--wire", "x"); code != exitUsage {

@@ -20,6 +20,7 @@ import (
 	"strings"
 
 	"github.com/RhythmShahriar/echo/catcher"
+	"github.com/RhythmShahriar/echo/internal/flagtext"
 	"github.com/RhythmShahriar/echo/proxy"
 	"github.com/RhythmShahriar/echo/sendmail"
 )
@@ -92,18 +93,36 @@ func (h viewHandler) WithGroup(string) slog.Handler { return h }
 // cmdCA prints where the proxy's CA certificate is, creating it if needed,
 // so it can be trusted in containers and runtimes (--pem prints it).
 // --untrust prints how to remove it from the places it is usually added.
+// caUsage is ca's help.
+const caUsage = `rhythm echo ca: print the proxy's CA certificate path
+
+Usage:
+  rhythm echo ca [--pem | --untrust]
+
+Flags:
+      --pem                  print the certificate instead of its path
+      --untrust              print how to stop trusting the CA
+
+Exit codes: 0 ok, 2 usage error, 3 couldn't read the CA.
+` + flagtext.Footer
+
 func cmdCA(args []string, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("ca", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	pem := fs.Bool("pem", false, "print the certificate instead of its path")
 	untrust := fs.Bool("untrust", false, "print how to stop trusting the CA")
-	const usage = "usage: rhythm echo ca [--pem | --untrust]"
 	if err := fs.Parse(args); err != nil || fs.NArg() > 0 || (*pem && *untrust) {
-		if errors.Is(err, flag.ErrHelp) {
-			fmt.Fprintln(stdout, usage+"   (--pem prints the certificate instead of its path; --untrust prints how to remove it)")
+		switch {
+		case errors.Is(err, flag.ErrHelp):
+			fmt.Fprint(stdout, caUsage)
 			return exitOK
+		case err != nil:
+			fmt.Fprintln(stderr, "rhythm echo:", ownFlagError(err, fs))
+		case fs.NArg() > 0:
+			fmt.Fprintf(stderr, "rhythm echo: ca takes no arguments, got %q; rhythm echo help ca lists its flags\n", fs.Arg(0))
+		default:
+			fmt.Fprintln(stderr, "rhythm echo: pick --pem or --untrust, not both")
 		}
-		fmt.Fprintln(stderr, "rhythm echo: "+usage)
 		return exitUsage
 	}
 	if *untrust {

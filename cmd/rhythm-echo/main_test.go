@@ -242,8 +242,10 @@ func TestUsageErrorsExitTwo(t *testing.T) {
 		{[]string{"snapshot", "--action", "nope"}, `no action named "nope"`},
 		{[]string{"show", "nope", "--url", srv.URL}, `no message "nope"`},
 		{[]string{"report", "nope"}, `no snapshot named "nope"`},
-		{[]string{"init", "extra"}, "usage"},
-		{[]string{"ca", "extra"}, "usage"},
+		{[]string{"init", "extra"}, `init takes no arguments, got "extra"`},
+		{[]string{"ca", "extra"}, `ca takes no arguments, got "extra"`},
+		{[]string{"ca", "--pem", "--untrust"}, "pick --pem or --untrust, not both"},
+		{[]string{"ca", "--pme"}, "unknown flag --pme; did you mean --pem?"},
 	} {
 		code, out, errOut := runCLI(t, tc.args...)
 		if code != exitUsage || !strings.Contains(errOut, tc.want) {

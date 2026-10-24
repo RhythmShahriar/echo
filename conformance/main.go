@@ -20,11 +20,15 @@ import (
 	"time"
 
 	"github.com/RhythmShahriar/echo/catcher"
+	"github.com/RhythmShahriar/echo/internal/flagtext"
 	"github.com/RhythmShahriar/echo/wire"
 )
 
 // Usage is the help for `rhythm echo conformance`.
-var Usage = `Usage: rhythm echo conformance [flags]
+var Usage = `rhythm echo conformance: a strict stand-in Echo for a connector's end-to-end test
+
+Usage:
+  rhythm echo conformance [flags]
 
 Runs a strict stand-in Echo for a connector's end-to-end test. Point the
 connector at it (RHYTHM_ECHO_URL), run the test, then stop it (Ctrl-C or
@@ -33,21 +37,24 @@ capture is checked against Echo's wire schema; a bad one is answered 400
 with what is wrong. GET /v1/conformance returns the report so far as JSON.
 
 Flags:
-  --listen <addr>    API address (default 127.0.0.1:8025)
-  --smtp <addr>      also run Echo's SMTP sink there (default off)
-  --mode <m>         seal (default) or observe
-  --token <t>        require this X-Echo-Token
-  --allow <hosts>    hosts reachable when sealed, comma separated
-  --wire <n>         speak this wire version, to check a connector falls back (default ` + strconv.Itoa(wire.Version) + `)
-  --expect <list>    scenarios the run must include, comma separated:
-                     email, email-after, http-before, http-after, run, site,
-                     attachments, wire-1, wire-2
-  --json             print the report as JSON instead of a table
-`
+      --listen <addr>    API address (default 127.0.0.1:8025)
+      --smtp <addr>      also run Echo's SMTP sink there (default off)
+      --mode <m>         seal (default) or observe
+      --token <t>        require this X-Echo-Token
+      --allow <hosts>    hosts reachable when sealed, comma separated
+      --wire <n>         speak this wire version, to check a connector falls back (default ` + strconv.Itoa(wire.Version) + `)
+      --expect <list>    scenarios the run must include, comma separated:
+                         email, email-after, http-before, http-after, run, site,
+                         attachments, wire-1, wire-2
+      --json             print the report as JSON instead of a table
+
+Exit codes: 0 every check passed, 1 a check failed, 2 usage error, 3 couldn't
+listen.
+` + flagtext.Footer
 
 // Main runs the stand-in until SIGINT or SIGTERM, then prints its report.
-// The exit code is 0 when every check passed, 1 when one failed and 2 for
-// bad flags.
+// The exit code is 0 when every check passed, 1 when one failed, 2 for
+// bad flags and 3 when it can't listen.
 func Main(args []string, _ io.Reader, stdout, stderr io.Writer) int {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -72,11 +79,11 @@ func serve(ctx context.Context, args []string, stdout, stderr io.Writer, ready f
 			fmt.Fprint(stdout, Usage)
 			return 0
 		}
-		fmt.Fprintf(stderr, "rhythm echo conformance: %v\n\n%s", err, Usage)
+		fmt.Fprintf(stderr, "rhythm echo conformance: %s\n", flagtext.Error(err, fs))
 		return 2
 	}
 	if fs.NArg() > 0 {
-		fmt.Fprintf(stderr, "rhythm echo conformance: takes no arguments, got %q\n\n%s", fs.Arg(0), Usage)
+		fmt.Fprintf(stderr, "rhythm echo conformance: takes no arguments, got %q\n", fs.Arg(0))
 		return 2
 	}
 	s, err := New(Options{Mode: *mode, Token: *token, Allow: list(*allow), Wire: *version, Expect: list(*expect)})
@@ -88,7 +95,7 @@ func serve(ctx context.Context, args []string, stdout, stderr io.Writer, ready f
 	ln, err := net.Listen("tcp", *listen)
 	if err != nil {
 		fmt.Fprintf(stderr, "rhythm echo conformance: %v\n", err)
-		return 1
+		return 3
 	}
 	api := &http.Server{Handler: s, ReadHeaderTimeout: 10 * time.Second}
 	errs := make(chan error, 2)

@@ -15,13 +15,17 @@ import (
 
 	"github.com/RhythmShahriar/echo/client"
 	"github.com/RhythmShahriar/echo/config"
+	"github.com/RhythmShahriar/echo/internal/flagtext"
 	"github.com/RhythmShahriar/echo/runner"
 	"github.com/RhythmShahriar/echo/sendmail"
 	"github.com/RhythmShahriar/echo/store"
 )
 
 // Usage is the help for rhythm echo mcp.
-const Usage = `usage: rhythm echo mcp [--url URL] [--token T] [--config FILE]
+const Usage = `rhythm echo mcp: MCP server for coding agents, on stdin and stdout
+
+Usage:
+  rhythm echo mcp [--url URL] [--token T] [--config FILE]
 
 Runs Echo's MCP server on stdin and stdout, for coding agents:
   claude mcp add echo -- rhythm-echo mcp
@@ -31,10 +35,14 @@ compare, check_domain. Results are masked. Start Echo first (rhythm echo up);
 the action tools use the nearest .echo/config.yaml (in the folder the agent
 starts in or above it) and run in the folder that holds it.
 
-  --url <url>      where Echo runs (default from the config, or RHYTHM_ECHO_URL)
-  --token <t>      the token Echo was started with (RHYTHM_ECHO_TOKEN)
-  --config <file>  the config to read (default the nearest .echo/config.yaml)
-`
+Flags:
+      --url <url>      where Echo runs (default from the config, or RHYTHM_ECHO_URL)
+      --token <t>      the token Echo was started with (RHYTHM_ECHO_TOKEN)
+      --config <file>  the config to read (default the nearest .echo/config.yaml)
+
+Exit codes: 0 stdin closed, 2 usage error or a bad config, 3 couldn't read
+or write.
+` + flagtext.Footer
 
 // Main runs the server until stdin closes, for rhythm echo mcp. It
 // returns 0 then, 2 for a wrong command line or config and 3 when
@@ -50,11 +58,11 @@ func Main(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 			fmt.Fprint(stderr, Usage)
 			return 0
 		}
-		fmt.Fprintf(stderr, "rhythm echo mcp: %v\n\n%s", err, Usage)
+		fmt.Fprintf(stderr, "rhythm echo mcp: %s\n", flagtext.Error(err, fs))
 		return 2
 	}
 	if fs.NArg() > 0 {
-		fmt.Fprintf(stderr, "rhythm echo mcp: unexpected argument %q\n\n%s", fs.Arg(0), Usage)
+		fmt.Fprintf(stderr, "rhythm echo mcp: unexpected argument %q\n", fs.Arg(0))
 		return 2
 	}
 	p := *path

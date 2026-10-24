@@ -19,6 +19,7 @@ import (
 	"github.com/RhythmShahriar/echo/check"
 	"github.com/RhythmShahriar/echo/client"
 	"github.com/RhythmShahriar/echo/config"
+	"github.com/RhythmShahriar/echo/internal/flagtext"
 	"github.com/RhythmShahriar/echo/model"
 	"github.com/RhythmShahriar/echo/runner"
 	"github.com/RhythmShahriar/echo/sendmail"
@@ -650,12 +651,7 @@ func (c cmdSpec) accepts(name string) bool {
 var shortFlags = map[string]string{"o": "output", "q": "quiet", "v": "verbose", "H": "header"}
 
 // dash spells a flag as it's typed: --name, or -o for a letter.
-func dash(name string) string {
-	if len(name) == 1 {
-		return "-" + name
-	}
-	return "--" + name
-}
+func dash(name string) string { return flagtext.Dash(name) }
 
 // unused returns, in order, the flags set on the command line that c
 // doesn't read, by their long names.
@@ -768,43 +764,9 @@ func suggestCommand(typed string) string {
 	return closest(typed, names)
 }
 
-// closest returns the candidate within edit distance 2 of typed, the
-// nearest first and the earlier on a tie; "" when none is that close.
-// Two edits catch a swap (cmopare) or a missing and a wrong letter. The
-// distance must also be less than typed's length, or every two-letter
-// word would be close to up and ls.
-func closest(typed string, candidates []string) string {
-	typed = strings.ToLower(typed)
-	best, bestD := "", min(3, len([]rune(typed)))
-	for _, c := range candidates {
-		if d := editDistance(typed, c); d < bestD {
-			best, bestD = c, d
-		}
-	}
-	return best
-}
-
-// editDistance is the Levenshtein distance between a and b.
-func editDistance(a, b string) int {
-	ra, rb := []rune(a), []rune(b)
-	prev := make([]int, len(rb)+1)
-	cur := make([]int, len(rb)+1)
-	for j := range prev {
-		prev[j] = j
-	}
-	for i := 1; i <= len(ra); i++ {
-		cur[0] = i
-		for j := 1; j <= len(rb); j++ {
-			cost := 1
-			if ra[i-1] == rb[j-1] {
-				cost = 0
-			}
-			cur[j] = min(prev[j]+1, cur[j-1]+1, prev[j-1]+cost)
-		}
-		prev, cur = cur, prev
-	}
-	return prev[len(rb)]
-}
+// closest is flagtext.Closest: the candidate a mistyped name most
+// likely meant.
+func closest(typed string, candidates []string) string { return flagtext.Closest(typed, candidates) }
 
 // helpLine formats one flag for help: the flag and its value from
 // column 2 (column 6 without a short form) and the text from column 29,
@@ -845,8 +807,7 @@ func commandHelp(w io.Writer, c cmdSpec) {
 			fmt.Fprint(w, helpLine(d.left, cmp.Or(f.doc, d.text)))
 		}
 	}
-	fmt.Fprint(w, "\nExit codes: 0 ok, 1 findings, 2 usage error, 3 couldn't run, 130 interrupted.\n"+
-		"rhythm echo help lists every command.\n")
+	fmt.Fprint(w, "\nExit codes: 0 ok, 1 findings, 2 usage error, 3 couldn't run, 130 interrupted.\n"+flagtext.Footer)
 }
 
 // quietFlag is -q and --quiet. Alone it means results only, as in Tuner

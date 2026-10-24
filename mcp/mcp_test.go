@@ -470,7 +470,7 @@ func TestCancel(t *testing.T) {
 
 func TestMain_(t *testing.T) {
 	var out, errb strings.Builder
-	if code := Main([]string{"--nope"}, strings.NewReader(""), &out, &errb); code != 2 || !strings.Contains(errb.String(), "usage: rhythm echo mcp") {
+	if code := Main([]string{"--confg"}, strings.NewReader(""), &out, &errb); code != 2 || errb.String() != "rhythm echo mcp: unknown flag --confg; did you mean --config?\n" {
 		t.Errorf("bad flag: %d %q", code, errb.String())
 	}
 	if out.Len() != 0 {

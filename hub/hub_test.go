@@ -628,8 +628,17 @@ func TestMainUsage(t *testing.T) {
 		}
 	}
 	var errb bytes.Buffer
-	if code := Main([]string{"--help"}, nil, io.Discard, &errb); code != 0 || !strings.Contains(errb.String(), "usage: rhythm echo hub") {
+	if code := Main([]string{"--help"}, nil, io.Discard, &errb); code != 0 || !strings.Contains(errb.String(), "Usage:\n  rhythm echo hub --store DIR") ||
+		!strings.Contains(errb.String(), "\nExit codes: 0 stopped") {
 		t.Errorf("--help: %d %q", code, errb.String())
+	}
+	errb.Reset()
+	if code := Main([]string{"--bogus"}, nil, io.Discard, &errb); code != 2 || errb.String() != "rhythm echo hub: unknown flag --bogus\n" {
+		t.Errorf("an unknown flag: %d %q", code, errb.String())
+	}
+	errb.Reset()
+	if code := Main([]string{"--keep", "x"}, nil, io.Discard, &errb); code != 2 || !strings.Contains(errb.String(), `--keep "x": want a whole number`) {
+		t.Errorf("a bad number: %d %q", code, errb.String())
 	}
 }
 
