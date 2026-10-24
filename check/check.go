@@ -120,7 +120,9 @@ func Message(m model.Message, o Options) []model.Issue {
 				Fix: "Set a secret on the webhook (WooCommerce → Settings → Advanced → Webhooks) so receivers can verify it."})
 		}
 	}
-	if m.Channel != model.Email && strings.Contains(m.Body, "•••••") && m.Status != model.Faked {
+	// Whatever happened to the message: a sealed site's payload says what
+	// the live site would send.
+	if m.Channel != model.Email && strings.Contains(m.Body, "•••••") {
 		add(model.Issue{Check: "content/secret", Level: model.Warning, Title: fmt.Sprintf("%s carries a credential in its body", capitalize(what)),
 			Fix: "Don't put API keys or passwords in payloads; send them in an Authorization header, or not at all."})
 	}

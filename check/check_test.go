@@ -93,3 +93,17 @@ func TestPlaceholdersIgnoreJSONAndCSS(t *testing.T) {
 		t.Errorf("false placeholder:\n%s", got)
 	}
 }
+
+func TestSecretInPayloadWhateverTheStatus(t *testing.T) {
+	for _, st := range []model.Status{model.Faked, model.Sent, model.Blocked, model.Failed} {
+		m := model.Message{Channel: model.Webhook, URL: "https://crm.shop.test/api/leads", Status: st,
+			Body: `{"email":"a@b.test","api_key":"ab•••••"}`}
+		if !strings.Contains(titles(Message(m, Options{})), "content/secret") {
+			t.Errorf("%s: a credential in the payload must be flagged", st)
+		}
+	}
+	m := model.Message{Channel: model.Webhook, URL: "https://crm.shop.test/api/leads", Status: model.Faked, Body: `{"email":"a@b.test"}`}
+	if strings.Contains(titles(Message(m, Options{})), "content/secret") {
+		t.Error("no credential, no issue")
+	}
+}
