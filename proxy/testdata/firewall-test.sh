@@ -45,6 +45,7 @@ for fw in nft iptables; do
 		else
 			# xt_owner refuses uids this namespace can't map, so the
 			# "someone else" side runs without the owner rule.
+			# shellcheck disable=SC2016 # the pattern matches a literal $ECHO_USER
 			sed -e '/--uid-owner "\$ECHO_USER"/d' "$dir/iptables-echo.sh" >"$work/ipt.sh"
 			ECHO_USER=root sh "$work/ipt.sh" >/dev/null
 		fi
