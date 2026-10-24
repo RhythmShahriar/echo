@@ -6,9 +6,11 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/RhythmShahriar/echo/catcher"
@@ -74,5 +76,58 @@ func TestReplayCommand(t *testing.T) {
 	}
 	if code, out, _ := runCLI(t, "replay", "--list"); code != 0 || !strings.Contains(out, "payment_intent.succeeded") {
 		t.Errorf("--list:\n%s", out)
+	}
+}
+
+// nxdomain answers every DNS query on loopback with NXDOMAIN and counts
+// them, so tests can see which resolver a command used without real DNS.
+func nxdomain(t *testing.T) (string, *atomic.Int32) {
+	t.Helper()
+	pc, err := net.ListenPacket("udp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = pc.Close() })
+	var n atomic.Int32
+	go func() {
+		buf := make([]byte, 1500)
+		for {
+			size, from, err := pc.ReadFrom(buf)
+			if err != nil {
+				return
+			}
+			if size < 12 {
+				continue
+			}
+			n.Add(1)
+			resp := append([]byte(nil), buf[:size]...)
+			resp[2] |= 0x80                   // a response
+			resp[3] = resp[3]&0xf0 | 0x80 | 3 // recursion available, NXDOMAIN
+			_, _ = pc.WriteTo(resp, from)
+		}
+	}()
+	return pc.LocalAddr().String(), &n
+}
+
+func TestCheckAndHeadersOptions(t *testing.T) {
+	if code, _, errOut := runCLI(t, "check", "shop.test", "--provider", "sendgird"); code != exitUsage ||
+		!strings.Contains(errOut, `--provider "sendgird": use one of sendgrid, mailgun`) {
+		t.Errorf("unknown provider: %d %q", code, errOut)
+	}
+	addr, n := nxdomain(t)
+	code, out, errOut := runCLI(t, "check", "shop.test", "--provider", "ses", "--resolver", addr, "--plain")
+	if code != 0 || !strings.Contains(out, "Sender: Amazon SES") || !strings.Contains(out, "Records: no mail records found") || n.Load() == 0 {
+		t.Errorf("check: %d, %d queries\n%s\n%s", code, n.Load(), out, errOut)
+	}
+	if strings.Contains(out, "found -") || strings.Contains(out, "shop.test: ") {
+		t.Errorf("issue lines still carry the records summary:\n%s", out)
+	}
+	before := n.Load()
+	code, out, errOut = runCLI(t, "headers", "../../headers/testdata/sendgrid.eml", "--check", "--resolver", addr, "--plain")
+	if code != 0 || n.Load() == before {
+		t.Errorf("headers --check ignored --resolver: %d, %d queries\n%s\n%s", code, n.Load()-before, out, errOut)
+	}
+	if !strings.Contains(out, "Sent by: SendGrid") {
+		t.Errorf("headers:\n%s", out)
 	}
 }

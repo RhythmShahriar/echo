@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"time"
@@ -27,10 +28,11 @@ import (
 // --mta-sts-fetch).
 func cmdCheck(s *session) int {
 	o := &s.o
-	from, prov, sel, rp, host, fetch, resolver := &o.fromMail, &o.provider, &o.selector, &o.returnPath, &o.smtpHost, &o.mtaSTSFetch, &o.resolver
+	from, prov, sel, rp, host := &o.fromMail, &o.provider, &o.selector, &o.returnPath, &o.smtpHost
 	args := s.args
 	if len(args) != 1 {
-		return s.fail(usageErr("usage: rhythm echo check <domain> [--from-mail file.eml] [--provider name] [--selector s]"))
+		return s.fail(usageErr("usage: rhythm echo check <domain> [--from-mail file.eml] [--provider name] [--selector s]\n" +
+			"  [--return-path domain] [--smtp-host host] [--mta-sts-fetch] [--resolver host:port] [--json] [--fail-on level]"))
 	}
 	domain := strings.TrimSuffix(strings.ToLower(strings.TrimSpace(args[0])), ".")
 	if strings.Contains(domain, "/") || strings.Contains(domain, "@") {
@@ -52,6 +54,11 @@ func cmdCheck(s *session) int {
 			domain = r.FromDomain
 		}
 	}
+	if *prov != "" {
+		if _, ok := dns.ProviderByName(*prov); !ok {
+			return s.fail(usageErr("--provider %q: use one of %s", *prov, providerNames()))
+		}
+	}
 	if *prov != "" || *sel != "" || *rp != "" || *host != "" {
 		if sender == nil {
 			sender = &dns.Sender{}
@@ -69,44 +76,68 @@ func cmdCheck(s *session) int {
 			sender.SMTPHost = *host
 		}
 	}
-	opts := dns.Options{Sender: sender}
-	if *fetch {
-		opts.HTTP = &http.Client{Timeout: 10 * time.Second}
-	}
-	if *resolver != "" {
-		opts.Resolver = customResolver(*resolver)
-	}
 	ctx, cancel := context.WithTimeout(s.ctx, 60*time.Second)
 	defer cancel()
 	s.view.Header(version, domain)
 	if sender != nil && sender.Provider != "" {
-		s.view.Step("Sender", sender.Provider)
+		s.view.Step("Sender", providerLabel(sender.Provider))
 	}
-	rep := dns.Check(ctx, domain, opts)
+	rep := dns.Check(ctx, domain, s.dnsOptions(sender))
 	if s.o.json {
 		return jsonOut(s, rep)
 	}
-	return s.issues(fmt.Sprintf("%s: %s", domain, deliverySummary(rep)), rep.Issues)
+	s.view.Step("Records", deliverySummary(rep))
+	return s.issues(domain, rep.Issues)
 }
 
+// dnsOptions are the DNS check settings from --resolver and --mta-sts-fetch.
+func (s *session) dnsOptions(sender *dns.Sender) dns.Options {
+	opts := dns.Options{Sender: sender}
+	if s.o.mtaSTSFetch {
+		opts.HTTP = &http.Client{Timeout: 10 * time.Second}
+	}
+	if s.o.resolver != "" {
+		opts.Resolver = customResolver(s.o.resolver)
+	}
+	return opts
+}
+
+// deliverySummary says which mail records were found and which weren't
+// (missing, or broken: two SPF records count as none).
 func deliverySummary(r dns.Report) string {
-	var parts []string
-	if r.SPF != nil {
-		parts = append(parts, "SPF")
+	var found, missing []string
+	for _, rec := range []struct {
+		name string
+		ok   bool
+	}{{"SPF", r.SPF != nil}, {"DKIM", len(r.DKIM) > 0}, {"DMARC", r.DMARC != nil}, {"MX", len(r.MX) > 0 || r.NullMX}} {
+		if rec.ok {
+			found = append(found, rec.name)
+		} else {
+			missing = append(missing, rec.name)
+		}
 	}
-	if len(r.DKIM) > 0 {
-		parts = append(parts, "DKIM")
-	}
-	if r.DMARC != nil {
-		parts = append(parts, "DMARC")
-	}
-	if len(r.MX) > 0 {
-		parts = append(parts, "MX")
-	}
-	if len(parts) == 0 {
+	switch {
+	case len(found) == 0:
 		return "no mail records found"
+	case len(missing) == 0:
+		return "found " + strings.Join(found, ", ")
 	}
-	return strings.Join(parts, ", ") + " found"
+	return "found " + strings.Join(found, ", ") + "; no usable " + strings.Join(missing, ", ")
+}
+
+func providerNames() string {
+	var names []string
+	for _, p := range dns.Providers {
+		names = append(names, p.Name)
+	}
+	return strings.Join(names, ", ")
+}
+
+func providerLabel(name string) string {
+	if p, ok := dns.ProviderByName(name); ok {
+		return p.Label
+	}
+	return name
 }
 
 // cmdHeaders analyzes a received email's authentication and route.
@@ -114,7 +145,7 @@ func cmdHeaders(s *session) int {
 	withDNS, hops, args := &s.o.withDNS, &s.o.hops, s.args
 	var err error
 	if len(args) != 1 {
-		return s.fail(usageErr("usage: rhythm echo headers <file.eml | -> [--check] [--hops]"))
+		return s.fail(usageErr("usage: rhythm echo headers <file.eml | -> [--check] [--hops] [--resolver host:port] [--mta-sts-fetch] [--json] [--fail-on level]"))
 	}
 	var raw []byte
 	if args[0] == "-" {
@@ -129,7 +160,7 @@ func cmdHeaders(s *session) int {
 	issues := r.Issues
 	if *withDNS && r.FromDomain != "" {
 		ctx, cancel := context.WithTimeout(s.ctx, 60*time.Second)
-		rep := dns.Check(ctx, r.FromDomain, dns.Options{Sender: &r.Sender})
+		rep := dns.Check(ctx, r.FromDomain, s.dnsOptions(&r.Sender))
 		cancel()
 		issues = append(issues, rep.Issues...)
 	}
@@ -139,14 +170,18 @@ func cmdHeaders(s *session) int {
 	}
 	s.view.Header(version, args[0])
 	s.view.Step("From", r.From)
-	s.view.Step("Sent by", firstNonEmpty(r.Provider, "unknown service"))
+	s.view.Step("Sent by", firstNonEmpty(providerLabel(r.Provider), "unknown service"))
 	s.view.Step("Results", fmt.Sprintf("SPF %s · DKIM %s · DMARC %s", orNone(r.Auth.SPF), orNone(r.Auth.DKIM), orNone(r.Auth.DMARC)))
 	if *hops {
 		for i, h := range r.Hops {
 			s.view.Step(fmt.Sprintf("Hop %d", i+1), fmt.Sprintf("%s → %s %s", h.From, h.By, h.With))
 		}
 	}
-	return s.issues("headers checked", issues)
+	label := filepath.Base(args[0])
+	if args[0] == "-" {
+		label = "the message"
+	}
+	return s.issues(label, issues)
 }
 
 // issues prints issues as a run would and picks the exit code.

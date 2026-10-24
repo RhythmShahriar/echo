@@ -94,7 +94,7 @@ func LoadCA(dir string) (*CA, error) {
 		return ca.init()
 	}
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
-		return nil, fmt.Errorf("echo CA in %s: %w (delete the directory to make a new one)", dir, err)
+		return nil, fmt.Errorf("reading Echo's CA in %s: %w (delete the directory to make a new one)", dir, err)
 	}
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, err
