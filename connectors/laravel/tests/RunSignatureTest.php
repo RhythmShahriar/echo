@@ -4,7 +4,9 @@
 
 namespace Rhythm\Echo\Tests;
 
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Route;
 use Rhythm\Echo\Connector;
@@ -71,6 +73,30 @@ class RunSignatureTest extends TestCase
             $got = $echo->acceptRun($v['value'], $v['remote'], $v['forwarded']);
             $this->assertSame($v['run'], $got, $v['name']);
         }
+    }
+
+    // Under PHP-FPM each request is a new process (a new Connector here):
+    // a forged header must not add a log line to every request.
+    public function test_an_ignored_value_is_logged_once_every_ten_minutes_across_processes(): void
+    {
+        Log::shouldReceive('warning')->once()
+            ->with('Rhythm Echo: ignored an unsigned X-Echo-Run: with RHYTHM_ECHO_TOKEN set, only runs Echo signed with it count');
+        Log::shouldReceive('warning')->once()
+            ->with('Rhythm Echo: ignored an X-Echo-Run from 203.0.113.9: without RHYTHM_ECHO_TOKEN only a direct call from this machine may set the run (set the same token here and in Echo)');
+        $client = $this->app->make(EchoClient::class);
+        foreach ([1, 2, 3] as $process) {
+            $this->assertSame('', (new Connector($this->app, $client, ['token' => 'secret']))->acceptRun('r1/checkout', '127.0.0.1', false), "process {$process}");
+        }
+        // another reason is still logged
+        (new Connector($this->app, $client, []))->acceptRun('r1/checkout', '203.0.113.9', false);
+        $this->assertTrue(Cache::has('rhythm-echo.runlog.unsigned'));
+    }
+
+    public function test_an_ignored_value_is_logged_with_a_broken_cache(): void
+    {
+        $this->app['config']->set('cache.default', 'missing');
+        Log::shouldReceive('warning')->once();
+        (new Connector($this->app, $this->app->make(EchoClient::class), ['token' => 'secret']))->acceptRun('r1/checkout', '127.0.0.1', false);
     }
 
     public function test_without_a_token_an_unsigned_value_from_a_public_ip_is_ignored(): void

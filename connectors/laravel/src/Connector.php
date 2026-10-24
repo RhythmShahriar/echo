@@ -4,9 +4,11 @@
 
 namespace Rhythm\Echo;
 
+use Illuminate\Contracts\Cache\Repository;
 use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Log\Context\Repository as Context;
 use Illuminate\Support\Env;
+use Throwable;
 
 /**
  * The connector's state: whether it runs, where Echo is, which run the
@@ -31,8 +33,15 @@ class Connector
 
     private ?string $reason = null;
 
-    /** Whether an ignored X-Echo-Run was logged already. */
-    private bool $runLogged = false;
+    /** How long, in seconds, an ignored X-Echo-Run stays quiet after it was logged. */
+    public const RUN_LOG_QUIET = 600;
+
+    /**
+     * Reasons an ignored X-Echo-Run was logged for in this process.
+     *
+     * @var array<string, true>
+     */
+    private array $runLogged = [];
 
     public function __construct(
         private readonly Application $app,
@@ -115,7 +124,7 @@ class Connector
         $token = $this->runToken();
         [$run, $action, $ok] = Wire::verifyRun($token, $value);
         if ($run === '') {
-            $this->runIgnored('ignored an X-Echo-Run whose signature does not verify ('.($token !== '' ? 'not signed with this token' : 'RHYTHM_ECHO_TOKEN is not set here').')');
+            $this->runIgnored('bad', 'ignored an X-Echo-Run whose signature does not verify ('.($token !== '' ? 'not signed with this token' : 'RHYTHM_ECHO_TOKEN is not set here').')');
 
             return '';
         }
@@ -123,14 +132,14 @@ class Connector
             return "{$run}/{$action}";
         }
         if ($token !== '') {
-            $this->runIgnored('ignored an unsigned X-Echo-Run: with RHYTHM_ECHO_TOKEN set, only runs Echo signed with it count');
+            $this->runIgnored('unsigned', 'ignored an unsigned X-Echo-Run: with RHYTHM_ECHO_TOKEN set, only runs Echo signed with it count');
 
             return '';
         }
         if (! $forwarded && ($remote === '::1' || preg_match('/^(::ffff:)?127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/i', $remote))) {
             return "{$run}/{$action}";
         }
-        $this->runIgnored(sprintf(
+        $this->runIgnored('remote', sprintf(
             'ignored an X-Echo-Run from %s%s: without RHYTHM_ECHO_TOKEN only a direct call from this machine may set the run (set the same token here and in Echo)',
             $remote !== '' ? $remote : 'an unknown address', $forwarded ? ' behind a proxy' : '',
         ));
@@ -147,13 +156,27 @@ class Connector
         return (string) (($this->config['token'] ?? '') ?: ($this->config['write_token'] ?? ''));
     }
 
-    private function runIgnored(string $message): void
+    /**
+     * Logs why an X-Echo-Run was ignored, once per reason every ten
+     * minutes. Under PHP-FPM every request is a new process, so the
+     * property alone would let any visitor add a log line per request with
+     * a forged header; the app's cache remembers it across requests.
+     */
+    private function runIgnored(string $reason, string $message): void
     {
-        if ($this->runLogged) {
+        if (isset($this->runLogged[$reason])) {
             return;
         }
-        $this->runLogged = true;
-        $this->app->make('log')->warning('Rhythm Echo: '.$message);
+        $this->runLogged[$reason] = true;
+        try {
+            $cache = $this->app->bound('cache') ? $this->app->make('cache')->store() : null;
+            $first = ! $cache instanceof Repository || $cache->add('rhythm-echo.runlog.'.$reason, 1, self::RUN_LOG_QUIET);
+        } catch (Throwable) {
+            $first = true; // a broken cache costs a log line, never the request
+        }
+        if ($first) {
+            $this->app->make('log')->warning('Rhythm Echo: '.$message);
+        }
     }
 
     /** Stores the run for this request and every job it queues. */

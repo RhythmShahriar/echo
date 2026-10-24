@@ -120,6 +120,9 @@ abstract class TestCase extends Testbench
         $app['env'] = $this->env;
         $app['config']->set('app.url', 'http://site.test');
         $app['config']->set('mail.default', 'array');
+        // A fresh cache per test: the connector keeps its wire version and
+        // run-log quiet periods there.
+        $app['config']->set('cache.default', 'array');
         $app['config']->set('mail.from', ['address' => 'shop@site.test', 'name' => 'Site']);
         $app['config']->set('rhythm-echo', array_merge($app['config']->get('rhythm-echo', []), [
             'enabled' => true,
