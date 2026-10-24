@@ -3,10 +3,12 @@
 
 // Package store keeps Echo's files in the project's .echo/
 // folder: named snapshots, recent runs and comparisons, each a directory
-// with run.json (or comparison.json) and its screenshots.
+// holding run.json (or comparison.json).
 package store
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -31,40 +33,91 @@ const Incoming = ".incoming"
 // Store is a .echo folder.
 type Store struct{ Root string }
 
+// safeName also rules out spaces, so a name can't end in one (Windows
+// drops trailing spaces and dots from file names).
 var safeName = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$`)
 
-// ValidName reports whether name can be used as a snapshot name.
-func ValidName(name string) bool { return safeName.MatchString(name) }
+// windowsDevice matches the names Windows keeps for devices, which no
+// file or folder can have there, with or without an extension (nul.txt
+// is NUL too).
+var windowsDevice = regexp.MustCompile(`(?i)^(con|prn|aux|nul|com[1-9]|lpt[1-9])(\.|$)`)
+
+// Reserved is the snapshot name kept for the latest snapshot, in any case.
+const Reserved = "latest"
+
+// ValidName reports whether name can be used for a new snapshot or run.
+func ValidName(name string) bool { return CheckName(name) == nil }
+
+// CheckName says why name can't be used for a new snapshot or run, or
+// returns nil. Names must work as folder names on Linux, macOS and
+// Windows, so a project's .echo folder can move between them.
+func CheckName(name string) error {
+	switch {
+	case !safeName.MatchString(name):
+		return fmt.Errorf("%q isn't a valid name: use up to 64 letters, digits, dots, dashes and underscores, starting with a letter or digit", name)
+	case strings.EqualFold(name, Reserved):
+		return fmt.Errorf("%q is reserved for the latest snapshot; pick another name", name)
+	case windowsDevice.MatchString(name):
+		return fmt.Errorf("%q is a device name on Windows (CON, PRN, AUX, NUL, COM1 to COM9, LPT1 to LPT9); pick another name", name)
+	case strings.HasSuffix(name, "."):
+		return fmt.Errorf("%q ends in a dot, which Windows drops; pick another name", name)
+	}
+	return nil
+}
 
 // Stamp is the default name for snapshots and runs.
 func Stamp(t time.Time) string { return t.Format("2006-01-02T15-04-05") }
 
-// NewDir creates kind/name (kind is "snapshots", "runs" or Incoming) and
-// returns it. An existing folder with the same name is replaced.
+// Runs holds recent runs and comparisons, one folder each.
+const Runs = "runs"
+
+// NewDir creates a folder for kind and returns it. For Runs it's
+// runs/<name>-<6 random hex digits>, made with a plain mkdir that retries
+// on a clash, so runs started in the same second (Stamp has one-second
+// resolution) or by two processes at once each get their own folder and
+// none is ever deleted. For Incoming it's the in-progress folder of the
+// snapshot name, replaced when a failed snapshot left one behind. Any
+// other kind gets kind/name, which must not exist yet.
 func (s Store) NewDir(kind, name string) (string, error) {
-	if !ValidName(name) {
-		return "", fmt.Errorf("%q isn't a valid name: use letters, digits, dots, dashes and underscores", name)
-	}
-	dir := filepath.Join(s.Root, kind, name)
-	if kind == Incoming {
-		_ = os.Remove(filepath.Join(s.Root, Incoming)) // an empty one left by older versions
-		dir = filepath.Join(s.Root, "snapshots", Incoming+"-"+name)
-	}
-	if err := os.RemoveAll(dir); err != nil {
+	if err := CheckName(name); err != nil {
 		return "", err
 	}
-	return dir, os.MkdirAll(dir, 0o750)
+	switch kind {
+	case Incoming:
+		_ = os.Remove(filepath.Join(s.Root, Incoming)) // an empty one left by older versions
+		dir := filepath.Join(s.Root, "snapshots", Incoming+"-"+name)
+		if err := os.RemoveAll(dir); err != nil {
+			return "", err
+		}
+		return dir, os.MkdirAll(dir, 0o750)
+	case Runs:
+		parent := filepath.Join(s.Root, Runs)
+		if err := os.MkdirAll(parent, 0o750); err != nil {
+			return "", err
+		}
+		for range 16 {
+			dir := filepath.Join(parent, name+"-"+randomHex(3))
+			err := os.Mkdir(dir, 0o750)
+			if err == nil {
+				return dir, nil
+			}
+			if !errors.Is(err, fs.ErrExist) {
+				return "", err
+			}
+		}
+		return "", fmt.Errorf("no free folder for %s in %s", name, parent)
+	}
+	dir := filepath.Join(s.Root, kind, name)
+	if err := os.MkdirAll(filepath.Dir(dir), 0o750); err != nil {
+		return "", err
+	}
+	return dir, os.Mkdir(dir, 0o750)
 }
 
-// Saver returns a function that writes files into dir.
-func Saver(dir string) func(name string, data []byte) error {
-	return func(name string, data []byte) error {
-		clean := filepath.Clean(filepath.FromSlash(name))
-		if filepath.IsAbs(clean) || strings.HasPrefix(clean, "..") {
-			return fmt.Errorf("refusing to write %q outside the run folder", name)
-		}
-		return cache.WriteFile(filepath.Join(dir, clean), data)
-	}
+func randomHex(n int) string {
+	b := make([]byte, n)
+	_, _ = rand.Read(b)
+	return hex.EncodeToString(b)
 }
 
 // SaveRun writes run.json into dir.
@@ -102,36 +155,106 @@ func LoadComparison(dir string) (*model.Comparison, error) {
 }
 
 // Promote moves a finished snapshot from Incoming into snapshots/name,
-// replacing an older snapshot with that name, and returns its new folder.
+// replacing an older snapshot with that name; it returns the new folder.
+// Names that differ only in case are one snapshot: macOS and Windows
+// can't keep Before and before apart, so taking before replaces Before
+// everywhere and the folder takes the new spelling.
 func (s Store) Promote(dir, name string) (string, error) {
-	if !ValidName(name) {
-		return "", fmt.Errorf("%q isn't a valid snapshot name", name)
+	if err := CheckName(name); err != nil {
+		return "", err
 	}
 	final := filepath.Join(s.Root, "snapshots", name)
 	if err := os.MkdirAll(filepath.Dir(final), 0o750); err != nil {
 		return "", err
 	}
-	if err := os.RemoveAll(final); err != nil {
+	names, err := s.Snapshots()
+	if err != nil {
 		return "", err
+	}
+	for _, n := range names {
+		if strings.EqualFold(n, name) {
+			if err := os.RemoveAll(filepath.Join(s.Root, "snapshots", n)); err != nil {
+				return "", err
+			}
+		}
 	}
 	return final, os.Rename(dir, final)
 }
 
 // SetLatest records name as the snapshot compare uses by default.
 func (s Store) SetLatest(name string) error {
-	return cache.WriteFile(s.latestFile(), []byte(name+"\n"))
+	return writeAtomic(s.latestFile(), []byte(name+"\n"))
 }
 
-func (s Store) latestFile() string { return filepath.Join(s.Root, "snapshots", "LATEST") }
+// latestFile is the pointer to the latest snapshot. It's a dotfile so no
+// snapshot folder can take its place; older versions kept it in LATEST,
+// which a snapshot named LATEST destroyed.
+func (s Store) latestFile() string { return filepath.Join(s.Root, "snapshots", ".latest") }
+
+// latest returns the name the pointer holds, or "".
+func (s Store) latest() string {
+	s.migrateLatest()
+	b, _ := os.ReadFile(s.latestFile())
+	return strings.TrimSpace(string(b))
+}
+
+// migrateLatest moves an older version's snapshots/LATEST file to
+// .latest, once, then removes the temp files it leaked each time writing
+// LATEST failed (kit/cache.WriteFile keeps its temp when the rename
+// fails). A LATEST folder is a snapshot and stays.
+func (s Store) migrateLatest() {
+	snaps := filepath.Join(s.Root, "snapshots")
+	old := filepath.Join(snaps, "LATEST")
+	if fi, err := os.Lstat(old); err == nil && fi.Mode().IsRegular() {
+		if _, err := os.Lstat(s.latestFile()); errors.Is(err, fs.ErrNotExist) {
+			b, err := os.ReadFile(old) //nolint:gosec // our own pointer file
+			if err != nil || writeAtomic(s.latestFile(), b) != nil {
+				return
+			}
+		}
+		_ = os.Remove(old)
+	}
+	// Only the old pointer was ever written straight into snapshots/.
+	leaked, _ := filepath.Glob(filepath.Join(snaps, ".tmp-*"))
+	for _, p := range leaked {
+		if fi, err := os.Lstat(p); err == nil && fi.Mode().IsRegular() {
+			_ = os.Remove(p)
+		}
+	}
+}
+
+// writeAtomic writes data to path through a temp file in the same folder
+// and a rename, removing the temp file whenever a step fails, so a
+// failure never leaves a half-written pointer or a stray file behind.
+func writeAtomic(path string, data []byte) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
+		return err
+	}
+	tmp, err := os.CreateTemp(filepath.Dir(path), filepath.Base(path)+".tmp-*")
+	if err != nil {
+		return err
+	}
+	_, err = tmp.Write(data)
+	if cerr := tmp.Close(); err == nil {
+		err = cerr
+	}
+	if err == nil {
+		err = os.Rename(tmp.Name(), path)
+	}
+	if err != nil {
+		_ = os.Remove(tmp.Name())
+	}
+	return err
+}
 
 // Snapshot returns the directory of a named snapshot, or of the latest
 // one when name is empty. When the latest was deleted, the newest
-// remaining snapshot becomes the latest.
+// remaining snapshot becomes the latest. Case doesn't matter, as on
+// macOS and Windows.
 func (s Store) Snapshot(name string) (string, error) {
 	if name == "" {
-		b, _ := os.ReadFile(s.latestFile())
-		name = strings.TrimSpace(string(b))
-		if name == "" || !s.exists(name) {
+		name = s.latest()
+		if s.find(name) == "" {
 			newest, err := s.newest()
 			if err != nil {
 				return "", err
@@ -143,14 +266,16 @@ func (s Store) Snapshot(name string) (string, error) {
 			_ = s.SetLatest(name)
 		}
 	}
-	if !ValidName(name) {
+	// Lookups check only the characters, not CheckName, so a snapshot an
+	// older version let through (LATEST, con) can still be read and deleted.
+	if !safeName.MatchString(name) {
 		return "", fmt.Errorf("%q isn't a valid snapshot name", name)
 	}
-	dir := filepath.Join(s.Root, "snapshots", name)
-	if _, err := os.Stat(filepath.Join(dir, "run.json")); err != nil { //nolint:gosec // name passed ValidName above
+	found := s.find(name)
+	if found == "" {
 		return "", fmt.Errorf("no snapshot named %q; see rhythm echo snapshots", name)
 	}
-	return dir, nil
+	return filepath.Join(s.Root, "snapshots", found), nil
 }
 
 // Delete removes a snapshot. When it was the latest, the newest remaining
@@ -163,7 +288,7 @@ func (s Store) Delete(name string) error {
 	if err := os.RemoveAll(dir); err != nil {
 		return err
 	}
-	if b, _ := os.ReadFile(s.latestFile()); strings.TrimSpace(string(b)) != name {
+	if !strings.EqualFold(s.latest(), filepath.Base(dir)) {
 		return nil
 	}
 	newest, err := s.newest()
@@ -176,12 +301,26 @@ func (s Store) Delete(name string) error {
 	return s.SetLatest(newest)
 }
 
-func (s Store) exists(name string) bool {
-	if !ValidName(name) {
-		return false
+// find returns the folder name of the finished snapshot called name,
+// ignoring case and preferring an exact match, or "" when there's none.
+func (s Store) find(name string) string {
+	if !safeName.MatchString(name) {
+		return ""
 	}
-	_, err := os.Stat(filepath.Join(s.Root, "snapshots", name, "run.json")) //nolint:gosec // name passed ValidName above
-	return err == nil
+	has := func(n string) bool {
+		_, err := os.Stat(filepath.Join(s.Root, "snapshots", n, "run.json")) //nolint:gosec // n passed safeName or came from ReadDir
+		return err == nil
+	}
+	if has(name) {
+		return name
+	}
+	names, _ := s.Snapshots()
+	for _, n := range names {
+		if strings.EqualFold(n, name) && has(n) {
+			return n
+		}
+	}
+	return ""
 }
 
 // newest returns the most recently taken snapshot, or "" when there's
@@ -209,17 +348,47 @@ func (s Store) Snapshots() ([]string, error) {
 	return s.list("snapshots")
 }
 
-// LatestRun returns the newest run directory (a run or comparison), or
-// the latest snapshot when nothing has been run since taking one.
+// LatestRun returns the folder of the newest result, a run, comparison
+// or snapshot, by when it started (run.json's started, or the folder's
+// modification time when that can't be read). Folders without run.json,
+// left by a run that failed early, have nothing to show and are skipped.
+// On a tie a run wins, since it was made from the snapshot.
 func (s Store) LatestRun() (string, error) {
-	runs, err := s.list("runs")
-	if err == nil && len(runs) > 0 {
-		return filepath.Join(s.Root, "runs", runs[len(runs)-1]), nil
+	best, bestAt := "", time.Time{}
+	for _, kind := range []string{"snapshots", Runs} { // runs last, so they win ties
+		names, _ := s.list(kind)
+		for _, n := range names {
+			dir := filepath.Join(s.Root, kind, n)
+			at, ok := startedAt(dir)
+			if ok && (best == "" || !at.Before(bestAt)) {
+				best, bestAt = dir, at
+			}
+		}
 	}
-	if dir, err := s.Snapshot(""); err == nil {
-		return dir, nil
+	if best == "" {
+		return "", errors.New("nothing to show yet; run rhythm echo snapshot, compare or run first")
 	}
-	return "", errors.New("nothing to show yet; run rhythm echo snapshot, compare or run first")
+	return best, nil
+}
+
+// startedAt returns when the run in dir started, or false when dir holds
+// no run.json. It reads only the started field.
+func startedAt(dir string) (time.Time, bool) {
+	path := filepath.Join(dir, "run.json")
+	if _, err := os.Stat(path); err != nil {
+		return time.Time{}, false
+	}
+	var r struct {
+		Started time.Time `json:"started"`
+	}
+	if cache.ReadJSON(path, &r) == nil && !r.Started.IsZero() {
+		return r.Started, true
+	}
+	fi, err := os.Stat(dir)
+	if err != nil {
+		return time.Time{}, false
+	}
+	return fi.ModTime(), true
 }
 
 func (s Store) list(kind string) ([]string, error) {
@@ -238,26 +407,57 @@ func (s Store) list(kind string) ([]string, error) {
 }
 
 // Prune keeps the newest keep runs and deletes older ones. Snapshots are
-// never pruned.
+// never pruned. A folder without run.json or comparison.json is a run
+// another process may still be writing, so it is left alone until it is
+// pruneGrace old (by its modification time), which clears out runs that
+// crashed without deleting one still going.
 func (s Store) Prune(keep int) error {
-	runs, err := s.list("runs")
+	runs, err := s.list(Runs)
 	if err != nil {
 		return err
 	}
-	for len(runs) > keep {
-		if err := os.RemoveAll(filepath.Join(s.Root, "runs", runs[0])); err != nil {
+	for _, n := range runs[:max(len(runs)-keep, 0)] {
+		dir := filepath.Join(s.Root, Runs, n)
+		if !finished(dir) && !older(dir, pruneGrace) {
+			continue
+		}
+		if err := os.RemoveAll(dir); err != nil {
 			return err
 		}
-		runs = runs[1:]
 	}
 	return nil
 }
 
+// pruneGrace is how long Prune leaves an unfinished run folder alone. A
+// run takes a minute per action at most, so an hour is well past any
+// that is still going.
+const pruneGrace = time.Hour
+
+// finished reports whether dir holds a written run or comparison.
+func finished(dir string) bool {
+	for _, f := range []string{"run.json", "comparison.json"} {
+		if _, err := os.Stat(filepath.Join(dir, f)); err == nil {
+			return true
+		}
+	}
+	return false
+}
+
+// older reports whether dir was last modified more than d ago.
+func older(dir string, d time.Duration) bool {
+	fi, err := os.Stat(dir)
+	return err == nil && time.Since(fi.ModTime()) > d
+}
+
 // ExcludeFromGit adds the store's snapshots and runs to the repository's
-// local exclude list (.git/info/exclude), so screenshots never get
-// committed by accident and the project's .gitignore stays untouched.
-// config.yaml and flows/ stay visible to git, to share with the team. It
-// does nothing outside a git repository.
+// local exclude list (.git/info/exclude), so captured messages, which
+// can hold customer data, never get committed by accident and the
+// project's .gitignore stays untouched. Unfinished snapshots
+// (snapshots/.incoming-<name>) get a line of their own; older versions
+// wrote a .incoming/ line for a folder Echo no longer uses. An
+// exclude list they wrote gets only the lines it lacks. config.yaml and
+// flows/ stay visible to git, to share with the team. It does nothing
+// outside a git repository.
 func (s Store) ExcludeFromGit() {
 	out, err := exec.Command("git", "rev-parse", "--git-path", "info/exclude").Output()
 	if err != nil {
@@ -281,9 +481,16 @@ func (s Store) ExcludeFromGit() {
 		return
 	}
 	base := "/" + filepath.ToSlash(rel) + "/"
-	lines := []string{base + "snapshots/", base + "runs/", base + Incoming + "/"}
+	lines := []string{base + "snapshots/", base + "runs/", base + "snapshots/" + Incoming + "-*"}
 	existing, _ := os.ReadFile(path) //nolint:gosec // the repository's own exclude file
-	if slices.Contains(strings.Split(string(existing), "\n"), lines[0]) {
+	have := strings.Split(string(existing), "\n")
+	var missing []string
+	for _, l := range lines {
+		if !slices.Contains(have, l) {
+			missing = append(missing, l)
+		}
+	}
+	if len(missing) == 0 {
 		return
 	}
 	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644) //nolint:gosec // the repository's own exclude file
@@ -294,5 +501,9 @@ func (s Store) ExcludeFromGit() {
 	if len(existing) > 0 && !strings.HasSuffix(string(existing), "\n") {
 		_, _ = f.WriteString("\n")
 	}
-	_, _ = f.WriteString("# Echo snapshots and reports\n" + strings.Join(lines, "\n") + "\n")
+	header := ""
+	if len(missing) == len(lines) {
+		header = "# Echo snapshots and reports\n"
+	}
+	_, _ = f.WriteString(header + strings.Join(missing, "\n") + "\n")
 }

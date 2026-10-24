@@ -533,3 +533,49 @@ func TestSecretReady(t *testing.T) {
 		t.Errorf("secret set: %v", err)
 	}
 }
+
+// TestProductionRefused: a live site is refused even when its name
+// resolves to a private address (a hosts-file entry or a VPN) or it's
+// also listed as staging, whatever the case or the subdomain.
+func TestProductionRefused(t *testing.T) {
+	srv, got := receiver(t, stripeSecret, verifyStripe)
+	_, port, _ := strings.Cut(srv.Listener.Addr().String(), ":")
+	o := opts(stripeSecret)
+	o.Resolver = staticResolver{"shop.example": {"127.0.0.1"}, "www.shop.example": {"127.0.0.1"}, "staging.test": {"127.0.0.1"}}
+	o.Production = []string{"shop.example"}
+	for _, target := range []string{"http://shop.example:" + port + "/hook", "http://WWW.Shop.Example:" + port + "/hook"} {
+		o.Staging = []string{target}
+		_, err := Send(context.Background(), mustLoad(t, "invoice.paid"), Target{URL: target}, o)
+		if !errors.Is(err, ErrRefused) || !strings.Contains(err.Error(), `matches "shop.example" under production`) {
+			t.Errorf("%s: %v", target, err)
+		}
+	}
+	if len(got.reqs) != 0 {
+		t.Fatalf("%d requests reached a production site", len(got.reqs))
+	}
+	o.Staging = nil
+	if res, err := Send(context.Background(), mustLoad(t, "invoice.paid"), Target{URL: "http://staging.test:" + port + "/hook"}, o); err != nil || res.Status != 200 {
+		t.Errorf("a site not under production: %+v %v", res, err)
+	}
+}
+
+// With a run key, X-Echo-Run is signed the way wire.SignRun signs it
+// (the K0 test vector), so a connector that has the token trusts it.
+func TestRunHeaderSigned(t *testing.T) {
+	srv, got := receiver(t, stripeSecret, verifyStripe)
+	o := opts(stripeSecret)
+	o.Action, o.RunKey = "checkout", "secret"
+	res, err := Send(context.Background(), mustLoad(t, "stripe/checkout.session.completed"), Target{URL: srv.URL}, o)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := "r1/checkout.NhOp3HY0JQ76wSoPnn3sZg"; got.reqs[0].Header.Get("X-Echo-Run") != want || res.Headers["X-Echo-Run"] != want {
+		t.Errorf("X-Echo-Run = %q (result %q), want %q", got.reqs[0].Header.Get("X-Echo-Run"), res.Headers["X-Echo-Run"], want)
+	}
+	if res.Run != "r1" || res.Action != "checkout" {
+		t.Errorf("the result names the run unsigned: %q %q", res.Run, res.Action)
+	}
+	if signRun("", "r1", "checkout") != "r1/checkout" {
+		t.Error("no token: unsigned")
+	}
+}
