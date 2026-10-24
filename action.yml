@@ -1,0 +1,174 @@
+# Echo as a GitHub Action. See the wiki page Echo-CI for examples:
+# https://github.com/RhythmShahriar/rhythm/wiki/Echo-CI
+name: Rhythm Echo
+description: Is your site still saying what it should? Capture and compare every email, SMS and webhook your site sends, with staging sealed.
+author: Rhythm Shahriar
+branding:
+  icon: radio
+  color: orange
+
+inputs:
+  mode:
+    description: >
+      "up" starts Echo in the background for later steps (e.g. rhythm soundcheck --echo) and leaves
+      it running; "snapshot", "compare" or "run" start it, run the actions in .echo/config.yaml,
+      report, and stop it.
+    required: false
+    default: run
+  name:
+    description: Snapshot name for mode snapshot.
+    required: false
+    default: ci
+  fail-on:
+    description: >
+      Fail on changes at or above broke, new or changed (compare), or issues at or above error,
+      warning or notice (run, snapshot). Default: broke when comparing, error otherwise. "none" never fails.
+    required: false
+    default: ""
+  seal:
+    description: Seal (nothing leaves) or observe (send for real).
+    required: false
+    default: "seal"
+  listen:
+    description: API address. Use 0.0.0.0:8025 when the site runs in a service container (a token is generated).
+    required: false
+    default: 127.0.0.1:8025
+  args:
+    description: Extra flags for the command, e.g. "--action 'Contact form'".
+    required: false
+    default: ""
+  version:
+    description: Echo version to install, e.g. 1.0.0. Default the latest release.
+    required: false
+    default: latest
+  upload:
+    description: Upload the HTML and JUnit reports as a workflow artifact.
+    required: false
+    default: "true"
+
+outputs:
+  url:
+    description: Where Echo listens (for RHYTHM_ECHO_URL in the site under test).
+    value: ${{ steps.up.outputs.url }}
+  token:
+    description: The token connectors must send when Echo listens beyond loopback.
+    value: ${{ steps.up.outputs.token }}
+  exit-code:
+    description: The command's exit code (0 ok, 1 --fail-on hit, 2 usage error, 3 couldn't run).
+    value: ${{ steps.check.outputs.exit-code }}
+  report:
+    description: Path of the standalone HTML report.
+    value: ${{ steps.check.outputs.report }}
+
+runs:
+  using: composite
+  steps:
+    - name: Install Echo
+      shell: bash
+      env:
+        VERSION: ${{ inputs.version }}
+      run: |
+        set -euo pipefail
+        case "$(uname -m)" in x86_64|amd64) arch=amd64 ;; aarch64|arm64) arch=arm64 ;; *) echo "unsupported CPU $(uname -m)"; exit 1 ;; esac
+        os=$(uname -s | tr '[:upper:]' '[:lower:]')
+        if [ "$VERSION" = latest ]; then
+          base=https://github.com/RhythmShahriar/echo/releases/latest/download
+        else
+          base=https://github.com/RhythmShahriar/echo/releases/download/v${VERSION#v}
+        fi
+        dir="$RUNNER_TEMP/echo-bin"
+        mkdir -p "$dir" && cd "$dir"
+        archive="rhythm-echo_${os}_${arch}.tar.gz"
+        curl -fsSLO "$base/$archive"
+        curl -fsSLO "$base/checksums.txt"
+        grep " $archive\$" checksums.txt | sha256sum -c -
+        tar -xzf "$archive" rhythm-echo
+        echo "$dir" >> "$GITHUB_PATH"
+        ./rhythm-echo --version
+
+    - name: Start Echo
+      id: up
+      shell: bash
+      env:
+        SEAL: ${{ inputs.seal }}
+        LISTEN: ${{ inputs.listen }}
+      run: |
+        set -euo pipefail
+        flag=--seal
+        [ "$SEAL" = observe ] && flag=--observe
+        token=""
+        case "$LISTEN" in 127.*|localhost*) ;; *) token=$(head -c 24 /dev/urandom | od -An -tx1 | tr -d ' \n'); echo "::add-mask::$token" ;; esac
+        RHYTHM_ECHO_TOKEN="$token" nohup rhythm-echo up "$flag" --listen "$LISTEN" --plain > "$RUNNER_TEMP/echo.log" 2>&1 &
+        echo $! > "$RUNNER_TEMP/echo.pid"
+        port=${LISTEN##*:}
+        for _ in $(seq 1 50); do
+          curl -fsS -H "X-Echo-Token: $token" "http://127.0.0.1:$port/v1/health" >/dev/null 2>&1 && break
+          sleep 0.2
+        done
+        curl -fsS -H "X-Echo-Token: $token" "http://127.0.0.1:$port/v1/health"
+        echo "url=http://127.0.0.1:$port" >> "$GITHUB_OUTPUT"
+        echo "token=$token" >> "$GITHUB_OUTPUT"
+        echo "RHYTHM_ECHO_URL=http://127.0.0.1:$port" >> "$GITHUB_ENV"
+        [ -z "$token" ] || echo "RHYTHM_ECHO_TOKEN=$token" >> "$GITHUB_ENV"
+
+    - name: Run Echo
+      id: check
+      if: inputs.mode != 'up'
+      shell: bash
+      env:
+        MODE: ${{ inputs.mode }}
+        NAME: ${{ inputs.name }}
+        FAIL_ON: ${{ inputs.fail-on }}
+        ARGS: ${{ inputs.args }}
+      run: |
+        set -uo pipefail
+        level=$FAIL_ON
+        if [ -z "$level" ]; then
+          case "$MODE" in compare) level=broke ;; *) level=error ;; esac
+        fi
+        fail=()
+        [ "$level" = none ] || fail=(--fail-on "$level")
+        # shellcheck disable=SC2206 # ARGS is a flag string to split
+        extra=($ARGS)
+        case "$MODE" in
+          snapshot) cmd=(rhythm-echo snapshot --name "$NAME") ;;
+          compare)  cmd=(rhythm-echo compare) ;;
+          run)      cmd=(rhythm-echo run) ;;
+          *) echo "::error::unknown mode $MODE"; exit 2 ;;
+        esac
+        "${cmd[@]}" "${fail[@]}" "${extra[@]}" --plain
+        code=$?
+        echo "exit-code=$code" >> "$GITHUB_OUTPUT"
+        [ "$code" -ge 2 ] && exit "$code"
+        which=()
+        [ "$MODE" = snapshot ] && which=("$NAME")
+        out="$RUNNER_TEMP/echo-report"
+        mkdir -p "$out"
+        rhythm-echo report "${which[@]}" --md >> "$GITHUB_STEP_SUMMARY" || true
+        rhythm-echo report "${which[@]}" "${fail[@]}" --junit -o "$out/echo-junit.xml" -q || true
+        rhythm-echo report "${which[@]}" --html -o "$out/echo-report.html" -q || true
+        echo "report=$out/echo-report.html" >> "$GITHUB_OUTPUT"
+        exit 0
+
+    - name: Stop Echo
+      if: always() && inputs.mode != 'up'
+      shell: bash
+      run: |
+        [ -f "$RUNNER_TEMP/echo.pid" ] && kill "$(cat "$RUNNER_TEMP/echo.pid")" 2>/dev/null || true
+
+    - name: Upload reports
+      if: always() && inputs.mode != 'up' && inputs.upload == 'true' && steps.check.outputs.report != ''
+      uses: actions/upload-artifact@v4
+      with:
+        name: echo-report
+        path: ${{ runner.temp }}/echo-report/
+        if-no-files-found: ignore
+
+    - name: Fail on changes
+      if: steps.check.outputs.exit-code == '1'
+      shell: bash
+      env:
+        FAIL_ON: ${{ inputs.fail-on }}
+      run: |
+        echo "::error::Echo found changes or issues at or above --fail-on ${FAIL_ON:-its default}. See the job summary and the echo-report artifact."
+        exit 1
