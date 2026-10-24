@@ -359,17 +359,47 @@ func (s Store) Snapshots() ([]string, error) {
 	return s.list("snapshots")
 }
 
-// LatestRun returns the newest run directory (a run or comparison), or
-// the latest snapshot when nothing has been run since taking one.
+// LatestRun returns the folder of the newest result, a run, comparison
+// or snapshot, by when it started (run.json's started, or the folder's
+// modification time when that can't be read). Folders without run.json,
+// left by a run that failed early, have nothing to show and are skipped.
+// On a tie a run wins, since it was made from the snapshot.
 func (s Store) LatestRun() (string, error) {
-	runs, err := s.list(Runs)
-	if err == nil && len(runs) > 0 {
-		return filepath.Join(s.Root, Runs, runs[len(runs)-1]), nil
+	best, bestAt := "", time.Time{}
+	for _, kind := range []string{"snapshots", Runs} { // runs last, so they win ties
+		names, _ := s.list(kind)
+		for _, n := range names {
+			dir := filepath.Join(s.Root, kind, n)
+			at, ok := startedAt(dir)
+			if ok && (best == "" || !at.Before(bestAt)) {
+				best, bestAt = dir, at
+			}
+		}
 	}
-	if dir, err := s.Snapshot(""); err == nil {
-		return dir, nil
+	if best == "" {
+		return "", errors.New("nothing to show yet; run rhythm echo snapshot, compare or run first")
 	}
-	return "", errors.New("nothing to show yet; run rhythm echo snapshot, compare or run first")
+	return best, nil
+}
+
+// startedAt returns when the run in dir started, or false when dir holds
+// no run.json. It reads only the started field.
+func startedAt(dir string) (time.Time, bool) {
+	path := filepath.Join(dir, "run.json")
+	if _, err := os.Stat(path); err != nil {
+		return time.Time{}, false
+	}
+	var r struct {
+		Started time.Time `json:"started"`
+	}
+	if cache.ReadJSON(path, &r) == nil && !r.Started.IsZero() {
+		return r.Started, true
+	}
+	fi, err := os.Stat(dir)
+	if err != nil {
+		return time.Time{}, false
+	}
+	return fi.ModTime(), true
 }
 
 func (s Store) list(kind string) ([]string, error) {

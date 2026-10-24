@@ -83,9 +83,7 @@ func TestPruneKeepsNewest(t *testing.T) {
 	s := Store{Root: t.TempDir()}
 	start := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	for i := range 5 {
-		if _, err := s.NewDir(Runs, Stamp(start.Add(time.Duration(i)*time.Minute))); err != nil {
-			t.Fatal(err)
-		}
+		saveRun(t, s, start.Add(time.Duration(i)*time.Minute))
 	}
 	if err := s.Prune(2); err != nil {
 		t.Fatal(err)
@@ -236,12 +234,66 @@ func TestLatestRunFallsBackToTheSnapshot(t *testing.T) {
 	if dir, err := s.LatestRun(); err != nil || filepath.Base(dir) != "first" {
 		t.Errorf("only a snapshot: %s, %v", dir, err)
 	}
-	run, err := s.NewDir(Runs, Stamp(time.Now()))
+	run := saveRun(t, s, time.Now())
+	if dir, err := s.LatestRun(); err != nil || dir != run {
+		t.Errorf("a run since: %s, %v", dir, err)
+	}
+}
+
+func saveRun(t *testing.T, s Store, at time.Time) string {
+	t.Helper()
+	dir, err := s.NewDir(Runs, Stamp(at))
 	if err != nil {
 		t.Fatal(err)
 	}
+	if err := SaveRun(dir, &model.Run{Schema: model.Schema, Started: at}); err != nil {
+		t.Fatal(err)
+	}
+	return dir
+}
+
+// TestLatestRunIsTheNewestResult: report with no argument shows whatever
+// ran last, a compare or a snapshot.
+func TestLatestRunIsTheNewestResult(t *testing.T) {
+	start := time.Date(2026, 10, 1, 9, 0, 0, 0, time.UTC)
+
+	s := Store{Root: filepath.Join(t.TempDir(), ".echo")}
+	take(t, s, "base", start)
+	saveRun(t, s, start.Add(time.Minute)) // an old compare
+	take(t, s, "fresh", start.Add(time.Hour))
+	if dir, err := s.LatestRun(); err != nil || filepath.Base(dir) != "fresh" {
+		t.Errorf("compare then snapshot: %s, %v", dir, err)
+	}
+
+	s = Store{Root: filepath.Join(t.TempDir(), ".echo")}
+	take(t, s, "base", start)
+	run := saveRun(t, s, start.Add(time.Hour))
 	if dir, err := s.LatestRun(); err != nil || dir != run {
-		t.Errorf("a run since: %s, %v", dir, err)
+		t.Errorf("snapshot then compare: %s, %v", dir, err)
+	}
+
+	// A run that failed before writing run.json has nothing to show.
+	if _, err := s.NewDir(Runs, Stamp(start.Add(2*time.Hour))); err != nil {
+		t.Fatal(err)
+	}
+	if dir, err := s.LatestRun(); err != nil || dir != run {
+		t.Errorf("an empty run folder won: %s, %v", dir, err)
+	}
+
+	// Without a started time the folder's age decides.
+	stale := saveRun(t, s, time.Time{})
+	old := start.Add(-time.Hour)
+	if err := os.Chtimes(stale, old, old); err != nil {
+		t.Fatal(err)
+	}
+	if dir, _ := s.LatestRun(); dir != run {
+		t.Errorf("an old folder without a time won: %s", dir)
+	}
+	if err := os.Chtimes(stale, time.Now(), time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	if dir, _ := s.LatestRun(); dir != stale {
+		t.Errorf("a new folder without a time lost: %s", dir)
 	}
 }
 
