@@ -52,10 +52,18 @@ func hookTo(r Request) string {
 	return r.URL.Hostname() + "/" + strings.Join(s, "/")
 }
 
+// hookFill fills a catch hook message: the masked hook as recipient and,
+// for a WooCommerce webhook pointed at the hook, its topic as the event.
+func hookFill(r Request, m *model.Message) {
+	m.To = []string{hookTo(r)}
+	m.Event = r.Header("x-wc-webhook-topic")
+}
+
 // hubspot: the CRM API (api.hubapi.com/crm/v3/objects/{type}…) and form
 // submissions (api.hsforms.com/submissions/v3/integration/submit/{portal}/{form}).
 var hubspot = Recognizer{
 	Provider: "hubspot",
+	Name:     "HubSpot",
 	Channel:  model.Webhook,
 	Match: func(r Request) bool {
 		return host(r, "api.hubapi.com", "api.hubspot.com", "api.hsforms.com")
@@ -110,6 +118,7 @@ var hubspot = Recognizer{
 // list members added or updated by signup forms and shops.
 var mailchimp = Recognizer{
 	Provider: "mailchimp",
+	Name:     "Mailchimp",
 	Channel:  model.Webhook,
 	Match: func(r Request) bool {
 		return host(r, "api.mailchimp.com") && strings.HasPrefix(r.URL.Path, "/3.0/")
@@ -151,6 +160,7 @@ var mailchimp = Recognizer{
 // /api/track and /api/identify, which answer "1".
 var klaviyo = Recognizer{
 	Provider: "klaviyo",
+	Name:     "Klaviyo",
 	Channel:  model.Webhook,
 	Match:    func(r Request) bool { return host(r, "a.klaviyo.com") },
 	Fill: func(r Request, m *model.Message) {
@@ -191,6 +201,7 @@ var klaviyo = Recognizer{
 // contactLists, contactTags, deals).
 var activecampaign = Recognizer{
 	Provider: "activecampaign",
+	Name:     "ActiveCampaign",
 	Channel:  model.Webhook,
 	Match: func(r Request) bool {
 		return host(r, "api-us1.com", "activehosted.com") && strings.HasPrefix(r.URL.Path, "/api/3/")
@@ -230,10 +241,11 @@ var activecampaign = Recognizer{
 // zapier: catch hooks, hooks.zapier.com/hooks/catch/{account}/{hook}/.
 var zapier = Recognizer{
 	Provider:  "zapier",
+	Name:      "Zapier",
 	SecretURL: true,
 	Channel:   model.Webhook,
 	Match:     func(r Request) bool { return host(r, "hooks.zapier.com") },
-	Fill:      func(r Request, m *model.Message) { m.To = []string{hookTo(r)} },
+	Fill:      hookFill,
 	Fake: func(Request, *model.Message) Fake {
 		return jsonFake(200, js(map[string]string{"attempt": uuid(), "id": uuid(), "request_id": uuid(), "status": "success"}))
 	},
@@ -243,13 +255,14 @@ var zapier = Recognizer{
 // hook.{region}.make.com/{token}. They answer "Accepted" as text.
 var makeHook = Recognizer{
 	Provider:  "make",
+	Name:      "Make",
 	SecretURL: true,
 	Channel:   model.Webhook,
 	Match: func(r Request) bool {
 		h := strings.ToLower(r.URL.Hostname())
 		return strings.HasPrefix(h, "hook.") && (strings.HasSuffix(h, ".make.com") || strings.HasSuffix(h, ".integromat.com"))
 	},
-	Fill: func(r Request, m *model.Message) { m.To = []string{hookTo(r)} },
+	Fill: hookFill,
 	Fake: func(Request, *model.Message) Fake { return textFake(200, "Accepted") },
 }
 
@@ -260,6 +273,7 @@ var makeHook = Recognizer{
 // n8n's default port, 5678.
 var n8n = Recognizer{
 	Provider:  "n8n",
+	Name:      "n8n",
 	SecretURL: true,
 	Channel:   model.Webhook,
 	Match: func(r Request) bool {
@@ -269,7 +283,7 @@ var n8n = Recognizer{
 		}
 		return host(r, "n8n.cloud") || n8nHost(r.URL.Hostname()) || r.URL.Port() == "5678"
 	},
-	Fill: func(r Request, m *model.Message) { m.To = []string{hookTo(r)} },
+	Fill: hookFill,
 	Fake: func(Request, *model.Message) Fake {
 		return jsonFake(200, `{"message":"Workflow was started"}`)
 	},

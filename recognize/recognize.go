@@ -61,8 +61,17 @@ type Fake struct {
 
 // Recognizer understands one provider's API.
 type Recognizer struct {
+	// Provider is the slug stored on messages ("amazon-ses").
 	Provider string
-	Channel  model.Channel
+	// Name is the provider's display name ("Amazon SES"), for titles and
+	// reports. A provider with several recognizers names it on each.
+	Name    string
+	Channel model.Channel
+	// Priority orders recognizers: higher ones are tried first. Host and
+	// path matchers use 0. One that matches on something any host can
+	// carry (a header) goes below 0, so a request to a known host is
+	// claimed by that host's recognizer first.
+	Priority int
 	// Match reports whether the request is for this provider.
 	Match func(r Request) bool
 	// Fill sets recipients, content and event on m from the request.
@@ -79,11 +88,23 @@ type Recognizer struct {
 	SecretURL bool
 }
 
-// registry holds every recognizer, most specific first. Recognizers are
-// added from init functions in this package's provider files.
+// registry holds every recognizer in the order Recognize tries them.
+// Recognizers are added from init functions in this package's provider
+// files. Go runs those in file-name order, so register sorts: by Priority,
+// then by Provider. Only a provider's own recognizers keep the order they
+// were registered in, which is the order within one file. Renaming a file
+// can't change which recognizer wins.
 var registry []Recognizer
 
-func register(r Recognizer) { registry = append(registry, r) }
+func register(r Recognizer) {
+	registry = append(registry, r)
+	slices.SortStableFunc(registry, func(a, b Recognizer) int {
+		if a.Priority != b.Priority {
+			return b.Priority - a.Priority
+		}
+		return strings.Compare(a.Provider, b.Provider)
+	})
+}
 
 // Recognize fills m from r: channel, provider, recipients, content. It
 // returns the matching recognizer, or the generic one.
@@ -122,23 +143,13 @@ func Providers() []string {
 	return out
 }
 
-// names are the providers' display names, for titles and reports.
-var names = map[string]string{
-	"twilio": "Twilio", "slack": "Slack", "discord": "Discord", "woocommerce": "WooCommerce", "teams": "Teams",
-	"sendgrid": "SendGrid", "mailgun": "Mailgun", "postmark": "Postmark", "resend": "Resend", "amazon-ses": "Amazon SES",
-	"brevo": "Brevo", "sparkpost": "SparkPost", "mandrill": "Mandrill",
-	"vonage": "Vonage", "messagebird": "MessageBird", "bird": "Bird", "plivo": "Plivo", "amazon-sns": "Amazon SNS",
-	"telnyx": "Telnyx", "clicksend": "ClickSend", "whatsapp-cloud": "WhatsApp Cloud API",
-	"ga4": "GA4", "meta-capi": "Meta Conversions API", "stripe": "Stripe", "paypal": "PayPal", "fcm": "FCM", "onesignal": "OneSignal",
-	"hubspot": "HubSpot", "mailchimp": "Mailchimp", "klaviyo": "Klaviyo", "activecampaign": "ActiveCampaign",
-	"zapier": "Zapier", "make": "Make", "n8n": "n8n",
-}
-
 // Name returns a provider's display name ("amazon-ses" → "Amazon SES"),
 // or the slug itself for one Echo doesn't know.
 func Name(provider string) string {
-	if n, ok := names[provider]; ok {
-		return n
+	for _, r := range registry {
+		if r.Provider == provider && r.Name != "" {
+			return r.Name
+		}
 	}
 	return provider
 }

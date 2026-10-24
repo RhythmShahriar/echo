@@ -20,6 +20,7 @@ func init() {
 // trigger URL.
 var teams = Recognizer{
 	Provider: "teams",
+	Name:     "Teams",
 	Channel:  model.Chat,
 	Match: func(r Request) bool {
 		p := r.URL.Path

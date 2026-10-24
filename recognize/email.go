@@ -45,6 +45,7 @@ func emails(as []addr) []string {
 // copy), from, subject and content parts. It answers 202 with no body.
 var sendgrid = Recognizer{
 	Provider: "sendgrid",
+	Name:     "SendGrid",
 	Channel:  model.Email,
 	Match: func(r Request) bool {
 		return host(r, "api.sendgrid.com") && r.URL.Path == "/v3/mail/send"
@@ -99,6 +100,7 @@ var sendgrid = Recognizer{
 // SDK), with repeated to/cc/bcc fields.
 var mailgun = Recognizer{
 	Provider: "mailgun",
+	Name:     "Mailgun",
 	Channel:  model.Email,
 	Match: func(r Request) bool {
 		s := segments(r)
@@ -141,6 +143,7 @@ type postmarkMsg struct {
 
 var postmark = Recognizer{
 	Provider: "postmark",
+	Name:     "Postmark",
 	Channel:  model.Email,
 	Match: func(r Request) bool {
 		return host(r, "api.postmarkapp.com") && strings.HasPrefix(r.URL.Path, "/email")
@@ -197,6 +200,7 @@ type resendMsg struct {
 
 var resend = Recognizer{
 	Provider: "resend",
+	Name:     "Resend",
 	Channel:  model.Email,
 	Match: func(r Request) bool {
 		return host(r, "api.resend.com") && (r.URL.Path == "/emails" || r.URL.Path == "/emails/batch") && r.Method == "POST"
@@ -238,6 +242,7 @@ var resend = Recognizer{
 // form-encoded query API (Action=SendEmail on /), answered in XML.
 var ses = Recognizer{
 	Provider: "amazon-ses",
+	Name:     "Amazon SES",
 	Channel:  model.Email,
 	Match: func(r Request) bool {
 		h := strings.ToLower(r.URL.Hostname())
@@ -318,6 +323,7 @@ var ses = Recognizer{
 // brevo (formerly Sendinblue): POST /v3/smtp/email.
 var brevo = Recognizer{
 	Provider: "brevo",
+	Name:     "Brevo",
 	Channel:  model.Email,
 	Match: func(r Request) bool {
 		return host(r, "api.brevo.com", "api.sendinblue.com") && r.URL.Path == "/v3/smtp/email"
@@ -351,6 +357,7 @@ var brevo = Recognizer{
 // sparkpost: POST /api/v1/transmissions with recipients and content.
 var sparkpost = Recognizer{
 	Provider: "sparkpost",
+	Name:     "SparkPost",
 	Channel:  model.Email,
 	Match: func(r Request) bool {
 		return host(r, "api.sparkpost.com", "api.eu.sparkpost.com") && strings.HasPrefix(r.URL.Path, "/api/v1/transmissions") && r.Method == "POST"
@@ -384,6 +391,7 @@ var sparkpost = Recognizer{
 // travels in the body as "key" and is never copied into the message.
 var mandrill = Recognizer{
 	Provider: "mandrill",
+	Name:     "Mandrill",
 	Channel:  model.Email,
 	Match: func(r Request) bool {
 		return host(r, "mandrillapp.com") && strings.HasPrefix(r.URL.Path, "/api/1.0/messages/send")

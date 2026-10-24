@@ -16,6 +16,7 @@ func init() {
 // token, a topic or a condition.
 var fcm = Recognizer{
 	Provider: "fcm",
+	Name:     "FCM",
 	Channel:  model.Push,
 	Match: func(r Request) bool {
 		s := segments(r)
@@ -48,6 +49,7 @@ var fcm = Recognizer{
 // subscription IDs, aliases, emails or phone numbers).
 var onesignal = Recognizer{
 	Provider: "onesignal",
+	Name:     "OneSignal",
 	Channel:  model.Push,
 	Match: func(r Request) bool {
 		return host(r, "onesignal.com") && r.Method == "POST" &&

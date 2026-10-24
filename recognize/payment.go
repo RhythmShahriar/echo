@@ -114,6 +114,7 @@ var stripePrefixes = map[string]string{
 // what was done to it: "payment_intents create", "payment_intents confirm".
 var stripe = Recognizer{
 	Provider: "stripe",
+	Name:     "Stripe",
 	Channel:  model.Payment,
 	Match:    func(r Request) bool { return host(r, "api.stripe.com") },
 	Fill: func(r Request, m *model.Message) {
@@ -198,6 +199,7 @@ var stripe = Recognizer{
 // "checkout.orders create", "checkout.orders capture", "oauth2.token".
 var paypal = Recognizer{
 	Provider: "paypal",
+	Name:     "PayPal",
 	Channel:  model.Payment,
 	Match: func(r Request) bool {
 		return host(r, "api-m.paypal.com", "api.paypal.com", "api-m.sandbox.paypal.com", "api.sandbox.paypal.com")

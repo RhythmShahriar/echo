@@ -25,6 +25,7 @@ func init() {
 // "whatsapp:".
 var twilio = Recognizer{
 	Provider: "twilio",
+	Name:     "Twilio",
 	Channel:  model.SMS,
 	Match: func(r Request) bool {
 		return host(r, "api.twilio.com") && strings.HasSuffix(r.URL.Path, "/Messages.json") && r.Method == "POST"
@@ -56,6 +57,7 @@ var twilio = Recognizer{
 // slack: incoming webhooks post JSON {"text": …, "blocks": …}.
 var slack = Recognizer{
 	Provider: "slack",
+	Name:     "Slack",
 	Channel:  model.Chat,
 	Match: func(r Request) bool {
 		return host(r, "hooks.slack.com") || (host(r, "slack.com") && strings.HasPrefix(r.URL.Path, "/api/chat.postMessage"))
@@ -83,6 +85,7 @@ var slack = Recognizer{
 // discord: webhooks post JSON {"content": …, "embeds": …}.
 var discord = Recognizer{
 	Provider: "discord",
+	Name:     "Discord",
 	Channel:  model.Chat,
 	Match: func(r Request) bool {
 		return (host(r, "discord.com") || host(r, "discordapp.com")) && strings.HasPrefix(r.URL.Path, "/api/webhooks/")
@@ -100,9 +103,15 @@ var discord = Recognizer{
 	Fake: func(Request, *model.Message) Fake { return Fake{Status: 204} },
 }
 
-// wooWebhook: WooCommerce delivers webhooks with X-WC-Webhook-* headers.
+// wooWebhook: WooCommerce delivers webhooks with X-WC-Webhook-* headers,
+// to any URL a shop owner enters. It matches on the header alone, so it
+// runs after the host recognizers: a WooCommerce webhook to a Zapier
+// catch hook is Zapier's, whose secret URL is then masked (the catch hook
+// recognizers still take the topic as the event).
 var wooWebhook = Recognizer{
 	Provider: "woocommerce",
+	Name:     "WooCommerce",
+	Priority: -10,
 	Channel:  model.Webhook,
 	Match:    func(r Request) bool { return r.Header("x-wc-webhook-topic") != "" },
 	Fill: func(r Request, m *model.Message) {

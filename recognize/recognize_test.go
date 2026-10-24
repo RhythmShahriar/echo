@@ -66,11 +66,11 @@ func formReq(raw string, body string, headers ...string) Request {
 func join(parts ...string) string { return strings.Join(parts, "") }
 
 func allCases() []tcase {
-	return slices.Concat(emailCases, smsCases, chatCases, analyticsCases, pushCases, paymentCases, crmCases)
+	return slices.Concat(coreCases, emailCases, smsCases, chatCases, analyticsCases, pushCases, paymentCases, crmCases)
 }
 
 func allNegatives() []negative {
-	return slices.Concat(emailNegatives, smsNegatives, chatNegatives, analyticsNegatives, pushNegatives, paymentNegatives, crmNegatives)
+	return slices.Concat(coreNegatives, emailNegatives, smsNegatives, chatNegatives, analyticsNegatives, pushNegatives, paymentNegatives, crmNegatives)
 }
 
 func TestRecognizers(t *testing.T) {
@@ -148,21 +148,53 @@ func wellFormedXML(s string) bool {
 	}
 }
 
-func TestProvidersListsEveryRecognizer(t *testing.T) {
-	listed := Providers()
-	tested := map[string]bool{}
+// TestEveryProviderHasFixtures enforces the fixture rule: each provider
+// has a request it must claim and one it must leave alone.
+func TestEveryProviderHasFixtures(t *testing.T) {
+	pos, neg := map[string]int{}, map[string]int{}
 	for _, c := range allCases() {
-		tested[c.provider] = true
+		pos[c.provider]++
 	}
-	for p := range tested {
+	for _, n := range allNegatives() {
+		neg[n.provider]++
+	}
+	listed := Providers()
+	for p := range pos {
 		if !slices.Contains(listed, p) {
 			t.Errorf("Providers() is missing %q", p)
 		}
 	}
-	core := map[string]bool{"twilio": true, "slack": true, "discord": true, "woocommerce": true}
 	for _, p := range listed {
-		if !tested[p] && !core[p] {
-			t.Errorf("provider %q has no fixture", p)
+		if pos[p] < 1 || neg[p] < 1 {
+			t.Errorf("provider %q has %d positive and %d negative fixtures, want at least one of each", p, pos[p], neg[p])
+		}
+	}
+}
+
+// TestNoFixtureIsClaimedTwice: each positive fixture matches the
+// recognizers of one provider only, so the order in the registry is a
+// tie-break that never decides a real case by accident.
+func TestNoFixtureIsClaimedTwice(t *testing.T) {
+	for _, c := range allCases() {
+		var claimed []string
+		for _, rec := range registry {
+			if rec.Match(c.req) && !slices.Contains(claimed, rec.Provider) {
+				claimed = append(claimed, rec.Provider)
+			}
+		}
+		if len(claimed) != 1 {
+			t.Errorf("%s/%s: %s %s matched by %q", c.provider, c.name, c.req.Method, c.req.URL, claimed)
+		}
+	}
+}
+
+// TestRegistryOrderIsExplicit: the registry is sorted by Priority then
+// Provider, whatever order the init functions ran in.
+func TestRegistryOrderIsExplicit(t *testing.T) {
+	for i := 1; i < len(registry); i++ {
+		a, b := registry[i-1], registry[i]
+		if a.Priority < b.Priority || a.Priority == b.Priority && a.Provider > b.Provider {
+			t.Errorf("%s (priority %d) before %s (priority %d)", a.Provider, a.Priority, b.Provider, b.Priority)
 		}
 	}
 }
@@ -196,9 +228,9 @@ func TestProvidersAreListedOnce(t *testing.T) {
 }
 
 func TestEveryProviderHasADisplayName(t *testing.T) {
-	for _, p := range Providers() {
-		if _, ok := names[p]; !ok {
-			t.Errorf("no display name for %q", p)
+	for _, r := range registry {
+		if r.Name == "" {
+			t.Errorf("no display name for %q", r.Provider)
 		}
 	}
 	if Name("amazon-ses") != "Amazon SES" || Name("unknown-thing") != "unknown-thing" {

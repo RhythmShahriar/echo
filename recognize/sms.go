@@ -28,6 +28,7 @@ func init() {
 // never copied into the message).
 var vonageSMS = Recognizer{
 	Provider: "vonage",
+	Name:     "Vonage",
 	Channel:  model.SMS,
 	Match: func(r Request) bool {
 		return host(r, "rest.nexmo.com") && r.URL.Path == "/sms/json"
@@ -54,6 +55,7 @@ var vonageSMS = Recognizer{
 // channel of sms, mms, whatsapp, viber or messenger.
 var vonageMessages = Recognizer{
 	Provider: "vonage",
+	Name:     "Vonage",
 	Channel:  model.SMS,
 	Match: func(r Request) bool {
 		return host(r, "api.nexmo.com", "messages-sandbox.nexmo.com") && r.URL.Path == "/v1/messages" && r.Method == "POST"
@@ -84,6 +86,7 @@ var vonageMessages = Recognizer{
 // originator, recipients (a list or comma-separated) and body.
 var messagebird = Recognizer{
 	Provider: "messagebird",
+	Name:     "MessageBird",
 	Channel:  model.SMS,
 	Match: func(r Request) bool {
 		return host(r, "rest.messagebird.com") && r.URL.Path == "/messages" && r.Method == "POST"
@@ -120,6 +123,7 @@ var messagebird = Recognizer{
 // api.bird.com/workspaces/{ws}/channels/{channel}/messages.
 var bird = Recognizer{
 	Provider: "bird",
+	Name:     "Bird",
 	Channel:  model.SMS,
 	Match: func(r Request) bool {
 		s := segments(r)
@@ -146,6 +150,7 @@ var bird = Recognizer{
 // several) and text.
 var plivo = Recognizer{
 	Provider: "plivo",
+	Name:     "Plivo",
 	Channel:  model.SMS,
 	Match: func(r Request) bool {
 		s := segments(r)
@@ -176,6 +181,7 @@ var plivo = Recognizer{
 // the JSON protocol send X-Amz-Target AmazonSNS.Publish.
 var sns = Recognizer{
 	Provider: "amazon-sns",
+	Name:     "Amazon SNS",
 	Channel:  model.SMS,
 	Match: func(r Request) bool {
 		h := strings.ToLower(r.URL.Hostname())
@@ -213,6 +219,7 @@ var sns = Recognizer{
 // telnyx: POST api.telnyx.com/v2/messages with from, to and text.
 var telnyx = Recognizer{
 	Provider: "telnyx",
+	Name:     "Telnyx",
 	Channel:  model.SMS,
 	Match: func(r Request) bool {
 		return host(r, "api.telnyx.com") && strings.HasPrefix(r.URL.Path, "/v2/messages") && r.Method == "POST"
@@ -242,6 +249,7 @@ var telnyx = Recognizer{
 // clicksend: POST rest.clicksend.com/v3/sms/send with a list of messages.
 var clicksend = Recognizer{
 	Provider: "clicksend",
+	Name:     "ClickSend",
 	Channel:  model.SMS,
 	Match: func(r Request) bool {
 		return host(r, "rest.clicksend.com") && r.URL.Path == "/v3/sms/send"
@@ -281,6 +289,7 @@ var clicksend = Recognizer{
 // graph.facebook.com/{version}/{phone-number-id}/messages.
 var whatsapp = Recognizer{
 	Provider: "whatsapp-cloud",
+	Name:     "WhatsApp Cloud API",
 	Channel:  model.WhatsApp,
 	Match: func(r Request) bool {
 		return host(r, "graph.facebook.com") && r.Method == "POST" && graphPath(r, "messages")
