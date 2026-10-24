@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/RhythmShahriar/echo/model"
+	"github.com/RhythmShahriar/rhythm/kit/secrets"
 )
 
 // Request is an outbound HTTP request as a connector or the proxy saw it.
@@ -70,6 +71,9 @@ type Recognizer struct {
 	// every mode, even to allowlisted hosts. Fake then answers with the
 	// provider's own error, and the message is counted as blocked.
 	Refuse func(r Request) bool
+	// SecretURL, when set, says the URL itself is the credential (catch
+	// hooks): its last path segment is masked wherever it's stored.
+	SecretURL bool
 }
 
 // registry holds every recognizer, most specific first. Recognizers are
@@ -159,6 +163,50 @@ var generic = Recognizer{
 		}
 		m.To = []string{r.URL.Host + r.URL.Path}
 	},
+}
+
+// secretQuery are query parameters that carry a URL's credential on top
+// of what secrets.Redact finds: Logic Apps and Power Automate sign
+// trigger URLs with sig.
+var secretQuery = []string{"sig", "signature", "code"}
+
+// RedactURL masks the credentials in a request URL for storing and
+// showing it: what secrets.Redact finds (keys, Slack and Discord hook
+// tokens), signature parameters, and the secret last segment of catch
+// hooks (Zapier, Make, n8n). The masked form is the same every
+// run, so compare still pairs messages by URL.
+func RedactURL(rec Recognizer, raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil || u.Host == "" || u.User != nil {
+		return secrets.Redact(raw)
+	}
+	changed := false
+	if rec.SecretURL {
+		segs := strings.Split(u.Path, "/")
+		for i := len(segs) - 1; i >= 0; i-- {
+			if segs[i] != "" {
+				segs[i], changed = secrets.Mask(segs[i], 2), true
+				break
+			}
+		}
+		u.Path = strings.Join(segs, "/")
+	}
+	pairs := strings.Split(u.RawQuery, "&")
+	for i, p := range pairs {
+		k, v, _ := strings.Cut(p, "=")
+		if k, err := url.QueryUnescape(k); err == nil && v != "" && slices.Contains(secretQuery, strings.ToLower(k)) {
+			pairs[i], changed = p[:len(p)-len(v)]+secrets.Mask(v, 2), true
+		}
+	}
+	if !changed {
+		return secrets.Redact(raw)
+	}
+	// Built by hand: url.URL.String would percent-encode the bullets.
+	out := u.Scheme + "://" + u.Host + u.Path
+	if u.RawQuery != "" {
+		out += "?" + strings.Join(pairs, "&")
+	}
+	return secrets.Redact(out)
 }
 
 // Refuses reports whether rec refuses r, sealed or not (see Recognizer.Refuse).

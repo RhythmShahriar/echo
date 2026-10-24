@@ -148,3 +148,22 @@ func TestSeveralEmailsToOneAddress(t *testing.T) {
 		t.Errorf("fewer:\n%s", got)
 	}
 }
+
+// TestMaskedHookURLsPair: catch hook URLs are stored with their secret
+// masked; the masked form is stable, so the same hook pairs across runs.
+func TestMaskedHookURLsPair(t *testing.T) {
+	hook := func(url, body string) model.Message {
+		return model.Message{Channel: model.Webhook, Provider: "zapier", Method: "POST", URL: url, To: []string{strings.TrimPrefix(url, "https://")},
+			Status: model.Faked, Body: body}
+	}
+	b := []model.Message{hook("https://hooks.zapier.com/hooks/catch/123/ab•••••/", `{"order":1}`)}
+	a := []model.Message{hook("https://hooks.zapier.com/hooks/catch/123/ab•••••/", `{"order":2}`)}
+	if got := Messages(b, a); len(got) != 0 {
+		t.Errorf("the same masked hook changed:\n%s", titles(got))
+	}
+	a = []model.Message{hook("https://hooks.zapier.com/hooks/catch/123/xy•••••/", `{"order":2}`)}
+	got := titles(Messages(b, a))
+	if !strings.Contains(got, "broke: Zapier webhook is no longer sent") || !strings.Contains(got, "new: Zapier webhook is now sent") {
+		t.Errorf("another hook is another message:\n%s", got)
+	}
+}

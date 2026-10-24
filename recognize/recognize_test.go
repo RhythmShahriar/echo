@@ -202,3 +202,23 @@ func TestEveryProviderHasADisplayName(t *testing.T) {
 		t.Error("Name")
 	}
 }
+
+func TestRedactURLMasksHookSecrets(t *testing.T) {
+	for _, c := range []struct{ raw, want, secret string }{
+		{zapierHook, "https://hooks.zapier.com/hooks/catch/1234567/ab•••••/", "c9xyz"},
+		{"https://hook.eu2.make.com/" + join("abcd", "efgh1234ijkl5678"), "https://hook.eu2.make.com/ab•••••", "efgh1234"},
+		{"https://shop.app.n8n.cloud/webhook/" + join("7f3a", "-9c2e"), "https://shop.app.n8n.cloud/webhook/7f•••••", "9c2e"},
+		{"https://hooks.slack.com/services/T0000/B0000/" + join("XXXXXXXX", "abcdefgh"), "https://hooks.slack.com/services/T0000/B0000/XX•••••", "abcdefgh"},
+		{"https://discord.com/api/webhooks/123/" + join("abcdefghij", "klmnopqrstuv"), "https://discord.com/api/webhooks/123/ab•••••", "klmnop"},
+		{"https://prod-01.westus.logic.azure.com/workflows/1/triggers/manual/paths/invoke?api-version=2016-06-01&sig=" + join("Zx9", "secretsig"),
+			"https://prod-01.westus.logic.azure.com/workflows/1/triggers/manual/paths/invoke?api-version=2016-06-01&sig=Zx•••••", "secretsig"},
+		{"https://crm.shop.test/api/leads?page=2", "https://crm.shop.test/api/leads?page=2", ""},
+	} {
+		var m model.Message
+		r := req("POST", c.raw, nil, "")
+		got := RedactURL(Recognize(r, &m), c.raw)
+		if got != c.want || (c.secret != "" && strings.Contains(got, c.secret)) {
+			t.Errorf("RedactURL(%s) = %s, want %s", c.raw, got, c.want)
+		}
+	}
+}

@@ -282,3 +282,17 @@ func TestSinkMailIsNeverSent(t *testing.T) {
 		t.Errorf("a connector's mail in observe mode is really sent: %+v, %+v", m, d)
 	}
 }
+
+func TestHookSecretsMaskedInURL(t *testing.T) {
+	s := NewServer(NewInbox(10), Config{})
+	secret := strings.Join([]string{"c9", "xyz12"}, "")
+	d, err := s.Capture(wire.Capture{Version: 1, Kind: "http", Phase: wire.Before, HTTP: &wire.HTTP{Method: "POST",
+		URL: "https://hooks.zapier.com/hooks/catch/1234567/" + secret + "/", Body: `{"order":1}`}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	m, _ := s.Inbox.Get(d.ID)
+	if m.Provider != "zapier" || m.URL != "https://hooks.zapier.com/hooks/catch/1234567/c9•••••/" || strings.Contains(m.URL+strings.Join(m.To, ""), secret) {
+		t.Errorf("url %q, to %q", m.URL, m.To)
+	}
+}

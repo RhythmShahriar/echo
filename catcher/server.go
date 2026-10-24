@@ -174,6 +174,7 @@ func (s *Server) http(c wire.Capture, run, action string, src model.Source) (wir
 	m := model.Message{Run: run, Action: action, Source: src, Method: req.Method,
 		URL: secrets.Redact(h.URL), Headers: redactHeaders(req.Headers), Body: s.cut(secrets.Redact(h.Body))}
 	rec := recognize.Recognize(req, &m)
+	m.URL = recognize.RedactURL(rec, h.URL) // a catch hook's URL is its credential
 	allowed := s.allowed(u.Hostname(), src.Host)
 	d := wire.Decision{Mode: s.cfg.Mode}
 	switch {

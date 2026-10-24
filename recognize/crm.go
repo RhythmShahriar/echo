@@ -226,10 +226,11 @@ var activecampaign = Recognizer{
 
 // zapier: catch hooks, hooks.zapier.com/hooks/catch/{account}/{hook}/.
 var zapier = Recognizer{
-	Provider: "zapier",
-	Channel:  model.Webhook,
-	Match:    func(r Request) bool { return host(r, "hooks.zapier.com") },
-	Fill:     func(r Request, m *model.Message) { m.To = []string{hookTo(r)} },
+	Provider:  "zapier",
+	SecretURL: true,
+	Channel:   model.Webhook,
+	Match:     func(r Request) bool { return host(r, "hooks.zapier.com") },
+	Fill:      func(r Request, m *model.Message) { m.To = []string{hookTo(r)} },
 	Fake: func(Request, *model.Message) Fake {
 		return jsonFake(200, js(map[string]string{"attempt": uuid(), "id": uuid(), "request_id": uuid(), "status": "success"}))
 	},
@@ -238,8 +239,9 @@ var zapier = Recognizer{
 // makeHook: Make (formerly Integromat) custom webhooks,
 // hook.{region}.make.com/{token}. They answer "Accepted" as text.
 var makeHook = Recognizer{
-	Provider: "make",
-	Channel:  model.Webhook,
+	Provider:  "make",
+	SecretURL: true,
+	Channel:   model.Webhook,
 	Match: func(r Request) bool {
 		h := strings.ToLower(r.URL.Hostname())
 		return strings.HasPrefix(h, "hook.") && (strings.HasSuffix(h, ".make.com") || strings.HasSuffix(h, ".integromat.com"))
@@ -254,8 +256,9 @@ var makeHook = Recognizer{
 // instance named for it (n8n.shop.com, shop-n8n.example.net) or one on
 // n8n's default port, 5678.
 var n8n = Recognizer{
-	Provider: "n8n",
-	Channel:  model.Webhook,
+	Provider:  "n8n",
+	SecretURL: true,
+	Channel:   model.Webhook,
 	Match: func(r Request) bool {
 		p := r.URL.Path
 		if !strings.HasPrefix(p, "/webhook/") && !strings.HasPrefix(p, "/webhook-test/") {
