@@ -16,12 +16,15 @@ import (
 	"strings"
 	"time"
 
+	"github.com/RhythmShahriar/echo/check"
 	"github.com/RhythmShahriar/echo/client"
 	"github.com/RhythmShahriar/echo/config"
 	"github.com/RhythmShahriar/echo/model"
+	"github.com/RhythmShahriar/echo/runner"
 	"github.com/RhythmShahriar/echo/sendmail"
 	"github.com/RhythmShahriar/echo/store"
 	"github.com/RhythmShahriar/rhythm/kit/cli"
+	"gopkg.in/yaml.v3"
 )
 
 type options struct {
@@ -35,15 +38,26 @@ type options struct {
 	storeDir               string // --store: where snapshots and runs go
 	name, snapshot         string
 	actions                cli.RepeatFlag
-	force                  bool   // snapshot: save even when every action failed; with --import, replace
-	export, importFile     string // snapshot: write one to, or add one from, a .tgz
-	against                string // compare: a baseline from anywhere
+	force                  bool           // snapshot: save even when every action failed; with --import, replace
+	export, importFile     string         // snapshot: write one to, or add one from, a .tgz
+	against                string         // compare: a baseline from anywhere
+	accept                 cli.RepeatFlag // compare: keys of changes that are intended
+	parallel               int            // snapshot, compare and run: actions at once
 
 	seal, observe bool
 	listen, smtp  string
 	proxy         string
 	mitm          bool
 	allow         cli.ListFlag
+
+	// up: where and how the catcher may listen, who may view it and
+	// where it keeps what it catches
+	privateNetwork, freePorts bool
+	login                     string
+	keep                      int
+	keepFor                   time.Duration
+	spamassassin              string
+	sites                     string // up: sites.yaml with a write token per site
 
 	channel, runID, to string
 	since              time.Duration // ls and watch: also the messages from this long ago
@@ -94,6 +108,8 @@ func flagSet(o *options) *flag.FlagSet {
 	fs.StringVar(&o.export, "export", "", "")
 	fs.StringVar(&o.importFile, "import", "", "")
 	fs.StringVar(&o.against, "against", "", "")
+	fs.Var(&o.accept, "accept", "")
+	fs.IntVar(&o.parallel, "parallel", 0, "")
 
 	fs.BoolVar(&o.seal, "seal", false, "")
 	fs.BoolVar(&o.observe, "observe", false, "")
@@ -102,6 +118,13 @@ func flagSet(o *options) *flag.FlagSet {
 	fs.StringVar(&o.proxy, "proxy", "", "")
 	fs.BoolVar(&o.mitm, "mitm", false, "")
 	fs.Var(&o.allow, "allow", "")
+	fs.BoolVar(&o.privateNetwork, "private-network", false, "")
+	fs.BoolVar(&o.freePorts, "free-ports", false, "")
+	fs.StringVar(&o.login, "login", "", "")
+	fs.IntVar(&o.keep, "keep", 0, "")
+	fs.Var(daysFlag{&o.keepFor}, "keep-for", "")
+	fs.StringVar(&o.spamassassin, "spamassassin", "", "")
+	fs.StringVar(&o.sites, "sites", "", "")
 
 	fs.StringVar(&o.channel, "channel", "", "")
 	fs.StringVar(&o.runID, "run", "", "")
@@ -136,8 +159,9 @@ type plan struct {
 	o       options
 	args    []string
 	cfg     config.Config
-	cfgPath string   // the config file read, absolute; "" when there is none and the defaults apply
-	notes   []string // said on stderr before the command runs
+	checks  check.Options // what the config expects of every message: its site, rules: and checks:
+	cfgPath string        // the config file read, absolute; "" when there is none and the defaults apply
+	notes   []string      // said on stderr before the command runs
 	format  string
 	st      store.Store
 	echo    *client.Client
@@ -215,6 +239,12 @@ func parse(c cmdSpec, args []string) (*plan, error) {
 		p.cfg.MITM = true
 	}
 	p.cfg.Allow = append(p.cfg.Allow, o.allow...)
+	if p.checks, err = runner.CheckOptions(p.cfg); err != nil {
+		return nil, cli.UsageError{Msg: fmt.Sprintf("%s: %v", p.configName(), err)}
+	}
+	if o.parallel < 0 {
+		return nil, cli.Usagef("--parallel %d: give how many actions may run at once, e.g. 4", o.parallel)
+	}
 	if err := p.overrideWaits(); err != nil {
 		return nil, err
 	}
@@ -420,6 +450,8 @@ var flagDocs = map[string]flagDoc{
 	"force":    {"--force", "save the snapshot even when every action failed"},
 	"export":   {"--export <file.tgz>", "write a snapshot (--name, default the latest) to a .tgz,\nto compare with elsewhere; - writes it to stdout"},
 	"import":   {"--import <file.tgz>", "add a snapshot from --export and make it the latest\n(--name renames it)"},
+	"accept":   {"--accept <key>", "take the change with this key (compare -v) as intended (repeatable)"},
+	"parallel": {"--parallel <n>", "run up to n actions at once (one with parallel: false runs alone)"},
 	"against":  {"--against <path>", "compare with this run instead: a run folder, its run.json\nor a .tgz written by snapshot's export"},
 
 	"seal":    {"--seal", "nothing leaves; Echo answers for every service (default)"},
@@ -429,6 +461,14 @@ var flagDocs = map[string]flagDoc{
 	"proxy":   {"--proxy <addr>", "also run an HTTP(S) proxy, e.g. 127.0.0.1:8026"},
 	"mitm":    {"--mitm", "decrypt HTTPS in the proxy (trust the CA: rhythm echo ca)"},
 	"allow":   {"--allow <hosts>", "hosts reachable even when sealed, e.g. api.stripe.com"},
+
+	"private-network": {"--private-network", "listen beyond loopback without a token, on private (RFC 1918)\nand container networks only; prints a warning"},
+	"free-ports":      {"--free-ports", "when 8025 or 1025 is taken (Mailpit in DDEV, Lando, Sail), move to\nthe next free pair from 18025/11025 and save it to the config\nwithout asking"},
+	"login":           {"--login <user:pass>", "let viewers sign in to Echo Inbox, read only, for 8 hours.\nPrefer RHYTHM_ECHO_LOGIN: other users can read a flag in ps"},
+	"keep":            {"--keep <n>", "with --store: the most messages kept (default 10000)"},
+	"keep-for":        {"--keep-for <d>", "with --store: drop messages older than this, e.g. 336h"},
+	"sites":           {"--sites <file>", "give each site its own write token (captures only), from a\nsites.yaml as rhythm echo hub reads it; its read token reads all"},
+	"spamassassin":    {"--spamassassin <addr>", "score each email with the SpamAssassin daemon at host:port\n(spamd; port 783 when left out)"},
 
 	"channel": {"--channel <c>", "only email, sms, whatsapp, webhook, chat, analytics, payment,\npush or http"},
 	"run":     {"--run <id>", "only messages from this run"},
@@ -468,7 +508,7 @@ var (
 	terminalFlags = []flagUse{{"quiet", ""}, {"plain", ""}, {"no-color", ""}}
 	// actionFlags are reportFlags for the commands that run actions, where
 	// --quiet also takes the quiet window.
-	actionFlags = slices.Concat(withDoc(reportFlags, "quiet", quietWindowDoc), []flagUse{{"timeout", ""}})
+	actionFlags = slices.Concat(withDoc(reportFlags, "quiet", quietWindowDoc), []flagUse{{"timeout", ""}, {"parallel", ""}})
 )
 
 // quietWindowDoc is --quiet's help where it also takes a duration.
@@ -498,6 +538,9 @@ var commands = []cmdSpec{
 	{name: "up", aliases: []string{"start"}, use: "up [flags]", about: "start the catcher (API :8025, SMTP :1025)",
 		flags: flags([]flagUse{{"seal", ""}, {"observe", ""}, {"listen", ""}, {"smtp", ""}, {"proxy", ""}, {"mitm", ""}, {"allow", ""},
 			{"token", "require this token. Needed when the API, SMTP sink or proxy\nlistens beyond loopback; the SMTP sink then asks for it as\nthe password. Prefer RHYTHM_ECHO_TOKEN: other users can\nread a flag in ps"},
+			{"private-network", ""}, {"free-ports", ""}, {"login", ""}, {"sites", ""},
+			{"store", "keep what Echo catches in this folder, so a restart keeps it\n(default in memory; inbox: store: in the config)"},
+			{"keep", ""}, {"keep-for", ""}, {"spamassassin", ""},
 			{"config", ""}}, terminalFlags, []flagUse{{"verbose", ""}})},
 	{name: "install", use: "install <stack> [path]", about: "connect a site: wordpress, laravel, next, node, generic", own: true},
 	{name: "doctor", use: "doctor", about: "check that every capture layer works",
@@ -515,7 +558,7 @@ var commands = []cmdSpec{
 			{"export", ""}, {"import", ""}, {"fail-on", ""}}, actionFlags)},
 	{name: "compare", aliases: []string{"cmp"}, use: "compare [--snapshot N]", about: "run the actions again and show what changed since a snapshot",
 		flags: flags(echoFlags, []flagUse{{"store", ""}, {"action", ""}, {"snapshot", ""}, {"against", ""},
-			{"fail-on", failOnChanges}}, actionFlags)},
+			{"accept", ""}, {"fail-on", failOnChanges}}, actionFlags)},
 	{name: "run", use: "run", about: "run the actions once, no comparison",
 		flags: flags(echoFlags, []flagUse{{"store", ""}, {"action", ""}, {"fail-on", ""}}, actionFlags)},
 	{name: "report", use: "report [run | snapshot]", about: "show the last result again (--open, -o)",
@@ -846,9 +889,8 @@ func visited(fs *flag.FlagSet, name string) bool {
 // would be cut short without a word. A wrong value is a usage error
 // (exit 2) before anything runs.
 //
-// This stands in for runner.Options.Quiet and Timeout until they are
-// released; the config has no per-action quiet on this version, so
-// replacing the global one has the same effect.
+// The values also go to runner.Options.Quiet and Timeout
+// (runnerOptions), so --quiet replaces an action's own quiet: too.
 func (p *plan) overrideWaits() error {
 	o := &p.o
 	if !o.quietForSet && !o.timeoutSet {
@@ -905,3 +947,25 @@ func shortDuration(d time.Duration) string {
 	}
 	return s
 }
+
+// daysFlag is a duration flag that also takes days, as the config's
+// keep_for: does: 14d, 1d12h or 36h.
+type daysFlag struct{ d *time.Duration }
+
+func (f daysFlag) String() string {
+	if f.d == nil {
+		return "0s"
+	}
+	return f.d.String()
+}
+
+func (f daysFlag) Set(v string) error {
+	var d config.Duration
+	if err := d.UnmarshalYAML(&yaml.Node{Kind: yaml.ScalarNode, Value: v}); err != nil {
+		return errDaysValue
+	}
+	*f.d = d.Duration
+	return nil
+}
+
+var errDaysValue = errors.New("want a duration like 14d or 12h")

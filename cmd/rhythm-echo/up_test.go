@@ -955,14 +955,14 @@ func TestLoginNeedsATokenBeyondLoopback(t *testing.T) {
 	if code != exitUsage || !strings.Contains(errOut, want) || strings.Contains(out, "API") {
 		t.Errorf("exit %d:\n%s\n%s", code, out, errOut)
 	}
-	if err := loginNeedsToken(nil, "", "0.0.0.0:8025"); err != nil {
+	if err := loginNeedsToken(nil, loginEnv, "", "0.0.0.0:8025"); err != nil {
 		t.Errorf("no login: %v", err)
 	}
 	l, _ := web.ParseLogin("client:correct horse")
-	if err := loginNeedsToken(l, "s3cret-token", "0.0.0.0:8025"); err != nil {
+	if err := loginNeedsToken(l, loginEnv, "s3cret-token", "0.0.0.0:8025"); err != nil {
 		t.Errorf("with a token: %v", err)
 	}
-	if err := loginNeedsToken(l, "", "127.0.0.1:8025"); err != nil {
+	if err := loginNeedsToken(l, loginEnv, "", "127.0.0.1:8025"); err != nil {
 		t.Errorf("loopback: %v", err)
 	}
 }
@@ -1089,15 +1089,15 @@ func TestLoginWithoutAToken(t *testing.T) {
 
 func TestLoginFromEnv(t *testing.T) {
 	t.Setenv(loginEnv, "")
-	if l, err := loginFromEnv(); l != nil || err != nil {
+	if l, _, err := upLogin(""); l != nil || err != nil {
 		t.Errorf("unset: %v %v", l, err)
 	}
 	t.Setenv(loginEnv, "client:short")
-	if _, err := loginFromEnv(); err == nil || err.Error() != "RHYTHM_ECHO_LOGIN: the password must be at least 8 characters" {
+	if _, _, err := upLogin(""); err == nil || err.Error() != "RHYTHM_ECHO_LOGIN: the password must be at least 8 characters" {
 		t.Errorf("short password: %v", err)
 	}
 	t.Setenv(loginEnv, "client:correct horse")
-	if l, err := loginFromEnv(); err != nil || l.User() != "client" {
+	if l, _, err := upLogin(""); err != nil || l.User() != "client" {
 		t.Errorf("good: %v %v", l, err)
 	}
 }

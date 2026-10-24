@@ -12,7 +12,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"net/url"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -109,7 +108,7 @@ func (s *session) fail(err error) int {
 // the config, which exits 2 rather than 3.
 func isUsage(err error) bool {
 	var ue cli.UsageError
-	return errors.As(err, &ue) || errors.Is(err, runner.ErrNoActions) || errors.Is(err, runner.ErrUnknownAction) ||
+	return errors.As(err, &ue) || errors.Is(err, runner.ErrNoActions) || errors.Is(err, runner.ErrUnknownAction) || errors.Is(err, runner.ErrWaits) ||
 		errors.Is(err, replay.ErrNoSecret) || errors.Is(err, replay.ErrRefused) || errors.Is(err, replay.ErrPayPal)
 }
 
@@ -133,11 +132,11 @@ func (s *session) start(target string) {
 
 // actions runs the configured actions against the running Echo.
 func (s *session) actions(name string) (*model.Run, error) {
-	if h, err := s.echo.Health(s.ctx); err != nil {
+	h, err := s.echo.Health(s.ctx)
+	if err != nil {
 		return nil, err
-	} else {
-		s.view.Step("Echo", fmt.Sprintf("%s mode at %s", h.Mode, s.echo.URL))
 	}
+	s.view.Step("Echo", fmt.Sprintf("%s mode at %s", h.Mode, s.echo.URL))
 	s.ran = true
 	// Flush and command actions run in the project's folder, as they do
 	// from the folder itself: "php artisan ..." fails from proj/sub.
@@ -149,8 +148,41 @@ func (s *session) actions(name string) (*model.Run, error) {
 		return nil, err
 	}
 	defer back()
-	return runner.Run(s.ctx, runner.Options{Config: s.cfg, Client: s.echo, Version: version, Name: name, Only: s.o.actions,
-		Replay: replayer(s.cfg, s.projectDir(), s.cfgPath), Hooks: runner.Hooks{Action: s.view.Action, Log: s.view.Log}})
+	return runner.Run(s.ctx, s.runnerOptions(name, h))
+}
+
+// runnerOptions are what the runner runs with: the config and the
+// command line's --action, --parallel, --quiet and --timeout, with the
+// run signed for the Echo h describes.
+func (s *session) runnerOptions(name string, h client.Health) runner.Options {
+	key := s.runKey(h)
+	o := runner.Options{Config: s.cfg, Client: s.echo, Version: version, Name: name, Only: s.o.actions,
+		Replay: replayer(s.cfg, s.projectDir(), s.cfgPath, key), Hooks: runner.Hooks{Action: s.view.Action, Log: s.view.Log},
+		Parallel: s.o.parallel, RunKey: key}
+	if s.o.quietForSet {
+		o.Quiet = s.o.quietFor
+	}
+	if s.o.timeoutSet {
+		o.Timeout = s.o.timeout
+	}
+	return o
+}
+
+// writeTokenEnv holds a site's write token (catcher C16), as the
+// connectors read it. The runner signs the run with it when it is set,
+// since that is the key the site's connector checks.
+const writeTokenEnv = "RHYTHM_ECHO_WRITE_TOKEN" //nolint:gosec // a variable's name, not a token
+
+// runKey is the key the run value is signed with (X-Echo-Run), so a
+// connector that has a token trusts it: the site's write token when
+// RHYTHM_ECHO_WRITE_TOKEN is set, else Echo's token. It is "" when there
+// is no token, or the Echo h describes doesn't verify and strip signed
+// values (an older one would keep the signature in the action ID).
+func (s *session) runKey(h client.Health) string {
+	if !h.Supports("signed-runs") {
+		return ""
+	}
+	return cmp.Or(os.Getenv(writeTokenEnv), s.echo.Token)
 }
 
 // finish saves the HTML report, writes the chosen format, prints the
@@ -357,7 +389,7 @@ func (s *session) moveSnapshot() int {
 		return s.fail(usageErr("pick --export or --import, not both"))
 	case len(s.args) > 0:
 		return s.fail(usageErr("snapshot takes no arguments; name the snapshot with --name"))
-	case len(o.actions) > 0 || o.failOn != "" || s.format != "" || o.open || o.quietForSet || o.timeoutSet:
+	case len(o.actions) > 0 || o.failOn != "" || s.format != "" || o.open || o.quietForSet || o.timeoutSet || o.parallel != 0:
 		return s.fail(usageErr("--export and --import run no actions, so they take only --name, --force, --config and --store"))
 	}
 	archiveErr := func(err error) int {
@@ -444,7 +476,13 @@ func cmdCompare(s *session) int {
 	if err := store.SaveRun(dir, after); err != nil {
 		return s.fail(err)
 	}
-	c := compare.Compare(before, after, snapDir, dir, version)
+	c := runner.CompareOptions(s.cfg).Compare(before, after, snapDir, dir, version)
+	if len(s.o.accept) > 0 {
+		_, unknown := compare.Accept(c, s.o.accept)
+		for _, k := range unknown {
+			fmt.Fprintf(s.stderr, "rhythm echo: --accept %s matched no change\n", k)
+		}
+	}
 	c.Warnings = append(c.Warnings, after.Warnings...)
 	if err := store.SaveComparison(dir, c); err != nil {
 		return s.fail(err)
@@ -537,12 +575,8 @@ func cmdWatch(s *session) int {
 	if !s.o.quiet {
 		fmt.Fprintf(s.stderr, "Watching %s (%s mode). Ctrl+C to stop.\n", s.echo.URL, h.Mode)
 	}
-	w := &watcher{s: s, status: newStatusLRU(watchMemory), enc: json.NewEncoder(s.stdout)}
+	w := &watcher{s: s, status: newStatusLRU(watchMemory), enc: json.NewEncoder(s.stdout), opts: s.checks}
 	w.enc.SetEscapeHTML(false)
-	if u, err := url.Parse(s.cfg.Site); err == nil {
-		w.opts.SiteHost = u.Hostname()
-	}
-	w.opts.AllowRecipients = s.cfg.AllowRecipients
 	start := time.Now().UTC()
 	if s.o.since > 0 {
 		start = start.Add(-s.o.since)

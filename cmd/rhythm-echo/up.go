@@ -22,7 +22,6 @@ import (
 
 	"github.com/RhythmShahriar/echo/catcher"
 	"github.com/RhythmShahriar/echo/check"
-	"github.com/RhythmShahriar/echo/config"
 	"github.com/RhythmShahriar/echo/model"
 	"github.com/RhythmShahriar/echo/proxy"
 	"github.com/RhythmShahriar/echo/report"
@@ -33,11 +32,21 @@ import (
 // cmdUp runs the catcher until interrupted: the API connectors post to
 // (with a live web view at /), the SMTP sink and, when asked, the proxy.
 func cmdUp(s *session) int {
+	if len(s.args) > 0 {
+		return s.fail(usageErr("up takes no arguments; rhythm echo up --help lists its flags"))
+	}
 	cfg := s.cfg
+	sites, err := loadSites(s)
+	if err != nil {
+		return s.fail(err)
+	}
 	token := s.echo.Token
+	if sites != nil {
+		token = sites.read
+	}
 	smtpOn := cfg.SMTP != "" && cfg.SMTP != "off"
 	proxyOn := cfg.Proxy != "" && cfg.Proxy != "off"
-	private := privateNetworkOn()
+	private := s.o.privateNetwork || privateNetworkOn()
 	var open []string // addresses served beyond loopback without a token
 	for _, l := range []struct {
 		on         bool
@@ -67,12 +76,20 @@ func cmdUp(s *session) int {
 		}
 		open = append(open, l.addr)
 	}
-	login, err := loginFromEnv()
+	login, loginFrom, err := upLogin(s.o.login)
 	if err != nil {
 		return s.fail(err)
 	}
-	if err := loginNeedsToken(login, token, cfg.Listen); err != nil {
+	if err := loginNeedsToken(login, loginFrom, token, cfg.Listen); err != nil {
 		return s.fail(err)
+	}
+	store, err := inboxSettings(s)
+	if err != nil {
+		return s.fail(err)
+	}
+	spamd := s.o.spamassassin
+	if spamd != "" && !hostPort(spamAddr(spamd)) {
+		return s.fail(usageErr("--spamassassin %s: want host:port, like 127.0.0.1:783", spamd))
 	}
 
 	// Every port is taken before anything is printed, so a port in use
@@ -87,8 +104,8 @@ func cmdUp(s *session) int {
 	ln, sl, err := listenPair(cfg.Listen, smtpAddr)
 	if err != nil {
 		// Mailpit or another catcher may hold the ports: offer a free
-		// pair. --free-ports (cli lane, X18) will pass true here.
-		if ln, sl, err = moveAside(s, &cfg.Listen, &smtpAddr, err, false); err != nil {
+		// pair, or take one without asking with --free-ports.
+		if ln, sl, err = moveAside(s, &cfg.Listen, &smtpAddr, err, s.o.freePorts); err != nil {
 			return s.fail(err)
 		}
 		if smtpOn {
@@ -107,21 +124,55 @@ func cmdUp(s *session) int {
 		stack.push(func(context.Context) { _ = pl.Close() })
 	}
 
-	inbox := catcher.NewInbox(10000)
-	srv := catcher.NewServer(inbox, catcher.Config{Mode: cfg.Mode, Allow: cfg.Allow, Token: token, Version: version})
-	checks := liveChecks(cfg)
+	inbox, err := openInbox(store)
+	if err != nil {
+		return s.fail(err)
+	}
+	stack.push(func(context.Context) {
+		if err := inbox.Close(); err != nil {
+			fmt.Fprintln(s.stderr, "rhythm echo: keeping the inbox:", err)
+		}
+	})
+	checks := s.checks
+	ccfg := catcher.Config{Mode: cfg.Mode, Allow: cfg.Allow, Token: token, Version: version, Listen: cfg.Listen,
+		Site: cfg.Site, AllowRecipients: cfg.AllowRecipients, Rules: checks.Rules, Checks: checks.Checks,
+		SMTPAddr: "off", ProxyAddr: "off"}
+	if sl != nil {
+		ccfg.SMTPAddr = sl.Addr().String()
+	}
+	if pl != nil {
+		ccfg.ProxyAddr = pl.Addr().String()
+	}
+	if sites != nil {
+		ccfg.WriteTokens = sites.write
+	}
+	srv := catcher.NewServer(inbox, ccfg)
 	log := newLiveLog(s.view)
 	log.checks = checks
 	// A login guards the Inbox with a session cookie, which a rebinding
 	// page can't send either, so the Host check isn't needed then.
 	ui := web.New(web.Options{Inbox: inbox, Mode: cfg.Mode, Checks: checks, AnyHost: token != "" || login != nil})
 	log.issues = ui.Issues // checked once, for the log and the page
+	scorer := newSpamScorer(spamd, inbox)
 	inbox.OnAdd(func(m model.Message) {
 		ui.Notify(m)
 		log.add(m)
+		scorer.score(m)
 	})
+	stack.push(func(context.Context) { scorer.wait() })
+	routes := upRoutes(srv, inbox, ui, cfg.Mode, checks)
+	relayLine := ""
+	if rel, line, err := releaseRoute(s, inbox, token, login); err != nil {
+		return s.fail(err)
+	} else if rel != nil {
+		routes, relayLine = append(routes, *rel), line
+	}
+	handler := upHandler(routes, token, login)
+	if sites != nil {
+		handler = writeTokens(sites.tokens(), srv, handler)
+	}
 	errs := make(chan error, 3)
-	api := &http.Server{Addr: cfg.Listen, Handler: upHandler(upRoutes(srv, inbox, ui, cfg.Mode, checks), token, login), ReadHeaderTimeout: 10 * time.Second}
+	api := &http.Server{Addr: cfg.Listen, Handler: handler, ReadHeaderTimeout: 10 * time.Second}
 	go func() { errs <- api.Serve(ln) }()
 	stack.push(func(ctx context.Context) { _ = api.Shutdown(ctx) })
 	stack.push(func(context.Context) { ui.Close() }) // runs first: Shutdown waits for open event streams
@@ -130,7 +181,11 @@ func cmdUp(s *session) int {
 		sink := catcher.NewSMTP(srv, cfg.SMTP)
 		smtpLine = cfg.SMTP + "  (point a mailer or sendmail_path here)"
 		if !loopback(cfg.SMTP) && token != "" {
-			sink.Backend = tokenBackend{inner: sink.Backend, token: token}
+			passwords := []string{token}
+			if sites != nil {
+				passwords = sites.tokens()
+			}
+			sink.Backend = tokenBackend{inner: sink.Backend, tokens: passwords}
 			smtpLine = cfg.SMTP + "  (log in with any username and the token as the password)"
 		}
 		go func() { errs <- sink.Serve(sl) }()
@@ -163,8 +218,20 @@ func cmdUp(s *session) int {
 	for _, n := range notes {
 		s.view.Step(n.label, n.text)
 	}
+	if store.dir != "" {
+		s.view.Step("Inbox", inboxLine(store, len(inbox.List(catcher.Filter{}))))
+	}
+	if sites != nil {
+		s.view.Step("Sites", sites.line())
+	}
 	if login != nil {
 		s.view.Step("Login", loginLine(login, token, cfg.Listen))
+	}
+	if relayLine != "" {
+		s.view.Step("Relay", relayLine)
+	}
+	if spamd != "" {
+		s.view.Step("Spam", "each email is scored by SpamAssassin at "+spamAddr(spamd))
 	}
 	if len(cfg.Allow) > 0 {
 		s.view.Step("Allowed", strings.Join(cfg.Allow, ", "))
@@ -183,9 +250,10 @@ func cmdUp(s *session) int {
 			return s.fail(err)
 		}
 	}
+	tally := report.Tally(liveRun(inbox, cfg.Mode, checks))
 	stack.run()
 	if !s.o.quiet {
-		fmt.Fprintf(s.stderr, "\nStopped. Captured %s this session.\n", report.Tally(liveRun(inbox, cfg.Mode, checks)))
+		fmt.Fprintf(s.stderr, "\nStopped. Captured %s this session.\n", tally)
 	}
 	return exitOK
 }
@@ -214,35 +282,41 @@ type upRoute struct {
 	probe   string // a GET path that reaches the route, for the test
 	handler http.Handler
 	browser bool // part of Echo Inbox: a --login session may read it
+	session bool // a --login session may use it; the handler checks the session itself (the relay)
 }
 
 // upRoutes lists everything the API listener serves: the catcher's API,
 // Echo Inbox at / and the session as an HTML report at /report.
 func upRoutes(srv *catcher.Server, inbox *catcher.Inbox, ui *web.UI, mode string, checks check.Options) []upRoute {
 	return []upRoute{
-		{"/v1/", "/v1/messages", srv, false},
-		{"/api/v1/", "/api/v1/messages", srv, false}, // Mailpit-compatible email API
-		{"GET /{$}", "/", ui, true},
-		{"GET /assets/", "/assets/app.js", ui, true},
-		{"/ui/", web.PathMessages, ui, true},
+		{"/v1/", "/v1/messages", srv, false, false},
+		{"/api/v1/", "/api/v1/messages", srv, false, false}, // Mailpit-compatible email API
+		{"GET /{$}", "/", ui, true, false},
+		{"GET /assets/", "/assets/app.js", ui, true, false},
+		{"/ui/", web.PathMessages, ui, true, false},
 		// Through the UI's Host check: the report holds the whole session.
-		{"GET /report", "/report", ui.Protect(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { liveReport(w, r, inbox, mode, checks) })), true},
+		{"GET /report", "/report", ui.Protect(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { liveReport(w, r, inbox, mode, checks) })), true, false},
 	}
 }
 
 // upHandler serves routes, all behind the token when one is set. With a
 // login, Echo Inbox's routes are also open to a signed-in viewer, read
-// only (web.Login.Guard). Without a token they need the login then, while
+// only (web.Login.Guard), and a session route (the relay's release) is
+// handed the request to check the sign-in itself. Without a token they need the login then, while
 // the API stays as open as before: connectors on this machine post to it.
 // That is why cmdUp allows a login without a token on loopback only
 // (loginNeedsToken).
 func upHandler(routes []upRoute, token string, login *web.Login) http.Handler {
 	mux := http.NewServeMux()
 	viewer := http.NewServeMux()
+	signed := http.NewServeMux()
 	for _, r := range routes {
 		mux.Handle(r.pattern, r.handler)
 		if r.browser {
 			viewer.Handle(r.pattern, r.handler)
+		}
+		if r.session {
+			signed.Handle(r.pattern, r.handler)
 		}
 	}
 	if login == nil {
@@ -262,6 +336,10 @@ func upHandler(routes []upRoute, token string, login *web.Login) http.Handler {
 		})
 	}
 	return requireToken(token, mux, func(w http.ResponseWriter, r *http.Request) bool {
+		if _, p := signed.Handler(r); p != "" {
+			signed.ServeHTTP(w, r)
+			return true
+		}
 		if !viewing(r) {
 			return false
 		}
@@ -270,22 +348,25 @@ func upHandler(routes []upRoute, token string, login *web.Login) http.Handler {
 	})
 }
 
-// loginEnv sets up a viewer login (user:password). The --login flag
-// belongs to the cli lane's flag set; until it lands, the environment is
-// how to ask for one.
+// loginEnv sets up a viewer login (user:password), as --login does. The
+// variable keeps the password out of ps.
 const loginEnv = "RHYTHM_ECHO_LOGIN"
 
-// loginFromEnv returns the login RHYTHM_ECHO_LOGIN asks for, or nil.
-func loginFromEnv() (*web.Login, error) {
-	spec := os.Getenv(loginEnv)
+// upLogin returns the login --login (or else RHYTHM_ECHO_LOGIN) asks for,
+// or nil, with where it came from for messages.
+func upLogin(flag string) (*web.Login, string, error) {
+	from, spec := "--login", flag
 	if spec == "" {
-		return nil, nil
+		from, spec = loginEnv, os.Getenv(loginEnv)
+	}
+	if spec == "" {
+		return nil, "", nil
 	}
 	l, err := web.ParseLogin(spec)
 	if err != nil {
-		return nil, usageErr("%s: %v", loginEnv, err)
+		return nil, from, usageErr("%s: %v", from, err)
 	}
-	return l, nil
+	return l, from, nil
 }
 
 // loginNeedsToken refuses a login without a token on a --listen address
@@ -293,11 +374,12 @@ func loginFromEnv() (*web.Login, error) {
 // stays open, as connectors on this machine post to it, so anyone who can
 // reach the address could read and delete what the sign-in guards. Only
 // --listen matters: the SMTP sink and the proxy serve nothing to read.
-func loginNeedsToken(login *web.Login, token, listen string) error {
+// from names where the login came from (--login or RHYTHM_ECHO_LOGIN).
+func loginNeedsToken(login *web.Login, from, token, listen string) error {
 	if login == nil || token != "" || loopback(listen) {
 		return nil
 	}
-	return usageErr("%s needs a token when --listen %s is reachable from other machines: without one the API answers anyone there; set --token (or RHYTHM_ECHO_TOKEN) for connectors and keep the login for viewers", loginEnv, listen)
+	return usageErr("%s needs a token when --listen %s is reachable from other machines: without one the API answers anyone there; set --token (or RHYTHM_ECHO_TOKEN) for connectors and keep the login for viewers", from, listen)
 }
 
 // loginLine is the banner step for a login. Without a token (loopback
@@ -465,16 +547,6 @@ func markers(issues []model.Issue) string {
 	return strings.Join(out, ", ")
 }
 
-// liveChecks is what live messages are checked against: links to the
-// configured site are fine; allow_recipients may really be messaged.
-func liveChecks(cfg config.Config) check.Options {
-	o := check.Options{AllowRecipients: cfg.AllowRecipients}
-	if u, err := url.Parse(cfg.Site); err == nil {
-		o.SiteHost = u.Hostname()
-	}
-	return o
-}
-
 func modeLine(mode string) string {
 	if mode == "observe" {
 		return "observe: messages are recorded and sent for real"
@@ -485,9 +557,8 @@ func modeLine(mode string) string {
 // loopback reports whether a listen address stays on this machine.
 func loopback(addr string) bool { return proxy.IsLoopbackAddr(addr) }
 
-// privateNetworkEnv turns on --private-network. The flag itself belongs
-// to the cli lane's flag set; until it lands, the environment is how the
-// Docker image asks for it.
+// privateNetworkEnv turns on --private-network from the environment, for
+// a container whose arguments are hard to change.
 const privateNetworkEnv = "RHYTHM_ECHO_PRIVATE_NETWORK"
 
 // privateNetworkOn reports whether up may listen beyond loopback without

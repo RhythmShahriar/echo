@@ -426,7 +426,7 @@ func cmdReplay(s *session) int {
 	s.view.Header(version, secrets.Redact(target))
 	s.view.Step("Event", ev.Name+" ("+ev.Scheme+")")
 	res, err := replay.Send(s.ctx, ev, replay.Target{URL: target, Headers: headersMap},
-		replay.Options{SecretEnv: opts.SecretEnv, Staging: opts.Staging, Scan: opts.Scan, Run: runID, Action: action})
+		replay.Options{SecretEnv: opts.SecretEnv, Staging: opts.Staging, Scan: opts.Scan, Run: runID, Action: action, RunKey: s.runKey(h)})
 	if err != nil {
 		return s.fail(err)
 	}
@@ -460,7 +460,7 @@ func loadEvent(name, scheme, typ string) (replay.Event, error) {
 }
 
 // replayer runs replay actions from .echo/config.yaml.
-func replayer(cfg config.Config, dir, cfgPath string) runner.Replayer {
+func replayer(cfg config.Config, dir, cfgPath, runKey string) runner.Replayer {
 	return func(ctx context.Context, a config.ReplayAction, to, run string) error {
 		ev, err := loadEvent(a.Event, "", "")
 		if err != nil {
@@ -476,7 +476,7 @@ func replayer(cfg config.Config, dir, cfgPath string) runner.Replayer {
 		}
 		r, act, _ := strings.Cut(run, "/")
 		res, err := replay.Send(ctx, ev, replay.Target{URL: to}, replay.Options{SecretEnv: a.Secret, Staging: cfg.Staging,
-			Scan: scanConfigs(dir, cfgPath), Run: r, Action: act})
+			Scan: scanConfigs(dir, cfgPath), Run: r, Action: act, RunKey: runKey})
 		if err != nil {
 			return err
 		}

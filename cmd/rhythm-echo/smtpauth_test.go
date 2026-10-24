@@ -23,7 +23,7 @@ func TestSMTPSinkBeyondLoopbackAsksForTheToken(t *testing.T) {
 		t.Fatal(err)
 	}
 	sink := catcher.NewSMTP(s, ln.Addr().String())
-	sink.Backend = tokenBackend{inner: sink.Backend, token: "t0k3n"}
+	sink.Backend = tokenBackend{inner: sink.Backend, tokens: []string{"other-site-token", "t0k3n"}}
 	go func() { _ = sink.Serve(ln) }()
 	defer func() { _ = sink.Close() }()
 	addr := ln.Addr().String()

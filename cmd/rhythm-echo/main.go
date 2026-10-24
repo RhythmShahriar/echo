@@ -185,6 +185,18 @@ Catcher (up):
                              listens beyond loopback; the SMTP sink then asks for it as
                              the password. Prefer RHYTHM_ECHO_TOKEN: other users can
                              read a flag in ps
+      --private-network      listen beyond loopback without a token, on private (RFC 1918)
+                             and container networks only; prints a warning
+      --free-ports           when 8025 or 1025 is taken (Mailpit in DDEV, Lando, Sail), move
+                             to the next free pair and save it to the config without asking
+      --login <user:pass>    let viewers sign in to Echo Inbox, read only, for 8 hours
+                             (prefer RHYTHM_ECHO_LOGIN)
+      --sites <file>         a write token per site (captures only), from a hub sites.yaml
+      --store <dir>          keep what Echo catches in this folder, across restarts
+      --keep <n>             the most messages kept (default 10000)
+      --keep-for <d>         with --store: drop messages older than this, e.g. 14d
+      --spamassassin <addr>  score each email with the SpamAssassin daemon at host:port
+                             (spamd; port 783 when left out)
 
 Install (install <stack>):
       --url <url>            Echo's API as the site reaches it (default from .echo/config.yaml)
@@ -230,6 +242,8 @@ Actions (snapshot, compare, run):
       --quiet <d>            how long nothing must arrive before an action is done
                              (overrides quiet:, at most 30s); -q alone: results only
       --timeout <d>          longest wait per action (overrides timeout:, at most 1m)
+      --accept <key>         compare: take this change (its key from -v) as intended (repeatable)
+      --parallel <n>         run up to n actions at once (one with parallel: false runs alone)
       --against <path>       compare: with this run instead (a run folder, its run.json or
                              a .tgz from snapshot --export)
       --export <file.tgz>    snapshot: write one (--name, default the latest) to a .tgz;

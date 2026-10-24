@@ -11,13 +11,14 @@ import (
 	"github.com/emersion/go-smtp"
 )
 
-// tokenBackend makes the SMTP sink require AUTH PLAIN with Echo's token as
-// the password (any username). It wraps the sink when it listens beyond
-// loopback, which, like the API, is only allowed with a token: otherwise
-// anyone who can reach the port could add mail to the captures.
+// tokenBackend makes the SMTP sink require AUTH PLAIN with one of Echo's
+// tokens as the password (any username): its token, or with --sites the
+// read token or a site's write token. It wraps the sink when it listens
+// beyond loopback, which, like the API, is only allowed with a token:
+// otherwise anyone who can reach the port could add mail to the captures.
 type tokenBackend struct {
-	inner smtp.Backend
-	token string
+	inner  smtp.Backend
+	tokens []string
 }
 
 func (b tokenBackend) NewSession(c *smtp.Conn) (smtp.Session, error) {
@@ -25,7 +26,7 @@ func (b tokenBackend) NewSession(c *smtp.Conn) (smtp.Session, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &tokenSession{Session: s, token: b.token}, nil
+	return &tokenSession{Session: s, tokens: b.tokens}, nil
 }
 
 var errNeedAuth = &smtp.SMTPError{Code: 530, EnhancedCode: smtp.EnhancedCode{5, 7, 0},
@@ -33,7 +34,7 @@ var errNeedAuth = &smtp.SMTPError{Code: 530, EnhancedCode: smtp.EnhancedCode{5, 
 
 type tokenSession struct {
 	smtp.Session
-	token  string
+	tokens []string
 	authed bool
 }
 
@@ -41,7 +42,13 @@ func (s *tokenSession) AuthMechanisms() []string { return []string{sasl.Plain} }
 
 func (s *tokenSession) Auth(string) (sasl.Server, error) {
 	return sasl.NewPlainServer(func(_, _, password string) error {
-		if subtle.ConstantTimeCompare([]byte(password), []byte(s.token)) != 1 {
+		ok := false
+		for _, t := range s.tokens { // every one, so the time doesn't tell which nearly matched
+			if t != "" && subtle.ConstantTimeCompare([]byte(password), []byte(t)) == 1 {
+				ok = true
+			}
+		}
+		if !ok {
 			return smtp.ErrAuthFailed
 		}
 		s.authed = true
