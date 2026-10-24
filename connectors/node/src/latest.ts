@@ -61,13 +61,30 @@ export function waitParam(wait: string | number | undefined): string {
   return wait;
 }
 
-/** waitMs is the same wait in milliseconds, for the client's own timeout. */
+/** Go duration units, in milliseconds. */
+const units: Record<string, number> = { ns: 1e-6, us: 1e-3, 'µs': 1e-3, 'μs': 1e-3, ms: 1, s: 1000, m: 60000, h: 3600000 };
+
+/**
+ * waitMs is the same wait in milliseconds, for the client's own timeout.
+ * It reads Go durations the way Echo does, compound ones ("1m30s")
+ * included, and throws on anything else: guessing a shorter wait would make
+ * the client give up while Echo is still waiting.
+ */
 export function waitMs(wait: string | number | undefined): number {
-  const w = waitParam(wait);
-  const m = /^(\d+(?:\.\d+)?)(ms|s|m)$/.exec(w);
-  if (!m) return 10000;
-  const n = Number(m[1]);
-  return m[2] === 'ms' ? n : m[2] === 's' ? n * 1000 : n * 60000;
+  const w = waitParam(wait).trim();
+  if (w === '0') return 0;
+  const part = /(\d+(?:\.\d*)?|\.\d+)(ns|us|µs|μs|ms|s|m|h)/y;
+  let total = 0;
+  let at = 0;
+  while (at < w.length) {
+    part.lastIndex = at;
+    const m = part.exec(w);
+    if (!m) break;
+    total += Number(m[1]) * (units[m[2] ?? ''] ?? 0);
+    at = part.lastIndex;
+  }
+  if (w === '' || at < w.length) throw new TypeError(`wait "${w}" is not a duration Echo reads, such as 500ms, 10s or 1m30s`);
+  return total;
 }
 
 /** params is the query string for a LatestQuery, as [name, value] pairs. */

@@ -108,6 +108,19 @@ describe('playwright', () => {
     expect(waitParam('1m')).toBe('1m');
     expect(waitMs('1.5s')).toBe(1500);
     expect(waitMs('1m')).toBe(60000);
+    expect(waitMs(undefined)).toBe(10000);
+    expect(waitMs(250)).toBe(250);
+    expect(waitMs('0')).toBe(0);
+    // compound Go durations: the client must wait as long as Echo does
+    expect(waitMs('1m30s')).toBe(90000);
+    expect(waitMs('1h2m3.5s')).toBe(3723500);
+    expect(waitMs('1500us')).toBe(1.5);
+  });
+
+  it('refuses a wait Echo would not read instead of guessing', () => {
+    for (const w of ['', '10', 'soon', '1m30', '-1s', '1d', '10 s']) {
+      expect(() => waitMs(w)).toThrow(/is not a duration Echo reads/);
+    }
   });
 });
 
