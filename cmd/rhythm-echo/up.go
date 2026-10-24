@@ -101,7 +101,7 @@ func cmdUp(s *session) int {
 
 // liveLog prints each captured message once. The inbox calls back again
 // when a message changes (an observed request gets its answer, a check
-// blocks it); a new status is printed as a marked update and an update
+// blocks it); a new status is printed as a marked update, and an update
 // that changes nothing visible isn't printed at all.
 type liveLog struct {
 	view   *report.Pretty
