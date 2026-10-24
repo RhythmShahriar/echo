@@ -113,14 +113,36 @@ func (c *Client) Clear(ctx context.Context, f Filter) (int, error) {
 
 // Begin tells Echo that run/action is in progress, so messages that can't
 // say which action caused them (plain SMTP, async jobs) are attributed to
-// it. End closes it.
+// it. End closes it. Use BeginLease when other runs may share this Echo.
 func (c *Client) Begin(ctx context.Context, run, action string) error {
-	return c.do(ctx, http.MethodPost, "/v1/actions/begin", nil, map[string]string{"run": run, "action": action}, nil)
+	_, err := c.BeginLease(ctx, run, action)
+	return err
 }
 
-// End closes the action in progress.
+// End closes the oldest action this machine began. EndLease closes one
+// action exactly.
 func (c *Client) End(ctx context.Context) error {
 	return c.do(ctx, http.MethodPost, "/v1/actions/end", nil, nil, nil)
+}
+
+// BeginLease tells Echo that run/action is in progress and returns the
+// lease that EndLease takes to close it. While several actions are open,
+// Echo marks untagged messages ambiguous rather than guess. An Echo from
+// before leases returns an empty lease; EndLease then falls back to End.
+func (c *Client) BeginLease(ctx context.Context, run, action string) (string, error) {
+	var out struct {
+		Lease string `json:"lease"`
+	}
+	err := c.do(ctx, http.MethodPost, "/v1/actions/begin", nil, map[string]string{"run": run, "action": action}, &out)
+	return out.Lease, err
+}
+
+// EndLease closes the action BeginLease returned lease for.
+func (c *Client) EndLease(ctx context.Context, lease string) error {
+	if lease == "" {
+		return c.End(ctx)
+	}
+	return c.do(ctx, http.MethodPost, "/v1/actions/end", nil, map[string]string{"lease": lease}, nil)
 }
 
 // Capture sends a capture, as a connector would. Echo's own tools (the
@@ -196,7 +218,8 @@ func (c *Client) do(ctx context.Context, method, path string, q url.Values, body
 		msg, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
 		return &APIError{Method: method, Path: path, StatusCode: resp.StatusCode, Status: resp.Status, Message: strings.TrimSpace(string(msg))}
 	}
-	if out == nil {
+	// An Echo from before leases answers begin with 204 and no lease.
+	if out == nil || resp.StatusCode == http.StatusNoContent {
 		return nil
 	}
 	return json.NewDecoder(resp.Body).Decode(out)

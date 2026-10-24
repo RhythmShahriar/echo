@@ -435,21 +435,44 @@ func (s *Server) wait(w http.ResponseWriter, r *http.Request) {
 type actionBody struct {
 	Run    string `json:"run"`
 	Action string `json:"action"`
+	Lease  string `json:"lease,omitempty"`
 }
 
+// begin opens an action and answers {"lease": "..."}, which end takes to
+// close exactly that action.
 func (s *Server) begin(w http.ResponseWriter, r *http.Request) {
 	var b actionBody
 	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<16)).Decode(&b); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	s.Inbox.Begin(b.Run, b.Action)
+	writeJSON(w, http.StatusOK, map[string]string{"lease": s.Inbox.begin(b.Run, b.Action, caller(r))})
+}
+
+// end closes the action named by {"lease": "..."}. Clients from before
+// leases send no body: the oldest action the same address opened is
+// closed, so an old runner keeps working while another run is open.
+func (s *Server) end(w http.ResponseWriter, r *http.Request) {
+	var b actionBody
+	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<16)).Decode(&b); err != nil && !errors.Is(err, io.EOF) {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if b.Lease != "" {
+		s.Inbox.End(b.Lease)
+	} else {
+		s.Inbox.endOldest(caller(r))
+	}
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (s *Server) end(w http.ResponseWriter, _ *http.Request) {
-	s.Inbox.End()
-	w.WriteHeader(http.StatusNoContent)
+// caller is the address a request came from, without the port: each
+// request may come over a new connection.
+func caller(r *http.Request) string {
+	if host, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
+		return host
+	}
+	return r.RemoteAddr
 }
 
 func duration(v string, def, limit time.Duration) time.Duration {

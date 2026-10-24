@@ -6,6 +6,8 @@ package client
 import (
 	"context"
 	"errors"
+	"io"
+	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -69,5 +71,54 @@ func TestAPIErrors(t *testing.T) {
 	_, err = New(srv.URL, "wrong").Health(context.Background())
 	if IsNotFound(err) || err == nil || !strings.Contains(err.Error(), "401 Unauthorized to GET /v1/health: missing or wrong") {
 		t.Errorf("wrong token: %v", err)
+	}
+}
+
+func TestLeases(t *testing.T) {
+	s := catcher.NewServer(catcher.NewInbox(10), catcher.Config{Version: "test"})
+	srv := httptest.NewServer(s)
+	defer srv.Close()
+	ctx := context.Background()
+	c := New(srv.URL, "")
+	a, err := c.BeginLease(ctx, "run-a", "signup")
+	if err != nil || a == "" {
+		t.Fatalf("begin: %q %v", a, err)
+	}
+	b, _ := c.BeginLease(ctx, "run-b", "signup")
+	if m := s.Inbox.Add(model.Message{}); m.Attribution != model.Ambiguous {
+		t.Errorf("two open: %+v", m)
+	}
+	if err := c.EndLease(ctx, b); err != nil {
+		t.Fatal(err)
+	}
+	if m := s.Inbox.Add(model.Message{}); m.Run != "run-a" {
+		t.Errorf("EndLease closed the wrong action: %+v", m)
+	}
+	if err := c.EndLease(ctx, a); err != nil {
+		t.Fatal(err)
+	}
+	if m := s.Inbox.Add(model.Message{}); m.Run != "" {
+		t.Errorf("all ended: %+v", m)
+	}
+}
+
+// An Echo from before leases answers begin with 204 and no body.
+func TestBeginLeaseOnOldEcho(t *testing.T) {
+	var ends []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		if r.URL.Path == "/v1/actions/end" {
+			ends = append(ends, string(body))
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer srv.Close()
+	c := New(srv.URL, "")
+	lease, err := c.BeginLease(context.Background(), "r1", "a")
+	if err != nil || lease != "" {
+		t.Fatalf("old Echo: %q %v", lease, err)
+	}
+	if err := c.EndLease(context.Background(), lease); err != nil || len(ends) != 1 || ends[0] != "" {
+		t.Errorf("EndLease without a lease ends the old way: %v %q", err, ends)
 	}
 }

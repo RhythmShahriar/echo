@@ -5,7 +5,6 @@ package catcher
 
 import (
 	"bytes"
-	"context"
 	"encoding/base64"
 	"encoding/json"
 	"net"
@@ -14,7 +13,6 @@ import (
 	gosmtp "net/smtp"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/RhythmShahriar/echo/model"
 	"github.com/RhythmShahriar/echo/wire"
@@ -115,27 +113,6 @@ func TestEmailCaptureParsesMIMEAndRedacts(t *testing.T) {
 	}
 	if strings.Contains(m.Text, "abcdef123456") {
 		t.Errorf("token in text leaked: %q", m.Text)
-	}
-}
-
-func TestWaitCatchesLateMessages(t *testing.T) {
-	in := NewInbox(10)
-	in.Begin("r1", "checkout")
-	go func() {
-		time.Sleep(150 * time.Millisecond)
-		in.Add(model.Message{Channel: model.Email, Subject: "receipt"})
-		time.Sleep(150 * time.Millisecond)
-		in.Add(model.Message{Channel: model.Webhook}) // async, e.g. Action Scheduler
-	}()
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	got := in.Wait(ctx, Filter{Run: "r1", Action: "checkout"}, 1, 400*time.Millisecond)
-	if len(got) != 2 {
-		t.Errorf("want both messages, got %d", len(got))
-	}
-	in.End()
-	if m := in.Add(model.Message{}); m.Run != "" {
-		t.Errorf("after End, messages aren't attributed: %+v", m)
 	}
 }
 

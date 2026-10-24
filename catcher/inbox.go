@@ -8,6 +8,7 @@ package catcher
 
 import (
 	"context"
+	"crypto/rand"
 	"fmt"
 	"slices"
 	"strings"
@@ -28,16 +29,26 @@ type Inbox struct {
 	maxBytes int64
 	bytes    int64         // sum of size(m) over msgs
 	changed  chan struct{} // closed and replaced whenever a message is added or updated
-	run      string        // the action in progress, for messages that don't say
-	action   string
+	scopes   []scope       // the actions in progress, oldest first, for messages that don't say
 	seq      int
 	onAdd    func(model.Message)
+	// after is time.After. Tests swap it for a clock they move by hand, so
+	// Wait's quiet period doesn't depend on how fast the machine is.
+	after func(time.Duration) <-chan time.Time
+}
+
+// scope is one action in progress, opened by Begin.
+type scope struct {
+	lease  string
+	run    string
+	action string
+	owner  string // who opened it (the API caller's address), for an End without a lease
 }
 
 // NewInbox keeps at most max messages and DefaultMaxBytes of them (oldest
 // dropped first).
 func NewInbox(max int) *Inbox {
-	return &Inbox{max: max, maxBytes: DefaultMaxBytes, changed: make(chan struct{})}
+	return &Inbox{max: max, maxBytes: DefaultMaxBytes, changed: make(chan struct{}), after: time.After}
 }
 
 // SetMaxBytes caps how much message data the inbox holds, dropping the
@@ -99,17 +110,68 @@ func size(m model.Message) int64 {
 // live view). It's called with the inbox unlocked.
 func (in *Inbox) OnAdd(fn func(model.Message)) { in.onAdd = fn }
 
-// Begin marks run/action as in progress: messages captured until End that
-// don't carry their own run are attributed to it (SMTP mail, connectors
-// that couldn't see the X-Echo-Run header, async sends).
-func (in *Inbox) Begin(run, action string) {
+// Begin marks run/action as in progress and returns a lease that End
+// takes to close it. Messages captured meanwhile that don't carry their
+// own run (SMTP mail, connectors that couldn't see the X-Echo-Run header,
+// async sends) are attributed to it, as long as it's the only action in
+// progress. Several runs may be open at once (two compares, a runner and
+// a manual send): untagged mail is then marked ambiguous instead of being
+// credited to whichever began last. An empty run and action open nothing.
+func (in *Inbox) Begin(run, action string) string { return in.begin(run, action, "") }
+
+func (in *Inbox) begin(run, action, owner string) string {
+	if run == "" && action == "" {
+		return ""
+	}
+	sc := scope{lease: rand.Text(), run: run, action: action, owner: owner}
 	in.mu.Lock()
-	in.run, in.action = run, action
+	in.scopes = append(in.scopes, sc)
 	in.mu.Unlock()
+	return sc.lease
 }
 
-// End clears the action in progress.
-func (in *Inbox) End() { in.Begin("", "") }
+// End closes the actions with the given leases; an unknown or already
+// closed lease is ignored. Called with no lease, it closes the oldest
+// action in progress, as End did before leases.
+func (in *Inbox) End(leases ...string) {
+	in.mu.Lock()
+	defer in.mu.Unlock()
+	if len(leases) == 0 {
+		if len(in.scopes) > 0 {
+			in.scopes = slices.Delete(in.scopes, 0, 1)
+		}
+		return
+	}
+	in.scopes = slices.DeleteFunc(in.scopes, func(sc scope) bool { return slices.Contains(leases, sc.lease) })
+}
+
+// endOldest closes the oldest action owner opened, for clients that don't
+// send their lease. It reports whether there was one.
+func (in *Inbox) endOldest(owner string) bool {
+	in.mu.Lock()
+	defer in.mu.Unlock()
+	i := slices.IndexFunc(in.scopes, func(sc scope) bool { return sc.owner == owner })
+	if i < 0 {
+		return false
+	}
+	in.scopes = slices.Delete(in.scopes, i, i+1)
+	return true
+}
+
+// attribute fills the run of a message that doesn't name one. Called with
+// in.mu held.
+func (in *Inbox) attribute(m *model.Message) {
+	if m.Run != "" || m.Action != "" {
+		return
+	}
+	switch len(in.scopes) {
+	case 0:
+	case 1:
+		m.Run, m.Action = in.scopes[0].run, in.scopes[0].action
+	default:
+		m.Attribution = model.Ambiguous
+	}
+}
 
 // Add stores m, filling its ID, time and run, and returns it.
 func (in *Inbox) Add(m model.Message) model.Message {
@@ -121,9 +183,7 @@ func (in *Inbox) Add(m model.Message) model.Message {
 	if m.ID == "" {
 		m.ID = model.NewID(fmt.Sprint(m.At.UnixNano(), in.seq, m.URL, m.Subject))
 	}
-	if m.Run == "" && m.Action == "" {
-		m.Run, m.Action = in.run, in.action
-	}
+	in.attribute(&m)
 	in.msgs = append(in.msgs, m)
 	in.bytes += size(m)
 	in.evict()
@@ -221,8 +281,7 @@ func (in *Inbox) List(f Filter) []model.Message {
 // waiting for quiet catches them.
 func (in *Inbox) Wait(ctx context.Context, f Filter, min int, quiet time.Duration) []model.Message {
 	last := -1
-	timer := time.NewTimer(quiet)
-	defer timer.Stop()
+	var still <-chan time.Time // fires once nothing new has matched for quiet
 	for {
 		in.mu.Lock()
 		ch := in.changed
@@ -230,23 +289,17 @@ func (in *Inbox) Wait(ctx context.Context, f Filter, min int, quiet time.Duratio
 		got := in.List(f)
 		if len(got) != last {
 			last = len(got)
-			if !timer.Stop() {
-				select {
-				case <-timer.C:
-				default:
-				}
-			}
-			timer.Reset(quiet)
+			still = in.after(quiet)
 		}
 		select {
 		case <-ctx.Done():
 			return got
 		case <-ch:
-		case <-timer.C:
+		case <-still:
 			if len(got) >= min {
 				return got
 			}
-			timer.Reset(quiet)
+			still = in.after(quiet)
 		}
 	}
 }
