@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/RhythmShahriar/echo/model"
+	xhtml "golang.org/x/net/html"
 )
 
 const tracker = `<p>Hi</p><img src="https://track.example/open.gif?u=42" width="1" height="1">`
@@ -78,6 +79,64 @@ func TestTrackerStaysInSandbox(t *testing.T) {
 	}
 	if !strings.Contains(out, `<button class="remote" type="button" data-remote>Load remote images</button><iframe`) {
 		t.Errorf("no remote images button before the preview")
+	}
+}
+
+// TestBlockingPolicyInOwnHead covers an email that brings its own
+// doctype and head. The policy is put before them, and a browser only
+// honors a CSP meta inside head: parsed the way a browser does, the meta
+// must land in the one head ahead of the email's own tags. The page-level
+// policy allows remote images (see reportCSP), so this meta is all that
+// keeps a tracking pixel from loading.
+func TestBlockingPolicyInOwnHead(t *testing.T) {
+	email := `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>Order</title>` +
+		`<style>p{color:red}</style></head><body>` + tracker + `</body></html>`
+	out := trackerReport(t, email)
+	frame := regexp.MustCompile(`srcdoc="([^"]*)"`).FindStringSubmatch(out)
+	if frame == nil {
+		t.Fatalf("no srcdoc preview:\n%s", out)
+	}
+	doc, err := xhtml.Parse(strings.NewReader(html.UnescapeString(frame[1])))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var heads []*xhtml.Node
+	var walk func(*xhtml.Node)
+	walk = func(n *xhtml.Node) {
+		if n.Type == xhtml.ElementNode && n.Data == "head" {
+			heads = append(heads, n)
+		}
+		for c := n.FirstChild; c != nil; c = c.NextSibling {
+			walk(c)
+		}
+	}
+	walk(doc)
+	if len(heads) != 1 {
+		t.Fatalf("want one head, got %d", len(heads))
+	}
+	first := heads[0].FirstChild
+	for first != nil && first.Type != xhtml.ElementNode {
+		first = first.NextSibling
+	}
+	if first == nil || first.Data != "meta" {
+		t.Fatalf("the head doesn't start with the policy meta")
+	}
+	attrs := map[string]string{}
+	for _, a := range first.Attr {
+		attrs[a.Key] = a.Val
+	}
+	if attrs["http-equiv"] != "Content-Security-Policy" || attrs["content"] != emailBlocked {
+		t.Errorf("the head's first element is %v, want the blocking policy", attrs)
+	}
+	// The email's own head content is still there after it.
+	var titles int
+	for c := heads[0].FirstChild; c != nil; c = c.NextSibling {
+		if c.Type == xhtml.ElementNode && c.Data == "title" {
+			titles++
+		}
+	}
+	if titles != 1 {
+		t.Errorf("the email's own title isn't in the head")
 	}
 }
 
