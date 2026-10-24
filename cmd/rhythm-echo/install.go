@@ -218,7 +218,10 @@ func sendmailLines(smtpAddr, bin, goos string, needsToken bool) string {
 		fmt.Fprintf(&b, "  Mail (scripts):   %s=%s in the environment of cron jobs and scripts\n", sendmail.EnvSMTP, smtpAddr)
 	}
 	if needsToken {
-		fmt.Fprintf(&b, "%sthe sink asks for Echo's token: set %s in the same environment\n", pad, sendmail.EnvToken)
+		// php-fpm clears the environment, so a variable set in the shell
+		// never reaches sendmail_path; the pool's env[] does.
+		fmt.Fprintf(&b, "%sthe sink asks for Echo's token: php-fpm clears the environment, so set\n", pad)
+		fmt.Fprintf(&b, "%senv[%s] = <token> in the php-fpm pool (and %s for cron and scripts)\n", pad, sendmail.EnvToken, sendmail.EnvToken)
 	}
 	return b.String()
 }

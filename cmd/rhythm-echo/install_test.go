@@ -253,7 +253,7 @@ func TestInstallGenericNamesAnOtherSink(t *testing.T) {
 		strings.Contains(spaced, "RHYTHM_ECHO_SMTP") {
 		t.Errorf("windows: a path with a space gets a hint:\n%s", spaced)
 	}
-	if remote := sendmailLines("10.0.0.5:1025", "/bin/rhythm-echo", "linux", true); !strings.Contains(remote, "set RHYTHM_ECHO_TOKEN") {
+	if remote := sendmailLines("10.0.0.5:1025", "/bin/rhythm-echo", "linux", true); !strings.Contains(remote, "env[RHYTHM_ECHO_TOKEN] = <token> in the php-fpm pool") {
 		t.Errorf("a sink beyond loopback asks for the token:\n%s", remote)
 	}
 }
