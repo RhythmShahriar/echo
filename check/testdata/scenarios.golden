@@ -1,0 +1,118 @@
+== s01 owner email (good)
+== s02 autoresponder (good)
+notice email/no-text [s02] Email has no plain-text part
+  detail: 
+  fix: Send a text alternative too; some clients and spam filters prefer it.
+  key: email/no-text|Email has no plain-text part
+== s03 owner SMS (good)
+== s04 Slack alert (good)
+== s05 GA4 purchase (good)
+== s06 Laravel order email (good)
+== s07 Resend welcome (good)
+== s07 Resend welcome (broken)
+error send/failed [s07b] Resend email fails
+  detail: resend: 401 invalid API key
+  fix: Check the sender's settings (API key, SMTP login, endpoint URL) and the provider's error above.
+  key: send/failed|Resend email fails
+== s09 owner notice to old agency (broken)
+== s10 merge tag (broken)
+error content/placeholder [s10] Unfilled placeholder {customer_first_name} in email
+  detail: The template still contains the placeholder, so readers see it instead of their data.
+  fix: Check the tag's spelling against the plugin's list of tags, and that the data it needs exists when the message is sent.
+  key: content/placeholder|Unfilled placeholder {customer_first_name} in email
+== s10 merge tag SMS (broken)
+error content/placeholder [s10s] Unfilled placeholder {first_name} in Twilio SMS
+  detail: The template still contains the placeholder, so readers see it instead of their data.
+  fix: Check the tag's spelling against the plugin's list of tags, and that the data it needs exists when the message is sent.
+  key: content/placeholder|Unfilled placeholder {first_name} in Twilio SMS
+== s11 PHP warning (broken)
+error content/php-error [s11] PHP error printed in email
+  detail: PHP Warning: Undefined variable $total (order.php line 42)
+  fix: Fix the code the error points at, and turn display_errors off so errors never reach messages.
+  key: content/php-error|PHP error printed in email
+== s12 staging link (broken)
+warning content/dev-link [s12] Email links to a development address (staging.shop.test)
+  detail: 
+  fix: Build links from the site's configured URL, not a hard-coded or local one.
+  key: content/dev-link|Email links to a development address (staging.shop.test)
+== s13 three-part SMS (broken)
+notice sms/parts [s13] SMS needs more than one part
+  detail: 3 parts (UCS-2); each part is charged
+  fix: Keep SMS under 160 GSM-7 characters (70 with emoji or other Unicode).
+  key: sms/parts|SMS needs more than one part
+== s13 long SMS (broken)
+warning sms/number [s13l] Message sent to a number that isn't in international format
+  detail: 07700900123
+  fix: Store and send numbers in E.164 form, e.g. +4915112345678.
+  key: sms/number|Message sent to a number that isn't in international format
+warning sms/parts [s13l] SMS needs more than 3 parts
+  detail: 4 parts (GSM-7); each part is charged
+  fix: Shorten the message, or avoid characters that force UCS-2 (emoji, curly quotes).
+  key: sms/parts|SMS needs more than 3 parts
+== s14 CRM webhook (broken)
+warning webhook/signature [s14] WooCommerce webhook is sent without a signature
+  detail: 
+  fix: Set a secret on the webhook (WooCommerce → Settings → Advanced → Webhooks) so receivers can verify it.
+  key: webhook/signature|WooCommerce webhook is sent without a signature
+== s15 Zapier hook (good)
+warning webhook/json [s15] Zapier webhook sends invalid JSON
+  detail: 
+  fix: The payload says it's JSON but doesn't parse; check how it's built (json_encode errors, stray output).
+  key: webhook/json|Zapier webhook sends invalid JSON
+== s16 CRM fails (broken)
+error send/failed [s16] Webhook to crm.shop.test fails (HTTP 500)
+  detail: Internal Server Error
+  fix: Check the sender's settings (API key, SMTP login, endpoint URL) and the provider's error above.
+  key: send/failed|Webhook to crm.shop.test fails (HTTP 500)
+warning content/secret [s16] Webhook to crm.shop.test carries a credential in its body
+  detail: 
+  fix: Don't put API keys or passwords in payloads; send them in an Authorization header, or not at all.
+  key: content/secret|Webhook to crm.shop.test carries a credential in its body
+== s17 From domain (broken)
+error content/placeholder [s17] Unfilled placeholder {{ order.id }} in email
+  detail: The template still contains the placeholder, so readers see it instead of their data.
+  fix: Check the tag's spelling against the plugin's list of tags, and that the data it needs exists when the message is sent.
+  key: content/placeholder|Unfilled placeholder {{ order.id }} in email
+warning content/encoding [s17] Garbled characters in email
+  detail: found "â€™": text was encoded twice
+  fix: Make sure the message is built and sent as UTF-8 (the mailer's charset and the template file's encoding).
+  key: content/encoding|Garbled characters in email
+warning email/no-subject [s17] Email has no subject
+  detail: 
+  fix: Give the notification a subject; many filters treat mail without one as spam.
+  key: email/no-subject|Email has no subject
+notice email/no-text [s17] Email has no plain-text part
+  detail: 
+  fix: Send a text alternative too; some clients and spam filters prefer it.
+  key: email/no-text|Email has no plain-text part
+notice email/from-domain [s17] Email is sent from another domain (mailer.example.org)
+  detail: the site is shop.example.com
+  fix: Send from an address on your own domain, or make sure its SPF, DKIM and DMARC cover this sender.
+  key: email/from-domain|Email is sent from another domain (mailer.example.org)
+== s19 real customer (broken)
+warning seal/real-recipient [s19] Email really sent to an address outside the allowlist
+  detail: jane.doe@gmail.com
+  fix: Run sealed on staging (rhythm echo up), or add test recipients to allow_recipients.
+  key: seal/real-recipient|Email really sent to an address outside the allowlist
+== s19 real customer allowed
+== s20 Stripe payment email (good)
+== s20 Stripe call (good)
+== big email (clipped)
+warning email/clipped [big] Email is too big for Gmail and gets clipped
+  detail: 104 KB of HTML; Gmail clips messages over 102 KB
+  fix: Trim inline CSS and markup, or move content behind links.
+  key: email/clipped|Email is too big for Gmail and gets clipped
+== WhatsApp to local number
+error content/placeholder [wa] Unfilled placeholder [your-name] in WhatsApp message
+  detail: The template still contains the placeholder, so readers see it instead of their data.
+  fix: Check the tag's spelling against the plugin's list of tags, and that the data it needs exists when the message is sent.
+  key: content/placeholder|Unfilled placeholder [your-name] in WhatsApp message
+warning sms/number [wa] Message sent to a number that isn't in international format
+  detail: 07700900123
+  fix: Store and send numbers in E.164 form, e.g. +4915112345678.
+  key: sms/number|Message sent to a number that isn't in international format
+== empty email
+error email/empty [empty] Email is empty
+  detail: 
+  fix: The template rendered nothing: check the notification's message setting and the variables it uses.
+  key: email/empty|Email is empty
