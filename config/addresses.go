@@ -24,8 +24,12 @@ import (
 // re-encoding the YAML would reformat a file the user wrote by hand. A key
 // that isn't there is added at the end; a missing file is created.
 // The result is loaded before it's written, so a rewrite that would break
-// the file fails instead.
+// the file fails instead. A symlinked config is rewritten where the link
+// points, so the link stays.
 func SetAddresses(path, listen, smtp, proxy string) error {
+	if real, err := filepath.EvalSymlinks(path); err == nil {
+		path = real
+	}
 	data, err := os.ReadFile(path) //nolint:gosec // the user's own project config
 	if err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return err
@@ -42,6 +46,15 @@ func SetAddresses(path, listen, smtp, proxy string) error {
 			return fmt.Errorf("%s: %w", path, err)
 		}
 	}
+	c, err := parse(data)
+	if err != nil {
+		return fmt.Errorf("rewriting %s would break it: %w", path, err)
+	}
+	for _, kv := range [][3]string{{"listen", listen, c.Listen}, {"smtp", smtp, c.SMTP}, {"proxy", proxy, c.Proxy}} {
+		if kv[1] != "" && kv[1] != kv[2] {
+			return fmt.Errorf("rewriting %s: %s reads back as %q, not %q", path, kv[0], kv[2], kv[1])
+		}
+	}
 	tmp, err := os.CreateTemp(filepath.Dir(path), ".config-*.yaml")
 	if err != nil {
 		return err
@@ -53,15 +66,6 @@ func SetAddresses(path, listen, smtp, proxy string) error {
 	}
 	if err := tmp.Close(); err != nil {
 		return err
-	}
-	c, err := Load(tmp.Name())
-	if err != nil {
-		return fmt.Errorf("rewriting %s would break it: %w", path, err)
-	}
-	for _, kv := range [][3]string{{"listen", listen, c.Listen}, {"smtp", smtp, c.SMTP}, {"proxy", proxy, c.Proxy}} {
-		if kv[1] != "" && kv[1] != kv[2] {
-			return fmt.Errorf("rewriting %s: %s reads back as %q, not %q", path, kv[0], kv[2], kv[1])
-		}
 	}
 	if err := os.Chmod(tmp.Name(), mode); err != nil {
 		return err

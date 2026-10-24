@@ -68,8 +68,13 @@ func TestSetAddressesQuotesAndRefuses(t *testing.T) {
 		}
 	}
 	p = write(t, "modee: seal\n") // already broken: refuse rather than write
-	if err := SetAddresses(p, "127.0.0.1:1", "", ""); err == nil || !strings.Contains(err.Error(), "modee") {
+	err := SetAddresses(p, "127.0.0.1:1", "", "")
+	if err == nil || !strings.Contains(err.Error(), "modee") {
 		t.Errorf("broken file: %v", err)
+	}
+	// The error names the user's file, not a temp file that's gone.
+	if err != nil && (strings.Contains(err.Error(), ".config-") || !strings.HasPrefix(err.Error(), "rewriting "+p+" would break it: ")) {
+		t.Errorf("error names the wrong file: %v", err)
 	}
 	if entries, _ := os.ReadDir(filepath.Dir(p)); len(entries) != 1 {
 		t.Errorf("temp files left: %v", entries)
@@ -93,6 +98,28 @@ func TestSetAddressesCreatesAndKeepsMode(t *testing.T) {
 	}
 	if st, _ := os.Stat(p); st.Mode().Perm() != 0o600 {
 		t.Errorf("mode = %v", st.Mode().Perm())
+	}
+}
+
+// A symlinked config is rewritten where it points; the link stays.
+func TestSetAddressesFollowsSymlink(t *testing.T) {
+	dir := t.TempDir()
+	real := filepath.Join(dir, "shared.yaml")
+	if err := os.WriteFile(real, []byte("listen: 127.0.0.1:8025\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(dir, "config.yaml")
+	if err := os.Symlink(real, link); err != nil {
+		t.Skip("no symlinks here:", err)
+	}
+	if err := SetAddresses(link, "127.0.0.1:18025", "", ""); err != nil {
+		t.Fatal(err)
+	}
+	if st, err := os.Lstat(link); err != nil || st.Mode()&os.ModeSymlink == 0 {
+		t.Errorf("the link was replaced: %v %v", st, err)
+	}
+	if got, _ := os.ReadFile(real); string(got) != "listen: 127.0.0.1:18025\n" {
+		t.Errorf("target = %q", got)
 	}
 }
 

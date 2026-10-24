@@ -307,19 +307,27 @@ func Load(path string) (Config, error) {
 	if err != nil {
 		return c, err
 	}
+	c, err = parse(data)
+	if err != nil {
+		return c, fmt.Errorf("%s: %w", path, err)
+	}
+	return c, nil
+}
+
+// parse decodes and validates a config file's content, for Load and for
+// SetAddresses, which checks a rewrite before it's written.
+func parse(data []byte) (Config, error) {
+	c := Default()
 	dec := yaml.NewDecoder(bytes.NewReader(data))
 	dec.KnownFields(true)
 	if err := dec.Decode(&c); err != nil && !errors.Is(err, io.EOF) {
-		return c, fmt.Errorf("%s: %w", path, err)
+		return c, err
 	}
 	var root yaml.Node
 	if yaml.Unmarshal(data, &root) == nil {
 		c.lines = index(&root)
 	}
-	if err := c.Validate(); err != nil {
-		return c, fmt.Errorf("%s: %w", path, err)
-	}
-	return c, nil
+	return c, c.Validate()
 }
 
 // Validate checks values a user could get wrong. When c came from Load,
