@@ -106,6 +106,9 @@ type Attachment struct {
 	Type   string `json:"type,omitempty"` // MIME type: "application/pdf"
 	Size   int64  `json:"size"`           // decoded bytes
 	SHA256 string `json:"sha256,omitempty"`
+	// Inline says the file is shown in the message body (a logo, a
+	// chart) rather than offered as a download.
+	Inline bool `json:"inline,omitempty"`
 }
 
 // Response is what the remote service (or Echo's fake) answered.

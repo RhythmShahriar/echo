@@ -83,9 +83,37 @@ type mailpitMessage struct {
 	Text        string              `json:"Text"`
 	HTML        string              `json:"HTML"`
 	Size        int                 `json:"Size"`
-	Inline      []any               `json:"Inline"`
-	Attachments []any               `json:"Attachments"`
+	Inline      []mailpitAttachment `json:"Inline"`
+	Attachments []mailpitAttachment `json:"Attachments"`
 	Headers     map[string][]string `json:"Headers"` // not in Mailpit's message; it serves them at …/headers
+}
+
+// mailpitAttachment is a file as Mailpit lists it. Echo keeps no content,
+// so there's no PartID to download it by.
+type mailpitAttachment struct {
+	FileName    string           `json:"FileName"`
+	ContentType string           `json:"ContentType"`
+	ContentID   string           `json:"ContentID"`
+	Size        int64            `json:"Size"`
+	Checksums   mailpitChecksums `json:"Checksums"`
+}
+
+type mailpitChecksums struct {
+	SHA256 string `json:"SHA256,omitempty"`
+}
+
+// files splits m's attachments into Mailpit's inline and attached lists.
+func files(m model.Message) (inline, attached []mailpitAttachment) {
+	inline, attached = []mailpitAttachment{}, []mailpitAttachment{}
+	for _, a := range m.Attachments {
+		f := mailpitAttachment{FileName: a.Name, ContentType: a.Type, Size: a.Size, Checksums: mailpitChecksums{SHA256: a.SHA256}}
+		if a.Inline {
+			inline = append(inline, f)
+		} else {
+			attached = append(attached, f)
+		}
+	}
+	return inline, attached
 }
 
 // emails returns the captured emails, newest first, as Mailpit lists them.
@@ -132,9 +160,10 @@ func (s *Server) mailpitMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	sum := summary(m)
+	inline, attached := files(m)
 	writeJSON(w, http.StatusOK, mailpitMessage{ID: sum.ID, MessageID: sum.MessageID, From: sum.From, To: sum.To, Cc: sum.Cc,
 		Bcc: sum.Bcc, ReplyTo: sum.ReplyTo, ReturnPath: strings.Trim(m.Headers["return-path"], "<> "), Subject: m.Subject,
-		Date: m.At, Tags: []string{}, Text: m.Text, HTML: m.HTML, Size: sum.Size, Inline: []any{}, Attachments: []any{},
+		Date: m.At, Tags: []string{}, Text: m.Text, HTML: m.HTML, Size: sum.Size, Inline: inline, Attachments: attached,
 		Headers: headers(m)})
 }
 
@@ -175,6 +204,8 @@ func summary(m model.Message) mailpitSummary {
 	if sum.Size == 0 {
 		sum.Size = len(m.Text) + len(m.HTML)
 	}
+	_, attached := files(m)
+	sum.Attachments = len(attached) // Mailpit counts only the files offered as downloads
 	if m.ReplyTo != "" {
 		sum.ReplyTo = addresses([]string{m.ReplyTo}, m.Headers["reply-to"])
 	} else {

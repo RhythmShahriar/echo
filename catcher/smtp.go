@@ -5,14 +5,18 @@ package catcher
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"io"
 	"mime"
 	"net"
 	netmail "net/mail"
+	"path"
 	"strings"
 	"time"
 
+	"github.com/emersion/go-message"
 	"github.com/emersion/go-message/mail"
 	"github.com/emersion/go-sasl"
 	"github.com/emersion/go-smtp"
@@ -106,8 +110,9 @@ func mailer(h map[string]string) string {
 	return m
 }
 
-// ParseMIME reads an RFC 5322 message: headers, addresses, subject and the
-// first text and HTML parts. Attachments are skipped.
+// ParseMIME reads an RFC 5322 message: headers, addresses, subject, the
+// first text and HTML parts, and the name, type, decoded size and SHA-256
+// of every attachment and named inline part (never their content).
 func ParseMIME(raw []byte) (model.Message, error) {
 	var m model.Message
 	r, err := mail.CreateReader(bytes.NewReader(raw))
@@ -136,26 +141,75 @@ func ParseMIME(raw []byte) (model.Message, error) {
 		if errors.Is(err, io.EOF) {
 			break
 		}
+		// A part in a charset or encoding Go doesn't know still reads.
+		if err != nil && !message.IsUnknownCharset(err) && !message.IsUnknownEncoding(err) {
+			return m, err
+		}
+		h := partHeader(p.Header)
+		ct, params, _ := h.ContentType()
+		disp, dparams, _ := h.ContentDisposition()
+		name := dparams["filename"] // RFC 2231 and RFC 2047 names come decoded
+		if name == "" {
+			name = params["name"]
+		}
+		if name == "" && disp != "attachment" && (ct == "" || strings.HasPrefix(ct, "text/")) {
+			b, err := io.ReadAll(io.LimitReader(p.Body, maxMail))
+			if err != nil {
+				return m, err
+			}
+			switch {
+			case ct == "text/html" && m.HTML == "":
+				m.HTML = string(b)
+			case (ct == "text/plain" || ct == "") && m.Text == "":
+				m.Text = string(b)
+			}
+			continue
+		}
+		a, err := attachment(p.Body, name, ct)
 		if err != nil {
 			return m, err
 		}
-		ih, ok := p.Header.(*mail.InlineHeader)
-		if !ok {
-			continue // attachment
-		}
-		ct, _, _ := mime.ParseMediaType(ih.Get("Content-Type"))
-		b, err := io.ReadAll(io.LimitReader(p.Body, maxMail))
-		if err != nil {
-			return m, err
-		}
-		switch {
-		case ct == "text/html" && m.HTML == "":
-			m.HTML = string(b)
-		case (ct == "text/plain" || ct == "") && m.Text == "":
-			m.Text = string(b)
-		}
+		// Shown in the body: said so, or an unnamed part the HTML refers
+		// to by its Content-ID (multipart/related).
+		a.Inline = disp == "inline" || disp == "" && h.Get("Content-Id") != ""
+		m.Attachments = append(m.Attachments, a)
 	}
 	return m, nil
+}
+
+// partHeader returns the header of a mail part, whichever kind it is.
+func partHeader(h mail.PartHeader) message.Header {
+	switch h := h.(type) {
+	case *mail.InlineHeader:
+		return h.Header
+	case *mail.AttachmentHeader:
+		return h.Header
+	}
+	return message.Header{}
+}
+
+// attachment reads body (decoded) for its size and hash.
+func attachment(body io.Reader, name, typ string) (model.Attachment, error) {
+	sum := sha256.New()
+	n, err := io.Copy(sum, io.LimitReader(body, maxMail))
+	if err != nil {
+		return model.Attachment{}, err
+	}
+	return model.Attachment{Name: name, Type: typ, Size: n, SHA256: hex.EncodeToString(sum.Sum(nil))}, nil
+}
+
+// headerAttachments reads the X-Echo-Attachments header older WordPress
+// connectors send in place of the files: their names, comma-separated.
+// Only the names are known.
+func headerAttachments(v string) []model.Attachment {
+	var out []model.Attachment
+	for name := range strings.SplitSeq(v, ",") {
+		if name = strings.TrimSpace(name); name != "" {
+			typ, _, _ := mime.ParseMediaType(mime.TypeByExtension(path.Ext(name)))
+			out = append(out, model.Attachment{Name: name, Type: typ})
+		}
+	}
+	return out
 }
 
 func addrs(h mail.Header, key string) []string {

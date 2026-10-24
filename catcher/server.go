@@ -150,11 +150,12 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
 // capabilities are the API features this catcher has beyond wire version
 // 1, so a client can tell a newer Echo from an older one.
 var capabilities = []string{
-	"leases", // begin answers a lease that end takes
-	"issues", // every message carries the checks' findings
-	"late",   // untagged mail dated before the open action is credited to the one before
-	"search", // /v1/messages takes q, limit and before, and since as a duration
-	"events", // GET /v1/events streams changes; DELETE /v1/messages/{id}
+	"leases",      // begin answers a lease that end takes
+	"issues",      // every message carries the checks' findings
+	"late",        // untagged mail dated before the open action is credited to the one before
+	"search",      // /v1/messages takes q, limit and before, and since as a duration
+	"events",      // GET /v1/events streams changes; DELETE /v1/messages/{id}
+	"attachments", // emails list their files: name, type, size and sha256
 }
 
 // health is what GET /v1/health answers, in this order.
@@ -343,12 +344,20 @@ func (s *Server) email(e *wire.Email) model.Message {
 	m := model.Message{Channel: model.Email, Provider: "", From: e.From, To: e.To, CC: e.CC, BCC: e.BCC,
 		ReplyTo: e.ReplyTo, Subject: e.Subject, Text: e.Text, HTML: e.HTML, Headers: lower(e.Headers)}
 	if e.Raw != "" {
-		if parsed, err := ParseMIME([]byte(e.Raw)); err == nil {
+		// A message cut short or otherwise broken still gives what was
+		// read before the error.
+		if parsed, err := ParseMIME([]byte(e.Raw)); err == nil || parsed.Headers != nil {
 			fillEmpty(&m, parsed)
 		}
 		// Decoded first: a reset link in a base64 part is invisible to
 		// every rule.
 		m.Body = s.fit(&m, e.Raw, mask.MIME)
+	}
+	if m.Attachments == nil {
+		m.Attachments = headerAttachments(m.Headers["x-echo-attachments"])
+	}
+	for i := range m.Attachments { // a file name is the sender's text too
+		m.Attachments[i].Name = s.fitAny(m.Attachments[i].Name, mask.Text)
 	}
 	m.Headers = s.headers(m.Headers)
 	s.maskFields(&m)
@@ -410,6 +419,9 @@ func fillEmpty(m *model.Message, p model.Message) {
 	}
 	if m.ReplyTo == "" {
 		m.ReplyTo = p.ReplyTo
+	}
+	if len(m.Attachments) == 0 {
+		m.Attachments = p.Attachments
 	}
 	if len(m.Headers) == 0 {
 		m.Headers = p.Headers
