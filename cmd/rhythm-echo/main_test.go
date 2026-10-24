@@ -546,3 +546,28 @@ func TestListSince(t *testing.T) {
 		t.Errorf("negative --since: %d %q", code, errOut)
 	}
 }
+
+// A token on the command line shows in ps, so the flag earns a warning;
+// the environment variable and -q do not.
+func TestTokenFlagWarns(t *testing.T) {
+	t.Chdir(t.TempDir())
+	t.Setenv("RHYTHM_ECHO_TOKEN", "")
+	if _, _, errOut := runCLI(t, "report", "--token", "s3cret"); !strings.Contains(errOut, tokenFlagWarning) {
+		t.Errorf("--token: no warning in %q", errOut)
+	}
+	if _, _, errOut := runCLI(t, "report", "--token", "s3cret", "-q"); strings.Contains(errOut, "RHYTHM_ECHO_TOKEN") {
+		t.Errorf("-q must hide the warning: %q", errOut)
+	}
+	if _, _, errOut := runCLI(t, "install", "laravel", "--token", "s3cret"); !strings.Contains(errOut, tokenFlagWarning) {
+		t.Errorf("install --token: no warning in %q", errOut)
+	}
+	t.Setenv("RHYTHM_ECHO_TOKEN", "s3cret")
+	for _, args := range [][]string{{"report"}, {"install", "laravel"}} {
+		if _, _, errOut := runCLI(t, args...); strings.Contains(errOut, "RHYTHM_ECHO_TOKEN") {
+			t.Errorf("%v with the env var: unexpected warning %q", args, errOut)
+		}
+	}
+	if code, out, _ := runCLI(t, "help"); code != 0 || !strings.Contains(out, "Prefer RHYTHM_ECHO_TOKEN") {
+		t.Error("help must steer --token to RHYTHM_ECHO_TOKEN")
+	}
+}

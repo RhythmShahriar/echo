@@ -52,6 +52,7 @@ func command(fn func(*session) int, args []string, stdout, stderr io.Writer) int
 		fmt.Fprintln(stderr, "rhythm echo:", err)
 		return exitUsage
 	}
+	warnTokenFlag(stderr, p.o.token, p.o.quiet)
 	s := p.begin(stdout, stderr)
 	defer s.stop()
 	return fn(s)

@@ -71,6 +71,8 @@ func cmdInstall(args []string, stdout, stderr io.Writer) int {
 		return exitUsage
 	}
 	echoURL := cmp.Or(*url, os.Getenv("RHYTHM_ECHO_URL"), "http://"+cfg.Listen)
+	// install has no -q: what it prints is the result.
+	warnTokenFlag(stderr, *token, false)
 	tok := cmp.Or(*token, os.Getenv("RHYTHM_ECHO_TOKEN"))
 	proxyAddr := cfg.Proxy
 	if proxyAddr == "" || proxyAddr == "off" {

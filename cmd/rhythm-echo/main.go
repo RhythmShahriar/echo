@@ -126,13 +126,14 @@ Catcher (up):
       --proxy <addr>         also run an HTTP(S) proxy, e.g. 127.0.0.1:8026
       --mitm                 decrypt HTTPS in the proxy (trust the CA: rhythm echo ca)
       --allow <hosts>        hosts reachable even when sealed, e.g. api.stripe.com
-      --token <t>            require this token (RHYTHM_ECHO_TOKEN). Needed when the API,
-                             SMTP sink or proxy listens beyond loopback; the SMTP sink
-                             then asks for it as the password
+      --token <t>            require this token. Needed when the API, SMTP sink or proxy
+                             listens beyond loopback; the SMTP sink then asks for it as
+                             the password. Prefer RHYTHM_ECHO_TOKEN: other users can
+                             read a flag in ps
 
 Install (install <stack>):
       --url <url>            Echo's API as the site reaches it (default from .echo/config.yaml)
-      --token <t>            the token Echo was started with
+      --token <t>            the token Echo was started with (prefer RHYTHM_ECHO_TOKEN)
       --mode <m>             wordpress: seal or observe, what to do when Echo is down
       --force                wordpress: run even where WordPress says production
       --proxy <url>          wordpress: send raw cURL through Echo's proxy
