@@ -221,7 +221,7 @@ func doHTTP(ctx context.Context, o Options, a config.Action, runValue string, fa
 		req.Header.Set(k, fake.expand(v))
 	}
 	req.Header.Set(wire.RunHeader, runValue)
-	req.AddCookie(&http.Cookie{Name: wire.RunHeader, Value: url.QueryEscape(runValue)})
+	req.AddCookie(&http.Cookie{Name: wire.RunHeader, Value: url.QueryEscape(runValue)}) //nolint:gosec // a request cookie we send, not one we set in a browser
 	resp, err := o.HTTP.Do(req)
 	if err != nil {
 		return err
