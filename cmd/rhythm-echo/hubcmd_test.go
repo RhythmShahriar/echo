@@ -35,6 +35,7 @@ func TestMCPHubAndScheduleAreCommands(t *testing.T) {
 		{"conformance", "Usage:\n  rhythm echo conformance [flags]"},
 		{"init", "Usage:\n  rhythm echo init [--stack s] [--force]"},
 		{"ca", "Usage:\n  rhythm echo ca [--pem | --untrust]"},
+		{"sendmail", "Usage:\n  rhythm echo sendmail [-t]"},
 	} {
 		// Every command's help reads alike: what it does, Usage, its
 		// flags, the exit codes and the pointer to the rest.
@@ -43,6 +44,20 @@ func TestMCPHubAndScheduleAreCommands(t *testing.T) {
 			!strings.Contains(out, "\nFlags:\n") || !strings.Contains(out, "\nExit codes") || !strings.HasSuffix(out, "\nrhythm echo help lists every command.\n") {
 			t.Errorf("help %s: %d\n%s", c.name, code, out)
 		}
+	}
+	// sendmail's help says where the message goes, in order, and the
+	// variables it reads; --help prints it too.
+	code, out, _ := runCLI(t, "sendmail", "--help")
+	if code != exitOK {
+		t.Errorf("sendmail --help: %d\n%s", code, out)
+	}
+	for _, want := range []string{"RHYTHM_ECHO_SMTP", "RHYTHM_ECHO_URL", "RHYTHM_ECHO_TOKEN", "RHYTHM_ECHO_RUN", "RHYTHM_ECHO_FORCE", "127.0.0.1:1025", "the first that is set"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("sendmail --help lacks %q:\n%s", want, out)
+		}
+	}
+	if code, _, errOut := runCLI(t, "sendmail", "--bogus"); code != 64 || !strings.Contains(errOut, "unknown option --bogus") {
+		t.Errorf("sendmail --bogus: %d %s", code, errOut)
 	}
 	// Their flag errors read like the other commands', without the help.
 	for _, c := range []struct{ args, want string }{

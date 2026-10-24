@@ -209,6 +209,10 @@ func removeDir(dir, goos string) string {
 
 // cmdSendmail is a sendmail-compatible entry for PHP's sendmail_path and
 // other tools. Its flags are sendmail's, so they bypass Echo's parser.
-func cmdSendmail(args []string, stdin io.Reader, stderr io.Writer) int {
+func cmdSendmail(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
+	if sendmail.Help(args) {
+		fmt.Fprint(stdout, sendmail.Usage)
+		return exitOK
+	}
 	return sendmail.Main(args, stdin, stderr)
 }

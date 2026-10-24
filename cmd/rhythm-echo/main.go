@@ -31,6 +31,7 @@ import (
 	"github.com/RhythmShahriar/echo/hub"
 	"github.com/RhythmShahriar/echo/mcp"
 	"github.com/RhythmShahriar/echo/runner"
+	"github.com/RhythmShahriar/echo/sendmail"
 	"github.com/RhythmShahriar/rhythm/kit"
 )
 
@@ -127,7 +128,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	case "ca":
 		return cmdCA(args[1:], stdout, stderr)
 	case "sendmail":
-		return cmdSendmail(args[1:], stdin, stderr)
+		return cmdSendmail(args[1:], stdin, stdout, stderr)
 	}
 	return cmdUpdate(args[1:], stdout, stderr)
 }
@@ -139,10 +140,6 @@ func help(name string, stdin io.Reader, stdout, stderr io.Writer) int {
 		return unknownCommand(name, stderr)
 	}
 	if c.own {
-		if c.name == "sendmail" {
-			fmt.Fprintf(stdout, "rhythm echo sendmail: %s\n\nUsage:\n  rhythm echo %s\n", c.about, c.use)
-			return exitOK
-		}
 		if u, ok := ownUsage[c.name]; ok {
 			fmt.Fprint(stdout, u)
 			return exitOK
@@ -155,7 +152,8 @@ func help(name string, stdin io.Reader, stdout, stderr io.Writer) int {
 
 // ownUsage is the help of the commands another package runs, which
 // print it on stderr for --help; help prints it on stdout.
-var ownUsage = map[string]string{"mcp": mcp.Usage, "hub": hub.Usage, "schedule": hub.ScheduleUsage, "conformance": conformance.Usage}
+var ownUsage = map[string]string{"mcp": mcp.Usage, "hub": hub.Usage, "schedule": hub.ScheduleUsage, "conformance": conformance.Usage,
+	"sendmail": sendmail.Usage}
 
 // ownReplayer is the replayer mcp and schedule run replay actions with:
 // the one snapshot and compare use, for the project in dir with its

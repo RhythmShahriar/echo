@@ -60,6 +60,54 @@ const (
 
 const maxMessage = 25 << 20
 
+// Usage is the help for rhythm echo sendmail, which --help prints.
+const Usage = `rhythm echo sendmail: sendmail stand-in for sendmail_path; reads the message on stdin
+
+Usage:
+  rhythm echo sendmail [-t] [-i] [-f from] [rcpt…]
+
+Point sendmail_path (PHP's mail()), cron or any tool that calls sendmail
+here: the message goes to Echo and is never delivered for real.
+
+Flags:
+  -t                         take the recipients from To, Cc and Bcc
+  -i, -oi                    a line holding only "." doesn't end the message
+  -f <from>, -r <from>       the envelope sender
+  -F <name>                  the sender's full name
+                             sendmail's other options are accepted and ignored
+
+Where the message goes, the first that is set:
+  RHYTHM_ECHO_SMTP           host:port of Echo's SMTP sink
+  RHYTHM_ECHO_URL            Echo's API: the sink its /v1/health reports, else the API
+  smtp:                      in the nearest .echo/config.yaml (its listen: when smtp: off)
+  127.0.0.1:1025             otherwise
+
+Environment:
+  RHYTHM_ECHO_TOKEN          sent to log in to the sink, or as X-Echo-Token to the API
+  RHYTHM_ECHO_RUN            "<run>/<action>", added as X-Echo-Run to a message without
+                             one; Echo sets it on the commands its actions run
+  RHYTHM_ECHO_FORCE          1 runs it even where WP_ENVIRONMENT_TYPE, APP_ENV,
+                             VERCEL_ENV or NODE_ENV says production
+
+Exit codes (sysexits, as sendmail's): 0 sent, 64 usage error, 65 a bad message,
+69 Echo unreachable, 75 try again, 78 refused in production.
+rhythm echo help lists every command.
+`
+
+// Help reports whether args ask for the help: --help, before any
+// recipient.
+func Help(args []string) bool {
+	for _, a := range args {
+		if a == "--help" {
+			return true
+		}
+		if a == "--" || !strings.HasPrefix(a, "-") {
+			return false
+		}
+	}
+	return false
+}
+
 // options are the sendmail flags the shim understands.
 type options struct {
 	extract    bool // -t: recipients from To, Cc and Bcc

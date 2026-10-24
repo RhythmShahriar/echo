@@ -206,3 +206,11 @@ func TestParseArgs(t *testing.T) {
 		t.Errorf("%+v %v", o, err)
 	}
 }
+
+func TestHelp(t *testing.T) {
+	for args, want := range map[string]bool{"--help": true, "-t --help": true, "ann@shop.test --help": false, "-- --help": false, "-t": false} {
+		if got := Help(strings.Fields(args)); got != want {
+			t.Errorf("Help(%q) = %v", args, got)
+		}
+	}
+}
