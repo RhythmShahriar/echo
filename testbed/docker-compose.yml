@@ -49,6 +49,8 @@ services:
       - "127.0.0.1:18853:18853" # plain PHP
       - "127.0.0.1:18854:18854" # Mailpit web UI and API
       - "127.0.0.1:18855:18855" # Mailpit SMTP (the benchmark's Mailpit column)
+      - "127.0.0.1:18857:18857" # Buggregator web UI and API (TOOLS=buggregator)
+      - "127.0.0.1:18858:18858" # Buggregator SMTP (the benchmark's Buggregator column)
     healthcheck:
       test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:18899/"]
       interval: 2s
@@ -77,6 +79,10 @@ services:
   wp:
     build:
       context: ./wp
+      args:
+        # make up TOOLS=staging-shield sets it: the Staging Shield plugin
+        # from wordpress.org, baked in inactive for the benchmark's column.
+        STAGING_SHIELD: ${STAGING_SHIELD:-}
     image: echo-testbed-wp:6.8.3
     networks: [sealed]
     depends_on:
@@ -176,6 +182,13 @@ services:
     environment:
       MP_DISABLE_VERSION_CHECK: "true"
       MP_MAX_MESSAGES: "5000"
+
+  # Buggregator, the benchmark's Buggregator column: only with
+  # make up TOOLS=buggregator (the compose profile of the same name).
+  buggregator:
+    image: ghcr.io/buggregator/server:${BUGGREGATOR_VERSION:-latest}
+    profiles: [buggregator]
+    networks: [sealed]
 
 volumes:
   wp: {}

@@ -1,7 +1,14 @@
 # Echo testbed: 20 scenarios of a site that stops saying what it should, on
-# WordPress, Laravel, Next.js and plain PHP, behind a network with no way out.
+# WordPress, Laravel, Next.js and plain PHP, behind a network with no way out,
+# and 15 of the environment around Echo going wrong.
 # Needs Docker with Compose v2 and Go (to build Echo from this checkout).
-# Ports: sites 18850-18855 on 127.0.0.1, Echo 18860-18862 (on the host).
+# Ports: sites 18850-18858 on 127.0.0.1, Echo 18860-18862 (on the host),
+# the local environment probes 23200-23239.
+#
+# TOOLS names what the benchmark judges besides Echo, as
+# make up benchmark TOOLS="echo mailpit buggregator staging-shield":
+# buggregator starts Buggregator, staging-shield bakes the Staging Shield
+# plugin into the WordPress image (downloaded from wordpress.org).
 
 COMPOSE  := docker compose -f docker-compose.yml
 GO       ?= $(shell command -v go 2>/dev/null || echo /usr/local/go/bin/go)
@@ -15,7 +22,13 @@ export TESTBED_UID := $(shell id -u)
 export TESTBED_GID := $(shell id -g)
 export TESTBED_TOKEN := $(TOKEN)
 
-.PHONY: up down reset good broken status logs wp echo binaries ca connector apps
+TOOLS ?= echo mailpit
+export COMPOSE_PROFILES := $(if $(filter buggregator,$(TOOLS)),buggregator)
+export STAGING_SHIELD ?= $(if $(filter staging-shield,$(TOOLS)),latest)
+WORK  := bench/work
+VHS   ?= vhs
+
+.PHONY: up down reset good broken status logs wp echo binaries ca connector apps benchmark reproduce demo
 
 up: binaries ca connector apps ## build, start and seed everything (WordPress is fresh every time)
 	@mkdir -p state
@@ -34,7 +47,7 @@ up: binaries ca connector apps ## build, start and seed everything (WordPress is
 	@./toggle.sh status
 
 down: ## stop and delete everything (containers, database, WordPress volume); built apps stay in runtime/
-	$(COMPOSE) down -v --remove-orphans
+	COMPOSE_PROFILES=buggregator $(COMPOSE) down -v --remove-orphans
 
 reset: down up ## start over from a freshly seeded site
 
@@ -55,6 +68,17 @@ wp: ## run WP-CLI, e.g. make wp ARGS="option get admin_email"
 
 echo: binaries ca ## run Echo in the foreground the way the benchmark does (sealed; OBSERVE=1 for observe mode)
 	$(ECHO_ENV) $(ECHO) up --config .echo/config.yaml --token $(TOKEN) $(if $(OBSERVE),--observe,--seal)
+
+benchmark: binaries ## run every scenario for Echo and TOOLS; writes ../docs/benchmark.md and bench/work/results.json
+	cd .. && GOWORK=off $(GO) run -tags testbed ./testbed/bench -bin testbed/$(ECHO) -tools "$(TOOLS)"
+
+reproduce: binaries ## run the benchmark twice and fail if any outcome differs
+	cd .. && GOWORK=off $(GO) run -tags testbed ./testbed/bench -bin testbed/$(ECHO) -tools "$(TOOLS)" -work testbed/$(WORK)/first -out testbed/$(WORK)/first.md
+	cd .. && GOWORK=off $(GO) run -tags testbed ./testbed/bench -bin testbed/$(ECHO) -tools "$(TOOLS)" -work testbed/$(WORK)/second -out testbed/$(WORK)/second.md
+	cd .. && GOWORK=off $(GO) run -tags testbed ./testbed/bench -diff testbed/$(WORK)/first/results.json testbed/$(WORK)/second/results.json
+
+demo: binaries ca ## render the 60-second demo (demo/demo.tape) to ../docs/assets/demo.gif; needs make up and VHS (charmbracelet/vhs)
+	mkdir -p ../docs/assets && cd demo && $(VHS) demo.tape
 
 # Echo from this checkout: one binary for the host (the CLI, the benchmark's
 # default -bin is ../bin/rhythm-echo) and a static Linux one for the
