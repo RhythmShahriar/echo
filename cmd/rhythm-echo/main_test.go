@@ -1842,7 +1842,7 @@ func TestQuietAndTimeoutFlags(t *testing.T) {
 	}
 
 	// Two emails are expected and one comes: only the timeout ends the
-	// wait for the second, and the runner reports the expectation unmet.
+	// wait for the second; the runner then reports the expectation unmet.
 	// The config's timeout is a minute.
 	writeConfig(t, "site: "+shop.URL+"\nquiet: 200ms\ntimeout: 1m\n"+action+"    expect: {email: 2}\n")
 	start = time.Now()
@@ -2084,7 +2084,7 @@ func TestLatestPrintsTheCodeOrLink(t *testing.T) {
 }
 
 // TestLatestAgainstTheRealCatcher: latest reads the code and the link
-// from Echo's own /v1/messages/latest, and its "nothing came" answer.
+// from Echo's own /v1/messages/latest, as well as its "nothing came" answer.
 func TestLatestAgainstTheRealCatcher(t *testing.T) {
 	t.Chdir(t.TempDir())
 	echo := fixtureServer(t, 21300, catcher.NewServer(catcher.NewInbox(10), catcher.Config{Version: "test"}))
