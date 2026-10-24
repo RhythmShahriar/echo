@@ -63,7 +63,14 @@ type Config struct {
 	WriteTokens map[string]string
 	ReadToken   string
 	Listen      string // the address Echo listens on; its host is accepted in Host besides loopback names
-	MaxBody     int    // bytes of body kept per message; default 256 KiB
+	// Hosts are more names accepted in Host without a token (up
+	// --hostname), such as "*.ddev.site" for DDEV's router.
+	Hosts []string
+	// PrivateNetwork is up --private-network without a token: a private
+	// peer may also name Echo by an IP address or a one-label name
+	// (ProtectOptions.PrivateNetwork).
+	PrivateNetwork bool
+	MaxBody        int // bytes of body kept per message; default 256 KiB
 	// Site is the site being tested (a URL or host): links to it aren't
 	// development links. AllowRecipients are the address and number globs
 	// that may really be messaged. Both feed the checks run on every
@@ -146,7 +153,8 @@ func NewServer(inbox *Inbox, cfg Config) *Server {
 	for t := range cfg.WriteTokens {
 		tokens = append(tokens, t)
 	}
-	s.handler = Protect(http.HandlerFunc(s.serve), ProtectOptions{Token: cfg.Token, Tokens: tokens, Hosts: listenHosts(cfg.Listen)})
+	s.handler = Protect(http.HandlerFunc(s.serve), ProtectOptions{Token: cfg.Token, Tokens: tokens,
+		Hosts: append(listenHosts(cfg.Listen), cfg.Hosts...), PrivateNetwork: cfg.PrivateNetwork})
 	return s
 }
 

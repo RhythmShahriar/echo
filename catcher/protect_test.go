@@ -112,3 +112,37 @@ func TestProtectOverRealHTTP(t *testing.T) {
 		t.Errorf("text/plain capture: %s", resp.Status)
 	}
 }
+
+// TestHostAllowedPrivateNetwork: under --private-network a private peer
+// may name Echo by a service name or an IP address; a domain name only
+// when Hosts lists it, and a public peer gets nothing more than before.
+func TestHostAllowedPrivateNetwork(t *testing.T) {
+	hosts := []string{"*.ddev.site", "echo.myapp.lndo.site"}
+	for _, c := range []struct {
+		host, peer string
+		private    bool
+		want       bool
+	}{
+		{"echo:8025", "172.18.0.4:40000", true, true},
+		{"mailpit", "10.0.0.7:1", true, true},
+		{"172.18.0.2:8025", "172.18.0.4:40000", true, true},
+		{"[fd00::2]:8025", "[fd00::9]:1", true, true},
+		{"echo:8025", "100.64.1.2:1", true, true},
+		{"echo:8025", "127.0.0.1:1", true, true},
+		{"echo:8025", "203.0.113.9:1", true, false}, // a public peer
+		{"echo:8025", "172.18.0.4:40000", false, false},
+		{"0.0.0.0:8025", "172.18.0.4:40000", true, false},
+		{"rebind.attacker.example", "172.18.0.1:1", true, false},
+		{"shop.ddev.site:8026", "203.0.113.9:1", false, true}, // listed: any peer
+		{"ddev.site", "172.18.0.1:1", false, false},
+		{"evilddev.site", "172.18.0.1:1", false, false},
+		{"ECHO.MyApp.lndo.site", "172.18.0.1:1", false, true},
+		{"localhost:8025", "203.0.113.9:1", false, true},
+	} {
+		r := httptest.NewRequest("GET", "/v1/health", nil)
+		r.Host, r.RemoteAddr = c.host, c.peer
+		if got := HostAllowed(r, hosts, c.private); got != c.want {
+			t.Errorf("Host %s from %s (private %v): %v, want %v", c.host, c.peer, c.private, got, c.want)
+		}
+	}
+}

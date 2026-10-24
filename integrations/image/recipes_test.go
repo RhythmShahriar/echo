@@ -135,7 +135,7 @@ func TestDDEVAddon(t *testing.T) {
 	}
 	readYAML(t, "integrations/ddev/docker-compose.echo.yaml", &compose)
 	env := strings.Join(compose.Services["echo"].Environment, "\n")
-	for _, want := range []string{"HTTP_EXPOSE=8025:8025", "HTTPS_EXPOSE=8026:8025"} {
+	for _, want := range []string{"HTTP_EXPOSE=8025:8025", "HTTPS_EXPOSE=8026:8025", "RHYTHM_ECHO_HOSTNAMES=$DDEV_HOSTNAME"} {
 		if !strings.Contains(env, want) {
 			t.Errorf("the echo service has no %s", want)
 		}

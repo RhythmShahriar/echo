@@ -50,6 +50,12 @@ type Options struct {
 	// loopback names are served, so a DNS-rebinding page can't read the
 	// inbox. up sets it when a token guards the listener.
 	AnyHost bool
+	// Hosts and PrivateNetwork widen the Host check as they do the API's
+	// (catcher.HostAllowed): the names up --hostname gives and, under
+	// --private-network, an IP address or a one-label name from a
+	// private peer.
+	Hosts          []string
+	PrivateNetwork bool
 }
 
 // UI serves Echo Inbox. Feed it every new or updated message with Notify
@@ -112,7 +118,7 @@ func (u *UI) Protect(next http.Handler) http.Handler {
 // allowed reports whether r may go on. It answers r with 403 when its
 // Host isn't this machine (unless AnyHost) or when another page sent it.
 func (u *UI) allowed(w http.ResponseWriter, r *http.Request) bool {
-	if !u.o.AnyHost && !loopbackHost(r.Host) {
+	if !u.o.AnyHost && !loopbackHost(r.Host) && !catcher.HostAllowed(r, u.o.Hosts, u.o.PrivateNetwork) {
 		http.Error(w, "Echo Inbox answers only to localhost", http.StatusForbidden)
 		return false
 	}

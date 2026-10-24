@@ -230,6 +230,8 @@ Catcher (up):
                              read a flag in ps
       --private-network      listen beyond loopback without a token, on private (RFC 1918)
                              and container networks only; prints a warning
+      --hostname <name>      also answer to this name without a token, e.g. *.ddev.site
+                             (RHYTHM_ECHO_HOSTNAMES)
       --free-ports           when 8025 or 1025 is taken (Mailpit in DDEV, Lando, Sail), move
                              to the next free pair and save it to the config without asking
       --login <user:pass>    let viewers sign in to Echo Inbox, read only, for 8 hours

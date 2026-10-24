@@ -24,8 +24,16 @@ type ProtectOptions struct {
 	// tokens); empty ones are ignored.
 	Tokens []string
 	// Hosts are host names accepted besides loopback ones: the host part
-	// of the address Echo listens on ("echo" in Docker Compose).
+	// of the address Echo listens on and the names up --hostname gives.
+	// "*.ddev.site" accepts every name under ddev.site.
 	Hosts []string
+	// PrivateNetwork (up --private-network without a token) also accepts
+	// a Host that is an IP address or a name of one label ("echo" in
+	// Docker Compose, DDEV and Lando) from a peer on loopback, a private
+	// network or the shared address space. A DNS-rebinding page always
+	// sends its own domain name, so it can be neither. Origin and
+	// Content-Type are still checked.
+	PrivateNetwork bool
 }
 
 // Protect guards a loopback API against web pages open in the developer's
@@ -52,7 +60,7 @@ func Protect(next http.Handler, o ProtectOptions) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
-		if !o.hostAllowed(r.Host) {
+		if !HostAllowed(r, o.Hosts, o.PrivateNetwork) {
 			http.Error(w, "Echo answers only to localhost: Host "+r.Host+" is not allowed", http.StatusForbidden)
 			return
 		}
@@ -82,22 +90,62 @@ func (o ProtectOptions) hasToken(tok string) bool {
 	return ok
 }
 
-func (o ProtectOptions) hostAllowed(hostport string) bool {
-	if hostport == "" {
+// HostAllowed reports whether r's Host header may be served without a
+// token: a loopback name, one of hosts (exact, or "*.example.test" for the
+// names under example.test) or, with privateNetwork, an IP address or a
+// name of one label sent from a private peer (see
+// ProtectOptions.PrivateNetwork). Echo Inbox applies the same rule.
+func HostAllowed(r *http.Request, hosts []string, privateNetwork bool) bool {
+	if r.Host == "" {
 		return true // HTTP/1.0 without Host: not a browser
 	}
-	host := strings.ToLower(hostOnly(hostport))
+	host := strings.ToLower(hostOnly(r.Host))
 	host = strings.TrimSuffix(strings.TrimPrefix(host, "["), "]")
 	if loopbackName(host) {
 		return true
 	}
-	for _, h := range o.Hosts {
-		h = strings.ToLower(strings.TrimSuffix(strings.TrimPrefix(h, "["), "]"))
-		if h != "" && h == host {
+	for _, h := range hosts {
+		if hostMatch(strings.ToLower(strings.TrimSuffix(strings.TrimPrefix(h, "["), "]")), host) {
 			return true
 		}
 	}
-	return false
+	if !privateNetwork || !PrivatePeer(r.RemoteAddr) {
+		return false
+	}
+	if ip := net.ParseIP(host); ip != nil {
+		return !ip.IsUnspecified() // "0.0.0.0" reaches loopback from a browser
+	}
+	return host != "" && !strings.Contains(host, ".")
+}
+
+// hostMatch reports whether host is pattern, or under it when pattern
+// starts with "*.".
+func hostMatch(pattern, host string) bool {
+	if suffix, ok := strings.CutPrefix(pattern, "*."); ok {
+		return suffix != "" && strings.HasSuffix(host, "."+suffix)
+	}
+	return pattern != "" && pattern == host
+}
+
+// sharedSpace is the carrier-grade NAT range (RFC 6598), which some
+// container runtimes give their bridges. It is never routed on the
+// internet.
+var sharedSpace = &net.IPNet{IP: net.IPv4(100, 64, 0, 0).To4(), Mask: net.CIDRMask(10, 32)}
+
+// PrivatePeer reports whether remote (a request's RemoteAddr) is on
+// loopback, a private network (RFC 1918, fc00::/7) or the shared address
+// space (100.64.0.0/10): somewhere --private-network lets Echo be reached
+// from.
+func PrivatePeer(remote string) bool {
+	host, _, err := net.SplitHostPort(remote)
+	if err != nil {
+		host = remote
+	}
+	ip := net.ParseIP(host)
+	if ip == nil {
+		return false
+	}
+	return ip.IsLoopback() || ip.IsPrivate() || sharedSpace.Contains(ip)
 }
 
 // loopbackName reports whether host is a loopback address or a localhost

@@ -57,7 +57,8 @@ type options struct {
 	keep                      int
 	keepFor                   time.Duration
 	spamassassin              string
-	sites                     string // up: sites.yaml with a write token per site
+	sites                     string       // up: sites.yaml with a write token per site
+	hostnames                 cli.ListFlag // up: more names Echo answers to without a token
 
 	channel, runID, to string
 	since              time.Duration // ls and watch: also the messages from this long ago; report --site: the period
@@ -131,6 +132,7 @@ func flagSet(o *options) *flag.FlagSet {
 	fs.Var(daysFlag{&o.keepFor, errDaysValue}, "keep-for", "")
 	fs.StringVar(&o.spamassassin, "spamassassin", "", "")
 	fs.StringVar(&o.sites, "sites", "", "")
+	fs.Var(&o.hostnames, "hostname", "")
 
 	fs.StringVar(&o.channel, "channel", "", "")
 	fs.StringVar(&o.runID, "run", "", "")
@@ -483,6 +485,7 @@ var flagDocs = map[string]flagDoc{
 	"keep":            {"--keep <n>", "the most messages kept (default 10000)"},
 	"keep-for":        {"--keep-for <d>", "with --store: drop messages older than this, e.g. 14d"},
 	"sites":           {"--sites <file>", "give each site its own write token (captures only), from a\nsites.yaml as rhythm echo hub reads it; its read token reads all"},
+	"hostname":        {"--hostname <name>", "also answer to this name without a token, e.g. *.ddev.site\n(repeatable; RHYTHM_ECHO_HOSTNAMES, comma-separated)"},
 	"spamassassin":    {"--spamassassin <addr>", "score each email with the SpamAssassin daemon at host:port\n(spamd; port 783 when left out)"},
 
 	"channel": {"--channel <c>", "only email, sms, whatsapp, webhook, chat, analytics, payment,\npush or http"},
@@ -559,7 +562,7 @@ var commands = []cmdSpec{
 	{name: "up", aliases: []string{"start"}, use: "up [flags]", about: "start the catcher (API :8025, SMTP :1025)",
 		flags: flags([]flagUse{{"seal", ""}, {"observe", ""}, {"listen", ""}, {"smtp", ""}, {"proxy", ""}, {"mitm", ""}, {"allow", ""},
 			{"token", "require this token. Needed when the API, SMTP sink or proxy\nlistens beyond loopback; the SMTP sink then asks for it as\nthe password. Prefer RHYTHM_ECHO_TOKEN: other users can\nread a flag in ps"},
-			{"private-network", ""}, {"free-ports", ""}, {"login", ""}, {"sites", ""},
+			{"private-network", ""}, {"hostname", ""}, {"free-ports", ""}, {"login", ""}, {"sites", ""},
 			{"store", "keep what Echo catches in this folder, so a restart keeps it\n(default in memory; inbox: store: in the config)"},
 			{"keep", ""}, {"keep-for", ""}, {"spamassassin", ""},
 			{"config", ""}}, terminalFlags, []flagUse{{"verbose", ""}})},

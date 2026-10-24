@@ -14,6 +14,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -165,6 +166,39 @@ func writeTokens(tokens []string, srv http.Handler, next http.Handler) http.Hand
 	})
 }
 
+// hostnamesEnv lists more names up answers to without a token, as
+// --hostname does, comma-separated: for a container whose arguments are
+// hard to change (DDEV sets it to the project's names).
+const hostnamesEnv = "RHYTHM_ECHO_HOSTNAMES"
+
+// hostnameRe is a host name, or "*." and one, without a port.
+var hostnameRe = regexp.MustCompile(`^(\*\.)?[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*$`)
+
+// upHostnames returns the names --hostname gives, else those in
+// RHYTHM_ECHO_HOSTNAMES, lowercased. A request without a token may name
+// Echo by one of them in its Host header (a reverse proxy's or router's
+// name, such as <project>.ddev.site).
+func upHostnames(flag []string) ([]string, error) {
+	from, list := "--hostname", flag
+	if len(list) == 0 {
+		from = hostnamesEnv
+		for _, h := range strings.Split(os.Getenv(hostnamesEnv), ",") {
+			if h = strings.TrimSpace(h); h != "" {
+				list = append(list, h)
+			}
+		}
+	}
+	out := make([]string, 0, len(list))
+	for _, h := range list {
+		name := strings.ToLower(strings.TrimSuffix(h, "."))
+		if !hostnameRe.MatchString(name) {
+			return nil, usageErr("%s %q: want a host name like echo.myapp.lndo.site or *.ddev.site, without a port", from, h)
+		}
+		out = append(out, name)
+	}
+	return out, nil
+}
+
 // relayEnv holds the relay's SMTP account URL, which has a password in
 // it, so it is better kept out of a committed config.
 const relayEnv = "RHYTHM_ECHO_RELAY"
@@ -176,7 +210,7 @@ const releasePattern = "POST /v1/messages/{id}/release"
 // has relay:, with the banner line that says where releases go. A
 // release needs Echo's token or a viewer's sign-in, so up refuses a relay
 // it could never use.
-func releaseRoute(s *session, inbox *catcher.Inbox, token string, login *web.Login) (*upRoute, string, error) {
+func releaseRoute(s *session, inbox *catcher.Inbox, token string, login *web.Login, names []string) (*upRoute, string, error) {
 	rc := s.cfg.Relay
 	if rc == nil {
 		return nil, "", nil
@@ -204,7 +238,7 @@ func releaseRoute(s *session, inbox *catcher.Inbox, token string, login *web.Log
 			hosts = []string{host}
 		}
 	}
-	h = catcher.Protect(h, catcher.ProtectOptions{Token: token, Hosts: hosts})
+	h = catcher.Protect(h, catcher.ProtectOptions{Token: token, Hosts: append(hosts, names...)})
 	where := "the relay"
 	if u, err := url.Parse(raw); err == nil {
 		where = u.Host // never the user or password

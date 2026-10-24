@@ -23,5 +23,9 @@ services:
       - VIRTUAL_HOST=$DDEV_HOSTNAME
       - HTTP_EXPOSE=8025:8025
       - HTTPS_EXPOSE=8026:8025
+      # The router's names (https://<project>.ddev.site:8026): without a
+      # token Echo answers only to these, its service name (echo:8025)
+      # and IP addresses.
+      - RHYTHM_ECHO_HOSTNAMES=$DDEV_HOSTNAME
       # Empty: no token, which --private-network allows on DDEV's network.
       - RHYTHM_ECHO_TOKEN=${RHYTHM_ECHO_TOKEN:-}

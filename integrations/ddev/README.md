@@ -37,7 +37,10 @@ works for tools written against Mailpit.
 
 Point the WordPress, Laravel or Node connector at Echo with
 `RHYTHM_ECHO_URL=http://echo:8025` in `web_environment`. Echo listens
-without a token because the DDEV network is private; to require one, set
+without a token because the DDEV network is private. It then answers
+only to its service name (`echo`), IP addresses and the project's names
+(`RHYTHM_ECHO_HOSTNAMES=$DDEV_HOSTNAME` in the add-on), so a web page can't
+reach it through a name of its own. To require a token, set
 `RHYTHM_ECHO_TOKEN` for both services:
 
 ```sh

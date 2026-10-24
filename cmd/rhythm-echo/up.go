@@ -77,6 +77,10 @@ func cmdUp(s *session) int {
 		}
 		open = append(open, l.addr)
 	}
+	names, err := upHostnames(s.o.hostnames)
+	if err != nil {
+		return s.fail(err)
+	}
 	login, loginFrom, err := upLogin(s.o.login)
 	if err != nil {
 		return s.fail(err)
@@ -137,7 +141,7 @@ func cmdUp(s *session) int {
 	checks := s.checks
 	ccfg := catcher.Config{Mode: cfg.Mode, Allow: cfg.Allow, Token: token, Version: version, Listen: cfg.Listen,
 		Site: cfg.Site, AllowRecipients: cfg.AllowRecipients, Rules: checks.Rules, Checks: checks.Checks,
-		SMTPAddr: "off", ProxyAddr: "off"}
+		SMTPAddr: "off", ProxyAddr: "off", Hosts: names, PrivateNetwork: private}
 	if sl != nil {
 		ccfg.SMTPAddr = sl.Addr().String()
 	}
@@ -152,7 +156,10 @@ func cmdUp(s *session) int {
 	log.checks = checks
 	// A login guards the Inbox with a session cookie, which a rebinding
 	// page can't send either, so the Host check isn't needed then.
-	ui := web.New(web.Options{Inbox: inbox, Mode: cfg.Mode, Checks: checks, AnyHost: token != "" || login != nil})
+	// Without either, --hostname and --private-network widen the Host
+	// check the same way for the Inbox as for the API.
+	ui := web.New(web.Options{Inbox: inbox, Mode: cfg.Mode, Checks: checks, AnyHost: token != "" || login != nil,
+		Hosts: names, PrivateNetwork: private})
 	log.issues = ui.Issues // checked once, for the log and the page
 	scorer := newSpamScorer(spamd, inbox)
 	inbox.OnAdd(func(m model.Message) {
@@ -163,7 +170,7 @@ func cmdUp(s *session) int {
 	stack.push(func(context.Context) { scorer.wait() })
 	routes := upRoutes(srv, inbox, ui, cfg.Mode, checks)
 	relayLine := ""
-	if rel, line, err := releaseRoute(s, inbox, token, login); err != nil {
+	if rel, line, err := releaseRoute(s, inbox, token, login, names); err != nil {
 		return s.fail(err)
 	} else if rel != nil {
 		routes, relayLine = append(routes, *rel), line

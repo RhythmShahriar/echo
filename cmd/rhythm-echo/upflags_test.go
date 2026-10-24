@@ -433,3 +433,106 @@ func TestOpenWarnings(t *testing.T) {
 		t.Errorf("observing: %q", w)
 	}
 }
+
+// hostCall makes one request to a running up with the Host header set to
+// host, as a container that names Echo "echo" sends it.
+func hostCall(t *testing.T, method, addr, path, host, body string) (int, string) {
+	t.Helper()
+	req, err := http.NewRequestWithContext(context.Background(), method, "http://"+addr+path, strings.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Host = host
+	if body != "" {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	b, _ := io.ReadAll(resp.Body)
+	return resp.StatusCode, string(b)
+}
+
+// TestUpPrivateNetworkAnswersToServiceNames: the image's default CMD
+// (wildcard listen, --private-network, no token) answers a connector in
+// another container that names Echo by its Compose service ("echo:8025")
+// or by an IP address, for the API and Echo Inbox alike. A domain name
+// stays refused unless --hostname (or RHYTHM_ECHO_HOSTNAMES) lists it,
+// and a page's Origin is still refused.
+func TestUpPrivateNetworkAnswersToServiceNames(t *testing.T) {
+	upEnv(t)
+	t.Setenv("RHYTHM_ECHO_TOKEN", "")
+	t.Setenv(privateNetworkEnv, "")
+	t.Setenv(hostnamesEnv, "*.ddev.site")
+	orig := listIfaces
+	listIfaces = func() ([]netIface, error) { return containerHost, nil }
+	t.Cleanup(func() { listIfaces = orig })
+	port := strings.TrimPrefix(wiringPorts(t, 1)[0], "127.0.0.1:")
+	_, _, stop := startUp(t, "--listen", "0.0.0.0:"+port, "--smtp", "off", "--private-network")
+	defer stop()
+	addr := "127.0.0.1:" + port
+	if code, body := hostCall(t, "POST", addr, "/v1/capture", "echo:8025", emailCapture("From the web container")); code != http.StatusOK {
+		t.Fatalf("capture with Host echo:8025: %d %s", code, body)
+	}
+	for _, c := range []struct{ path, host string }{
+		{"/api/v1/messages", "echo:8025"},
+		{"/v1/health", "172.17.0.2:" + port},
+		{"/", "echo:8025"},
+		{"/v1/health", "shop.ddev.site:8026"}, // DDEV's router, from RHYTHM_ECHO_HOSTNAMES
+	} {
+		if code, body := hostCall(t, "GET", addr, c.path, c.host, ""); code != http.StatusOK {
+			t.Errorf("GET %s with Host %s: %d %s", c.path, c.host, code, body)
+		}
+	}
+	if _, body := hostCall(t, "GET", addr, "/api/v1/messages", "echo", ""); !strings.Contains(body, "From the web container") {
+		t.Errorf("the capture isn't listed: %s", body)
+	}
+	for _, host := range []string{"rebind.attacker.example", "0.0.0.0:" + port} {
+		if code, _ := hostCall(t, "GET", addr, "/v1/messages", host, ""); code != http.StatusForbidden {
+			t.Errorf("Host %s: %d, want 403", host, code)
+		}
+		if code, _ := hostCall(t, "GET", addr, "/", host, ""); code != http.StatusForbidden {
+			t.Errorf("Inbox with Host %s: %d, want 403", host, code)
+		}
+	}
+	req, _ := http.NewRequestWithContext(context.Background(), "POST", "http://"+addr+"/v1/capture", strings.NewReader(emailCapture("x")))
+	req.Host = "echo:8025"
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Origin", "http://attacker.example")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusForbidden {
+		t.Errorf("a page's Origin: %d, want 403", resp.StatusCode)
+	}
+}
+
+// TestUpHostnameFlag: --hostname takes names and *. patterns and refuses
+// anything else; it wins over RHYTHM_ECHO_HOSTNAMES.
+func TestUpHostnameFlag(t *testing.T) {
+	t.Setenv(hostnamesEnv, "a.test, *.ddev.site")
+	if got, err := upHostnames(nil); err != nil || !slices.Equal(got, []string{"a.test", "*.ddev.site"}) {
+		t.Errorf("from the variable: %v %v", got, err)
+	}
+	if got, err := upHostnames([]string{"Echo.MyApp.lndo.site"}); err != nil || !slices.Equal(got, []string{"echo.myapp.lndo.site"}) {
+		t.Errorf("the flag: %v %v", got, err)
+	}
+	for _, bad := range []string{"echo:8025", "*", "a..b", "http://echo", "*.*.x"} {
+		_, err := upHostnames([]string{bad})
+		if err == nil || !strings.Contains(err.Error(), `--hostname "`+bad+`": want a host name like echo.myapp.lndo.site or *.ddev.site, without a port`) {
+			t.Errorf("%s: %v", bad, err)
+		}
+	}
+	t.Setenv(hostnamesEnv, "echo:1")
+	if _, err := upHostnames(nil); err == nil || !strings.Contains(err.Error(), `RHYTHM_ECHO_HOSTNAMES "echo:1"`) {
+		t.Errorf("variable error: %v", err)
+	}
+	upEnv(t)
+	if code, _, errOut := runCLI(t, "up", "--hostname", "echo:8025", "--listen", wiringPorts(t, 1)[0], "--smtp", "off"); code != exitUsage {
+		t.Errorf("exit %d: %s", code, errOut)
+	}
+}

@@ -14,7 +14,7 @@ services:
     entrypoint: /usr/local/bin/rhythm-echo
     services:
       image: ghcr.io/rhythmshahriar/echo:1
-      command: up --listen=0.0.0.0:8025 --smtp=0.0.0.0:1025 --private-network
+      command: up --listen=0.0.0.0:8025 --smtp=0.0.0.0:1025 --private-network --hostname=echo.myapp.lndo.site
       ports:
         - 8025
   appserver:
@@ -31,7 +31,9 @@ proxy:
 ```
 
 Then `lando rebuild -y` and open https://echo.myapp.lndo.site (use your
-app's name). Remove Lando's `mailpit` or `mailhog` service if the app has
+app's name, in `--hostname` too). Without a token Echo answers only to
+the names `--hostname` gives, its service name (`http://echo:8025`) and IP
+addresses, so a web page can't reach it through a name of its own. Remove Lando's `mailpit` or `mailhog` service if the app has
 one, or leave it and point only the mailer at Echo.
 
 For PHP's `mail()`, copy a Linux `rhythm-echo` binary into the app and set
