@@ -237,6 +237,9 @@ func (p *Pretty) comparison(r Result, hint string) {
 				if fix := firstLine(ch.Fix); fix != "" && class != model.Fixed {
 					fmt.Fprintf(p.w, "  fix: %s\n", Safe(fix))
 				}
+				if p.o.Verbose {
+					fmt.Fprintf(p.w, "  key: %s\n", compare.Key(ch))
+				}
 			}
 		}
 		if p.o.Quiet {
@@ -265,12 +268,15 @@ func (p *Pretty) comparison(r Result, hint string) {
 		for _, ch := range cs {
 			if class == model.Broke || class == model.New {
 				fmt.Fprintln(p.w, card(ui.Badge(classInfo[class].Label, ClassColor(class), true, badgeWidth), ClassColor(class), ch.Title,
-					countLabel(ch.Actions), []string{actionsLabel(ch.Actions, 3), beforeAfter(ch), firstLine(ch.Detail)}, ch.Fix))
+					countLabel(ch.Actions), []string{actionsLabel(ch.Actions, 3), beforeAfter(ch), firstLine(ch.Detail), p.key(ch)}, ch.Fix))
 				fmt.Fprintln(p.w)
 			} else {
 				fmt.Fprintln(p.w, line(lipgloss.NewStyle().Foreground(ClassColor(class)).Bold(true).Render(classInfo[class].Glyph), ch.Title, countLabel(ch.Actions)))
 				if class == model.Changed {
 					p.diff(ch, "       ")
+				}
+				if k := p.key(ch); k != "" {
+					fmt.Fprintf(p.w, "       %s\n", muted.Render(k))
 				}
 			}
 		}
@@ -461,6 +467,15 @@ func (p *Pretty) diff(ch model.Change, pad string) bool {
 		fmt.Fprintf(p.w, "%s%s\n", pad, hint)
 	}
 	return true
+}
+
+// key is "key: 3f9a2c1b" with -v, the name that accepts the change as
+// intended (compare.Accept), and "" otherwise.
+func (p *Pretty) key(ch model.Change) string {
+	if !p.o.Verbose {
+		return ""
+	}
+	return "key: " + compare.Key(ch)
 }
 
 func line(marker, title, right string) string {

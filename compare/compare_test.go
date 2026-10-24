@@ -62,7 +62,7 @@ func TestChangesWithinAMessage(t *testing.T) {
 		email("admin@shop.com", "Order #1043 received", "Total: 25.00"),
 	}
 	got := titles(Messages(b, a))
-	if !strings.Contains(got, "changed: Webhook to hooks.zapier.com: payload lost fields") {
+	if !strings.Contains(got, "broke: Webhook to hooks.zapier.com: payload lost fields") {
 		t.Errorf("lost field not reported:\n%s", got)
 	}
 	if strings.Contains(got, "subject changed") || strings.Contains(got, "text changed") {

@@ -30,11 +30,32 @@ type Options struct {
 	SiteDomain      string   // the domain mail should come from; defaults to SiteHost without "www."
 	AllowRecipients []string // globs of addresses or numbers that may really be messaged (observe mode)
 	Rules           []Rule   // custom rules, run after the registered ones; CustomRules makes them from the config
+	// Checks tunes rules by check ID, as `checks:` in the config does: Off
+	// drops a check's issues, "notice", "warning" or "error" sets their
+	// level and "broke" makes them errors. "changed" only matters to a
+	// comparison, so it keeps the level.
+	Checks map[string]string
+}
+
+// Off turns a check off in Options.Checks.
+const Off = "off"
+
+// tune applies o.Checks to an issue: false when its check is off.
+func (o Options) tune(i *model.Issue) bool {
+	switch set := strings.ToLower(o.Checks[i.Check]); set {
+	case Off:
+		return false
+	case string(model.Error), string(model.Warning), string(model.Notice):
+		i.Level = model.Level(set)
+	case model.Broke:
+		i.Level = model.Error
+	}
+	return true
 }
 
 // Message returns the problems in m: what every registered rule that
 // looks at m's channel finds, then o.Rules (custom rules from the
-// project's config).
+// project's config), as tuned by o.Checks.
 func Message(m model.Message, o Options) []model.Issue {
 	var out []model.Issue
 	for _, rs := range [][]Rule{Rules(), o.Rules} {
@@ -45,6 +66,9 @@ func Message(m model.Message, o Options) []model.Issue {
 			for _, i := range r.Run(m, o) {
 				i.Check = cmp.Or(i.Check, r.ID)
 				i.Level = cmp.Or(i.Level, r.Level)
+				if !o.tune(&i) {
+					continue
+				}
 				i.Message = m.ID
 				i.Identify()
 				out = append(out, i)

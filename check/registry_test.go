@@ -222,3 +222,27 @@ func TestCustomFixtures(t *testing.T) {
 		}
 	}
 }
+
+func TestChecksOverrideLevelsAndTurnRulesOff(t *testing.T) {
+	m := mail(func(m *model.Message) {
+		m.Subject = "Hi {first_name}"
+		m.HTML = `<a href="http://localhost/x">x</a>`
+	})
+	rules, err := CustomRules([]Custom{{ID: "brand/rival", Match: "Hi"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	o := Options{SiteHost: "shop.com", Rules: rules, Checks: map[string]string{
+		"content/dev-link": "off", "content/placeholder": "warning", "brand/rival": "broke",
+	}}
+	levels := map[string]model.Level{}
+	for _, i := range Message(m, o) {
+		levels[i.Check] = i.Level
+	}
+	if _, found := levels["content/dev-link"]; found {
+		t.Error("an off check must report nothing")
+	}
+	if levels["content/placeholder"] != model.Warning || levels["brand/rival"] != model.Error {
+		t.Errorf("levels: %v", levels)
+	}
+}

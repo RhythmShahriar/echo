@@ -24,12 +24,16 @@ import (
 	"github.com/RhythmShahriar/echo/recognize"
 )
 
-// Compare diffs before and after.
+// Compare diffs before and after, as the zero Options do.
 func Compare(before, after *model.Run, beforeDir, afterDir, version string) *model.Comparison {
+	return compareRuns(before, after, beforeDir, afterDir, version, Options{})
+}
+
+func compareRuns(before, after *model.Run, beforeDir, afterDir, version string, o Options) *model.Comparison {
 	out := &model.Comparison{Schema: model.Schema, Tool: "rhythm-echo", Version: version, Created: time.Now().UTC(),
 		Before: model.RunRef{Target: before.Target, Name: before.Name, Dir: beforeDir, Started: before.Started},
 		After:  model.RunRef{Target: after.Target, Name: after.Name, Dir: afterDir, Started: after.Started}}
-	g := grouper{}
+	g := grouper{tune: o.tune}
 	var notes []string
 	for _, a := range after.Actions {
 		b := before.Action(a.ID)
@@ -57,7 +61,7 @@ func Compare(before, after *model.Run, beforeDir, afterDir, version string) *mod
 		}
 		if b == nil {
 			// Not in the snapshot: everything it sends is new.
-			for _, c := range Messages(nil, a.Messages) {
+			for _, c := range Messages(nil, strip(a.Messages, o.ignored(a))) {
 				g.add(c, a.Label)
 			}
 			for _, c := range Issues(nil, a.Issues) {
@@ -65,7 +69,8 @@ func Compare(before, after *model.Run, beforeDir, afterDir, version string) *mod
 			}
 			continue
 		}
-		cs, cut := messages(b.Messages, a.Messages)
+		ignore := o.ignored(a)
+		cs, cut := messages(strip(b.Messages, ignore), strip(a.Messages, ignore), o.coveredText(b.Issues, a.Issues))
 		for _, c := range cs {
 			g.add(c, a.Label)
 		}
@@ -83,6 +88,9 @@ func Compare(before, after *model.Run, beforeDir, afterDir, version string) *mod
 	}
 	out.Changes = g.list()
 	out.Warnings = append(mismatch(before, after), notes...)
+	if len(o.Accept) > 0 {
+		Accept(out, o.Accept)
+	}
 	return out
 }
 
@@ -92,12 +100,13 @@ const ActionFailed = "run/action-failed"
 
 // Messages diffs the messages one action sent in two runs.
 func Messages(before, after []model.Message) []model.Change {
-	cs, _ := messages(before, after)
+	cs, _ := messages(before, after, nil)
 	return cs
 }
 
-// messages is Messages, plus notes on what couldn't be compared.
-func messages(before, after []model.Message) (out []model.Change, notes []string) {
+// messages is Messages, plus notes on what couldn't be compared. covered
+// holds the IDs of messages whose text change an issue already reports.
+func messages(before, after []model.Message, covered map[string]bool) (out []model.Change, notes []string) {
 	bs, as := byIdentity(before), byIdentity(after)
 	ids := keys(bs)
 	for _, id := range keys(as) {
@@ -112,7 +121,7 @@ func messages(before, after []model.Message) (out []model.Change, notes []string
 		multi := len(b) > 1 || len(a) > 1
 		pairs, lost, added, paired := pair(b, a)
 		for _, p := range pairs {
-			cs, note := content(p[0], p[1])
+			cs, note := content(p[0], p[1], covered[p[1].ID])
 			out = append(out, cs...)
 			if note != "" && !slices.Contains(notes, note) {
 				notes = append(notes, note)
@@ -230,8 +239,9 @@ const truncatedMark = "…(truncated)"
 func truncated(m model.Message) bool { return strings.HasSuffix(m.Body, truncatedMark) }
 
 // content compares two matched messages. note says what couldn't be
-// compared.
-func content(b, a model.Message) (out []model.Change, note string) {
+// compared. textCovered leaves out a text change: a new placeholder or PHP
+// error in a is already BROKE, and the line it changed would say it twice.
+func content(b, a model.Message, textCovered bool) (out []model.Change, note string) {
 	what := check.Capitalize(identityLabel(a))
 	ch := func(check, title, before, after, fix string) {
 		out = append(out, model.Change{Class: model.Changed, Check: check, Channel: a.Channel, Title: title, Before: before, After: after, Fix: fix})
@@ -256,7 +266,7 @@ func content(b, a model.Message) (out []model.Change, note string) {
 			ch("message/reply-to", what+": lost its Reply-To", roles(b.ReplyTo), "", "Replies now go to the sender address; restore Reply-To if customers should reach a person.")
 		}
 	}
-	if bt, at := text(b), text(a); len(Diff(bt, at)) > 0 {
+	if bt, at := text(b), text(a); !textCovered && len(Diff(bt, at)) > 0 {
 		// The full texts, so a report can show the diff (ChangeDiff).
 		ch("message/text", what+": text changed", bt, at, "Read the new text; if the change is intended, take a new snapshot.")
 	}
@@ -270,7 +280,14 @@ func content(b, a model.Message) (out []model.Change, note string) {
 	if len(bk) > 0 || len(ak) > 0 {
 		lost, added := diffSets(bk, ak)
 		if len(lost) > 0 {
-			out = append(out, model.Change{Class: model.Changed, Check: "message/fields-lost", Channel: a.Channel,
+			// An app or a payment flow reads a payload by field name: one
+			// that's gone breaks it, where a person reading an email might
+			// not notice.
+			class := model.Changed
+			if a.Channel == model.Webhook || a.Channel == model.Payment {
+				class = model.Broke
+			}
+			out = append(out, model.Change{Class: class, Check: "message/fields-lost", Channel: a.Channel,
 				Title: fmt.Sprintf("%s: payload lost fields", what), Detail: strings.Join(limit(lost, 12), ", "),
 				Fix: "Whatever receives this (a CRM, Zapier, an app) may depend on these fields."})
 		}
@@ -518,18 +535,30 @@ func ok(m model.Message) bool { return m.Status != model.Failed && m.Status != m
 type grouper struct {
 	order []string
 	by    map[string]*model.Change
+	tune  func(model.Change) (model.Change, bool) // Options.tune; nil keeps every change as it is
+}
+
+// groupKey is what makes two changes the same change.
+func groupKey(c model.Change) string {
+	if hs := ChangeDiff(c); hs != nil {
+		// The full texts differ in test data from action to action; the
+		// edit is what makes two changes the same.
+		return c.Class + "|" + c.Check + "|" + c.Title + "|" + signature(hs)
+	}
+	return c.Class + "|" + c.Check + "|" + c.Title + "|" + c.Before + "|" + c.After
 }
 
 func (g *grouper) add(c model.Change, action string) {
 	if g.by == nil {
 		g.by = map[string]*model.Change{}
 	}
-	k := c.Class + "|" + c.Check + "|" + c.Title + "|" + c.Before + "|" + c.After
-	if hs := ChangeDiff(c); hs != nil {
-		// The full texts differ in test data from action to action; the
-		// edit is what makes two changes the same.
-		k = c.Class + "|" + c.Check + "|" + c.Title + "|" + signature(hs)
+	if g.tune != nil {
+		var on bool
+		if c, on = g.tune(c); !on {
+			return
+		}
 	}
+	k := groupKey(c)
 	if have, found := g.by[k]; found {
 		if !slices.Contains(have.Actions, action) {
 			have.Actions = append(have.Actions, action)

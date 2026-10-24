@@ -33,7 +33,7 @@ func bigPayloads(n int) (b, a model.Message) {
 func BenchmarkFieldDiff10k(b *testing.B) {
 	before, after := bigPayloads(10000)
 	for b.Loop() {
-		content(before, after)
+		content(before, after, false)
 	}
 }
 
@@ -43,7 +43,7 @@ func BenchmarkFieldDiff10k(b *testing.B) {
 func TestFieldDiffIsLinear(t *testing.T) {
 	before, after := bigPayloads(10000)
 	start := time.Now()
-	cs, _ := content(before, after)
+	cs, _ := content(before, after, false)
 	if took := time.Since(start); took > 150*time.Millisecond && !raceEnabled {
 		t.Errorf("field diff of 10,000 keys took %s, want well under 50 ms", took)
 	}
@@ -63,7 +63,7 @@ func TestTruncatedPayloadsAreNotFieldsLost(t *testing.T) {
 	cut := full
 	cut.Body = full.Body[:len(full.Body)/2] + "\n…(truncated)"
 	for _, p := range [][2]model.Message{{full, cut}, {cut, full}, {cut, cut}} {
-		cs, note := content(p[0], p[1])
+		cs, note := content(p[0], p[1], false)
 		for _, c := range cs {
 			if strings.HasPrefix(c.Check, "message/fields-") {
 				t.Errorf("a cut payload read as a field change: %s", c.Title)
@@ -75,7 +75,7 @@ func TestTruncatedPayloadsAreNotFieldsLost(t *testing.T) {
 	}
 	// A whole payload on both sides is still compared, with no note.
 	_, lost := bigPayloads(50)
-	if cs, note := content(full, lost); note != "" || !strings.Contains(titles(cs), "payload lost fields") {
+	if cs, note := content(full, lost, false); note != "" || !strings.Contains(titles(cs), "payload lost fields") {
 		t.Errorf("full payloads: note %q, changes:\n%s", note, titles(cs))
 	}
 	// Through Compare the note is a warning of the comparison, once.
