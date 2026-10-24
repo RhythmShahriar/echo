@@ -32,11 +32,25 @@ type beginner interface {
 	End(ctx context.Context) error
 }
 
+// exclusiver is the exclusive lease a client from catcher C15 on has:
+// Echo waits until no other action (of any run) is open, then keeps new
+// ones out until it ends, so untagged mail can only be this action's.
+type exclusiver interface {
+	BeginExclusive(ctx context.Context, run, action string) (string, error)
+}
+
 // begin tells Echo that run/action is in progress and returns the func
-// that ends exactly that action. Errors are ignored, as before: an Echo
-// that can't attribute untagged mail still catches tagged mail.
-func begin(ctx context.Context, c beginner, run, action string) (end func()) {
-	if l, ok := c.(leaser); ok {
+// that ends exactly that action. With exclusive, it asks for an
+// exclusive lease when the client has one; without, a shared one. Errors
+// are ignored, as before: an Echo that can't attribute untagged mail
+// still catches tagged mail.
+func begin(ctx context.Context, c beginner, run, action string, exclusive bool) (end func()) {
+	l, leases := c.(leaser)
+	if x, ok := c.(exclusiver); ok && exclusive && leases {
+		lease, _ := x.BeginExclusive(ctx, run, action)
+		return func() { _ = l.EndLease(context.WithoutCancel(ctx), lease) }
+	}
+	if leases {
 		lease, _ := l.BeginLease(ctx, run, action)
 		return func() { _ = l.EndLease(context.WithoutCancel(ctx), lease) }
 	}
@@ -92,13 +106,18 @@ func ambiguousSince(ctx context.Context, c *client.Client, t time.Time) ([]strin
 }
 
 // ambiguityWarning is the run warning for n messages no action could be
-// credited with, or "" for none.
-func ambiguityWarning(n int) string {
-	switch n {
-	case 0:
+// credited with, or "" for none. overlapped says this run had actions
+// open at once itself, which is then the likelier cause.
+func ambiguityWarning(n int, overlapped bool) string {
+	if n == 0 {
 		return ""
-	case 1:
-		return "1 message could not be tied to an action because another run was open"
 	}
-	return fmt.Sprintf("%d messages could not be tied to an action because another run was open", n)
+	what := "1 message"
+	if n > 1 {
+		what = fmt.Sprintf("%d messages", n)
+	}
+	if overlapped {
+		return what + " could not be tied to an action because several actions were open at once; set parallel: false on actions whose mail a connector doesn't tag"
+	}
+	return what + " could not be tied to an action because another run was open"
 }

@@ -51,13 +51,13 @@ func (f *leasingEcho) EndLease(_ context.Context, lease string) error {
 
 func TestBeginEndsItsOwnLease(t *testing.T) {
 	l := &leasingEcho{}
-	begin(context.Background(), l, "r1", "a")()
+	begin(context.Background(), l, "r1", "a", false)()
 	if want := []string{"lease r1/a", "end L-a"}; !slices.Equal(l.calls, want) {
 		t.Errorf("with leases: %q, want %q", l.calls, want)
 	}
 	// An end must reach Echo even when the run was canceled.
 	ctx, cancel := context.WithCancel(context.Background())
-	end := begin(ctx, &l.fakeEcho, "r1", "b")
+	end := begin(ctx, &l.fakeEcho, "r1", "b", true) // no exclusive lease to ask for
 	cancel()
 	end()
 	if want := []string{"lease r1/a", "end L-a", "begin r1/b", "end"}; !slices.Equal(l.calls, want) {
@@ -102,8 +102,11 @@ func TestAmbiguityWarning(t *testing.T) {
 	if len(since) != 2 || since[0] == "" || since[0] > since[1] {
 		t.Errorf("each action asks from its own start: %q", since)
 	}
-	if ambiguityWarning(0) != "" || ambiguityWarning(1) != "1 message could not be tied to an action because another run was open" {
+	if ambiguityWarning(0, true) != "" || ambiguityWarning(1, false) != "1 message could not be tied to an action because another run was open" {
 		t.Error("ambiguityWarning wording")
+	}
+	if got := ambiguityWarning(2, true); got != "2 messages could not be tied to an action because several actions were open at once; set parallel: false on actions whose mail a connector doesn't tag" {
+		t.Errorf("overlapping actions: %q", got)
 	}
 }
 

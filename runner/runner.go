@@ -54,6 +54,10 @@ type Options struct {
 	// an error that matches ErrWaits.
 	Quiet   time.Duration
 	Timeout time.Duration
+	// Parallel runs up to this many actions at once (compare --parallel)
+	// once the site is seen tagging its mail; 0 or 1 runs them one by
+	// one. See runAll.
+	Parallel int
 }
 
 // Hooks report progress.
@@ -127,27 +131,12 @@ func Run(ctx context.Context, o Options) (*model.Run, error) {
 	}
 	fake := newFake()
 	opts := check.Options{SiteHost: host(cfg.Site), AllowRecipients: cfg.AllowRecipients}
-	lost := map[string]bool{}       // IDs of messages Echo couldn't credit to any action
-	ended := map[string]time.Time{} // when each action stopped waiting, by ID
-	for i, a := range actions {
-		if ctx.Err() != nil {
-			break
-		}
-		act, unsure := runAction(ctx, o, run, a, fake, opts)
-		ended[act.ID] = time.Now()
-		for _, id := range unsure {
-			lost[id] = true
-		}
-		run.Actions = append(run.Actions, act)
-		if o.Hooks.Action != nil {
-			o.Hooks.Action(&run.Actions[len(run.Actions)-1], i+1, len(actions))
-		}
-	}
-	if w := ambiguityWarning(len(lost)); w != "" {
+	done := runAll(ctx, o, run, actions, fake, opts)
+	if w := ambiguityWarning(len(done.lost), done.overlapped); w != "" {
 		run.Warnings = append(run.Warnings, w)
 	}
 	if ctx.Err() == nil {
-		creditLate(ctx, o, run, actions, ended, opts)
+		creditLate(ctx, o, run, actions, done.ended, opts)
 	}
 	run.Duration = float64(time.Since(start).Milliseconds())
 	return run, ctx.Err()
@@ -173,8 +162,9 @@ func ActionID(name string) string { return config.ActionID(name) }
 
 // runAction runs a and returns it, with the IDs of messages that arrived
 // while it was open but that Echo couldn't credit to it, because another
-// run had an action open too.
-func runAction(ctx context.Context, o Options, run *model.Run, a config.Action, fake *fakeData, opts check.Options) (model.Action, []string) {
+// action was open too. An exclusive action asks Echo for a lease no
+// other action may share (see begin).
+func runAction(ctx context.Context, o Options, run *model.Run, a config.Action, fake *fakeData, opts check.Options, exclusive bool) (model.Action, []string) {
 	cfg := o.Config
 	runID := run.ID
 	quiet := o.quietFor(a)
@@ -188,7 +178,7 @@ func runAction(ctx context.Context, o Options, run *model.Run, a config.Action, 
 	// so a connector can trust it. The replayer gets it unsigned, since it
 	// takes the run and action apart.
 	runValue := signRun(o.Client.Token, runID, act.ID)
-	end := begin(ctx, o.Client, runID, act.ID)
+	end := begin(ctx, o.Client, runID, act.ID, exclusive)
 	defer end()
 
 	var err error
