@@ -3,8 +3,10 @@
 
 # The slow suites, every night and on demand: the Docker tests (a sealed
 # container network, PHP's mail() through rhythm-echo sendmail plus the
-# WordPress connector inside a real WordPress) and WordPress's Plugin Check
-# on the mu-plugin.
+# WordPress connector inside a real WordPress), PHPStan with the WordPress
+# stubs on the mu-plugin and Echo Staging Seal, the Node and Laravel
+# connectors end to end against Echo's conformance stand-in and WordPress's
+# Plugin Check on the mu-plugin.
 name: nightly
 on:
   schedule:
@@ -24,6 +26,52 @@ jobs:
       - name: Pull the test images
         run: for i in php:8.3-cli nginx:1.27-alpine alpine:3.20 "$(awk '/^FROM /{print $2; exit}' Dockerfile)"; do docker pull -q "$i"; done
       - run: go test -tags docker -timeout 20m ./...
+
+  phpstan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
+        with:
+          go-version-file: go.mod
+      # In a folder of its own: the connector ships no composer.json.
+      - name: Install PHPStan with the WordPress stubs
+        working-directory: ${{ runner.temp }}
+        run: |
+          mkdir phpstan && cd phpstan
+          composer init --no-interaction --name=rhythmsh/echo-phpstan
+          composer config allow-plugins.phpstan/extension-installer true
+          composer require --no-interaction --no-progress phpstan/phpstan:^2.1 szepeviktor/phpstan-wordpress:^2.0 phpstan/extension-installer:^1.4
+      # TestPHPStan and TestPluginPHPStan skip without ECHO_PHPSTAN; a skip
+      # here means the install above didn't work, so it fails the job.
+      - name: PHPStan on the mu-plugin and Echo Staging Seal
+        env:
+          ECHO_PHPSTAN: ${{ runner.temp }}/phpstan/vendor/bin/phpstan
+        run: |
+          go test -run PHPStan -v ./connectors/wordpress/ | tee "$RUNNER_TEMP/phpstan.txt"
+          if grep -q -- '--- SKIP' "$RUNNER_TEMP/phpstan.txt"; then echo "::error::the PHPStan tests skipped"; exit 1; fi
+
+  # The connectors in real apps against the conformance stand-in, which
+  # checks every capture against the wire schema (connectors K10).
+  connectors-e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24
+      - name: Node, in a Next.js app
+        working-directory: connectors/node
+        run: |
+          npm ci --no-audit --no-fund
+          npm run test:e2e
+      - name: Laravel, in a Laravel app
+        run: |
+          docker pull -q php:8.3-cli
+          connectors/laravel/fixtures/e2e.sh
 
   plugin-check:
     runs-on: ubuntu-latest
