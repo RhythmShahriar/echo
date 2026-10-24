@@ -170,3 +170,66 @@ func TestScriptInstalls(t *testing.T) {
 		t.Error("uninstall script left the plugin")
 	}
 }
+
+// The REST routes doctor uses exist only while the connector is active and
+// open only to the token, an administrator or a direct loopback call when
+// no token is set. Checked with the plugin loaded in a faked WordPress.
+func TestRESTRoutesLocked(t *testing.T) {
+	php, err := exec.LookPath("php")
+	if err != nil {
+		t.Skip("php not installed")
+	}
+	const ok, forbidden = "true", `{"code":"rhythm_echo_forbidden","status":403}`
+	for _, tc := range []struct {
+		name, env, token, addr, admin, headers string
+		routes                                 bool
+		want                                   string
+	}{
+		{"production has no routes", "production", "tok", "127.0.0.1", "0", `{}`, false, forbidden},
+		{"token", "staging", "tok", "172.17.0.1", "0", `{"X-Echo-Token":"tok"}`, true, ok},
+		{"no token from the Docker gateway", "staging", "tok", "172.17.0.1", "0", `{}`, true, forbidden},
+		{"wrong token", "staging", "tok", "172.17.0.1", "0", `{"X-Echo-Token":"nope"}`, true, forbidden},
+		{"loopback is not enough with a token set", "staging", "tok", "127.0.0.1", "0", `{}`, true, forbidden},
+		{"administrator", "staging", "tok", "203.0.113.9", "1", `{}`, true, ok},
+		{"no token: loopback", "development", "", "127.0.0.1", "0", `{}`, true, ok},
+		{"no token: IPv6 loopback", "development", "", "::1", "0", `{}`, true, ok},
+		{"no token: private address", "development", "", "172.17.0.1", "0", `{}`, true, forbidden},
+		{"no token: 10/8", "local", "", "10.0.0.5", "0", `{}`, true, forbidden},
+		{"no token: loopback behind a proxy", "development", "", "127.0.0.1", "0", `{"X-Forwarded-For":"198.51.100.7"}`, true, forbidden},
+		{"no token: loopback with Forwarded", "development", "", "127.0.0.1", "0", `{"Forwarded":"for=198.51.100.7"}`, true, forbidden},
+		{"no token: administrator", "development", "", "198.51.100.7", "1", `{}`, true, ok},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, err := exec.Command(php, "testdata/rest-harness.php", "echo.php", tc.env, tc.token, tc.addr, tc.admin, tc.headers).CombinedOutput()
+			if err != nil {
+				t.Fatalf("%v: %s", err, out)
+			}
+			var got struct {
+				Routes  bool            `json:"routes"`
+				Allowed json.RawMessage `json:"allowed"`
+			}
+			if err := json.Unmarshal(out, &got); err != nil {
+				t.Fatalf("not JSON: %s", out)
+			}
+			if got.Routes != tc.routes || string(got.Allowed) != tc.want {
+				t.Errorf("routes %v, allowed %s; want routes %v, allowed %s", got.Routes, got.Allowed, tc.routes, tc.want)
+			}
+		})
+	}
+}
+
+// PHPStan at level 6 with the WordPress stubs. It needs a phpstan whose
+// vendor directory has szepeviktor/phpstan-wordpress and
+// phpstan/extension-installer, named by ECHO_PHPSTAN:
+//
+//	ECHO_PHPSTAN=/path/to/vendor/bin/phpstan go test -run PHPStan ./connectors/wordpress/
+func TestPHPStan(t *testing.T) {
+	phpstan := os.Getenv("ECHO_PHPSTAN")
+	if phpstan == "" {
+		t.Skip("set ECHO_PHPSTAN to a phpstan with the WordPress extension")
+	}
+	out, err := exec.Command(phpstan, "analyze", "--no-progress", "--memory-limit=1G", "-c", "phpstan.neon.dist").CombinedOutput()
+	if err != nil {
+		t.Fatalf("phpstan: %v\n%s", err, out)
+	}
+}

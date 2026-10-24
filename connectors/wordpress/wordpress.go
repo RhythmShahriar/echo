@@ -34,9 +34,12 @@ const (
 	SettingsPath = "mu-plugins/rhythm-echo/settings.php"
 )
 
-// The plugin's REST routes for `rhythm echo doctor`, under /wp-json/. Both need
-// X-Echo-Token when a token is configured; without one, an administrator
-// or a request from loopback or a private network.
+// The plugin's REST routes for `rhythm echo doctor`, under /wp-json/. They
+// exist only while the connector is active, so a production site answers
+// 404. Each call needs X-Echo-Token equal to the configured token or a
+// logged-in administrator. With no token configured, a request from
+// loopback with no X-Forwarded-For, Forwarded or X-Real-IP header is let in
+// too. Anything else gets 403.
 const (
 	PingRoute   = "rhythm-echo/v1/ping"   // GET: active, layers, warnings, can the site reach Echo
 	CanaryRoute = "rhythm-echo/v1/canary" // POST: sends one wp_mail and one wp_remote_post to the addresses below

@@ -105,13 +105,14 @@ final class Rhythm_Echo {
 	 */
 	public static function boot(): void {
 		$cfg = self::config();
-		add_action( 'rest_api_init', array( __CLASS__, 'routes' ) );
 		if ( 'production' === self::environment() && ! $cfg['force'] ) {
 			self::$reason = 'production';
 			add_action( 'admin_notices', array( __CLASS__, 'production_notice' ) );
 			return;
 		}
 		self::$active = true;
+		// Only an active connector has routes: on production they don't exist.
+		add_action( 'rest_api_init', array( __CLASS__, 'routes' ) );
 
 		add_filter( 'http_request_args', array( __CLASS__, 'http_request_args' ), PHP_INT_MAX, 2 );
 		if ( '' !== $cfg['proxy'] ) {
@@ -273,7 +274,7 @@ final class Rhythm_Echo {
 	 * not through Echo's proxy: otherwise they'd be captured twice, and
 	 * hosts only the site can resolve would fail at the proxy.
 	 *
-	 * @param resource|\CurlHandle $handle
+	 * @param resource|object $handle a CurlHandle on PHP 8 (PHPStan checks as 7.4, which has no such class)
 	 * @param array<string, mixed>  $args
 	 */
 	public static function http_api_curl( $handle, $args ): void {
@@ -1490,23 +1491,49 @@ final class Rhythm_Echo {
 	}
 
 	/**
-	 * With a token configured, only X-Echo-Token opens the routes. Without
-	 * one, an administrator or a request from this machine or a private
-	 * network (Echo on the Docker host) may.
+	 * Who may call the routes: a request with X-Echo-Token equal to the
+	 * configured token, or a logged-in administrator. With no token
+	 * configured, a request from this machine may too if it came straight
+	 * in: behind a reverse proxy or Docker's port mapping,
+	 * REMOTE_ADDR is the proxy or the bridge gateway (172.17.0.1), not the
+	 * visitor, so a private address proves nothing.
 	 *
 	 * @param WP_REST_Request<array<string, mixed>> $request
+	 * @return true|WP_Error
 	 */
-	public static function allowed( $request ): bool {
+	public static function allowed( $request ) {
 		$token = self::config()['token'];
 		if ( '' !== $token ) {
 			$given = (string) $request->get_header( 'X-Echo-Token' );
-			return '' !== $given && hash_equals( $token, $given );
+			if ( '' !== $given && hash_equals( $token, $given ) ) {
+				return true;
+			}
 		}
 		if ( current_user_can( 'manage_options' ) ) {
 			return true;
 		}
+		if ( '' === $token && self::direct_loopback( $request ) ) {
+			return true;
+		}
+		$why = '' !== $token
+			? 'send X-Echo-Token with the token in Rhythm Echo\'s settings'
+			: 'call from this machine without a proxy, or set a token (rhythm echo install wordpress --token)';
+		return new WP_Error( 'rhythm_echo_forbidden', 'Rhythm Echo: ' . $why . '.', array( 'status' => 403 ) );
+	}
+
+	/**
+	 * Whether the request came from loopback with no proxy in between.
+	 *
+	 * @param WP_REST_Request<array<string, mixed>> $request
+	 */
+	private static function direct_loopback( $request ): bool {
+		foreach ( array( 'X-Forwarded-For', 'Forwarded', 'X-Real-IP' ) as $h ) {
+			if ( null !== $request->get_header( $h ) ) {
+				return false;
+			}
+		}
 		$ip = isset( $_SERVER['REMOTE_ADDR'] ) ? (string) $_SERVER['REMOTE_ADDR'] : ''; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput
-		return '' !== $ip && false === filter_var( $ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE );
+		return '::1' === $ip || 1 === preg_match( '/^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/', $ip ) || 1 === preg_match( '/^::ffff:127\./i', $ip );
 	}
 
 	/**

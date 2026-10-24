@@ -9,6 +9,8 @@
 //
 //	GOWORK=off go test -tags docker -run Docker -v ./connectors/wordpress/
 //
+// ECHO_TEST_PORTS=LOW-HIGH moves the host ports it uses (18900-18999).
+//
 // Nothing leaves the machine: the fixture plugin only calls fake hosts,
 // and the containers resolve the real provider hosts to 127.0.0.1, so a
 // connector bug fails a test instead of reaching Twilio or Slack.
@@ -27,6 +29,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -253,10 +256,12 @@ func TestDockerWordPress(t *testing.T) {
 		if n := len(s.Inbox.List(catcher.Filter{})); n != 0 {
 			t.Errorf("captured %d messages on production", n)
 		}
-		ping := r.rest(t, "ping", prod)
-		if ping["active"] != false || ping["reason"] != "production" {
-			t.Errorf("ping on production = %v", ping)
+		// On production the routes don't exist at all.
+		prod["X-Echo-Token"] = token
+		if status, b := r.do(t, http.MethodGet, r.wpURL+"/?rest_route=/"+PingRoute, prod); status != http.StatusNotFound {
+			t.Errorf("ping on production: HTTP %d, want 404: %.300s", status, b)
 		}
+		delete(prod, "X-Echo-Token")
 		forced := map[string]string{"X-Test-Env": "production", "X-Test-Force": "1"}
 		r.get(t, "twilio", forced)
 		if n := len(s.Inbox.List(catcher.Filter{})); n != 1 {
@@ -279,10 +284,30 @@ func TestDockerWordPress(t *testing.T) {
 		if len(msgs) != 2 || !contains(msgs[0].To, CanaryEmail) || !strings.HasPrefix(msgs[1].URL, CanaryURL) {
 			t.Errorf("canaries caught = %+v", msgs)
 		}
-		// The routes need the token.
-		status, _ := r.do(t, http.MethodGet, r.wpURL+"/?rest_route=/"+PingRoute, map[string]string{"X-Echo-Token": "wrong"})
-		if status != http.StatusUnauthorized && status != http.StatusForbidden {
-			t.Errorf("ping with a wrong token: HTTP %d", status)
+		// The routes need the token. This test reaches WordPress through
+		// Docker's port mapping, so REMOTE_ADDR is the bridge gateway
+		// (172.17.0.1 or similar), a private address that used to pass.
+		for name, h := range map[string]map[string]string{"no token": nil, "a wrong token": {"X-Echo-Token": "wrong"}} {
+			if status, b := r.do(t, http.MethodGet, r.wpURL+"/?rest_route=/"+PingRoute, h); status != http.StatusForbidden {
+				t.Errorf("ping with %s: HTTP %d, want 403: %.300s", name, status, b)
+			}
+		}
+	})
+
+	t.Run("without a token only direct loopback calls get in", func(t *testing.T) {
+		r.seal()
+		r.write(t, Settings{URL: r.echoURL})
+		defer r.install(t, Settings{})
+		if status, b := r.do(t, http.MethodGet, r.wpURL+"/?rest_route=/"+PingRoute, nil); status != http.StatusForbidden {
+			t.Errorf("from the Docker gateway: HTTP %d, want 403: %.300s", status, b)
+		}
+		if status, b := r.inside(t, PingRoute, ""); status != http.StatusOK || !strings.Contains(b, `"connector":"wordpress"`) {
+			t.Errorf("from loopback: HTTP %d, want 200: %.300s", status, b)
+		}
+		for _, h := range []string{"X-Forwarded-For: 198.51.100.7", "Forwarded: for=198.51.100.7"} {
+			if status, b := r.inside(t, PingRoute, h); status != http.StatusForbidden {
+				t.Errorf("from loopback with %s: HTTP %d, want 403: %.300s", h, status, b)
+			}
 		}
 	})
 
@@ -392,10 +417,17 @@ func TestDockerWordPress(t *testing.T) {
 	})
 }
 
-// install rewrites the connector's settings in the mounted mu-plugins.
+// install rewrites the connector's settings in the mounted mu-plugins,
+// pointed at the test's Echo with its token.
 func (r *rig) install(t *testing.T, s Settings) {
 	t.Helper()
 	s.URL, s.Token = r.echoURL, token
+	r.write(t, s)
+}
+
+// write installs exactly s.
+func (r *rig) write(t *testing.T, s Settings) {
+	t.Helper()
 	if err := Install(r.content, s); err != nil {
 		t.Fatal(err)
 	}
@@ -458,6 +490,22 @@ func (r *rig) do(t *testing.T, method, url string, headers map[string]string) (i
 	return resp.StatusCode, b
 }
 
+// inside calls a REST route from inside the WordPress container, so the
+// request comes from loopback, with one extra header line if given.
+func (r *rig) inside(t *testing.T, route, header string) (int, string) {
+	t.Helper()
+	code := `$ctx = stream_context_create(array("http" => array("ignore_errors" => true, "header" => $argv[2])));
+$body = file_get_contents("http://127.0.0.1/?rest_route=/" . $argv[1], false, $ctx);
+echo explode(" ", $http_response_header[0])[1], "\n", $body;`
+	out, err := r.dc("exec", "-T", "wp", "php", "-r", code, route, header)
+	if err != nil {
+		t.Fatalf("php in the wp container: %v\n%s", err, out)
+	}
+	status, body, _ := strings.Cut(out, "\n")
+	n, _ := strconv.Atoi(strings.TrimSpace(status))
+	return n, body
+}
+
 func decode(t *testing.T, status int, b []byte) map[string]any {
 	t.Helper()
 	var out map[string]any
@@ -488,12 +536,23 @@ func (r *rig) dc(args ...string) (string, error) {
 	return string(out), err
 }
 
-// ports picks n free ports in 18900–18999.
+// ports picks n free ports in 18900–18999, or in the range ECHO_TEST_PORTS
+// names ("20480-20499") on a machine where those are taken.
 func ports(t *testing.T, n int) []int {
 	t.Helper()
+	lo, hi := 18900, 18999
+	if v := os.Getenv("ECHO_TEST_PORTS"); v != "" {
+		a, b, _ := strings.Cut(v, "-")
+		l, err1 := strconv.Atoi(a)
+		h, err2 := strconv.Atoi(b)
+		if err1 != nil || err2 != nil || h < l {
+			t.Fatalf("ECHO_TEST_PORTS=%q: want LOW-HIGH", v)
+		}
+		lo, hi = l, h
+	}
 	var out []int
-	for _, p := range rand.Perm(100) {
-		port := 18900 + p
+	for _, p := range rand.Perm(hi - lo + 1) {
+		port := lo + p
 		l, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%d", port))
 		if err != nil {
 			continue
@@ -504,7 +563,7 @@ func ports(t *testing.T, n int) []int {
 			return out
 		}
 	}
-	t.Fatal("no free ports in 18900-18999")
+	t.Fatalf("no %d free ports in %d-%d", n, lo, hi)
 	return nil
 }
 
