@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -226,19 +227,36 @@ func TestParallelStopsOnCancel(t *testing.T) {
 	}
 }
 
-// exclusiveEcho also has catcher C15's exclusive lease.
-type exclusiveEcho struct{ leasingEcho }
+// exclusiveEcho also has catcher C15's exclusive lease. busy makes it
+// answer like an Echo whose other actions stayed open too long.
+type exclusiveEcho struct {
+	leasingEcho
+	busy bool
+}
 
-func (f *exclusiveEcho) BeginExclusive(_ context.Context, run, action string) (string, error) {
-	f.calls = append(f.calls, "exclusive "+run+"/"+action)
+func (f *exclusiveEcho) BeginExclusive(_ context.Context, run, action string, timeout time.Duration) (string, error) {
+	f.calls = append(f.calls, fmt.Sprintf("exclusive %s/%s %s", run, action, timeout))
+	if f.busy {
+		return "", errors.New("409 Conflict")
+	}
 	return "X-" + action, nil
 }
 
 func TestBeginExclusive(t *testing.T) {
 	x := &exclusiveEcho{}
-	begin(context.Background(), x, "r1", "a", true)()
-	begin(context.Background(), x, "r1", "b", false)()
-	if want := []string{"exclusive r1/a", "end X-a", "lease r1/b", "end L-b"}; !slices.Equal(x.calls, want) {
+	begin(context.Background(), x, "r1", "a", true, 5*time.Second)()
+	begin(context.Background(), x, "r1", "b", false, 5*time.Second)()
+	if want := []string{"exclusive r1/a 5s", "end X-a", "lease r1/b", "end L-b"}; !slices.Equal(x.calls, want) {
+		t.Errorf("calls %q, want %q", x.calls, want)
+	}
+}
+
+// An exclusive lease Echo can't give in time becomes a shared one, so
+// the action still runs and its tagged mail still counts.
+func TestBeginExclusiveBusyFallsBack(t *testing.T) {
+	x := &exclusiveEcho{busy: true}
+	begin(context.Background(), x, "r1", "a", true, time.Second)()
+	if want := []string{"exclusive r1/a 1s", "lease r1/a", "end L-a"}; !slices.Equal(x.calls, want) {
 		t.Errorf("calls %q, want %q", x.calls, want)
 	}
 }

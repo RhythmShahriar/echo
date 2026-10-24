@@ -6,6 +6,7 @@ package runner
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -33,30 +34,48 @@ type beginner interface {
 }
 
 // exclusiver is the exclusive lease a client from catcher C15 on has:
-// Echo waits until no other action (of any run) is open, then keeps new
-// ones out until it ends, so untagged mail can only be this action's.
+// Echo waits up to timeout until no other action (of any run) is open,
+// then keeps new ones out until it ends, so untagged mail can only be
+// this action's. The signature must stay the client's own: a type
+// assertion that doesn't match fails without a word, so
+// TestClientLeaseMethodsMatch checks it against client.Client.
 type exclusiver interface {
-	BeginExclusive(ctx context.Context, run, action string) (string, error)
+	BeginExclusive(ctx context.Context, run, action string, timeout time.Duration) (string, error)
 }
 
 // begin tells Echo that run/action is in progress and returns the func
 // that ends exactly that action. With exclusive, it asks for an
-// exclusive lease when the client has one; without, a shared one. Errors
-// are ignored, as before: an Echo that can't attribute untagged mail
-// still catches tagged mail.
-func begin(ctx context.Context, c beginner, run, action string, exclusive bool) (end func()) {
+// exclusive lease when the client has one, waiting up to timeout for
+// other actions to end; without, a shared one. An exclusive lease Echo
+// can't give in time (others still open) falls back to a shared one.
+// Other errors are ignored, as before: an Echo that can't attribute
+// untagged mail still catches tagged mail. A lease that failed ends
+// nothing, since ending an empty lease would close whatever is open.
+func begin(ctx context.Context, c beginner, run, action string, exclusive bool, timeout time.Duration) (end func()) {
 	l, leases := c.(leaser)
-	if x, ok := c.(exclusiver); ok && exclusive && leases {
-		lease, _ := x.BeginExclusive(ctx, run, action)
-		return func() { _ = l.EndLease(context.WithoutCancel(ctx), lease) }
+	if !leases {
+		_ = c.Begin(ctx, run, action)
+		return func() { _ = c.End(context.WithoutCancel(ctx)) }
 	}
-	if leases {
-		lease, _ := l.BeginLease(ctx, run, action)
-		return func() { _ = l.EndLease(context.WithoutCancel(ctx), lease) }
+	var (
+		lease string
+		err   = errNoExclusive
+	)
+	if x, ok := c.(exclusiver); ok && exclusive {
+		lease, err = x.BeginExclusive(ctx, run, action, timeout)
 	}
-	_ = c.Begin(ctx, run, action)
-	return func() { _ = c.End(context.WithoutCancel(ctx)) }
+	if err != nil && ctx.Err() == nil {
+		lease, err = l.BeginLease(ctx, run, action)
+	}
+	if err != nil {
+		return func() {}
+	}
+	return func() { _ = l.EndLease(context.WithoutCancel(ctx), lease) }
 }
+
+// errNoExclusive stands for "no exclusive lease was asked for", so begin
+// asks for a shared one.
+var errNoExclusive = errors.New("no exclusive lease")
 
 // ambiguous is the attribution Echo gives a message that names no run
 // while several actions are open (catcher C5): it can't tell whose it is,

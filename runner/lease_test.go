@@ -6,8 +6,10 @@ package runner
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"slices"
 	"strings"
 	"sync"
@@ -51,17 +53,53 @@ func (f *leasingEcho) EndLease(_ context.Context, lease string) error {
 
 func TestBeginEndsItsOwnLease(t *testing.T) {
 	l := &leasingEcho{}
-	begin(context.Background(), l, "r1", "a", false)()
+	begin(context.Background(), l, "r1", "a", false, time.Second)()
 	if want := []string{"lease r1/a", "end L-a"}; !slices.Equal(l.calls, want) {
 		t.Errorf("with leases: %q, want %q", l.calls, want)
 	}
 	// An end must reach Echo even when the run was canceled.
 	ctx, cancel := context.WithCancel(context.Background())
-	end := begin(ctx, &l.fakeEcho, "r1", "b", true) // no exclusive lease to ask for
+	end := begin(ctx, &l.fakeEcho, "r1", "b", true, time.Second) // no exclusive lease to ask for
 	cancel()
 	end()
 	if want := []string{"lease r1/a", "end L-a", "begin r1/b", "end"}; !slices.Equal(l.calls, want) {
 		t.Errorf("without leases: %q, want %q", l.calls, want)
+	}
+}
+
+// failingEcho's lease calls fail, like an Echo that went away.
+type failingEcho struct{ leasingEcho }
+
+func (f *failingEcho) BeginLease(context.Context, string, string) (string, error) {
+	f.calls = append(f.calls, "lease failed")
+	return "", errors.New("connection refused")
+}
+
+// A lease that failed must end nothing: an empty lease would end
+// whatever another run has open.
+func TestFailedLeaseEndsNothing(t *testing.T) {
+	f := &failingEcho{}
+	begin(context.Background(), f, "r1", "a", false, time.Second)()
+	if want := []string{"lease failed"}; !slices.Equal(f.calls, want) {
+		t.Errorf("calls %q, want %q", f.calls, want)
+	}
+}
+
+// The runner finds the lease methods by type assertion, which fails
+// without a word when a signature drifts from the client's. Once the
+// client has a method by that name, it must have the runner's whole
+// interface.
+func TestClientLeaseMethodsMatch(t *testing.T) {
+	c := reflect.TypeFor[*client.Client]()
+	for _, it := range []reflect.Type{reflect.TypeFor[leaser](), reflect.TypeFor[exclusiver](), reflect.TypeFor[beginner]()} {
+		for i := range it.NumMethod() {
+			if _, ok := c.MethodByName(it.Method(i).Name); ok && !c.Implements(it) {
+				t.Errorf("client.Client has %s but not the runner's %s interface; match runner/lease.go to it", it.Method(i).Name, it.Name())
+			}
+		}
+	}
+	if !c.Implements(reflect.TypeFor[beginner]()) {
+		t.Error("client.Client lost Begin or End")
 	}
 }
 

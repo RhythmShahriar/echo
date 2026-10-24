@@ -179,7 +179,7 @@ func runAction(ctx context.Context, o Options, run *model.Run, a config.Action, 
 	// so a connector can trust it. The replayer gets it unsigned, since it
 	// takes the run and action apart.
 	runValue := signRun(o.Client.Token, runID, act.ID)
-	end := begin(ctx, o.Client, runID, act.ID, exclusive)
+	end := begin(ctx, o.Client, runID, act.ID, exclusive, cfg.Timeout.Duration)
 	defer end()
 
 	var err error
