@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/RhythmShahriar/echo/model"
+	"github.com/RhythmShahriar/rhythm/kit/secrets"
 )
 
 // Mailbox APIs: the site sends as a signed-in mailbox (OAuth) instead of
@@ -69,6 +70,7 @@ var graphMail = Recognizer{
 		if !isJSON(r) {
 			if raw, ok := decodeB64(string(r.Body)); ok {
 				fillMIME(raw, m)
+				maskB64(m, string(r.Body), raw, base64.StdEncoding)
 			}
 		} else {
 			var p struct {
@@ -128,8 +130,11 @@ var gmail = Recognizer{
 	Hosts:    []string{"gmail.googleapis.com", "www.googleapis.com"},
 	Match:    func(r Request) bool { return host(r, "gmail.googleapis.com", "www.googleapis.com") && gmailSend(r) },
 	Fill: func(r Request, m *model.Message) {
-		if raw := gmailRaw(r); raw != nil {
+		if raw, encoded := gmailRaw(r); raw != nil {
 			fillMIME(raw, m)
+			if encoded != "" {
+				maskB64(m, encoded, raw, base64.RawURLEncoding)
+			}
 		}
 	},
 	Fake: func(Request, *model.Message) Fake {
@@ -138,23 +143,24 @@ var gmail = Recognizer{
 	},
 }
 
-// gmailRaw returns the RFC 5322 message a Gmail send carries, or nil.
-func gmailRaw(r Request) []byte {
+// gmailRaw returns the RFC 5322 message a Gmail send carries, or nil,
+// and the base64 it was decoded from ("" when it came as is).
+func gmailRaw(r Request) ([]byte, string) {
 	mt, params, _ := mime.ParseMediaType(r.Header("content-type"))
 	switch {
 	case mt == "message/rfc822":
-		return r.Body
+		return r.Body, ""
 	case mt == "multipart/related" && params["boundary"] != "":
 		mr := multipart.NewReader(bytes.NewReader(r.Body), params["boundary"])
 		for {
 			p, err := mr.NextPart()
 			if err != nil {
-				return nil
+				return nil, ""
 			}
 			b, _ := io.ReadAll(io.LimitReader(p, maxMIME))
 			pt, _, _ := mime.ParseMediaType(p.Header.Get("Content-Type"))
 			if pt == "message/rfc822" {
-				return b
+				return b, ""
 			}
 		}
 	}
@@ -162,10 +168,31 @@ func gmailRaw(r Request) []byte {
 		Raw string `json:"raw"`
 	}
 	if !r.JSON(&p) {
-		return nil
+		return nil, ""
 	}
 	raw, _ := decodeB64(p.Raw)
-	return raw
+	return raw, p.Raw
+}
+
+// maskB64 masks secrets in a message that came base64-encoded. The stored
+// body is the request as sent, where secrets.Redact can't see into the
+// base64: when the decoded message holds a secret, the encoded run in
+// m.Body is swapped for the masked message, encoded again with enc. When
+// the run isn't there whole (the body was cut to size), m.Body becomes
+// the masked message itself, no longer than it was.
+func maskB64(m *model.Message, encoded string, raw []byte, enc *base64.Encoding) {
+	masked := secrets.Redact(string(raw))
+	if masked == string(raw) {
+		return
+	}
+	if strings.Contains(m.Body, encoded) {
+		m.Body = strings.Replace(m.Body, encoded, enc.EncodeToString([]byte(masked)), 1)
+		return
+	}
+	if m.Body != "" && len(masked) > len(m.Body) {
+		masked = masked[:len(m.Body)]
+	}
+	m.Body = masked
 }
 
 // decodeB64 decodes base64 in any of its spellings: URL-safe or standard,

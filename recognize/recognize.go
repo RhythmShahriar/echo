@@ -114,20 +114,23 @@ func register(r Recognizer) {
 }
 
 // Recognize fills m from r: channel, provider, recipients, content. It
-// returns the matching recognizer, or the generic one.
+// returns the matching recognizer, or the generic one. The subject, text
+// and HTML it fills are masked with secrets.Redact, as the SMTP sink masks
+// them: a key in a mail sent through an API is stored masked too.
 func Recognize(r Request, m *model.Message) Recognizer {
-	for _, rec := range registry {
-		if rec.Match(r) {
-			m.Channel, m.Provider = rec.Channel, rec.Provider
-			if rec.Fill != nil {
-				rec.Fill(r, m)
-			}
-			return rec
+	rec := generic
+	for _, c := range registry {
+		if c.Match(r) {
+			rec = c
+			break
 		}
 	}
-	m.Channel, m.Provider = generic.Channel, generic.Provider
-	generic.Fill(r, m)
-	return generic
+	m.Channel, m.Provider = rec.Channel, rec.Provider
+	if rec.Fill != nil {
+		rec.Fill(r, m)
+	}
+	m.Subject, m.Text, m.HTML = secrets.Redact(m.Subject), secrets.Redact(m.Text), secrets.Redact(m.HTML)
+	return rec
 }
 
 // FakeFor returns the sealed answer for a recognized request.
