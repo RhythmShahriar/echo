@@ -7,6 +7,8 @@
 package store
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -39,21 +41,56 @@ func ValidName(name string) bool { return safeName.MatchString(name) }
 // Stamp is the default name for snapshots and runs.
 func Stamp(t time.Time) string { return t.Format("2006-01-02T15-04-05") }
 
-// NewDir creates kind/name (kind is "snapshots", "runs" or Incoming) and
-// returns it. An existing folder with the same name is replaced.
+// Runs holds recent runs and comparisons, one folder each.
+const Runs = "runs"
+
+// NewDir creates a folder for kind and returns it. For Runs it's
+// runs/<name>-<6 random hex digits>, made with a plain mkdir that retries
+// on a clash, so runs started in the same second (Stamp has one-second
+// resolution) or by two processes at once each get their own folder and
+// none is ever deleted. For Incoming it's the in-progress folder of the
+// snapshot name, replaced when a failed snapshot left one behind. Any
+// other kind gets kind/name, which must not exist yet.
 func (s Store) NewDir(kind, name string) (string, error) {
 	if !ValidName(name) {
 		return "", fmt.Errorf("%q isn't a valid name: use letters, digits, dots, dashes and underscores", name)
 	}
-	dir := filepath.Join(s.Root, kind, name)
-	if kind == Incoming {
+	switch kind {
+	case Incoming:
 		_ = os.Remove(filepath.Join(s.Root, Incoming)) // an empty one left by older versions
-		dir = filepath.Join(s.Root, "snapshots", Incoming+"-"+name)
+		dir := filepath.Join(s.Root, "snapshots", Incoming+"-"+name)
+		if err := os.RemoveAll(dir); err != nil {
+			return "", err
+		}
+		return dir, os.MkdirAll(dir, 0o750)
+	case Runs:
+		parent := filepath.Join(s.Root, Runs)
+		if err := os.MkdirAll(parent, 0o750); err != nil {
+			return "", err
+		}
+		for range 16 {
+			dir := filepath.Join(parent, name+"-"+randomHex(3))
+			err := os.Mkdir(dir, 0o750)
+			if err == nil {
+				return dir, nil
+			}
+			if !errors.Is(err, fs.ErrExist) {
+				return "", err
+			}
+		}
+		return "", fmt.Errorf("no free folder for %s in %s", name, parent)
 	}
-	if err := os.RemoveAll(dir); err != nil {
+	dir := filepath.Join(s.Root, kind, name)
+	if err := os.MkdirAll(filepath.Dir(dir), 0o750); err != nil {
 		return "", err
 	}
-	return dir, os.MkdirAll(dir, 0o750)
+	return dir, os.Mkdir(dir, 0o750)
+}
+
+func randomHex(n int) string {
+	b := make([]byte, n)
+	_, _ = rand.Read(b)
+	return hex.EncodeToString(b)
 }
 
 // Saver returns a function that writes files into dir.
@@ -212,9 +249,9 @@ func (s Store) Snapshots() ([]string, error) {
 // LatestRun returns the newest run directory (a run or comparison), or
 // the latest snapshot when nothing has been run since taking one.
 func (s Store) LatestRun() (string, error) {
-	runs, err := s.list("runs")
+	runs, err := s.list(Runs)
 	if err == nil && len(runs) > 0 {
-		return filepath.Join(s.Root, "runs", runs[len(runs)-1]), nil
+		return filepath.Join(s.Root, Runs, runs[len(runs)-1]), nil
 	}
 	if dir, err := s.Snapshot(""); err == nil {
 		return dir, nil
@@ -240,12 +277,12 @@ func (s Store) list(kind string) ([]string, error) {
 // Prune keeps the newest keep runs and deletes older ones. Snapshots are
 // never pruned.
 func (s Store) Prune(keep int) error {
-	runs, err := s.list("runs")
+	runs, err := s.list(Runs)
 	if err != nil {
 		return err
 	}
 	for len(runs) > keep {
-		if err := os.RemoveAll(filepath.Join(s.Root, "runs", runs[0])); err != nil {
+		if err := os.RemoveAll(filepath.Join(s.Root, Runs, runs[0])); err != nil {
 			return err
 		}
 		runs = runs[1:]

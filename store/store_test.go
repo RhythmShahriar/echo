@@ -7,7 +7,9 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -81,15 +83,15 @@ func TestPruneKeepsNewest(t *testing.T) {
 	s := Store{Root: t.TempDir()}
 	start := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	for i := range 5 {
-		if _, err := s.NewDir("runs", Stamp(start.Add(time.Duration(i)*time.Minute))); err != nil {
+		if _, err := s.NewDir(Runs, Stamp(start.Add(time.Duration(i)*time.Minute))); err != nil {
 			t.Fatal(err)
 		}
 	}
 	if err := s.Prune(2); err != nil {
 		t.Fatal(err)
 	}
-	runs, _ := s.list("runs")
-	if len(runs) != 2 || runs[1] != Stamp(start.Add(4*time.Minute)) {
+	runs, _ := s.list(Runs)
+	if len(runs) != 2 || !strings.HasPrefix(runs[1], Stamp(start.Add(4*time.Minute))+"-") {
 		t.Errorf("kept %v", runs)
 	}
 	latest, _ := s.LatestRun()
@@ -234,11 +236,70 @@ func TestLatestRunFallsBackToTheSnapshot(t *testing.T) {
 	if dir, err := s.LatestRun(); err != nil || filepath.Base(dir) != "first" {
 		t.Errorf("only a snapshot: %s, %v", dir, err)
 	}
-	run, err := s.NewDir("runs", Stamp(time.Now()))
+	run, err := s.NewDir(Runs, Stamp(time.Now()))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if dir, err := s.LatestRun(); err != nil || dir != run {
 		t.Errorf("a run since: %s, %v", dir, err)
+	}
+}
+
+// TestRunFoldersAreUnique: runs started in the same second, or by two
+// processes at once, each get a folder, and none is deleted.
+func TestRunFoldersAreUnique(t *testing.T) {
+	s := Store{Root: t.TempDir()}
+	stamp := Stamp(time.Now())
+	old := filepath.Join(s.Root, Runs, stamp)
+	if err := os.MkdirAll(old, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(old, "run.json"), []byte("{}"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	dirs := make([]string, 20)
+	var wg sync.WaitGroup
+	for i := range dirs {
+		wg.Go(func() {
+			dir, err := s.NewDir(Runs, stamp)
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			if err := os.WriteFile(filepath.Join(dir, "run.json"), []byte(dir), 0o600); err != nil {
+				t.Error(err)
+			}
+			dirs[i] = dir
+		})
+	}
+	wg.Wait()
+	seen := map[string]bool{}
+	for _, d := range dirs {
+		if seen[d] || !regexp.MustCompile(`^`+regexp.QuoteMeta(stamp)+`-[0-9a-f]{6}$`).MatchString(filepath.Base(d)) {
+			t.Errorf("folder %s is shared or misnamed", d)
+		}
+		seen[d] = true
+		if b, err := os.ReadFile(filepath.Join(d, "run.json")); err != nil || string(b) != d {
+			t.Errorf("%s was overwritten: %q %v", d, b, err)
+		}
+	}
+	if b, err := os.ReadFile(filepath.Join(old, "run.json")); err != nil || string(b) != "{}" {
+		t.Errorf("an existing folder was touched: %q %v", b, err)
+	}
+	if runs, _ := s.list(Runs); len(runs) != 21 {
+		t.Errorf("%d run folders, want 21", len(runs))
+	}
+}
+
+func TestOtherKindsNeverReplace(t *testing.T) {
+	s := Store{Root: t.TempDir()}
+	if _, err := s.NewDir("snapshots", "keep"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.NewDir("snapshots", "keep"); err == nil {
+		t.Error("an existing folder must not be replaced")
+	}
+	if _, err := s.NewDir(Runs, "../x"); err == nil {
+		t.Error("path names must be rejected")
 	}
 }
