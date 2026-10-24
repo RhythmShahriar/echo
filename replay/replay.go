@@ -246,6 +246,22 @@ func lookupEnv(env []string, name string) (string, bool) {
 	return "", false
 }
 
+// SecretReady reports, before anything is sent, whether a signing secret
+// for e can be found: ErrNoSecret when it can't.
+func SecretReady(e Event, o Options) error {
+	if e.Scheme == PayPal || !known(e.Scheme) {
+		return nil // Send explains these
+	}
+	env := o.Env
+	if env == nil {
+		env = os.Environ()
+	}
+	if _, _, err := resolveSecret(e.Scheme, o, env); errors.Is(err, ErrNoSecret) {
+		return err
+	}
+	return nil
+}
+
 // resolveSecret finds the signing secret and checks it's test-shaped
 // where that can be told.
 func resolveSecret(scheme string, o Options, env []string) (secret, from string, err error) {

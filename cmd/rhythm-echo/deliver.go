@@ -239,6 +239,10 @@ func cmdReplay(s *session) int {
 		}
 		headersMap[strings.TrimSpace(name)] = strings.TrimSpace(value)
 	}
+	opts := replay.Options{SecretEnv: *secretEnv, Staging: s.cfg.Staging, Scan: scanConfigs()}
+	if err := replay.SecretReady(ev, opts); err != nil {
+		return s.fail(err) // a usage error, before the header
+	}
 	runID := "replay-" + time.Now().UTC().Format("20060102T150405")
 	action := "replay:" + ev.Type
 	_ = s.echo.Begin(s.ctx, runID, action)
@@ -247,7 +251,7 @@ func cmdReplay(s *session) int {
 	s.view.Header(version, secrets.Redact(target))
 	s.view.Step("Event", ev.Name+" ("+ev.Scheme+")")
 	res, err := replay.Send(s.ctx, ev, replay.Target{URL: target, Headers: headersMap},
-		replay.Options{SecretEnv: *secretEnv, Staging: s.cfg.Staging, Scan: scanConfigs(), Run: runID, Action: action})
+		replay.Options{SecretEnv: opts.SecretEnv, Staging: opts.Staging, Scan: opts.Scan, Run: runID, Action: action})
 	if err != nil {
 		return s.fail(err)
 	}

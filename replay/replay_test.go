@@ -520,3 +520,13 @@ func TestFromFile(t *testing.T) {
 		t.Error("invalid JSON accepted")
 	}
 }
+
+func TestSecretReady(t *testing.T) {
+	e := Event{Name: "x", Scheme: Stripe}
+	if err := SecretReady(e, Options{Env: []string{}}); !errors.Is(err, ErrNoSecret) {
+		t.Errorf("no secret: %v", err)
+	}
+	if err := SecretReady(e, Options{Env: []string{"ECHO_STRIPE_WEBHOOK_SECRET=" + "whsec_" + "abc"}}); err != nil {
+		t.Errorf("secret set: %v", err)
+	}
+}
