@@ -1,0 +1,27 @@
+{
+  "total": 2,
+  "unread": 1,
+  "messages_count": 1,
+  "messages_unread": 1,
+  "start": 0,
+  "tags": [],
+  "messages": [
+    {
+      "ID": "iAfZVVe2UQfNSG5BAjgYwa",
+      "MessageID": "12345.67890@localhost",
+      "Read": false,
+      "From": {"Name": "John Doe", "Address": "john@example.com"},
+      "To": [{"Name": "Jane Smith", "Address": "jane@example.com"}],
+      "Cc": [{"Name": "", "Address": "audit@example.com"}],
+      "Bcc": [],
+      "ReplyTo": [{"Name": "Support", "Address": "support@example.com"}],
+      "Subject": "Message subject",
+      "Created": "2024-04-01T10:11:12.345+11:00",
+      "Username": "",
+      "Tags": [],
+      "Size": 6144,
+      "Attachments": 1,
+      "Snippet": "Message snippet"
+    }
+  ]
+}

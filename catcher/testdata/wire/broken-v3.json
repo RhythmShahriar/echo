@@ -1,0 +1,23 @@
+{
+  "name": "a wire version no Echo speaks",
+  "about": "Send the version /v1/health names, at most wire.Version.",
+  "valid": false,
+  "problems": [
+    "capture.v: 3 is above 2"
+  ],
+  "capture": {
+    "v": 3,
+    "kind": "email",
+    "source": {
+      "via": "node"
+    },
+    "email": {
+      "from": "shop@shop.test",
+      "to": [
+        "ann@example.test"
+      ],
+      "subject": "Your receipt",
+      "text": "Thanks for your order."
+    }
+  }
+}

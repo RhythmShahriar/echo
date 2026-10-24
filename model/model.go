@@ -3,7 +3,7 @@
 
 // Package model holds what Echo records: the messages a site sends
 // (email, SMS, webhooks, chat alerts, analytics and payment calls), the
-// actions that made it send them, and the issues and changes found when
+// actions that made it send them and the issues and changes found when
 // checking and comparing runs. Runs are stored as JSON (schema
 // rhythm-echo/v1).
 package model
@@ -70,6 +70,45 @@ type Message struct {
 	Error    string            `json:"error,omitempty"`
 	Source   Source            `json:"source"`
 	At       time.Time         `json:"at"`
+
+	// Fields added after v1.0.0. All are omitted when empty, so a message
+	// that doesn't use them encodes exactly as before and the schema stays
+	// rhythm-echo/v1.
+
+	// Truncated says Body, HTML, Text, Subject or an address was cut
+	// to the size cap. Compare must not read a cut payload as "fields lost".
+	Truncated bool `json:"truncated,omitempty"`
+	// Attachments lists the files the message carried, without their
+	// content.
+	Attachments []Attachment `json:"attachments,omitempty"`
+	// Issues are the problems found in this message alone, set when it's
+	// checked on its own (the live view, watch) rather than in a run.
+	Issues []Issue `json:"issues,omitempty"`
+	// Attribution says how sure Echo is about Run and Action: "" when the
+	// message named them or arrived during exactly one action, Late or
+	// Ambiguous otherwise.
+	Attribution string `json:"attribution,omitempty"`
+	// LateFor is the action a Late message most likely belongs to.
+	LateFor string `json:"late_for,omitempty"`
+}
+
+// Attributions.
+const (
+	Late      = "late"      // arrived after its action ended; LateFor names the action
+	Ambiguous = "ambiguous" // arrived untagged while several actions were open
+)
+
+// Attachment is one file attached to a message. Echo keeps its name,
+// type, size and hash so a vanished or changed invoice shows up in a
+// comparison; the content itself is not stored.
+type Attachment struct {
+	Name   string `json:"name"`
+	Type   string `json:"type,omitempty"` // MIME type: "application/pdf"
+	Size   int64  `json:"size"`           // decoded bytes
+	SHA256 string `json:"sha256,omitempty"`
+	// Inline says the file is shown in the message body (a logo, a
+	// chart) rather than offered as a download.
+	Inline bool `json:"inline,omitempty"`
 }
 
 // Response is what the remote service (or Echo's fake) answered.
@@ -85,6 +124,7 @@ type Source struct {
 	Plugin string `json:"plugin,omitempty"` // the plugin or package that sent it, when known
 	Hook   string `json:"hook,omitempty"`   // wp_mail, pre_http_request, fetch, nodemailer…
 	Host   string `json:"host,omitempty"`   // the site that sent it
+	Site   string `json:"site,omitempty"`   // the site's own name for itself (home URL, APP_URL), when the connector knows it
 }
 
 // NewID returns a short ID for a message.
@@ -155,6 +195,20 @@ type Run struct {
 	Actions  []Action  `json:"actions"`
 	Issues   []Issue   `json:"issues,omitempty"` // run-wide (seal health, deliverability)
 	Warnings []string  `json:"warnings,omitempty"`
+	// BootIDs lists every catcher boot seen during the run, oldest first.
+	// More than one means Echo restarted mid-run and lost what it held.
+	BootIDs []string `json:"boot_ids,omitempty"`
+}
+
+// Failed returns how many actions failed (the action itself errored) and
+// how many there are.
+func (r *Run) Failed() (failed, total int) {
+	for _, a := range r.Actions {
+		if a.Error != "" {
+			failed++
+		}
+	}
+	return failed, len(r.Actions)
 }
 
 // Action returns the action with id, or nil.
@@ -187,9 +241,25 @@ type Change struct {
 	Fix     string   `json:"fix,omitempty"`
 	Actions []string `json:"actions"` // action labels
 	Channel Channel  `json:"channel,omitempty"`
-	Before  string   `json:"before,omitempty"`
+	Before  string   `json:"before,omitempty"` // in full: the terminal and HTML reports shorten it themselves
 	After   string   `json:"after,omitempty"`
 	Score   float64  `json:"score,omitempty"`
+	// Diff is a line diff of Before and After, for content changes.
+	Diff []DiffLine `json:"diff,omitempty"`
+}
+
+// Diff line operations.
+const (
+	DiffAdd     = "add" // only in After
+	DiffDel     = "del" // only in Before
+	DiffContext = "ctx" // in both, shown around a change
+)
+
+// DiffLine is one line of a Change's diff.
+type DiffLine struct {
+	Op   string `json:"op"`   // DiffAdd, DiffDel or DiffContext
+	Line int    `json:"line"` // 1-based, in After for add and ctx, in Before for del
+	Text string `json:"text"`
 }
 
 // Comparison is the result of `compare`.
