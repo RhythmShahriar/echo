@@ -19,7 +19,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"os/exec"
 	"regexp"
 	"slices"
 	"strings"
@@ -313,14 +312,15 @@ func doHTTP(ctx context.Context, o Options, a config.Action, runValue string, fa
 	return nil
 }
 
-// command runs cmd with sh -c and RHYTHM_ECHO_RUN set, so connectors in
-// CLI processes (wp-cli, artisan, scripts) tag what they send.
+// command runs cmd in the shell (see Shell) with RHYTHM_ECHO_RUN set, so
+// connectors in CLI processes (wp-cli, artisan, scripts) tag what they
+// send.
 func command(ctx context.Context, cmd, runValue string, env map[string]string) error {
-	c := exec.CommandContext(ctx, "sh", "-c", cmd) //nolint:gosec // the user's own configured command
-	c.Env = append(os.Environ(), "RHYTHM_ECHO_RUN="+runValue)
+	vars := []string{"RHYTHM_ECHO_RUN=" + runValue}
 	for k, v := range env {
-		c.Env = append(c.Env, k+"="+v)
+		vars = append(vars, k+"="+v)
 	}
+	c := Shell(ctx, cmd, vars)
 	var stderr bytes.Buffer
 	c.Stdout, c.Stderr = io.Discard, &stderr
 	if err := c.Run(); err != nil {

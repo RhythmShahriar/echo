@@ -62,7 +62,7 @@ type Config struct {
 type Action struct {
 	Name     string            `yaml:"name,omitempty"`
 	HTTP     *HTTPAction       `yaml:"http,omitempty"`
-	Command  string            `yaml:"command,omitempty"` // run with sh -c; RHYTHM_ECHO_RUN is set
+	Command  string            `yaml:"command,omitempty"` // run with sh -c (cmd /C on Windows); RHYTHM_ECHO_RUN is set
 	Replay   *ReplayAction     `yaml:"replay,omitempty"`
 	Env      map[string]string `yaml:"env,omitempty"`
 	Expect   Expect            `yaml:"expect,omitempty"`   // optional: fail the action unless these were sent
