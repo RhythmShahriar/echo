@@ -72,28 +72,78 @@ func (o Options) tune(c model.Change) (model.Change, bool) {
 	return c, true
 }
 
-// coveredText lists the messages of an action with a new placeholder or
-// PHP error that counts as BROKE: their text change says the same thing
-// again, so it isn't reported.
-func (o Options) coveredText(before, after []model.Issue) map[string]bool {
+// covered says how much of a message's text change an issue already
+// reports. all: a new placeholder or PHP error that counts as BROKE says
+// the same thing again. hosts: a new dev-link names these hosts, so a
+// change only in lines that carry one of them says nothing more.
+type covered struct {
+	all   bool
+	hosts []string
+}
+
+// coveredText lists, by message ID, what the new issues of an action
+// already say about its messages' text changes.
+func (o Options) coveredText(before, after []model.Issue) map[string]covered {
 	had := map[string]bool{}
 	for _, i := range before {
 		had[i.Key] = true
 	}
-	out := map[string]bool{}
+	out := map[string]covered{}
 	for _, i := range after {
-		if had[i.Key] || i.Message == "" || (i.Check != "content/placeholder" && i.Check != "content/php-error") {
+		if had[i.Key] || i.Message == "" {
 			continue
 		}
-		class := model.New
-		if i.Level == model.Error {
-			class = model.Broke
-		}
-		if c, on := o.tune(model.Change{Class: class, Check: i.Check}); on && c.Class == model.Broke {
-			out[i.Message] = true
+		switch i.Check {
+		case "content/placeholder", "content/php-error":
+			class := model.New
+			if i.Level == model.Error {
+				class = model.Broke
+			}
+			if c, on := o.tune(model.Change{Class: class, Check: i.Check}); on && c.Class == model.Broke {
+				cv := out[i.Message]
+				cv.all = true
+				out[i.Message] = cv
+			}
+		case "content/dev-link":
+			// Turned off, it reports nothing, so the text change stays.
+			h := check.DevLinkHost(i.Title)
+			if _, on := o.tune(model.Change{Class: model.New, Check: i.Check}); on && h != "" {
+				cv := out[i.Message]
+				cv.hosts = append(cv.hosts, h)
+				out[i.Message] = cv
+			}
 		}
 	}
 	return out
+}
+
+// says reports whether a new dev-link covers every change in hunks: each
+// changed line rewritten into one that carries a flagged host. A hunk that drops more lines than it adds, or adds a line
+// without the host, is a change of its own.
+func (cv covered) says(hunks []Hunk) bool {
+	if len(cv.hosts) == 0 || len(hunks) == 0 {
+		return false
+	}
+	for _, h := range hunks {
+		adds, dels := 0, 0
+		for _, l := range h {
+			switch l.Op {
+			case OpAdd:
+				adds++
+				if !slices.ContainsFunc(cv.hosts, func(host string) bool {
+					return strings.Contains(strings.ToLower(l.Text), strings.ToLower(host))
+				}) {
+					return false
+				}
+			case OpDel:
+				dels++
+			}
+		}
+		if adds == 0 || dels > adds {
+			return false
+		}
+	}
+	return true
 }
 
 // Key names a change for Accept: 8 hex characters from what makes two

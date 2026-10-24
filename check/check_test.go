@@ -182,3 +182,16 @@ func TestCapitalize(t *testing.T) {
 		}
 	}
 }
+
+func TestDevLinkHost(t *testing.T) {
+	m := model.Message{ID: "m1", Channel: model.Email, To: []string{"a@shop.com"}, Text: "Go to https://staging.shop.test/x"}
+	is := devLink.Run(m, Options{SiteHost: "shop.com"})
+	if len(is) != 1 || DevLinkHost(is[0].Title) != "staging.shop.test" {
+		t.Fatalf("issues %+v", is)
+	}
+	for _, title := range []string{"", "Email to a@shop.com has a placeholder ({name})", "x links to a development address (y"} {
+		if h := DevLinkHost(title); h != "" {
+			t.Errorf("DevLinkHost(%q) = %q", title, h)
+		}
+	}
+}

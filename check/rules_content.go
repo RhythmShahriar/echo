@@ -6,6 +6,7 @@ package check
 import (
 	"fmt"
 	"slices"
+	"strings"
 
 	"github.com/RhythmShahriar/echo/mask"
 	"github.com/RhythmShahriar/echo/model"
@@ -77,12 +78,26 @@ var devLink = Rule{
 	Run: func(m model.Message, o Options) []model.Issue {
 		var out []model.Issue
 		for _, h := range devLinks(m, o) {
-			out = append(out, model.Issue{Title: fmt.Sprintf("%s links to a development address (%s)", Capitalize(Describe(m)), h),
+			out = append(out, model.Issue{Title: Capitalize(Describe(m)) + devLinkMarker + h + ")",
 				Fix: "Build links from the site's configured URL, not a hard-coded or local one."})
 		}
 		return out
 	},
 }
+
+// DevLinkHost returns the development host a content/dev-link issue's
+// title names, or "" for any other title.
+func DevLinkHost(title string) string {
+	i := strings.LastIndex(title, devLinkMarker)
+	if i < 0 || !strings.HasSuffix(title, ")") {
+		return ""
+	}
+	return title[i+len(devLinkMarker) : len(title)-1]
+}
+
+// devLinkMarker comes between the message and the host in a dev-link
+// title: "Email to a@b.c links to a development address (x.test)".
+const devLinkMarker = " links to a development address ("
 
 var secretInBody = Rule{
 	ID: "content/secret", Level: model.Warning,

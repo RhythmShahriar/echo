@@ -217,3 +217,62 @@ func TestUnknownChecks(t *testing.T) {
 		t.Errorf("got %v", got)
 	}
 }
+
+// TestDevLinkCoversItsTextChange: a link that now points at a staging
+// host is NEW content/dev-link. When every changed line carries that host
+// the text change says it again and isn't reported; a change elsewhere
+// in the text still is, as it is with the check off or a dev-link the
+// snapshot had too.
+func TestDevLinkCoversItsTextChange(t *testing.T) {
+	mail := func(n, link, sign string) model.Message {
+		text := "Hi echo-test,\n\nThanks for your order #" + n + ".\n\nTotal: $49.99\n\nView your order: " + link + "/my-account/orders/" + n + "/\n\n" + sign
+		m := email("echo-test@shop.com", "Your order", text)
+		m.ID = model.NewID(text)
+		return m
+	}
+	before := run(withIssues(order(mail("1023", "https://shop.com", "Bean & Leaf")), nil))
+	compareWith := func(o Options, m model.Message) string {
+		return titles(o.Compare(before, run(withIssues(order(m), o.Checks)), "", "", "test").Changes)
+	}
+	got := compareWith(Options{}, mail("1024", "https://staging.shop.test", "Bean & Leaf"))
+	if !strings.Contains(got, "new: Email links to a development address (staging.shop.test)") || strings.Contains(got, "text changed") {
+		t.Errorf("only the link's line changed:\n%s", got)
+	}
+	if got = compareWith(Options{}, mail("1024", "https://staging.shop.test", "Bean & Leaf Roasters")); !strings.Contains(got, "text changed") {
+		t.Errorf("another line changed too, so the text change stays:\n%s", got)
+	}
+	off := Options{Checks: map[string]string{"content/dev-link": "off"}}
+	if got = compareWith(off, mail("1024", "https://staging.shop.test", "Bean & Leaf")); !strings.Contains(got, "text changed") || strings.Contains(got, "development address") {
+		t.Errorf("with the check off the text change is all there is:\n%s", got)
+	}
+	// The snapshot linked to one staging host already: the dev-link isn't
+	// new, so the text change to another stays.
+	before = run(withIssues(order(mail("1023", "https://dev.shop.test", "Bean & Leaf")), nil))
+	if got = compareWith(Options{}, mail("1024", "https://dev.shop.test/x", "Bean & Leaf")); !strings.Contains(got, "text changed") {
+		t.Errorf("an old dev-link covers nothing:\n%s", got)
+	}
+}
+
+func TestCoveredSays(t *testing.T) {
+	cv := covered{hosts: []string{"staging.shop.test"}}
+	cases := []struct {
+		name   string
+		before string
+		after  string
+		want   bool
+	}{
+		{"a line rewritten to the host", "a\nhttps://shop.com/x\nb", "a\nhttps://STAGING.shop.test/x\nb", true},
+		{"a line added with the host", "a\nb", "a\nhttps://staging.shop.test/x\nb", true},
+		{"a line only removed", "a\nhttps://shop.com/x\nb", "a\nb", false},
+		{"a line added without the host", "a\nb", "a\nhttps://staging.shop.test/x\nb\nc", false},
+		{"two lines replaced by one", "a\nx\ny\nb", "a\nhttps://staging.shop.test/x\nb", false},
+	}
+	for _, c := range cases {
+		if got := cv.says(Diff(c.before, c.after)); got != c.want {
+			t.Errorf("%s: says = %v, want %v", c.name, got, c.want)
+		}
+	}
+	if (covered{}).says(Diff("a", "b")) {
+		t.Error("no hosts cover nothing")
+	}
+}

@@ -107,9 +107,9 @@ func Messages(before, after []model.Message) []model.Change {
 	return cs
 }
 
-// messages is Messages, plus notes on what couldn't be compared. covered
-// holds the IDs of messages whose text change an issue already reports.
-func messages(before, after []model.Message, covered map[string]bool) (out []model.Change, notes []string) {
+// messages is Messages, plus notes on what couldn't be compared. cover
+// says, by message ID, how much of a text change an issue already reports.
+func messages(before, after []model.Message, cover map[string]covered) (out []model.Change, notes []string) {
 	bs, as := byIdentity(before), byIdentity(after)
 	ids := keys(bs)
 	for _, id := range keys(as) {
@@ -124,7 +124,7 @@ func messages(before, after []model.Message, covered map[string]bool) (out []mod
 		multi := len(b) > 1 || len(a) > 1
 		pairs, lost, added, paired := pair(b, a)
 		for _, p := range pairs {
-			cs, note := content(p[0], p[1], covered[p[1].ID])
+			cs, note := content(p[0], p[1], cover[p[1].ID])
 			out = append(out, cs...)
 			if note != "" && !slices.Contains(notes, note) {
 				notes = append(notes, note)
@@ -242,9 +242,10 @@ const truncatedMark = "…(truncated)"
 func truncated(m model.Message) bool { return strings.HasSuffix(m.Body, truncatedMark) }
 
 // content compares two matched messages. note says what couldn't be
-// compared. textCovered leaves out a text change: a new placeholder or PHP
-// error in a is already BROKE; the line it changed would say it twice.
-func content(b, a model.Message, textCovered bool) (out []model.Change, note string) {
+// compared. cover leaves out a text change an issue in a already reports:
+// a new placeholder or PHP error is BROKE and a new dev-link names the
+// host its changed lines carry, so the text change would say it twice.
+func content(b, a model.Message, cover covered) (out []model.Change, note string) {
 	what := check.Capitalize(identityLabel(a))
 	ch := func(check, title, before, after, fix string) {
 		out = append(out, model.Change{Class: model.Changed, Check: check, Channel: a.Channel, Title: title, Before: before, After: after, Fix: fix})
@@ -269,9 +270,11 @@ func content(b, a model.Message, textCovered bool) (out []model.Change, note str
 			ch("message/reply-to", what+": lost its Reply-To", roles(b.ReplyTo), "", "Replies now go to the sender address; restore Reply-To if customers should reach a person.")
 		}
 	}
-	if bt, at := text(b), text(a); !textCovered && len(Diff(bt, at)) > 0 {
-		// The full texts, so a report can show the diff (ChangeDiff).
-		ch("message/text", what+": text changed", bt, at, "Read the new text; if the change is intended, take a new snapshot.")
+	if bt, at := text(b), text(a); !cover.all {
+		if h := Diff(bt, at); len(h) > 0 && !cover.says(h) {
+			// The full texts, so a report can show the diff (ChangeDiff).
+			ch("message/text", what+": text changed", bt, at, "Read the new text; if the change is intended, take a new snapshot.")
+		}
 	}
 	out = append(out, attachments(b, a, what)...)
 	if b.Event != a.Event && b.Event != "" {
