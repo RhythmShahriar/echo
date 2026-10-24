@@ -49,10 +49,15 @@ type Envelope struct {
 	Kind     Kind    `json:"kind"`
 	Tool     string  `json:"tool"`
 	Version  string  `json:"version"`
-	Complete bool    `json:"complete"` // false when part of it couldn't be checked (Verdict is then "error")
+	Complete bool    `json:"complete"` // false when part of it couldn't be checked or a payload was cut to size
 	Summary  Summary `json:"summary"`
 	Verdict  string  `json:"verdict"`
 	Data     any     `json:"data"`
+
+	// failed says a part is missing (Verdict "error"). A payload cut to
+	// size leaves Complete false but not failed: everything else was
+	// compared, so the verdict is still ok or findings.
+	failed bool
 }
 
 // Summary counts what an Envelope holds. A count that doesn't apply to
@@ -131,10 +136,10 @@ func NewEnvelope(kind Kind, v any) Envelope {
 		issues = Issues(t)
 	case dns.Report:
 		issues = t.Issues
-		e.Complete = !t.Unreachable
+		e.failed = t.Unreachable
 	case *dns.Report:
 		issues = t.Issues
-		e.Complete = !t.Unreachable
+		e.failed = t.Unreachable
 	case headers.Result:
 		issues = t.Issues
 	case []model.Message:
@@ -157,9 +162,12 @@ func NewEnvelope(kind Kind, v any) Envelope {
 		n := Counts(issues)
 		e.Summary.Errors, e.Summary.Warnings, e.Summary.Notices = n[model.Error], n[model.Warning], n[model.Notice]
 	}
+	if e.failed {
+		e.Complete = false
+	}
 	s := e.Summary
 	switch {
-	case !e.Complete:
+	case e.failed:
 		e.Verdict = VerdictError
 	case s.Broke+s.New+s.Changed+s.Errors+s.Warnings+s.Notices > 0:
 		e.Verdict = VerdictFindings
@@ -169,8 +177,8 @@ func NewEnvelope(kind Kind, v any) Envelope {
 	return e
 }
 
-// addRun counts a run's actions and messages; a failed action or a
-// payload cut to size makes the result incomplete. actions says whether
+// addRun counts a run's actions and messages. A failed action makes the
+// result fail; a payload cut to size only makes it incomplete. actions says whether
 // the run's action count is the summary's (a comparison counts the
 // actions it compared instead).
 func (e *Envelope) addRun(r *model.Run, actions bool) {
@@ -189,7 +197,7 @@ func (e *Envelope) addRun(r *model.Run, actions bool) {
 		}
 	}
 	if failed > 0 {
-		e.Complete = false
+		e.failed = true
 	}
 }
 

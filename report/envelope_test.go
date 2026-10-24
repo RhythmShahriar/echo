@@ -139,11 +139,17 @@ func TestEnvelopeSummaryAndVerdict(t *testing.T) {
 			t.Errorf("%s: verdict %s complete %v summary %+v; want %s %v %+v", tc.kind, e.Verdict, e.Complete, e.Summary, tc.verdict, tc.complete, tc.summary)
 		}
 	}
-	// A cut payload can't be fully checked.
+	// A cut payload can't be fully checked, but everything else was: the
+	// result is incomplete and its verdict is still the findings'.
 	r := comparedRun()
 	r.Actions[0].Messages[2].Body = `{"a":` + "\n…(truncated)"
+	if e := NewEnvelope(KindRun, r); e.Complete || e.Verdict == VerdictError {
+		t.Errorf("truncated: complete %v verdict %s", e.Complete, e.Verdict)
+	}
+	// A failed action next to it still makes the verdict error.
+	r.Actions[0].Error = "timeout"
 	if e := NewEnvelope(KindRun, r); e.Complete || e.Verdict != VerdictError {
-		t.Errorf("truncated: %+v", e)
+		t.Errorf("truncated and failed: complete %v verdict %s", e.Complete, e.Verdict)
 	}
 }
 
