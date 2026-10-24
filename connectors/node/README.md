@@ -72,6 +72,33 @@ When Echo's action runner starts a command, it sets `RHYTHM_ECHO_RUN`, and captu
 
 In serverless functions and short scripts, `await flush()` (exported by both entry points) before exiting. It waits for the response reports that are still being sent to Echo.
 
+## Codes and links in Playwright and Cypress
+
+Login, signup and checkout tests need the one-time code or magic link the site just sent. Echo caught that message, so ask it:
+
+```ts
+// Playwright, or any Node test runner
+import { echo } from '@rhythmsh/echo/playwright';
+
+await page.getByRole('button', { name: 'Send code' }).click();
+const { code, link } = await echo.latest({ to: 'ann@example.test', channel: 'email', wait: '10s' });
+await page.getByLabel('Code').fill(code!);
+```
+
+```ts
+// cypress/support/e2e.ts
+import '@rhythmsh/echo/cypress';
+
+// in a test
+cy.echoLatest({ to: '+15551230000', channel: 'sms' }).its('code').then((code) => cy.get('#otp').type(code));
+```
+
+`latest({ to, channel, run, action, since, q, wait })` calls Echo's `GET /v1/messages/latest` and returns `{ codes, links, message }`, plus `code` (the first code) and `link` (the first link's URL). `channel` takes one channel or a list. Echo waits up to `wait` for the message to arrive: a duration such as `'10s'` or `'1500ms'`, or milliseconds; the default is `10s` and the most is `1m`. When nothing arrives in time, the call throws (Cypress: the command fails) with Echo's reason, so the test fails where the message went missing.
+
+Echo's address and token come from `RHYTHM_ECHO_URL` and `RHYTHM_ECHO_TOKEN`, or from the second argument (`{ url, token }`). In Cypress they come from `Cypress.env`: set `CYPRESS_RHYTHM_ECHO_URL` and `CYPRESS_RHYTHM_ECHO_TOKEN` in the shell, or `env` in `cypress.config`. `cy.echoLatest` uses `cy.request`, which Cypress sends from Node, so Echo needs no CORS setup. Neither helper depends on Playwright or Cypress.
+
+The codes and links are read from the message as Echo caught it, before masking. Echo never stores them in snapshots or reports.
+
 ## Configuration
 
 | Variable | Default | Meaning |

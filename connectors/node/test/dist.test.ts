@@ -62,6 +62,26 @@ describe.skipIf(!existsSync(join(dist, 'esm', 'register.js')))('built package', 
     expect(got).toHaveLength(2); // not four: no double capture
   });
 
+  it('resolves the playwright and cypress exports in ESM and CJS', async () => {
+    const pkg = join(import.meta.dirname, '..');
+    const esm = `
+const p = await import('@rhythmsh/echo/playwright');
+const c = await import('@rhythmsh/echo/cypress');
+console.log(JSON.stringify([typeof p.latest, typeof p.echo.latest, typeof c.registerEchoCommands]));`;
+    const cjs = `
+const p = require('@rhythmsh/echo/playwright');
+const c = require('@rhythmsh/echo/cypress');
+console.log(JSON.stringify([typeof p.latest, typeof p.echo.latest, typeof c.registerEchoCommands]));`;
+    const want = '["function","function","function"]';
+    const a = await run(process.execPath, ['--input-type=module', '-e', esm], { cwd: pkg });
+    expect(a.stdout.trim()).toBe(want);
+    const b = await run(process.execPath, ['--input-type=commonjs', '-e', cjs], { cwd: pkg });
+    expect(b.stdout.trim()).toBe(want);
+    for (const f of ['esm/playwright.d.ts', 'cjs/playwright.d.ts', 'esm/cypress.d.ts', 'cjs/cypress.d.ts']) {
+      expect(existsSync(join(dist, f)), f).toBe(true);
+    }
+  });
+
   it('stays inert in production', async () => {
     const { stdout } = await run(
       process.execPath,
