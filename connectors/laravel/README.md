@@ -103,10 +103,13 @@ Queued mail and jobs are sent when the worker runs them. For staging checks, eit
 ## Development
 
 ```sh
-make install   # composer:2 in Docker
-make check     # php -l, Larastan level 6, PHPUnit + Testbench (fake Echo on PHP's built-in server)
+make test      # composer install, PHPUnit + Testbench (fake Echo on PHP's built-in server), Larastan level 6: what CI runs
+make check     # php -l on every file, then make test
+make phpunit   # only PHPUnit, after make install
 make e2e       # a fresh Laravel app against Echo's real catcher (needs Go, Docker, jq)
 ```
+
+Everything runs in Docker (`composer:2` and `php:8.3-cli`); `PHP_VERSION=8.2 make test` picks another PHP image. `make test COMPOSER=composer PHP=php` runs on the host's PHP, as CI does. Composer's download cache is `COMPOSER_CACHE_DIR` from the environment (default `~/.cache/composer`), mounted into Docker, so CI can keep it between runs; with `COMPOSER_DISABLE_NETWORK=1` the install uses only that cache. The tests talk only to a fake Echo they start on 127.0.0.1. Run-signature tests read Echo's shared vectors from `conformance/` in the Echo repository (or the folder `ECHO_CONFORMANCE` names) and skip without them.
 
 ## License
 

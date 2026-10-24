@@ -181,6 +181,16 @@ NODE_USE_ENV_PROXY=1 HTTPS_PROXY=http://127.0.0.1:8026 NODE_EXTRA_CA_CERTS="$(rh
 
 `NODE_USE_ENV_PROXY` covers `fetch` from Node 22.21 and 24.0, and `http`/`https` from Node 22.21 and 24.5.
 
+## Development
+
+```sh
+npm run test:ci    # npm ci --ignore-scripts, tsc, then the tests: what CI runs
+npm test           # builds dist/, then the Vitest suite
+npm run test:e2e   # the packed package in a real Next.js app against Echo's catcher (needs Go)
+```
+
+The suite is hermetic. No install script is needed (`npm ci --ignore-scripts` is enough). The tests start their own fakes on 127.0.0.1 (a fake Echo and fake provider APIs) and need no network. It runs from the repository root too, with `npm --prefix connectors/node test`. Run-signature tests read Echo's shared vectors in `conformance/testdata/run-signature.json`.
+
 ## License
 
 MIT

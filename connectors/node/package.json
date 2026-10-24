@@ -83,6 +83,7 @@
     "lint": "tsc -p tsconfig.json",
     "pretest": "npm run build",
     "test": "vitest run",
+    "test:ci": "npm ci --ignore-scripts --no-audit --no-fund && npm run typecheck && npm test",
     "test:e2e": "npm run build && node fixtures/e2e.mjs",
     "prepack": "npm run build"
   },
