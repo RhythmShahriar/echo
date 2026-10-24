@@ -57,33 +57,104 @@ func Compare(before, after *model.Run, beforeDir, afterDir, version string) *mod
 func Messages(before, after []model.Message) []model.Change {
 	var out []model.Change
 	bs, as := byIdentity(before), byIdentity(after)
-	for _, id := range keys(bs) {
-		b := bs[id]
-		a, ok := as[id]
-		if !ok {
-			m := b[0]
-			out = append(out, model.Change{Class: model.Broke, Check: "message/missing", Channel: m.Channel,
-				Title:  fmt.Sprintf("%s is no longer sent", capitalize(identityLabel(m))),
-				Fix:    "Something in the change stopped this message: check the plugin or code that sends it, and its settings.",
-				Before: fmt.Sprint(len(b)), After: "0"})
-			continue
-		}
-		if len(a) < len(b) && len(a) > 0 {
-			out = append(out, model.Change{Class: model.Changed, Check: "message/fewer", Channel: b[0].Channel,
-				Title:  fmt.Sprintf("%s is sent fewer times", capitalize(identityLabel(b[0]))),
-				Before: fmt.Sprint(len(b)), After: fmt.Sprint(len(a))})
-		}
-		out = append(out, content(b[0], a[0])...)
-	}
+	ids := keys(bs)
 	for _, id := range keys(as) {
 		if _, ok := bs[id]; !ok {
-			m := as[id][0]
+			ids = append(ids, id)
+		}
+	}
+	for _, id := range ids {
+		b, a := bs[id], as[id]
+		// Several messages to the same place (a welcome and an account
+		// email to one address) are told apart by their subject.
+		multi := len(b) > 1 || len(a) > 1
+		pairs, lost, added := pair(b, a)
+		for _, p := range pairs {
+			out = append(out, content(p[0], p[1])...)
+		}
+		switch {
+		case len(lost) > 0 && len(a) > 0 && !distinct(lost, pairs):
+			out = append(out, model.Change{Class: model.Changed, Check: "message/fewer", Channel: lost[0].Channel,
+				Title:  fmt.Sprintf("%s is sent fewer times", capitalize(label(lost[0], multi))),
+				Before: fmt.Sprint(len(b)), After: fmt.Sprint(len(a))})
+		default:
+			for _, m := range lost {
+				out = append(out, model.Change{Class: model.Broke, Check: "message/missing", Channel: m.Channel,
+					Title:  fmt.Sprintf("%s is no longer sent", capitalize(label(m, multi))),
+					Fix:    "Something in the change stopped this message: check the plugin or code that sends it, and its settings.",
+					Before: "sent", After: "not sent"})
+			}
+		}
+		for _, m := range added {
 			out = append(out, model.Change{Class: model.New, Check: "message/new", Channel: m.Channel,
-				Title: fmt.Sprintf("%s is now sent", capitalize(identityLabel(m))), After: fmt.Sprint(len(as[id])),
-				Detail: preview(m)})
+				Title: fmt.Sprintf("%s is now sent", capitalize(label(m, multi))), Detail: preview(m)})
 		}
 	}
 	return out
+}
+
+// pair matches the messages of one identity across runs: the same subject
+// (or event) first, then whatever is left in order, so a changed subject
+// reads as a change rather than one message lost and another new.
+func pair(b, a []model.Message) (pairs [][2]model.Message, lost, added []model.Message) {
+	used := make([]bool, len(a))
+	var rest []model.Message
+	for _, m := range b {
+		found := -1
+		for i, n := range a {
+			if !used[i] && pairKey(m) == pairKey(n) {
+				found = i
+				break
+			}
+		}
+		if found >= 0 {
+			used[found] = true
+			pairs = append(pairs, [2]model.Message{m, a[found]})
+		} else {
+			rest = append(rest, m)
+		}
+	}
+	var left []model.Message
+	for i, n := range a {
+		if !used[i] {
+			left = append(left, n)
+		}
+	}
+	for len(rest) > 0 && len(left) > 0 {
+		pairs = append(pairs, [2]model.Message{rest[0], left[0]})
+		rest, left = rest[1:], left[1:]
+	}
+	return pairs, rest, left
+}
+
+func pairKey(m model.Message) string { return template(m.Subject) + "|" + m.Event }
+
+// distinct reports whether the lost messages differ from the ones still
+// sent; when they don't, the same message is simply sent fewer times.
+func distinct(lost []model.Message, pairs [][2]model.Message) bool {
+	for _, l := range lost {
+		same := false
+		for _, p := range pairs {
+			if pairKey(p[0]) == pairKey(l) {
+				same = true
+				break
+			}
+		}
+		if !same {
+			return true
+		}
+	}
+	return false
+}
+
+// label is identityLabel, with the subject when several messages share the
+// identity.
+func label(m model.Message, multi bool) string {
+	l := identityLabel(m)
+	if multi && strings.TrimSpace(m.Subject) != "" {
+		l += fmt.Sprintf(" (%q)", strings.TrimSpace(digits.ReplaceAllString(m.Subject, "#")))
+	}
+	return l
 }
 
 // content compares two matched messages.
@@ -170,7 +241,7 @@ func Issues(before, after []model.Issue) []model.Change {
 func identity(m model.Message) string {
 	switch m.Channel {
 	case model.Email, model.SMS, model.WhatsApp:
-		return string(m.Channel) + "|" + roles(strings.Join(m.To, ","))
+		return string(m.Channel) + "|" + m.Provider + "|" + roles(strings.Join(m.To, ","))
 	}
 	u, _ := url.Parse(m.URL)
 	h, p := "", ""
@@ -193,8 +264,8 @@ func identityLabel(m model.Message) string {
 			return fmt.Sprintf("%s %q", what, m.Event)
 		}
 	case model.Webhook:
-		if m.Event != "" && m.Provider != "" {
-			return fmt.Sprintf("%s webhook %q", check.Describe(m), m.Event)
+		if m.Event != "" {
+			return fmt.Sprintf("%s (%q)", what, m.Event)
 		}
 	}
 	return what

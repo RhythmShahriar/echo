@@ -119,3 +119,32 @@ func TestPathPatternAndFields(t *testing.T) {
 		t.Errorf("form fields = %q", f)
 	}
 }
+
+func TestSeveralEmailsToOneAddress(t *testing.T) {
+	welcome := email("echo-test+1@example.com", "Welcome to Shop", "Hello")
+	welcome.Provider = "resend"
+	account := email("echo-test+1@example.com", "Your account is ready", "Login here")
+	verify := email("echo-test+1@example.com", "Verify your email", "Click")
+	// Lost one of two emails to the same address (and provider).
+	got := titles(Messages([]model.Message{account, verify}, []model.Message{account}))
+	if !strings.Contains(got, `broke: Email to the test submitter ("Verify your email") is no longer sent`) || strings.Contains(got, "subject changed") {
+		t.Errorf("two emails, one lost:\n%s", got)
+	}
+	// A different provider is a different message.
+	got = titles(Messages([]model.Message{welcome, account}, []model.Message{account}))
+	if !strings.Contains(got, "broke: Resend email to the test submitter is no longer sent") || strings.Contains(got, "changed") {
+		t.Errorf("provider split:\n%s", got)
+	}
+	// One email whose subject changed is a change, not lost plus new.
+	renamed := account
+	renamed.Subject = "Your Shop account"
+	got = titles(Messages([]model.Message{account}, []model.Message{renamed}))
+	if got != "changed: Email to the test submitter: subject changed" {
+		t.Errorf("subject change:\n%s", got)
+	}
+	// The same email sent fewer times.
+	got = titles(Messages([]model.Message{account, account}, []model.Message{account}))
+	if !strings.Contains(got, "is sent fewer times") || strings.Contains(got, "broke") {
+		t.Errorf("fewer:\n%s", got)
+	}
+}
