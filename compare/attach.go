@@ -141,7 +141,7 @@ func walkParts(h textproto.MIMEHeader, body io.Reader, cut bool, out *[]Attachme
 	a := Attachment{Name: name, Type: strings.ToLower(ct), Size: -1}
 	// A part cut short ends without its boundary, which is an error; a
 	// message that is one attachment can only be cut at its end.
-	if err == nil && !(cut && depth == 0) {
+	if err == nil && (!cut || depth > 0) {
 		sum := sha256.Sum256(data)
 		a.Size, a.SHA256 = int64(len(data)), hex.EncodeToString(sum[:])
 	}

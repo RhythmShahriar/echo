@@ -198,7 +198,11 @@ func validate(root, schema map[string]any, doc any, at string) []string {
 				types = append(types, x.(string))
 			}
 		}
-		if !slices.Contains(types, jsonType(doc)) && !(jsonType(doc) == "integer" && slices.Contains(types, "number")) {
+		got := jsonType(doc)
+		if got == "integer" && slices.Contains(types, "number") {
+			got = "number" // every integer is a number
+		}
+		if !slices.Contains(types, got) {
 			return append(out, fmt.Sprintf("%s: %s, want %s", at, jsonType(doc), strings.Join(types, " or ")))
 		}
 	}
