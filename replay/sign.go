@@ -195,7 +195,7 @@ func orDefault(v, def string) string {
 }
 
 // signRun returns the X-Echo-Run value for run and action, signed with
-// Echo's token as "<run>/<action>.<sig>" when one is set. It is a copy of
+// token as "<run>/<action>.<sig>" when one is set. It is a copy of
 // wire.SignRun (connectors K0), kept here until that merges; the K0 test
 // vector in replay_test.go keeps the two the same.
 func signRun(token, run, action string) string {

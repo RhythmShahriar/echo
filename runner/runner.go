@@ -36,7 +36,7 @@ import (
 
 // Replayer sends a signed webhook for a replay action (package replay).
 // run is the unsigned "<run>/<action>"; the replayer signs X-Echo-Run
-// with Echo's token itself (replay.Options.Token).
+// itself when it has a key (replay.Options.RunKey).
 type Replayer func(ctx context.Context, a config.ReplayAction, to, run string) error
 
 // Options says what Run runs and against which Echo.
@@ -59,6 +59,16 @@ type Options struct {
 	// once the site is seen tagging its mail; 0 or 1 runs them one by
 	// one. See runAll.
 	Parallel int
+	// RunKey signs the run value the runner hands the site (X-Echo-Run,
+	// its cookie and RHYTHM_ECHO_RUN), so a connector that has the key
+	// can tell Echo's runner from a visitor who sends the header. Empty
+	// sends it unsigned. Leave it empty until the Echo this run reports
+	// to verifies and strips signed values (wire.VerifyRun in capture and
+	// SMTP): an Echo that doesn't keeps the signature in the action ID,
+	// so the mail is credited to no action. Which key it should be (Echo's
+	// token or a site's write token) is the caller's to decide; it is not
+	// taken from Client.Token for that reason.
+	RunKey string
 }
 
 // Hooks report progress.
@@ -175,10 +185,10 @@ func runAction(ctx context.Context, o Options, run *model.Run, a config.Action, 
 		act.Error = err.Error()
 		return act, nil
 	}
-	// HTTP requests and commands carry the run signed with Echo's token,
-	// so a connector can trust it. The replayer gets it unsigned, since it
-	// takes the run and action apart.
-	runValue := signRun(o.Client.Token, runID, act.ID)
+	// HTTP requests and commands carry the run signed with RunKey when
+	// there is one, so a connector can trust it. The replayer gets it
+	// unsigned, since it takes the run and action apart.
+	runValue := signRun(o.RunKey, runID, act.ID)
 	end := begin(ctx, o.Client, runID, act.ID, exclusive, cfg.Timeout.Duration)
 	defer end()
 
@@ -377,7 +387,7 @@ func doHTTP(ctx context.Context, o Options, a config.Action, runValue string, fa
 }
 
 // command runs cmd in the shell (see Shell) with RHYTHM_ECHO_RUN set to
-// runValue, signed like the header, so connectors in CLI processes
+// runValue, signed like the header when RunKey is set, so connectors in CLI processes
 // (wp-cli, artisan, scripts) tag what they send and a script may pass it
 // on to the site as X-Echo-Run.
 func command(ctx context.Context, cmd, runValue string, env map[string]string) error {

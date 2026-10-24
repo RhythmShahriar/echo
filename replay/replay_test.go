@@ -559,12 +559,12 @@ func TestProductionRefused(t *testing.T) {
 	}
 }
 
-// With Echo's token, X-Echo-Run is signed the way wire.SignRun signs it
+// With a run key, X-Echo-Run is signed the way wire.SignRun signs it
 // (the K0 test vector), so a connector that has the token trusts it.
 func TestRunHeaderSigned(t *testing.T) {
 	srv, got := receiver(t, stripeSecret, verifyStripe)
 	o := opts(stripeSecret)
-	o.Action, o.Token = "checkout", "secret"
+	o.Action, o.RunKey = "checkout", "secret"
 	res, err := Send(context.Background(), mustLoad(t, "stripe/checkout.session.completed"), Target{URL: srv.URL}, o)
 	if err != nil {
 		t.Fatal(err)

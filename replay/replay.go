@@ -82,9 +82,11 @@ type Options struct {
 	Now         func() time.Time
 	MaxBody     int // response bytes kept; default 64 KiB
 
-	// Token is Echo's token. When set, X-Echo-Run is signed with it, as
-	// connectors with a token only trust a signed value.
-	Token string
+	// RunKey, when set, signs X-Echo-Run, as connectors with a key only
+	// trust a signed value. Leave it empty until the Echo the site
+	// reports to strips signed values (see runner.Options.RunKey):
+	// otherwise the signature ends up in the action ID.
+	RunKey string
 }
 
 // Result is what happened.
@@ -171,7 +173,7 @@ func Send(ctx context.Context, e Event, t Target, o Options) (Result, error) {
 	}
 	res.Run = orDefault(o.Run, "replay-"+model.NewID(e.Name+now().String()+randomID(8)))
 	res.Action = orDefault(o.Action, "replay-"+strings.NewReplacer("/", "-", " ", "-").Replace(e.Name))
-	h.Set("X-Echo-Run", signRun(o.Token, res.Run, res.Action))
+	h.Set("X-Echo-Run", signRun(o.RunKey, res.Run, res.Action))
 	res.Headers = maskHeaders(h, o.HMAC)
 
 	timeout := o.Timeout
