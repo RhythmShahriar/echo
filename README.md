@@ -30,7 +30,7 @@
 <br>
 
 <p align="center">
-  <img alt="An Echo comparison after a plugin update: the admin notification email is no longer sent, an SMS now has an unfilled placeholder, and a webhook lost a field" src="docs/assets/compare.svg" width="720">
+  <img alt="An Echo comparison after a plugin update: the shop owner's notification email is no longer sent, an SMS now has an unfilled placeholder, and a webhook lost a field" src="docs/assets/compare.svg" width="720">
 </p>
 
 <br>
