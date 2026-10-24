@@ -212,7 +212,7 @@ func TestScheduleMain(t *testing.T) {
 	}
 	// No hub is listening: each site fails to compare and --once exits 1
 	// after waiting until Tuesday 02:00.
-	code, out, errb := run("Tue 02:00", "--once", "--store", dir, "--after", "true", "--file", sitesFile, "--url", "http://127.0.0.1:20509")
+	code, out, errb := run("Tue 02:00", "--once", "--store", dir, "--after", "true", "--file", sitesFile, "--url", "http://127.0.0.1:20519")
 	if code != 1 || waited != 64*time.Hour {
 		t.Errorf("--once: code %d, waited %s\n%s%s", code, waited, out, errb)
 	}
