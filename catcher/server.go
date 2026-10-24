@@ -66,7 +66,8 @@ type Config struct {
 	// BootID names this start of Echo; a client that sees it change knows
 	// Echo restarted and lost what it held in memory. Default: random.
 	BootID string
-	// Store is where messages are kept: "memory" (default) or "jsonl".
+	// Store is where messages are kept: "memory", or "jsonl" for an
+	// inbox from OpenInbox. Default: whichever the inbox is.
 	Store   string
 	Version string
 	// Warn is told about things worth a line in the log, such as a
@@ -96,6 +97,9 @@ func NewServer(inbox *Inbox, cfg Config) *Server {
 	}
 	if cfg.Store == "" {
 		cfg.Store = "memory"
+		if inbox.Persistent() {
+			cfg.Store = "jsonl"
+		}
 	}
 	if cfg.Warn == nil {
 		cfg.Warn = func(msg string) { log.Print("echo: " + msg) }

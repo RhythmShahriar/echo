@@ -23,13 +23,17 @@ import (
 // DefaultMaxBytes is how much message data an inbox holds by default.
 const DefaultMaxBytes = 256 << 20
 
-// Inbox holds captured messages in memory, newest last.
+// Inbox holds captured messages, newest last: in memory (NewInbox), or
+// also in a folder that outlives a restart (OpenInbox).
 type Inbox struct {
 	mu       sync.Mutex
 	msgs     []*entry          // oldest first
 	index    map[string]*entry // by message ID, so Get and Update don't scan
 	max      int
 	maxBytes int64
+	keepFor  time.Duration    // drop messages older than this; 0 keeps them
+	j        *journal         // where changes are written; nil for memory only
+	stop     chan struct{}    // closed by Close to end the retention ticker
 	bytes    int64            // sum of size(m) over msgs
 	changed  chan struct{}    // closed and replaced whenever the inbox changes
 	events   []Event          // the latest changes, oldest first, for subscribers
@@ -51,8 +55,9 @@ type Inbox struct {
 
 // entry is a stored message and its place in the inbox.
 type entry struct {
-	seq int // rises with every message: a page cursor finds its place by it
-	m   model.Message
+	seq  int // rises with every message: a page cursor finds its place by it
+	m    model.Message
+	disk int64 // bytes of its latest record in the journal, for compaction
 }
 
 // scope is one action in progress, opened by Begin.
@@ -91,10 +96,20 @@ func (in *Inbox) Bytes() int64 {
 }
 
 // evict drops the oldest messages until both caps hold, always keeping
-// the newest one. Called with in.mu held.
+// the newest one, and every message older than keepFor. Called with in.mu
+// held.
 func (in *Inbox) evict() {
 	n := 0
-	for len(in.msgs)-n > 1 && (len(in.msgs)-n > in.max || in.bytes > in.maxBytes) {
+	var cutoff time.Time
+	if in.keepFor > 0 {
+		cutoff = in.now().Add(-in.keepFor)
+	}
+	for n < len(in.msgs) {
+		left := len(in.msgs) - n
+		over := left > 1 && (left > in.max || in.bytes > in.maxBytes)
+		if !over && (cutoff.IsZero() || !in.msgs[n].m.At.Before(cutoff)) {
+			break
+		}
 		in.forget(in.msgs[n])
 		n++
 	}
@@ -277,7 +292,7 @@ func (in *Inbox) add(m model.Message, f found) model.Message {
 	seq, check := in.seq, in.check
 	in.mu.Unlock()
 	if m.At.IsZero() {
-		m.At = time.Now().UTC()
+		m.At = in.now().UTC()
 	}
 	if m.ID == "" {
 		m.ID = model.NewID(fmt.Sprint(m.At.UnixNano(), seq, m.URL, m.Subject))
@@ -296,6 +311,7 @@ func (in *Inbox) add(m model.Message, f found) model.Message {
 		in.found[m.ID] = f
 	}
 	in.bytes += size(m)
+	in.write(opAdd, e)
 	in.record(EventAdd, m.ID)
 	in.evict()
 	in.notify()
@@ -320,6 +336,7 @@ func (in *Inbox) Update(id string, fn func(*model.Message)) bool {
 		}
 		in.bytes += size(e.m) - before
 		out = e.m
+		in.write(opUpdate, e)
 		in.record(EventUpdate, id)
 		in.evict()
 		in.notify()
@@ -500,6 +517,7 @@ func (in *Inbox) forget(e *entry) {
 		delete(in.index, e.m.ID)
 		delete(in.found, e.m.ID)
 	}
+	in.write(opDelete, e)
 	in.record(EventDelete, e.m.ID)
 }
 
