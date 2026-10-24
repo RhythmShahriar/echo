@@ -3,7 +3,7 @@
 
 // Package catcher is Echo's running side: an inbox of captured messages,
 // the HTTP API connectors and tools talk to, the seal policy that decides
-// what may leave, and the SMTP sink.
+// what may leave and the SMTP sink.
 package catcher
 
 import (
@@ -26,7 +26,7 @@ const DefaultMaxBytes = 256 << 20
 // DefaultLeaseTTL is how long an action stays open without an end or a
 // renewal. A runner killed between begin and end (Ctrl-C, a crashed CI
 // job) would otherwise hold its action open until Echo restarts: every
-// later untagged message would be credited to it or marked ambiguous,
+// later untagged message would be credited to it or marked ambiguous
 // and no exclusive action could begin.
 const DefaultLeaseTTL = 10 * time.Minute
 
@@ -232,7 +232,7 @@ func (in *Inbox) begin(run, action, owner string) string {
 }
 
 // open adds sc to the open actions with a new lease, an expiry and the
-// inbox's TTL when sc has none, and returns the lease. Called with in.mu
+// inbox's TTL when sc has none. It returns the lease. Called with in.mu
 // held.
 func (in *Inbox) open(sc scope) string {
 	sc.lease, sc.begun = rand.Text(), in.now()
@@ -274,7 +274,7 @@ func (in *Inbox) dropStale() {
 	}
 }
 
-// nextExpiry is how long until the first open action's lease runs out,
+// nextExpiry is how long until the first open action's lease runs out
 // and false when none is open. Called with in.mu held.
 func (in *Inbox) nextExpiry() (time.Duration, bool) {
 	if len(in.scopes) == 0 {
@@ -524,8 +524,8 @@ func (in *Inbox) add(m model.Message, f found) model.Message {
 	if m.ID == "" {
 		m.ID = model.NewID(fmt.Sprint(m.At.UnixNano(), made, m.URL, m.Subject))
 	}
-	// Checked unlocked: the rules read up to MaxBody of text and HTML,
-	// and SMTP, the proxy and connectors add at the same time.
+	// Checked unlocked: the rules read up to MaxBody of text and HTML
+	// while SMTP, the proxy and connectors add at the same time.
 	if check != nil {
 		m.Issues = check(m)
 	}
@@ -533,7 +533,7 @@ func (in *Inbox) add(m model.Message, f found) model.Message {
 	in.attribute(&m)
 	// The page order is taken here, in the lock that appends, not with
 	// made above: a capture whose check ran longer may append after one
-	// that began later, and Page needs msgs sorted by seq.
+	// that began later and Page needs msgs sorted by seq.
 	in.seq++
 	e := &entry{seq: in.seq, m: m}
 	in.msgs = append(in.msgs, e)

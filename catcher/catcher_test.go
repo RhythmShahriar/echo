@@ -182,7 +182,7 @@ func TestLivePaymentsBlockedAndInfrastructureSkipped(t *testing.T) {
 }
 
 // TestLivePaymentsRefusedWhenAllowedOrObserved: an allowlist entry or
-// observe mode lifts the seal, but never for a live-mode payment call.
+// observe mode lifts the seal but never for a live-mode payment call.
 func TestLivePaymentsRefusedWhenAllowedOrObserved(t *testing.T) {
 	stripeKey := func(mode string) string {
 		return strings.Join([]string{"Bearer sk", "_" + mode + "_", "abcdefghijklmnop1234"}, "")

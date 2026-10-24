@@ -3,7 +3,7 @@
 
 // Package model holds what Echo records: the messages a site sends
 // (email, SMS, webhooks, chat alerts, analytics and payment calls), the
-// actions that made it send them, and the issues and changes found when
+// actions that made it send them and the issues and changes found when
 // checking and comparing runs. Runs are stored as JSON (schema
 // rhythm-echo/v1).
 package model

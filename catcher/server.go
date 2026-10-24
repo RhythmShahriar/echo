@@ -491,11 +491,11 @@ func (s *Server) maskFields(m *model.Message) {
 }
 
 // errorText masks and cuts the error a connector reports. It often
-// quotes the URL that failed, and a bot token or ?token= query with it.
+// quotes the URL that failed and a bot token or ?token= query with it.
 func (s *Server) errorText(v string) string { return s.fitAny(v, mask.Text) }
 
 // maxName is the most bytes of a run or action name Echo keeps. They are
-// labels for people and filters, not data, and every message stores them.
+// labels for people and filters, not data. Every message stores them.
 const maxName = 256
 
 // cutName cuts a run or action name to maxName bytes, on a character boundary.
