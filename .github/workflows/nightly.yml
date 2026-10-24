@@ -1,0 +1,41 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+# The slow suites, every night and on demand: the Docker tests (a sealed
+# container network, PHP's mail() through rhythm-echo sendmail plus the
+# WordPress connector inside a real WordPress) and WordPress's Plugin Check
+# on the mu-plugin.
+name: nightly
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
+        with:
+          go-version-file: go.mod
+      # The tests skip when an image is missing; pull them so they run.
+      - name: Pull the test images
+        run: for i in php:8.3-cli nginx:1.27-alpine alpine:3.20 "$(awk '/^FROM /{print $2; exit}' Dockerfile)"; do docker pull -q "$i"; done
+      - run: go test -tags docker -timeout 20m ./...
+
+  plugin-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      # The connector is a single-file mu-plugin next to Go code and test
+      # data; check it on its own, as rhythm-echo install wordpress ships it.
+      - name: Stage the plugin
+        run: mkdir -p _plugin/rhythm-echo && cp connectors/wordpress/echo.php _plugin/rhythm-echo/rhythm-echo.php
+      - uses: WordPress/plugin-check-action@10857da14b6c2246d15402b3e69f777edcf8c12e # v1.1.9
+        with:
+          build-dir: _plugin/rhythm-echo
+          slug: rhythm-echo
+          # An mu-plugin installed by the CLI has no readme.txt.
+          exclude-checks: plugin_readme

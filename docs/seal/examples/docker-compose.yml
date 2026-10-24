@@ -5,7 +5,6 @@
 # the internet, only to Echo. Echo records every email and request, fakes
 # provider answers (seal mode) and is the only service with a way out.
 #
-#   export RHYTHM_ECHO_BIN=/path/to/linux/rhythm-echo   # a static Linux binary
 #   export RHYTHM_ECHO_TOKEN=$(openssl rand -hex 16)
 #   docker compose up -d
 #   open http://127.0.0.1:8080        # the site, through the front
@@ -41,19 +40,19 @@ x-echo-env: &echo-env
 
 services:
   echo:
-    image: alpine:3.20
+    # Echo's image runs rhythm-echo up; these flags replace its defaults.
+    # RHYTHM_ECHO_IMAGE picks another tag or a local build.
+    image: ${RHYTHM_ECHO_IMAGE:-ghcr.io/rhythmshahriar/echo:1}
+    environment:
+      RHYTHM_ECHO_TOKEN: ${RHYTHM_ECHO_TOKEN} # from the environment, so it isn't in the process list
     volumes:
-      - ${RHYTHM_ECHO_BIN:?set RHYTHM_ECHO_BIN to a Linux rhythm-echo binary}:/usr/local/bin/rhythm-echo:ro
-      - echo-state:/root/.cache/rhythm/echo
+      - echo-state:/home/nonroot/.cache/rhythm/echo
     command:
-      - rhythm-echo
-      - up
       - --seal
       - --listen=0.0.0.0:8025
       - --smtp=0.0.0.0:1025
       - --proxy=0.0.0.0:8026
       - --mitm
-      - --token=${RHYTHM_ECHO_TOKEN}
       # - --allow=api.stripe.com # hosts that may really be reached while sealed
     networks: [sealed, egress]
     ports:

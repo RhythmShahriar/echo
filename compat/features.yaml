@@ -1,0 +1,287 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+# The HTML and CSS features that break most often in email, with the
+# clients that drop them. It is a hand-picked subset of the support data
+# at https://www.caniemail.com (Rémi Parmentier, MIT license; the notice
+# is in CANIEMAIL-LICENSE next to this file), cut down to the clients
+# most people open mail in and to what an HTML author can act on.
+#
+# Each feature has:
+#   id       stable name, used in findings and to silence one
+#   title    what the author wrote, as they'd say it
+#   none     clients that don't support it at all
+#   partial  clients that support it only in some cases (note says when)
+#   note     one line on what happens or what to do instead
+#   match    what to look for (one of the keys below)
+#
+# match keys:
+#   css: [properties]      a declaration, in a style attribute or a
+#                          <style> block; value: regex on its value
+#   on: [elements]         with css: only in style attributes of these
+#   function: name         a CSS function anywhere in a value: name(
+#   at: name               an at-rule: @name
+#   pseudo: name           a pseudo-class in a selector: :name
+#   element: [names]       an HTML element; attr: one of its attributes,
+#                          value: regex on that attribute's value
+#   style_over: bytes      a <style> block larger than this
+#
+# Regexes are Go syntax and match without case.
+
+clients:
+  gmail: Gmail
+  outlook-windows: Outlook for Windows
+  outlook-com: Outlook.com
+  yahoo: Yahoo Mail
+  apple: Apple Mail
+  samsung: Samsung Email
+
+features:
+  # Layout
+  - id: css-display-flex
+    title: "display: flex"
+    none: [outlook-windows]
+    partial: [gmail]
+    note: "Outlook for Windows lays the boxes out one under the other; Gmail drops it for non-Gmail accounts in its apps. Use tables for columns."
+    match: {css: [display], value: '^\s*(inline-)?flex\b'}
+  - id: css-display-grid
+    title: "display: grid"
+    none: [outlook-windows, gmail, outlook-com]
+    partial: [yahoo]
+    note: "The grid falls back to stacked blocks. Use tables for columns."
+    match: {css: [display], value: '^\s*(inline-)?grid\b'}
+  - id: css-gap
+    title: "gap"
+    none: [outlook-windows, gmail]
+    note: "Spacing between flex or grid items is lost. Use padding on the cells."
+    match: {css: [gap, row-gap, column-gap, grid-gap]}
+  - id: css-position
+    title: "position"
+    none: [outlook-windows, gmail, outlook-com, yahoo]
+    note: "Absolute, fixed and sticky boxes land in the normal flow or are removed."
+    match: {css: [position], value: '^\s*(absolute|fixed|sticky|relative)\b'}
+  - id: css-float
+    title: "float"
+    partial: [outlook-windows]
+    note: "Outlook for Windows only floats images and tables. Use align on a table instead."
+    match: {css: [float], value: '^\s*(left|right)\b'}
+  - id: css-max-width
+    title: "max-width"
+    none: [outlook-windows]
+    note: "Outlook for Windows ignores it, so the box takes the full width. Set a fixed width on a table, in a conditional comment."
+    match: {css: [max-width]}
+  - id: css-min-width
+    title: "min-width"
+    none: [outlook-windows]
+    note: "Outlook for Windows ignores it."
+    match: {css: [min-width]}
+  - id: css-padding-block
+    title: "padding on a div or p"
+    partial: [outlook-windows]
+    note: "Outlook for Windows only pads table cells. Put the padding on a td."
+    match: {css: [padding, padding-top, padding-right, padding-bottom, padding-left], on: [div, p, span, a]}
+  - id: css-width-div
+    title: "width on a div"
+    none: [outlook-windows]
+    note: "Outlook for Windows ignores widths on div. Use a table or a td with width."
+    match: {css: [width], on: [div]}
+  - id: css-aspect-ratio
+    title: "aspect-ratio"
+    none: [outlook-windows, gmail, outlook-com]
+    note: "The box gets no height from it. Set width and height on the image."
+    match: {css: [aspect-ratio]}
+  - id: css-object-fit
+    title: "object-fit"
+    none: [outlook-windows, gmail, outlook-com, yahoo]
+    note: "Images stretch to the box. Crop the image itself."
+    match: {css: [object-fit]}
+
+  # Colour, borders and effects
+  - id: css-background-image
+    title: "background-image"
+    none: [outlook-windows]
+    partial: [gmail]
+    note: "Outlook for Windows needs VML for a background image; Gmail drops url() backgrounds in some apps. Set a background colour as the fallback."
+    match: {css: [background, background-image], value: 'url\('}
+  - id: css-linear-gradient
+    title: "linear-gradient()"
+    none: [outlook-windows]
+    partial: [gmail]
+    note: "The gradient is dropped. Set a background colour first as the fallback."
+    match: {function: linear-gradient}
+  - id: css-radial-gradient
+    title: "radial-gradient()"
+    none: [outlook-windows]
+    partial: [gmail]
+    note: "The gradient is dropped. Set a background colour first as the fallback."
+    match: {function: radial-gradient}
+  - id: css-rgba
+    title: "rgba() and hsla() colours"
+    none: [outlook-windows]
+    note: "Outlook for Windows drops the whole colour, so text or a background can disappear. Use a hex colour."
+    match: {function: '(rgba|hsla)'}
+  - id: css-border-radius
+    title: "border-radius"
+    none: [outlook-windows]
+    note: "Corners stay square in Outlook for Windows. Fine to keep as a nicety."
+    match: {css: [border-radius, border-top-left-radius, border-top-right-radius, border-bottom-left-radius, border-bottom-right-radius]}
+  - id: css-box-shadow
+    title: "box-shadow"
+    none: [outlook-windows, gmail]
+    note: "The shadow is dropped. Don't use it to separate content."
+    match: {css: [box-shadow]}
+  - id: css-text-shadow
+    title: "text-shadow"
+    none: [outlook-windows, gmail]
+    note: "The shadow is dropped. Check the text still reads on its background."
+    match: {css: [text-shadow]}
+  - id: css-opacity
+    title: "opacity"
+    none: [outlook-windows]
+    note: "Outlook for Windows shows the element fully opaque."
+    match: {css: [opacity]}
+  - id: css-transform
+    title: "transform"
+    none: [outlook-windows, gmail, outlook-com]
+    note: "The element is shown without the transform."
+    match: {css: [transform]}
+  - id: css-animation
+    title: "animation"
+    none: [outlook-windows, gmail, outlook-com, yahoo]
+    note: "Nothing moves. Make sure the first frame says everything."
+    match: {css: [animation, animation-name]}
+  - id: css-transition
+    title: "transition"
+    none: [outlook-windows, gmail, outlook-com]
+    note: "Changes happen at once, without the transition."
+    match: {css: [transition]}
+
+  # Values and functions
+  - id: css-variables
+    title: "CSS variables, var()"
+    none: [outlook-windows, gmail, outlook-com, yahoo]
+    note: "The declaration is dropped, so the value falls back to the default. Write the value out."
+    match: {function: var}
+  - id: css-calc
+    title: "calc()"
+    none: [outlook-windows]
+    partial: [gmail]
+    note: "The declaration is dropped. Write the computed value out."
+    match: {function: calc}
+  - id: css-important
+    title: "!important"
+    partial: [outlook-windows, outlook-com]
+    note: "Some Outlook versions drop declarations marked !important in inline styles."
+    match: {css: ['*'], value: '!\s*important', on: ['*']}
+
+  # Style sheets and at-rules
+  - id: html-style
+    title: "<style> blocks"
+    partial: [gmail]
+    note: "Gmail drops the <style> block for non-Gmail accounts in its apps and when the block has a CSS error. Inline the styles that matter."
+    match: {element: [style]}
+  - id: html-style-size
+    title: "<style> over 16 KB"
+    none: [gmail]
+    note: "Gmail drops a <style> block larger than 16 KB, so every class in it stops working."
+    match: {style_over: 16384}
+  - id: html-link-stylesheet
+    title: "<link rel=stylesheet>"
+    none: [gmail, outlook-windows, outlook-com, yahoo]
+    note: "External style sheets aren't loaded. Inline the styles."
+    match: {element: [link], attr: rel, value: 'stylesheet'}
+  - id: css-at-import
+    title: "@import"
+    none: [gmail, outlook-windows, outlook-com, yahoo]
+    note: "Imported style sheets aren't loaded. Inline the styles."
+    match: {at: import}
+  - id: css-at-font-face
+    title: "@font-face"
+    none: [gmail, outlook-windows, outlook-com, yahoo]
+    note: "Web fonts fall back to the next font in the stack. End font-family with a system font."
+    match: {at: font-face}
+  - id: css-at-media
+    title: "@media queries"
+    none: [outlook-windows]
+    partial: [gmail]
+    note: "Outlook for Windows ignores them and Gmail only honours them for Gmail accounts. Design the default for desktop widths."
+    match: {at: media}
+  - id: css-at-supports
+    title: "@supports"
+    none: [gmail, outlook-windows, outlook-com, yahoo]
+    note: "The whole block is dropped."
+    match: {at: supports}
+  - id: css-at-keyframes
+    title: "@keyframes"
+    none: [gmail, outlook-windows, outlook-com, yahoo]
+    note: "Animations don't run."
+    match: {at: keyframes}
+  - id: css-hover
+    title: ":hover"
+    none: [outlook-windows]
+    partial: [gmail]
+    note: "Hover effects don't show in Outlook for Windows or on touch screens. Don't hide content behind them."
+    match: {pseudo: hover}
+
+  # HTML elements
+  - id: html-script
+    title: "<script>"
+    none: [gmail, outlook-windows, outlook-com, yahoo, apple, samsung]
+    note: "No mail client runs scripts and some flag the message for having one."
+    match: {element: [script]}
+  - id: html-form
+    title: "<form> and inputs"
+    none: [gmail, outlook-windows, outlook-com]
+    partial: [yahoo]
+    note: "Forms don't submit, or fields are removed. Link to a page with the form."
+    match: {element: [form, input, select, textarea]}
+  - id: html-video
+    title: "<video>"
+    none: [gmail, outlook-windows, outlook-com, yahoo]
+    note: "Only Apple Mail and a few others play it. Link a poster image to the video."
+    match: {element: [video]}
+  - id: html-audio
+    title: "<audio>"
+    none: [gmail, outlook-windows, outlook-com, yahoo]
+    note: "Most clients drop it. Link to the audio instead."
+    match: {element: [audio]}
+  - id: html-svg
+    title: "inline <svg>"
+    none: [gmail, outlook-windows, outlook-com, yahoo]
+    note: "The graphic is removed. Use a PNG."
+    match: {element: [svg]}
+  - id: html-img-svg
+    title: "SVG images"
+    none: [gmail, outlook-windows, outlook-com]
+    note: "The image doesn't load. Use a PNG."
+    match: {element: [img], attr: src, value: '(\.svg($|[?#])|^data:image/svg)'}
+  - id: html-img-webp
+    title: "WebP images"
+    none: [outlook-windows]
+    note: "Outlook for Windows shows a broken image. Use PNG or JPEG."
+    match: {element: [img], attr: src, value: '\.webp($|[?#])'}
+  - id: html-img-data-uri
+    title: "images as data: URIs"
+    none: [gmail, outlook-com, yahoo]
+    note: "The image is removed. Host it or attach it with a cid: reference."
+    match: {element: [img], attr: src, value: '^\s*data:'}
+  - id: html-srcset
+    title: "srcset and <picture>"
+    none: [gmail, outlook-windows, outlook-com]
+    note: "The fallback src is shown, so make it the image you want most people to see."
+    match: {element: [picture, source, img], attr: srcset}
+  - id: html-iframe
+    title: "<iframe>, <object> and <embed>"
+    none: [gmail, outlook-windows, outlook-com, yahoo, apple, samsung]
+    note: "Embedded content is removed or blocked."
+    match: {element: [iframe, object, embed]}
+  - id: html-details
+    title: "<details> and <dialog>"
+    none: [gmail, outlook-windows, outlook-com]
+    note: "Content inside shows open, or not at all."
+    match: {element: [details, summary, dialog]}
+  - id: html-background-attr
+    title: "background attribute"
+    none: [outlook-windows]
+    note: "Outlook for Windows needs VML for a background image. Set bgcolor as the fallback."
+    match: {element: [body, table, td, th], attr: background}

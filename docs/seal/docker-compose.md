@@ -21,10 +21,13 @@ Example: [examples/docker-compose.yml](examples/docker-compose.yml)
 ## Run it
 
 ```sh
-export RHYTHM_ECHO_BIN=$HOME/.local/bin/rhythm-echo   # a static Linux binary
 export RHYTHM_ECHO_TOKEN=$(openssl rand -hex 16)
 docker compose -f docs/seal/examples/docker-compose.yml up -d
 ```
+
+Echo runs from its image, `ghcr.io/rhythmshahriar/echo:1`. Set
+`RHYTHM_ECHO_IMAGE` to pin a release (`ghcr.io/rhythmshahriar/echo:1.2.3`)
+or to use an image built from a checkout.
 
 - The site is at http://127.0.0.1:8080.
 - Echo's inbox and API are at http://127.0.0.1:8025. Send the token as
@@ -32,14 +35,15 @@ docker compose -f docs/seal/examples/docker-compose.yml up -d
 
 ## How it fits together
 
-- **`echo`** runs `rhythm-echo up --seal --mitm` with:
+- **`echo`** runs `rhythm-echo up --seal --mitm` from Echo's image with:
   - the API on `:8025`
   - SMTP on `:1025`
   - the proxy on `:8026`
 
-  It listens on `0.0.0.0` inside its container, so it requires the token. The
-  CA, including its private key, is kept in the `echo-state` volume, so trust
-  survives restarts.
+  It listens on `0.0.0.0` inside its container, so it requires the token,
+  which it reads from `RHYTHM_ECHO_TOKEN`. The CA, including its private
+  key, is kept in the `echo-state` volume (mounted at
+  `/home/nonroot/.cache/rhythm/echo`), so trust survives restarts.
 - **`echo-ca`** is a one-shot job. It copies the CA *certificate* from
   `http://echo:8026/ca.pem` into the `echo-ca` volume, which the app mounts
   read-only at `/echo-ca/ca.pem`. The key is never shared.
@@ -67,7 +71,7 @@ For WordPress, two more steps:
 p="docker compose -f docs/seal/examples/docker-compose.yml"
 # No route out: this fails at once.
 $p exec app sh -c 'env -u https_proxy -u http_proxy curl -m 3 https://1.1.1.1/'
-# Through Echo: faked while sealed, and recorded.
+# Through Echo: faked while sealed and recorded.
 $p exec app curl -sS --cacert /echo-ca/ca.pem -d 'To=%2B15551230000&Body=hi' \
   https://api.twilio.com/2010-04-01/Accounts/AC123/Messages.json
 # Mail goes to the sink.
@@ -78,14 +82,14 @@ $p exec app sh -c "printf 'To: a@example.test\nSubject: hi\n\nhi\n' | sendmail -
 automatically, with a small nginx app in place of WordPress (see
 `proxy/testdata/compose.override.yml`). It checks that:
 - the app has no route out
-- the CA certificate is shared, and the key isn't
+- the CA certificate is shared but the key isn't
 - HTTP and HTTPS requests to `api.twilio.com` are faked
 - the proxy refuses clients without the token
 - mail reaches the sink
 - the inbox is readable from the host
 - the site is reachable through the front
 
-Ports are 18925 and 18980, and everything is removed afterwards.
+Ports are 18925 and 18980. Everything is removed afterwards.
 
 ## Notes
 
@@ -98,5 +102,5 @@ Ports are 18925 and 18980, and everything is removed afterwards.
 - **Observe mode:** use `--observe` instead of `--seal`. Everything is
   recorded and forwarded. The network seal still guarantees that nothing
   bypasses Echo.
-- **BusyBox `wget`** (Alpine) sends `GET` instead of `POST` through a proxy,
+- **BusyBox `wget`** (Alpine) sends `GET` instead of `POST` through a proxy
   and ignores `no_proxy`. Use curl for checks.

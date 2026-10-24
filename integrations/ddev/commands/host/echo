@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+#ddev-generated
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+## Description: Open Echo's inbox in the browser
+## Usage: echo
+## Example: "ddev echo"
+
+ddev launch "https://${DDEV_SITENAME}.${DDEV_TLD}:8026"

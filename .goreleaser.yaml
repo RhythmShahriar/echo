@@ -24,6 +24,23 @@ archives:
       - goos: windows
         formats: [zip]
     files: [README.md, LICENSE*]
+  # The DDEV add-on (integrations/ddev), installed with
+  #   ddev add-on get https://github.com/RhythmShahriar/echo/releases/download/vX.Y.Z/ddev-echo.tar.gz
+  # One top folder, like a GitHub source tarball, which DDEV strips.
+  - id: ddev
+    meta: true
+    formats: [tar.gz]
+    name_template: ddev-echo
+    files:
+      - src: integrations/ddev/*.yaml
+        dst: ddev-echo
+        strip_parent: true
+      - src: integrations/ddev/README.md
+        dst: ddev-echo
+        strip_parent: true
+      - src: integrations/ddev/commands/host/*
+        dst: ddev-echo/commands/host
+        strip_parent: true
 
 checksum:
   name_template: checksums.txt
@@ -33,15 +50,56 @@ checksum:
 release:
   prerelease: auto
 
-# Keyless Sigstore signature over checksums.txt. Verify with:
+# Keyless Sigstore signature over checksums.txt. The Action checks it with
+# .github/scripts/verify-release.sh before it runs a download. By hand:
 #   cosign verify-blob --bundle checksums.txt.sigstore.json \
-#     --certificate-identity https://github.com/RhythmShahriar/.github/.github/workflows/release-go.yml@refs/heads/master \
+#     --certificate-identity-regexp '^https://github\.com/RhythmShahriar/\.github/\.github/workflows/release-go\.yml@' \
+#     --certificate-github-workflow-repository RhythmShahriar/echo \
+#     --certificate-github-workflow-ref refs/tags/v1.2.3 \
 #     --certificate-oidc-issuer https://token.actions.githubusercontent.com checksums.txt
+# The identity ends in the ref release.yml calls the shared workflow by
+# (refs/heads/master for v1.0.0, a commit SHA since it is pinned). Put the
+# release's own tag in place of v1.2.3.
 signs:
   - cmd: cosign
     artifacts: checksum
     signature: "${artifact}.sigstore.json"
     args: [sign-blob, "--bundle=${signature}", "${artifact}", --yes]
+
+# Container images: ghcr.io/rhythmshahriar/echo:<version>, :<major> and
+# :latest (the last two not for prereleases), for linux/amd64 and arm64,
+# from the Dockerfile and the binaries built above. Off unless
+# RELEASE_IMAGES=true: the shared release workflow doesn't set up buildx or
+# log in to ghcr.io yet, so release.yml's images job builds the same
+# Dockerfile from the signed archives instead. Once release-go.yml can do
+# it, set RELEASE_IMAGES there and drop that job.
+dockers_v2:
+  - id: echo
+    ids: [rhythm-echo]
+    images: [ghcr.io/rhythmshahriar/echo]
+    tags:
+      - "{{ .Version }}"
+      - "{{ if not .Prerelease }}{{ .Major }}{{ end }}"
+      - "{{ if not .Prerelease }}latest{{ end }}"
+    platforms: [linux/amd64, linux/arm64]
+    labels:
+      org.opencontainers.image.source: https://github.com/RhythmShahriar/echo
+      org.opencontainers.image.version: "{{ .Version }}"
+      org.opencontainers.image.revision: "{{ .FullCommit }}"
+      org.opencontainers.image.licenses: MIT
+      org.opencontainers.image.title: rhythm-echo
+      org.opencontainers.image.description: Echo catches every email, SMS, webhook and API call a site sends.
+    disable: '{{ ne (envOrDefault "RELEASE_IMAGES" "") "true" }}'
+
+# Keyless cosign signatures on the images, by digest. Verify with
+#   cosign verify ghcr.io/rhythmshahriar/echo:1 \
+#     --certificate-identity-regexp '^https://github\.com/RhythmShahriar/' \
+#     --certificate-github-workflow-repository RhythmShahriar/echo \
+#     --certificate-github-workflow-ref refs/tags/v1.2.3 \
+#     --certificate-oidc-issuer https://token.actions.githubusercontent.com
+docker_signs:
+  - cmd: cosign
+    args: [sign, "${artifact}@${digest}", --yes]
 
 changelog:
   use: github
