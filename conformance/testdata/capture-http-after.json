@@ -1,0 +1,31 @@
+{
+  "name": "an allowed request's response",
+  "about": "After an allowed request, the connector reports its status and body with the ID from before.",
+  "valid": true,
+  "mode": "seal",
+  "echo": "up",
+  "capture": {
+    "v": 2,
+    "kind": "http",
+    "phase": "after",
+    "id": "m1",
+    "source": {
+      "via": "node",
+      "stack": "node",
+      "plugin": "twilio",
+      "hook": "fetch",
+      "host": "shop.test"
+    },
+    "http": {
+      "method": "GET",
+      "url": "https://shop.test/wp-cron.php",
+      "status": 200,
+      "response": "ok"
+    }
+  },
+  "decision": {
+    "mode": "seal",
+    "action": "allow"
+  },
+  "connector": "send"
+}

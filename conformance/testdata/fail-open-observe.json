@@ -1,0 +1,29 @@
+{
+  "name": "Echo unreachable while observing",
+  "about": "Only a connector configured or last told observe sends without a decision; it logs that Echo was unreachable.",
+  "valid": true,
+  "mode": "observe",
+  "echo": "unreachable",
+  "capture": {
+    "v": 2,
+    "kind": "http",
+    "phase": "before",
+    "source": {
+      "via": "node",
+      "stack": "node",
+      "plugin": "twilio",
+      "hook": "fetch",
+      "host": "shop.test"
+    },
+    "http": {
+      "method": "POST",
+      "url": "https://api.twilio.com/2010-04-01/Accounts/AC0000/Messages.json",
+      "headers": {
+        "authorization": "Basic •••••",
+        "content-type": "application/x-www-form-urlencoded"
+      },
+      "body": "To=%2B15551230000&From=%2B15550000000&Body=Your+order+has+shipped"
+    }
+  },
+  "connector": "send"
+}

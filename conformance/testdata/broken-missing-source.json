@@ -1,0 +1,20 @@
+{
+  "name": "a capture without its source",
+  "about": "source.via is required: Echo reports where each message came from.",
+  "valid": false,
+  "problems": [
+    "capture.source: missing (required)"
+  ],
+  "capture": {
+    "v": 2,
+    "kind": "email",
+    "email": {
+      "from": "shop@shop.test",
+      "to": [
+        "ann@example.test"
+      ],
+      "subject": "Your receipt",
+      "text": "Thanks for your order."
+    }
+  }
+}

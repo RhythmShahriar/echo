@@ -1,0 +1,28 @@
+{
+  "name": "an observed email is sent",
+  "about": "In observe mode Echo records the email and the connector sends it for real, then reports the outcome (email-after).",
+  "valid": true,
+  "mode": "observe",
+  "echo": "up",
+  "capture": {
+    "v": 2,
+    "kind": "email",
+    "source": {
+      "via": "laravel",
+      "hook": "mail"
+    },
+    "email": {
+      "from": "shop@shop.test",
+      "to": [
+        "ann@example.test"
+      ],
+      "subject": "Your receipt",
+      "text": "Thanks for your order."
+    }
+  },
+  "decision": {
+    "mode": "observe",
+    "action": "allow"
+  },
+  "connector": "send"
+}

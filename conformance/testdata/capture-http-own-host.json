@@ -1,0 +1,28 @@
+{
+  "name": "the site calling itself is allowed",
+  "about": "A request to source.host is the site talking to itself: Echo lets it through and the connector reports the response after.",
+  "valid": true,
+  "mode": "seal",
+  "echo": "up",
+  "capture": {
+    "v": 2,
+    "kind": "http",
+    "phase": "before",
+    "source": {
+      "via": "node",
+      "stack": "node",
+      "plugin": "twilio",
+      "hook": "fetch",
+      "host": "shop.test"
+    },
+    "http": {
+      "method": "GET",
+      "url": "https://shop.test/wp-cron.php"
+    }
+  },
+  "decision": {
+    "mode": "seal",
+    "action": "allow"
+  },
+  "connector": "send"
+}

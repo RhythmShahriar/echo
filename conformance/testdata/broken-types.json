@@ -1,0 +1,25 @@
+{
+  "name": "fields of the wrong type",
+  "about": "to is a list of addresses; a status is an integer.",
+  "valid": false,
+  "problems": [
+    "capture.email.to: want an array, got a string",
+    "capture.http.status: want an integer, got a string"
+  ],
+  "capture": {
+    "v": 2,
+    "kind": "http",
+    "phase": "after",
+    "source": {
+      "via": "node"
+    },
+    "email": {
+      "to": "ann@example.test"
+    },
+    "http": {
+      "method": "GET",
+      "url": "https://x.test/",
+      "status": "200"
+    }
+  }
+}

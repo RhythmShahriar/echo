@@ -1,0 +1,27 @@
+{
+  "name": "a field the protocol does not have",
+  "about": "A typo or a private field: the stand-in refuses it so a connector bug shows.",
+  "valid": false,
+  "problems": [
+    "capture.http.header: not part of the wire protocol"
+  ],
+  "capture": {
+    "v": 2,
+    "kind": "http",
+    "phase": "before",
+    "source": {
+      "via": "node",
+      "stack": "node",
+      "plugin": "twilio",
+      "hook": "fetch",
+      "host": "shop.test"
+    },
+    "http": {
+      "method": "GET",
+      "url": "https://api.example.test/",
+      "header": {
+        "a": "b"
+      }
+    }
+  }
+}

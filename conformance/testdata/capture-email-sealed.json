@@ -1,0 +1,30 @@
+{
+  "name": "a sealed email is faked",
+  "about": "Echo keeps the email: the connector reports success to the app and sends nothing.",
+  "valid": true,
+  "mode": "seal",
+  "echo": "up",
+  "capture": {
+    "v": 2,
+    "kind": "email",
+    "run": "r1/checkout",
+    "source": {
+      "via": "node",
+      "hook": "nodemailer",
+      "host": "shop.test"
+    },
+    "email": {
+      "from": "shop@shop.test",
+      "to": [
+        "ann@example.test"
+      ],
+      "subject": "Your receipt",
+      "text": "Thanks for your order."
+    }
+  },
+  "decision": {
+    "mode": "seal",
+    "action": "fake"
+  },
+  "connector": "fake"
+}

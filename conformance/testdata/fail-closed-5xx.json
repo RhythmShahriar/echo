@@ -1,0 +1,24 @@
+{
+  "name": "Echo answers 503 while sealed",
+  "about": "Echo is there but fails. Any status but 200 counts as no decision: sealed, nothing is sent.",
+  "valid": true,
+  "mode": "seal",
+  "echo": "5xx",
+  "capture": {
+    "v": 2,
+    "kind": "email",
+    "source": {
+      "via": "node",
+      "hook": "nodemailer"
+    },
+    "email": {
+      "from": "shop@shop.test",
+      "to": [
+        "ann@example.test"
+      ],
+      "subject": "Your receipt",
+      "text": "Thanks for your order."
+    }
+  },
+  "connector": "block"
+}

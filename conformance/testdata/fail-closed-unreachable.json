@@ -1,0 +1,29 @@
+{
+  "name": "Echo unreachable while sealed",
+  "about": "Nothing listens at Echo's address. Sealed, the connector must not send: the app gets an error (HTTP) or a failed send (email).",
+  "valid": true,
+  "mode": "seal",
+  "echo": "unreachable",
+  "capture": {
+    "v": 2,
+    "kind": "http",
+    "phase": "before",
+    "source": {
+      "via": "node",
+      "stack": "node",
+      "plugin": "twilio",
+      "hook": "fetch",
+      "host": "shop.test"
+    },
+    "http": {
+      "method": "POST",
+      "url": "https://api.twilio.com/2010-04-01/Accounts/AC0000/Messages.json",
+      "headers": {
+        "authorization": "Basic •••••",
+        "content-type": "application/x-www-form-urlencoded"
+      },
+      "body": "To=%2B15551230000&From=%2B15550000000&Body=Your+order+has+shipped"
+    }
+  },
+  "connector": "block"
+}
