@@ -141,7 +141,7 @@ func TestUpFreePortsMovesWithoutAsking(t *testing.T) {
 	old := askFreePorts
 	askFreePorts = func(*session, string) bool { t.Error("up asked although --free-ports was given"); return false }
 	t.Cleanup(func() { askFreePorts = old })
-	api, _, ok := nextFreePair("127.0.0.1", true)
+	api, _, ok := nextFreePair("127.0.0.1", "127.0.0.1", true)
 	if !ok {
 		t.Skip("no free pair")
 	}

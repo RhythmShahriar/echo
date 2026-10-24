@@ -539,7 +539,7 @@ func TestUpNamesMailpitOnItsPorts(t *testing.T) {
 	moveFreeBase(t)
 	ports := freePorts(t, 2)
 	fakeMailpit(t, ports[0], ports[1])
-	api, smtp, ok := nextFreePair("127.0.0.1", true)
+	api, smtp, ok := nextFreePair("127.0.0.1", "127.0.0.1", true)
 	if !ok {
 		t.Skip("no free pair")
 	}
@@ -658,12 +658,16 @@ func TestNextFreePairSkipsBusyPorts(t *testing.T) {
 		}
 		defer func() { _ = l.Close() }()
 	}
-	api, smtp, ok := nextFreePair("127.0.0.1", true)
+	api, smtp, ok := nextFreePair("127.0.0.1", "127.0.0.1", true)
 	if !ok || api != "127.0.0.1:20412" || smtp != "127.0.0.1:20417" {
 		t.Errorf("pair = %s %s %v, want 20412 and 20417 (20410 and 20416 are taken)", api, smtp, ok)
 	}
-	if api, _, _ := nextFreePair("127.0.0.1", false); api != "127.0.0.1:20411" {
+	if api, _, _ := nextFreePair("127.0.0.1", "127.0.0.1", false); api != "127.0.0.1:20411" {
 		t.Errorf("without SMTP: %s, want 20411", api)
+	}
+	// Each keeps its own host.
+	if api, smtp, ok := nextFreePair("127.0.0.1", "127.0.0.2", true); !ok || !strings.HasPrefix(api, "127.0.0.1:") || !strings.HasPrefix(smtp, "127.0.0.2:") {
+		t.Errorf("hosts: %s %s %v", api, smtp, ok)
 	}
 }
 
@@ -760,7 +764,7 @@ func TestUpMovesAsideWhenAsked(t *testing.T) {
 	old := askFreePorts
 	askFreePorts = func(_ *session, q string) bool { asked = q; return true }
 	t.Cleanup(func() { askFreePorts = old })
-	api, smtp, ok := nextFreePair("127.0.0.1", true)
+	api, smtp, ok := nextFreePair("127.0.0.1", "127.0.0.1", true)
 	if !ok {
 		t.Skip("no free pair")
 	}

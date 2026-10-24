@@ -111,8 +111,7 @@ func moveAside(s *session, listen, smtp *string, failed error, auto bool) (ln, s
 	if who == "Echo" {
 		return nil, nil, fmt.Errorf("Echo is already running on %s (use that one, or stop it first)", be.addr) //nolint:staticcheck // Echo is a name
 	}
-	host := hostOf(*listen)
-	api, mail, found := nextFreePair(host, smtpOn)
+	api, mail, found := nextFreePair(hostOf(*listen), hostOf(*smtp), smtpOn)
 	if !found {
 		return nil, nil, failed
 	}
@@ -165,8 +164,9 @@ func hostOf(addr string) string {
 }
 
 // nextFreePair finds the first API and SMTP ports from freeBase upward
-// that both can be bound on host right now.
-func nextFreePair(host string, smtpOn bool) (api, smtp string, ok bool) {
+// that both can be bound right now, each on its own host: an SMTP sink
+// on 0.0.0.0 next to an API on loopback keeps listening where it did.
+func nextFreePair(apiHost, smtpHost string, smtpOn bool) (api, smtp string, ok bool) {
 	free := func(addr string) bool {
 		l, err := net.Listen("tcp", addr)
 		if err != nil {
@@ -176,8 +176,8 @@ func nextFreePair(host string, smtpOn bool) (api, smtp string, ok bool) {
 		return true
 	}
 	for i := range freeTries {
-		api = net.JoinHostPort(host, strconv.Itoa(freeBase[0]+i))
-		smtp = net.JoinHostPort(host, strconv.Itoa(freeBase[1]+i))
+		api = net.JoinHostPort(apiHost, strconv.Itoa(freeBase[0]+i))
+		smtp = net.JoinHostPort(smtpHost, strconv.Itoa(freeBase[1]+i))
 		if free(api) && (!smtpOn || free(smtp)) {
 			return api, smtp, true
 		}
