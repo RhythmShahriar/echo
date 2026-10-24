@@ -22,7 +22,7 @@ import (
 // An empty value leaves that key alone. Only the old values change: every
 // comment, blank line and other key stays byte for byte, because
 // re-encoding the YAML would reformat a file the user wrote by hand. A key
-// that isn't there is added at the end, and a missing file is created.
+// that isn't there is added at the end; a missing file is created.
 // The result is loaded before it's written, so a rewrite that would break
 // the file fails instead.
 func SetAddresses(path, listen, smtp, proxy string) error {

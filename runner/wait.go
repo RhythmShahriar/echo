@@ -234,7 +234,7 @@ func withoutExpectations(issues []model.Issue) []model.Issue {
 	return out
 }
 
-// describe names a message in a warning by its channel and ID, and its
+// describe names a message in a warning by its channel and ID, plus its
 // event when it has one, like `email message 3f2a9c1b7d4e`. Run warnings
 // aren't masked like message bodies, so a subject or URL (which can hold
 // a one-time code or a token) stays out of them; the ID finds the

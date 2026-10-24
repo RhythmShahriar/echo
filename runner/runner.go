@@ -4,7 +4,7 @@
 // Package runner runs a project's actions against a running Echo: for
 // each one it triggers the site (an HTTP request, a command, a replayed
 // webhook), lets queued senders catch up, waits until the site falls
-// quiet, and records the messages that action caused, with their issues.
+// quiet, then records the messages that action caused, with their issues.
 package runner
 
 import (
@@ -246,7 +246,7 @@ func kind(a config.Action) string {
 }
 
 // refuse stops an action that must not run, before anything is sent: one
-// aimed at a site listed under production, and a replay outside seal
+// aimed at a site listed under production, or a replay outside seal
 // mode, which would let the site's reactions (order emails, SMS, CRM
 // calls) reach real people. Replays are refused the way `rhythm echo
 // replay` refuses them.
@@ -269,7 +269,7 @@ func refuse(cfg config.Config, a config.Action, mode string, fake *fakeData) err
 
 // expectations reports an action that sent fewer messages than its
 // config says it must: one expect/unmet issue per channel short of its
-// count, and per event short of its count (analytics: {purchase: 1}),
+// count, plus one per event short of its count (analytics: {purchase: 1})
 // matched on the message's event. A shortfall is named in the title so
 // compare tells a missing purchase event from a missing email.
 func expectations(e config.Expect, msgs []model.Message) []model.Issue {

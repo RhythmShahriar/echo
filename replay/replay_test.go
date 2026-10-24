@@ -536,7 +536,7 @@ func TestSecretReady(t *testing.T) {
 
 // TestProductionRefused: a live site is refused even when its name
 // resolves to a private address (a hosts-file entry or a VPN) or it's
-// also listed as staging, and whatever the case or the subdomain.
+// also listed as staging, whatever the case or the subdomain.
 func TestProductionRefused(t *testing.T) {
 	srv, got := receiver(t, stripeSecret, verifyStripe)
 	_, port, _ := strings.Cut(srv.Listener.Addr().String(), ":")

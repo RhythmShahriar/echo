@@ -360,7 +360,7 @@ func TestLatestRunIsTheNewestResult(t *testing.T) {
 }
 
 // TestRunFoldersAreUnique: runs started in the same second, or by two
-// processes at once, each get a folder, and none is deleted.
+// processes at once, each get a folder; none is deleted.
 func TestRunFoldersAreUnique(t *testing.T) {
 	s := Store{Root: t.TempDir()}
 	stamp := Stamp(time.Now())

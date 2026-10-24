@@ -3,7 +3,7 @@
 
 // Package config loads Echo's project settings from .echo/config.yaml:
 // how the catcher behaves (seal or observe, what may be reached), what
-// counts as staging and production, and the actions `snapshot` and
+// counts as staging and production, plus the actions `snapshot` and
 // `compare` run. Every key is optional.
 package config
 
@@ -237,7 +237,7 @@ type Relay struct {
 }
 
 // Reserved holds a key Echo accepts so configs written for a newer
-// feature still load, but doesn't read yet.
+// feature still load, though it doesn't read it yet.
 type Reserved struct{ node yaml.Node }
 
 // Node is the key's YAML as written.
@@ -251,7 +251,7 @@ func (r *Reserved) UnmarshalYAML(n *yaml.Node) error {
 // MarshalYAML writes the key back as it was read.
 func (r Reserved) MarshalYAML() (any, error) { return &r.node, nil }
 
-// Duration reads "2s" style values, and days as "14d".
+// Duration reads "2s" style values as well as days ("14d").
 type Duration struct{ time.Duration }
 
 func (d *Duration) UnmarshalYAML(n *yaml.Node) error {
@@ -547,8 +547,6 @@ func index(root *yaml.Node) positions {
 	return p
 }
 
-// at returns "line N: " for the key at path, or "" when c didn't come
-// from a file.
 // also names the line of an earlier entry in a message about a later
 // one, as " (line 2)", or returns "".
 func (c Config) also(path ...any) string {
@@ -569,6 +567,8 @@ const actionPrefix = "action:"
 
 var nonWord = regexp.MustCompile(`[^a-z0-9]+`)
 
+// at returns "line N: " for the key at path, or "" when c didn't come
+// from a file.
 func (c Config) at(path ...any) string {
 	if n, ok := c.lines[key(path...)]; ok {
 		return fmt.Sprintf("line %d: ", n)

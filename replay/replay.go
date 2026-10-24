@@ -7,7 +7,7 @@
 // + SMS + CRM call".
 //
 // Safety is enforced here, not left to callers: a target listed under
-// production is refused, and any other must be a configured staging URL
+// production is refused; any other must be a configured staging URL
 // or resolve only to loopback or private addresses (checked again at
 // dial time, so DNS can't change the answer), live keys
 // anywhere in reach refuse the send, secrets must look like test secrets,

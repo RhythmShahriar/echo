@@ -155,7 +155,7 @@ func LoadComparison(dir string) (*model.Comparison, error) {
 }
 
 // Promote moves a finished snapshot from Incoming into snapshots/name,
-// replacing an older snapshot with that name, and returns its new folder.
+// replacing an older snapshot with that name; it returns the new folder.
 // Names that differ only in case are one snapshot: macOS and Windows
 // can't keep Before and before apart, so taking before replaces Before
 // everywhere and the folder takes the new spelling.
