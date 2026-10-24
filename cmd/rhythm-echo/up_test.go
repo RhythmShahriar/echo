@@ -763,3 +763,74 @@ func TestGuessStack(t *testing.T) {
 		}
 	}
 }
+
+// containerHost is what a Docker container sees: loopback, its bridge
+// address and a link-local IPv6 address.
+var containerHost = []netIface{
+	{"lo", []net.IP{net.ParseIP("127.0.0.1"), net.ParseIP("::1")}},
+	{"eth0", []net.IP{net.ParseIP("172.17.0.2"), net.ParseIP("fe80::42:acff:fe11:2")}},
+}
+
+// publicHost is a server with a public address next to Docker's bridge.
+var publicHost = []netIface{
+	{"lo", []net.IP{net.ParseIP("127.0.0.1")}},
+	{"eth0", []net.IP{net.ParseIP("203.0.113.5")}},
+	{"docker0", []net.IP{net.ParseIP("100.64.0.1")}},
+}
+
+func TestPrivateOnly(t *testing.T) {
+	lookup := func(host string) ([]net.IP, error) {
+		switch host {
+		case "echo":
+			return []net.IP{net.ParseIP("10.0.0.7")}, nil
+		case "echo.shop.test":
+			return []net.IP{net.ParseIP("10.0.0.7"), net.ParseIP("198.51.100.9")}, nil
+		}
+		return nil, fmt.Errorf("no such host %s", host)
+	}
+	for _, c := range []struct {
+		addr   string
+		ifaces []netIface
+		want   string // "" for allowed
+	}{
+		{"0.0.0.0:8025", containerHost, ""},
+		{":8025", containerHost, ""},
+		{"[::]:8025", containerHost, ""},
+		{"172.17.0.2:8025", containerHost, ""},
+		{"192.168.1.20:8025", publicHost, ""},
+		{"[fd00::5]:8025", publicHost, ""},
+		{"100.64.0.1:8025", publicHost, ""}, // not RFC 1918, but Docker's bridge
+		{"echo:8025", publicHost, ""},
+		{"0.0.0.0:8025", publicHost, "--listen 0.0.0.0:8025 is reachable from a public address (203.0.113.5 on eth0)"},
+		{"203.0.113.5:8025", publicHost, "(203.0.113.5 on eth0); --private-network allows only private (RFC 1918) and container networks"},
+		{"echo.shop.test:8025", publicHost, "(198.51.100.9)"},
+		{"nowhere:8025", publicHost, "no such host nowhere"},
+	} {
+		err := privateOnly("--listen", c.addr, c.ifaces, lookup)
+		if c.want == "" && err != nil || c.want != "" && (err == nil || !strings.Contains(err.Error(), c.want)) {
+			t.Errorf("%s: err = %v, want %q", c.addr, err, c.want)
+		}
+	}
+}
+
+// TestPrivateNetworkRefusesAPublicInterface: with --private-network on, a
+// wildcard listen on a machine with a public address is still refused,
+// before anything is bound.
+func TestPrivateNetworkRefusesAPublicInterface(t *testing.T) {
+	t.Chdir(t.TempDir())
+	t.Setenv("RHYTHM_ECHO_TOKEN", "")
+	t.Setenv(privateNetworkEnv, "1")
+	orig := listIfaces
+	listIfaces = func() ([]netIface, error) { return publicHost, nil }
+	t.Cleanup(func() { listIfaces = orig })
+	code, _, errOut := runCLI(t, "up", "--listen", "0.0.0.0:20400", "--smtp", "off")
+	if code != exitUsage || !strings.Contains(errOut, "--listen 0.0.0.0:20400 is reachable from a public address (203.0.113.5 on eth0)") {
+		t.Errorf("exit %d: %s", code, errOut)
+	}
+	// Without --private-network the old refusal stands.
+	t.Setenv(privateNetworkEnv, "")
+	code, _, errOut = runCLI(t, "up", "--listen", "0.0.0.0:20400", "--smtp", "off")
+	if code != exitUsage || !strings.Contains(errOut, "--listen 0.0.0.0:20400 is reachable from other machines; set --token") {
+		t.Errorf("exit %d: %s", code, errOut)
+	}
+}

@@ -11,8 +11,11 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"os"
+	"regexp"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -32,16 +35,37 @@ import (
 func cmdUp(s *session) int {
 	cfg := s.cfg
 	token := s.echo.Token
-	if !loopback(cfg.Listen) && token == "" {
-		return s.fail(usageErr("--listen %s is reachable from other machines; set --token (or RHYTHM_ECHO_TOKEN) so only your connectors can post", cfg.Listen))
-	}
 	smtpOn := cfg.SMTP != "" && cfg.SMTP != "off"
-	if smtpOn && !loopback(cfg.SMTP) && token == "" {
-		return s.fail(usageErr("--smtp %s is reachable from other machines; set --token (or RHYTHM_ECHO_TOKEN): the sink then asks for it as the SMTP password", cfg.SMTP))
-	}
 	proxyOn := cfg.Proxy != "" && cfg.Proxy != "off"
-	if proxyOn && !loopback(cfg.Proxy) && token == "" {
-		return s.fail(usageErr("--proxy %s is reachable from other machines; set --token (or RHYTHM_ECHO_TOKEN) so it isn't an open relay", cfg.Proxy))
+	private := privateNetworkOn()
+	var open []string // addresses served beyond loopback without a token
+	for _, l := range []struct {
+		on         bool
+		flag, addr string
+		why        string
+	}{
+		{true, "--listen", cfg.Listen, "so only your connectors can post"},
+		{smtpOn, "--smtp", cfg.SMTP, "the sink then asks for it as the SMTP password"},
+		{proxyOn, "--proxy", cfg.Proxy, "so it isn't an open relay"},
+	} {
+		if !l.on || loopback(l.addr) || token != "" {
+			continue
+		}
+		if !private {
+			sep := " "
+			if l.flag == "--smtp" {
+				sep = ": "
+			}
+			return s.fail(usageErr("%s %s is reachable from other machines; set --token (or RHYTHM_ECHO_TOKEN)%s%s", l.flag, l.addr, sep, l.why))
+		}
+		ifaces, err := listIfaces()
+		if err != nil {
+			return s.fail(fmt.Errorf("--private-network: listing network interfaces: %w", err))
+		}
+		if err := privateOnly(l.flag, l.addr, ifaces, lookupIPs); err != nil {
+			return s.fail(usageErr("%v", err))
+		}
+		open = append(open, l.addr)
 	}
 
 	// Every port is taken before anything is printed, so a port in use
@@ -96,7 +120,7 @@ func cmdUp(s *session) int {
 	if sl != nil {
 		sink := catcher.NewSMTP(srv, cfg.SMTP)
 		smtpLine = cfg.SMTP + "  (point a mailer or sendmail_path here)"
-		if !loopback(cfg.SMTP) {
+		if !loopback(cfg.SMTP) && token != "" {
 			sink.Backend = tokenBackend{inner: sink.Backend, token: token}
 			smtpLine = cfg.SMTP + "  (log in with any username and the token as the password)"
 		}
@@ -128,6 +152,9 @@ func cmdUp(s *session) int {
 	}
 	if len(cfg.Allow) > 0 {
 		s.view.Step("Allowed", strings.Join(cfg.Allow, ", "))
+	}
+	if len(open) > 0 {
+		s.view.Step("Warning", "no token on "+strings.Join(open, ", ")+": anything on this private network can post to Echo and read what it caught (--private-network)")
 	}
 	if !s.o.quiet {
 		fmt.Fprintln(s.stderr, "\n  Waiting for messages. Ctrl+C to stop.")
@@ -362,6 +389,117 @@ func modeLine(mode string) string {
 
 // loopback reports whether a listen address stays on this machine.
 func loopback(addr string) bool { return proxy.IsLoopbackAddr(addr) }
+
+// privateNetworkEnv turns on --private-network. The flag itself belongs
+// to the cli lane's flag set; until it lands, the environment is how the
+// Docker image asks for it.
+const privateNetworkEnv = "RHYTHM_ECHO_PRIVATE_NETWORK"
+
+// privateNetworkOn reports whether up may listen beyond loopback without
+// a token, on private and container networks only.
+func privateNetworkOn() bool {
+	on, _ := strconv.ParseBool(os.Getenv(privateNetworkEnv))
+	return on
+}
+
+// netIface is a network interface that is up, with its addresses.
+type netIface struct {
+	name string
+	ips  []net.IP
+}
+
+// listIfaces lists this machine's interfaces; tests replace it.
+var listIfaces = func() ([]netIface, error) {
+	ifs, err := net.Interfaces()
+	if err != nil {
+		return nil, err
+	}
+	var out []netIface
+	for _, i := range ifs {
+		if i.Flags&net.FlagUp == 0 {
+			continue
+		}
+		addrs, err := i.Addrs()
+		if err != nil {
+			return nil, err
+		}
+		n := netIface{name: i.Name}
+		for _, a := range addrs {
+			if ipn, ok := a.(*net.IPNet); ok {
+				n.ips = append(n.ips, ipn.IP)
+			}
+		}
+		out = append(out, n)
+	}
+	return out, nil
+}
+
+func lookupIPs(host string) ([]net.IP, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	return net.DefaultResolver.LookupIP(ctx, "ip", host)
+}
+
+// containerIface matches the bridges and virtual links container runtimes
+// create (Docker, Podman, Kubernetes CNIs). Their addresses are usually
+// private anyway; a runtime can give them any range, though.
+var containerIface = regexp.MustCompile(`^(docker\d*|br-[0-9a-f]+|veth.+|cni\d*|podman\d*|cali.+|flannel.+|cilium.+)$`)
+
+// privateOnly returns nil when addr can be reached only from loopback,
+// private networks (RFC 1918, fc00::/7) or container interfaces. A
+// wildcard address listens on every interface, so each must qualify;
+// link-local addresses are left out, as they can't be routed.
+func privateOnly(flag, addr string, ifaces []netIface, lookup func(string) ([]net.IP, error)) error {
+	host, _, err := net.SplitHostPort(addr)
+	if err != nil {
+		return fmt.Errorf("%s %s: %w", flag, addr, err)
+	}
+	refuse := func(ip net.IP, iface string) error {
+		where := ip.String()
+		if iface != "" {
+			where += " on " + iface
+		}
+		return fmt.Errorf("%s %s is reachable from a public address (%s); --private-network allows only private (RFC 1918) and container networks: listen on a private address, or set --token (or RHYTHM_ECHO_TOKEN)", flag, addr, where)
+	}
+	ok := func(ip net.IP, iface string) bool {
+		return ip.IsLoopback() || ip.IsPrivate() || containerIface.MatchString(iface)
+	}
+	ip := net.ParseIP(host)
+	if host == "" || ip != nil && ip.IsUnspecified() {
+		for _, i := range ifaces {
+			for _, a := range i.ips {
+				if !a.IsLinkLocalUnicast() && !ok(a, i.name) {
+					return refuse(a, i.name)
+				}
+			}
+		}
+		return nil
+	}
+	ips := []net.IP{ip}
+	if ip == nil {
+		if ips, err = lookup(host); err != nil {
+			return fmt.Errorf("%s %s: %w", flag, addr, err)
+		}
+	}
+	for _, a := range ips {
+		if !ok(a, ifaceOf(a, ifaces)) {
+			return refuse(a, ifaceOf(a, ifaces))
+		}
+	}
+	return nil
+}
+
+// ifaceOf names the interface that holds ip, or "".
+func ifaceOf(ip net.IP, ifaces []netIface) string {
+	for _, i := range ifaces {
+		for _, a := range i.ips {
+			if a.Equal(ip) {
+				return i.name
+			}
+		}
+	}
+	return ""
+}
 
 // liveRun groups the inbox into actions (by run and action, "Live" for
 // messages outside any action) with each message's content checks, so the
