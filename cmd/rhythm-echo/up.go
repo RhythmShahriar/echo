@@ -222,7 +222,8 @@ func upRoutes(srv *catcher.Server, inbox *catcher.Inbox, ui *web.UI, mode string
 		{"GET /{$}", "/", ui, true},
 		{"GET /assets/", "/assets/app.js", ui, true},
 		{"/ui/", web.PathMessages, ui, true},
-		{"GET /report", "/report", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { liveReport(w, r, inbox, mode, checks) }), true},
+		// Through the UI's Host check: the report holds the whole session.
+		{"GET /report", "/report", ui.Protect(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { liveReport(w, r, inbox, mode, checks) })), true},
 	}
 }
 

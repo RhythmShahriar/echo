@@ -410,11 +410,17 @@ func TestLiveShowsContentChecks(t *testing.T) {
 		inbox.OnAdd(l.add)
 		return h, &log
 	}
+	// /report answers loopback names only without a token.
+	reportPage := func(h http.Handler) string {
+		r := httptest.NewRequest(http.MethodGet, "/report", nil)
+		r.Host = "127.0.0.1:8025"
+		return serve(h, r).Body.String()
+	}
 
 	t.Run("problems", func(t *testing.T) {
 		h, log := setup()
 		post(t, h, "Welcome, {first_name}", "Confirm here: http://localhost/confirm?k=1")
-		page := serve(h, httptest.NewRequest(http.MethodGet, "/report", nil)).Body.String()
+		page := reportPage(h)
 		for _, want := range []string{"Unfilled placeholder {first_name} in email", "Email links to a development address (localhost)"} {
 			if !strings.Contains(page, want) {
 				t.Errorf("live view lacks %q", want)
@@ -436,7 +442,7 @@ func TestLiveShowsContentChecks(t *testing.T) {
 	t.Run("clean", func(t *testing.T) {
 		h, log := setup()
 		post(t, h, "Welcome, Ann", "Confirm here: https://shop.example.com/confirm?k=1")
-		page := serve(h, httptest.NewRequest(http.MethodGet, "/report", nil)).Body.String()
+		page := reportPage(h)
 		if strings.Contains(page, "Unfilled placeholder") || strings.Contains(page, "development address") ||
 			!strings.Contains(strings.ToLower(page), "all clear") {
 			t.Error("a clean email shows problems")
@@ -925,6 +931,21 @@ func TestPrivateNetworkRefusesAPublicInterface(t *testing.T) {
 	code, _, errOut = runCLI(t, "up", "--listen", "0.0.0.0:20400", "--smtp", "off")
 	if code != exitUsage || !strings.Contains(errOut, "--listen 0.0.0.0:20400 is reachable from other machines; set --token") {
 		t.Errorf("exit %d: %s", code, errOut)
+	}
+}
+
+// TestReportRefusesARebindingHost: /report holds the whole session, so
+// without a token it answers only to loopback names, like Echo Inbox.
+func TestReportRefusesARebindingHost(t *testing.T) {
+	h, _ := testUpHandler("")
+	r := httptest.NewRequest(http.MethodGet, "/report", nil)
+	r.Host = "rebind.evil.example:8025"
+	if w := serve(h, r); w.Code != http.StatusForbidden {
+		t.Errorf("rebinding Host: %d, want 403", w.Code)
+	}
+	r.Host = "localhost:8025"
+	if w := serve(h, r); w.Code != http.StatusOK {
+		t.Errorf("localhost: %d", w.Code)
 	}
 }
 

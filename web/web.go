@@ -88,17 +88,8 @@ func New(o Options) *UI {
 func (u *UI) Handler() http.Handler { return u }
 
 func (u *UI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if !u.o.AnyHost && !loopbackHost(r.Host) {
-		http.Error(w, "Echo Inbox answers only to localhost", http.StatusForbidden)
+	if !u.allowed(w, r) {
 		return
-	}
-	// Browsers send Origin on a cross-site DELETE; only Echo's own page
-	// may delete.
-	if r.Method != http.MethodGet && r.Method != http.MethodHead {
-		if o := r.Header.Get("Origin"); o != "" && o != "http://"+r.Host && o != "https://"+r.Host {
-			http.Error(w, "Echo Inbox refuses requests from other pages", http.StatusForbidden)
-			return
-		}
 	}
 	h := w.Header()
 	h.Set("Content-Security-Policy", CSP)
@@ -106,6 +97,34 @@ func (u *UI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.Set("Referrer-Policy", "no-referrer")
 	h.Set("Cache-Control", "no-store")
 	u.mux.ServeHTTP(w, r)
+}
+
+// Protect puts next behind the UI's own Host and Origin checks, for pages
+// served beside Echo Inbox that show the inbox too (up's /report).
+func (u *UI) Protect(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if u.allowed(w, r) {
+			next.ServeHTTP(w, r)
+		}
+	})
+}
+
+// allowed refuses r when its Host isn't this machine (unless AnyHost) or
+// when another page sent it, and says whether r may go on.
+func (u *UI) allowed(w http.ResponseWriter, r *http.Request) bool {
+	if !u.o.AnyHost && !loopbackHost(r.Host) {
+		http.Error(w, "Echo Inbox answers only to localhost", http.StatusForbidden)
+		return false
+	}
+	// Browsers send Origin on a cross-site DELETE; only Echo's own page
+	// may delete.
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		if o := r.Header.Get("Origin"); o != "" && o != "http://"+r.Host && o != "https://"+r.Host {
+			http.Error(w, "Echo Inbox refuses requests from other pages", http.StatusForbidden)
+			return false
+		}
+	}
+	return true
 }
 
 // Notify tells open pages that m was added or changed. It runs m's
