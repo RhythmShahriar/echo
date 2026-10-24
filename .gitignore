@@ -1,5 +1,7 @@
 /bin/
 /dist/
+/rhythm-echo
+/rhythm-echo.exe
 *.exe
 *.test
 *.out
