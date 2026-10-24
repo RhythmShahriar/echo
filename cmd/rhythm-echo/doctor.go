@@ -473,8 +473,8 @@ func serviceAtURL(ctx context.Context, base string) string {
 // productionReason says why site counts as a live site under the
 // config's production: list, or "" when it doesn't. It matches the way
 // snapshot, compare, run and replay do (config.ProductionEntry): the
-// host in any case, :80 and :443 as no port, subdomains, and a port or
-// path only when the entry names one. Those commands refuse such a site
+// host in any case, :80 and :443 as no port, subdomains too and a port
+// or path only when the entry names one. Those commands refuse such a site
 // before any action, command actions included, so doctor says that.
 func productionReason(cfg config.Config, site string) string {
 	if site == "" {

@@ -339,11 +339,12 @@ Latest (latest --to <address>; prints only the code or link, for scripts and tes
 Relay (release <id> --to <address>; Echo Inbox's Release button does the same):
       --to <address>         who gets the email: an address on relay: allow
   up sends a release through your own SMTP account over TLS, only to the addresses
-  relay: allow lists, and logs each one in the inbox. It needs Echo's token or a
+  relay: allow lists. Each one is logged in the inbox. It needs Echo's token or a
   viewer --login. Keep the account's password in RHYTHM_ECHO_RELAY, not the config:
     relay:
       allow: ["*@client.example"]
-    RHYTHM_ECHO_RELAY=smtp://user:pass@smtp.agency.example:587 rhythm echo up --login ann:secret
+    RHYTHM_ECHO_RELAY=smtp://user:pass@smtp.agency.example:587 \
+      rhythm echo up --login client:<password>
 
 Deliverability (check, headers; never sends anything):
       --from-mail <file.eml> learn the real sender from a received email

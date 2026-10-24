@@ -112,7 +112,7 @@ func TestSecretInPayloadWhateverTheStatus(t *testing.T) {
 }
 
 // A one-time code, a magic link token and a signed URL are masked in
-// storage too, but they are meant to be in the message: they aren't a
+// storage too. They are meant to be in the message, so they aren't a
 // leaked credential.
 func TestSecretIgnoresCodesAndLinkTokens(t *testing.T) {
 	for _, m := range []model.Message{

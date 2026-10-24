@@ -29,8 +29,9 @@ type releaseAnswer struct {
 // cmdRelease sends one caught email to one address through the relay
 // that up runs with relay: in the config (integrations I8), as Echo
 // Inbox's Release button does. The address must be on relay: allow.
-// It exits 2 when the relay refuses the address or the message, and 3
-// when the relay's SMTP account didn't take it or Echo can't be reached.
+// It exits 2 when the relay refuses the address or the message. It
+// exits 3 when the relay's SMTP account didn't take it or Echo can't be
+// reached.
 func cmdRelease(s *session) int {
 	if len(s.args) != 1 || s.o.to == "" {
 		return s.fail(usageErr("usage: rhythm echo release <id> --to <address>   (IDs from: rhythm echo ls --channel email)"))

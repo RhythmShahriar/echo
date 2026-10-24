@@ -119,7 +119,7 @@ func TestAPIContract(t *testing.T) {
 }
 
 // TestReleaseContract: the email detail's Release form posts what the
-// relay's route takes (package relay), to the path it serves, and shows
+// relay's route takes (package relay), to the path it serves. It shows
 // the relay's own error text. The Page names the allowlist only when up
 // has a relay.
 func TestReleaseContract(t *testing.T) {
