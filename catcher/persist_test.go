@@ -4,6 +4,7 @@
 package catcher
 
 import (
+	"errors"
 	"fmt"
 	"net/http/httptest"
 	"os"
@@ -292,7 +293,7 @@ func TestPersistedInboxSkipsFilesAnUnfinishedCompactionLeft(t *testing.T) {
 	for _, e := range ents {
 		names = append(names, e.Name())
 	}
-	if !slices.Equal(names, []string{marker, "000002.jsonl"}) {
+	if !slices.Equal(names, []string{marker, lockFile, "000002.jsonl"}) {
 		t.Fatalf("files left: %v", names)
 	}
 }
@@ -402,4 +403,26 @@ func TestRefusedInboxFolderKeepsItsMode(t *testing.T) {
 	if err != nil || fi.Mode().Perm() != 0o755 {
 		t.Errorf("mode %v, %v; want 0755 kept", fi.Mode().Perm(), err)
 	}
+}
+
+// TestOpenInboxRefusesASecondEcho: a folder another Echo keeps its inbox
+// in is refused, naming that Echo's PID, until it closes the inbox.
+func TestOpenInboxRefusesASecondEcho(t *testing.T) {
+	dir := t.TempDir()
+	first, err := OpenInbox(InboxOptions{Dir: dir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = OpenInbox(InboxOptions{Dir: dir})
+	if !errors.Is(err, ErrInUse) || !strings.Contains(err.Error(), fmt.Sprintf("another Echo (PID %d) keeps its inbox in %s", os.Getpid(), dir)) {
+		t.Errorf("second open: %v", err)
+	}
+	if err := first.Close(); err != nil {
+		t.Fatal(err)
+	}
+	again, err := OpenInbox(InboxOptions{Dir: dir})
+	if err != nil {
+		t.Fatalf("after the first closed: %v", err)
+	}
+	_ = again.Close()
 }

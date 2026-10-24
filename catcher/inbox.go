@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"os"
 	"slices"
 	"strings"
 	"sync"
@@ -45,6 +46,7 @@ type Inbox struct {
 	keepFor  time.Duration    // drop messages older than this; 0 keeps them
 	j        *journal         // where changes are written; nil for memory only
 	stop     chan struct{}    // closed by Close to end the retention ticker
+	lock     *os.File         // holds the inbox folder's lock (lockInbox); nil for memory only
 	bytes    int64            // sum of size(m) over msgs
 	changed  chan struct{}    // closed and replaced whenever the inbox changes
 	events   []Event          // the latest changes, oldest first, for subscribers

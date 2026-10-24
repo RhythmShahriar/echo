@@ -92,7 +92,12 @@ func OpenInbox(o InboxOptions) (*Inbox, error) {
 	if err := claim(o.Dir); err != nil {
 		return nil, err
 	}
+	lock, err := lockInbox(o.Dir)
+	if err != nil {
+		return nil, err
+	}
 	in := NewInbox(cmp.Or(o.Keep, DefaultKeep))
+	in.lock = lock
 	in.maxBytes = cmp.Or(o.MaxBytes, DefaultMaxBytes)
 	in.keepFor = o.KeepFor
 	if o.now != nil {
@@ -100,6 +105,7 @@ func OpenInbox(o InboxOptions) (*Inbox, error) {
 	}
 	j := &journal{dir: o.Dir, segmentSize: cmp.Or(o.segmentSize, segmentSize)}
 	if err := in.replay(j); err != nil {
+		_ = lock.Close()
 		return nil, err
 	}
 	in.mu.Lock()
@@ -108,7 +114,7 @@ func OpenInbox(o InboxOptions) (*Inbox, error) {
 	if j.err == nil && j.total > 2*j.live+j.segmentSize {
 		in.compact()
 	}
-	err := j.err
+	err = j.err
 	in.mu.Unlock()
 	if err != nil {
 		_ = in.Close()
@@ -170,6 +176,9 @@ func (in *Inbox) Close() error {
 	if in.stop != nil {
 		close(in.stop)
 		in.stop = nil
+	}
+	if in.lock != nil {
+		defer func() { _ = in.lock.Close(); in.lock = nil }() // after the journal: the next Echo may start then
 	}
 	j := in.j
 	if j == nil {
@@ -328,7 +337,7 @@ func claim(dir string) error {
 			return fmt.Errorf("open inbox: %w", err)
 		}
 		for _, e := range ents {
-			if !journalFile(e.Name()) {
+			if !journalFile(e.Name()) && e.Name() != lockFile {
 				return fmt.Errorf("open inbox: %s holds files that aren't Echo's, such as %s; give the inbox a folder of its own", dir, e.Name())
 			}
 		}
