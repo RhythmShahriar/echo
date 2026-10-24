@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/RhythmShahriar/echo/client"
 	"github.com/RhythmShahriar/echo/config"
@@ -36,6 +37,13 @@ type options struct {
 
 	channel, runID, to string
 	all                bool
+
+	// check, headers and replay
+	fromMail, provider, selector, returnPath, smtpHost, resolver string
+	mtaSTSFetch, withDNS, hops, list                             bool
+	sets, headers                                                cli.RepeatFlag
+	secretEnv, scheme, typ                                       string
+	wait                                                         time.Duration
 }
 
 func flagSet(o *options) *flag.FlagSet {
@@ -73,6 +81,23 @@ func flagSet(o *options) *flag.FlagSet {
 	fs.StringVar(&o.runID, "run", "", "")
 	fs.StringVar(&o.to, "to", "", "")
 	fs.BoolVar(&o.all, "all", false, "")
+
+	fs.StringVar(&o.fromMail, "from-mail", "", "")
+	fs.StringVar(&o.provider, "provider", "", "")
+	fs.StringVar(&o.selector, "selector", "", "")
+	fs.StringVar(&o.returnPath, "return-path", "", "")
+	fs.StringVar(&o.smtpHost, "smtp-host", "", "")
+	fs.StringVar(&o.resolver, "resolver", "", "")
+	fs.BoolVar(&o.mtaSTSFetch, "mta-sts-fetch", false, "")
+	fs.BoolVar(&o.withDNS, "check", false, "")
+	fs.BoolVar(&o.hops, "hops", false, "")
+	fs.BoolVar(&o.list, "list", false, "")
+	fs.Var(&o.sets, "set", "")
+	both("H", "header", func(n string) { fs.Var(&o.headers, n, "") })
+	fs.StringVar(&o.secretEnv, "secret-env", "", "")
+	fs.StringVar(&o.scheme, "scheme", "", "")
+	fs.StringVar(&o.typ, "type", "", "")
+	fs.DurationVar(&o.wait, "wait", 5*time.Second, "")
 	return fs
 }
 

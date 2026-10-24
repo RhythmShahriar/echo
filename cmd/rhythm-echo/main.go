@@ -122,6 +122,23 @@ Output:
       --fail-on <level>      exit 1 on changes at or above broke, new or changed;
                              for run and snapshot: issues at error, warning, notice
 
+Replay (inbound webhooks, sent only to staging and local addresses, with Echo sealed):
+      --to <url>             where to send (absolute, or relative to site:)
+      --set <path=value>     override a field, e.g. data.object.amount=1999 (repeatable)
+      --secret-env <NAME>    env var with the signing secret (default per scheme,
+                             e.g. ECHO_STRIPE_WEBHOOK_SECRET)
+      --scheme <s>           for JSON files: stripe, standard, github, woocommerce, hmac
+      --list                 list the built-in events
+      --wait <d>             how long to collect what the site sends back (default 5s)
+
+Deliverability (check, headers; never sends anything):
+      --from-mail <file.eml> learn the real sender from a received email
+      --provider <name>      or name it: sendgrid, mailgun, ses, postmark, resend…
+      --selector <s>         DKIM selector to check
+      --mta-sts-fetch        also fetch the MTA-STS policy file over HTTPS
+      --check                (headers) also run the DNS checks for the sender
+      --hops                 (headers) show the route the message took
+
 Other:
       --config <file>        settings (default .echo/config.yaml)
       --url <url>            where Echo runs (default http://127.0.0.1:8025; RHYTHM_ECHO_URL)
