@@ -244,7 +244,7 @@ func (s *session) doctorLine(r doctorResult, label, detail string) {
 
 func (s *session) doctorEnd(ok, fails int) int {
 	if !s.o.quiet {
-		fmt.Fprintf(s.stdout, "\n  %d checks passed, %d failed.\n\n", ok, fails)
+		fmt.Fprintf(s.stdout, "\n  %s passed, %d failed.\n\n", plural(ok, "check"), fails)
 	}
 	if fails > 0 {
 		return exitFindings
