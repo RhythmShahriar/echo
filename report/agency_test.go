@@ -85,6 +85,27 @@ func TestAgencyContent(t *testing.T) {
 	}
 }
 
+// TestAgencyUntil: a run after Until is left out, so the rows and totals
+// agree with the period in the heading.
+func TestAgencyUntil(t *testing.T) {
+	in := agencyInput()
+	in.Until = stamp.Add(-3 * 24 * time.Hour)
+	var buf bytes.Buffer
+	if err := Agency(&buf, in); err != nil {
+		t.Fatal(err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "24 Sep to 21 Oct 2026") {
+		t.Error("the period doesn't end at Until")
+	}
+	if strings.Count(out, "<tr class=") != 1 || strings.Contains(out, "Sat 24 Oct") {
+		t.Error("a run after Until is listed")
+	}
+	if !strings.Contains(out, "1 comparison") {
+		t.Error("the totals count a run after Until")
+	}
+}
+
 func TestAgencyVerdicts(t *testing.T) {
 	cases := []struct {
 		name string
@@ -124,7 +145,7 @@ func TestAgencyBrand(t *testing.T) {
 		{Brand{Logo: png, Color: "#abc"}, []string{`src="data:image/png;base64,`, "--brand: #abc"}, nil},
 		// html/template writes the + as &#43;, which the browser reads back.
 		{Brand{Logo: svg}, []string{`src="data:image/svg&#43;xml;base64,`, "--brand: " + defaultBrandColor}, nil},
-		// Not an image, and a color that would break out of the CSS.
+		// Not an image plus a color that would break out of the CSS.
 		{Brand{Logo: []byte("<html><script>alert(1)</script>"), Color: "red;}body{display:none"},
 			[]string{"--brand: " + defaultBrandColor}, []string{"<img", "display:none"}},
 	}

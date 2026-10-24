@@ -54,8 +54,8 @@ type Brand struct {
 // AgencyInput is what an agency report covers: one site's runs over a
 // period. Runs are usually comparisons (a run checked against the
 // snapshot taken before an update); a run without one is listed as
-// checked only. Runs started before Since are left out, and the rest are
-// shown oldest first.
+// checked only. Runs started before Since or after Until are left out;
+// the rest are shown oldest first.
 type AgencyInput struct {
 	Site  string
 	Since time.Time
@@ -90,9 +90,15 @@ func Agency(w io.Writer, in AgencyInput) error {
 	zone := cmp.Or(in.Zone, time.Local)
 	runs := make([]Result, 0, len(in.Runs))
 	for _, r := range in.Runs {
-		if r.Run != nil && !r.Run.Started.Before(in.Since) {
-			runs = append(runs, r)
+		if r.Run == nil || r.Run.Started.Before(in.Since) {
+			continue
 		}
+		// Until labels the period, so a run after it would contradict the
+		// page's own heading.
+		if !in.Until.IsZero() && r.Run.Started.After(in.Until) {
+			continue
+		}
+		runs = append(runs, r)
 	}
 	slices.SortStableFunc(runs, func(a, b Result) int { return a.Run.Started.Compare(b.Run.Started) })
 
@@ -248,7 +254,7 @@ const pdfTimeout = time.Minute
 // PDF prints an HTML file to a PDF with headless Chrome or Chromium on
 // PATH, so Echo needs no PDF library. It returns ErrNoBrowser when there
 // is none. Chrome runs with a throwaway profile and background networking
-// off, and the page itself loads nothing remote.
+// off. The page itself loads nothing remote.
 func PDF(htmlPath, pdfPath string) error {
 	var bin string
 	for _, name := range browsers {
@@ -307,7 +313,7 @@ func PDF(htmlPath, pdfPath string) error {
 	}
 	defer func() { _ = f.Close() }()
 	if _, err := io.ReadFull(f, head); err != nil || string(head) != "%PDF-" {
-		return fmt.Errorf("%s wrote %s, but it isn't a PDF", filepath.Base(bin), pdfPath)
+		return fmt.Errorf("%s wrote %s but it isn't a PDF", filepath.Base(bin), pdfPath)
 	}
 	return nil
 }
