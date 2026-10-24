@@ -124,11 +124,15 @@ func setKey(data []byte, name, value string) ([]byte, error) {
 }
 
 func appendKey(data []byte, name, value string) []byte {
+	eol := "\n"
+	if bytes.Contains(data, []byte("\r\n")) {
+		eol = "\r\n" // a file written on Windows keeps its line endings
+	}
 	out := bytes.Clone(data)
 	if len(out) > 0 && out[len(out)-1] != '\n' {
-		out = append(out, '\n')
+		out = append(out, eol...)
 	}
-	return append(out, name+": "+quote(value)+"\n"...)
+	return append(out, name+": "+quote(value)+eol...)
 }
 
 // lineStart is the offset of 1-based line n.

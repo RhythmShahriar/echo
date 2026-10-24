@@ -38,6 +38,8 @@ func TestSetAddressesShapes(t *testing.T) {
 		{"proxy: # off\r\nmode: seal\r\n", "proxy: 127.0.0.1:8026 # off\r\nmode: seal\r\n"},
 		{"'proxy': 'x#y' # c\n", "'proxy': 127.0.0.1:8026 # c\n"},
 		{"proxy: a#b\n", "proxy: 127.0.0.1:8026\n"},
+		{"# top\r\nmode: seal\r\n", "# top\r\nmode: seal\r\nproxy: 127.0.0.1:8026\r\n"}, // a key added keeps CRLF
+		{"# top\r\nmode: seal", "# top\r\nmode: seal\r\nproxy: 127.0.0.1:8026\r\n"},
 	} {
 		p := write(t, tc.in)
 		if err := SetAddresses(p, "", "", "127.0.0.1:8026"); err != nil {
