@@ -12,8 +12,8 @@ import (
 	"github.com/RhythmShahriar/echo/model"
 )
 
-// receipt is the s11 receipt with the line the broken template adds, and a
-// second edit far below it so the change has two hunks.
+// receiptChange is the s11 receipt with the line the broken template
+// adds plus a second edit far below it, so the change has two hunks.
 func receiptChange() model.Change {
 	lines := []string{"Hello echo-test bb5c41,", "", "Thanks for your wholesale order W-7462 for Acme.", "",
 		"  1 x Espresso blend, 5 kg  $89.00", "", "  2 x Decaf Peru, 1 kg  $48.00", "", "", "We'll invoice you when it ships.",
@@ -49,7 +49,7 @@ func TestPlainShowsTheFirstHunk(t *testing.T) {
 		}
 	}
 	if strings.Contains(out, "Call us") || strings.Contains(out, " → ") {
-		t.Errorf("only the first hunk without -v, and no before → after:\n%s", out)
+		t.Errorf("only the first hunk without -v; no before → after:\n%s", out)
 	}
 }
 

@@ -43,8 +43,8 @@ const (
 const maxEdits = 500
 
 // Diff compares two texts line by line, as the user would read them:
-// blank lines and spacing don't count, and neither does what changes on
-// every run (see Normalize). It returns nil when nothing else differs.
+// blank lines, spacing and what changes on every run (see Normalize)
+// don't count. It returns nil when nothing else differs.
 func Diff(before, after string) []Hunk {
 	a, b := diffLines(before), diffLines(after)
 	ops := script(a, b)
@@ -52,7 +52,7 @@ func Diff(before, after string) []Hunk {
 }
 
 // ChangeDiff returns the hunks of a text or payload change, worked out
-// from its full Before and After, and nil for any other change.
+// from its full Before and After. Any other change has none.
 func ChangeDiff(c model.Change) []Hunk {
 	if !diffable(c.Check) {
 		return nil

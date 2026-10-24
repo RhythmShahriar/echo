@@ -29,7 +29,7 @@ type Server struct {
 }
 
 // NewServer returns a Resolver that asks the DNS server at addr
-// (host:port; port 53 when missing) over UDP, and TCP for long answers.
+// (host:port; port 53 when missing) over UDP, or TCP for long answers.
 func NewServer(addr string) *Server {
 	if _, _, err := net.SplitHostPort(addr); err != nil {
 		addr = net.JoinHostPort(addr, "53")

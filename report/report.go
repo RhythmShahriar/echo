@@ -51,7 +51,7 @@ var channelGlyph = map[model.Channel]string{
 // An action that failed fails at every threshold but "none": what it sent
 // was never checked. The threshold should come from ParseFailOn; a plain
 // string is still accepted (in any case) for callers that pass the flag
-// as typed, and "" never fails.
+// as typed. "" never fails.
 func FailOn[T ~string](r Result, threshold T) bool {
 	t := Threshold(strings.ToLower(strings.TrimSpace(string(threshold))))
 	if t == "" || t == FailNone {
@@ -126,8 +126,8 @@ func DefaultFailOn(compared bool) Threshold {
 }
 
 // ParseFailOn reads a --fail-on value in any case. "" gives the default.
-// A class only fits a comparison and a level only fits a run, and the
-// error for either mistake or an unknown word lists what fits.
+// A class only fits a comparison and a level only fits a run. The error
+// for either mistake or an unknown word lists what fits.
 func ParseFailOn(s string, compared bool) (Threshold, error) {
 	t := strings.ToLower(strings.TrimSpace(s))
 	classes := []string{model.Broke, model.New, model.Changed}

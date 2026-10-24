@@ -98,7 +98,7 @@ func Markdown(w io.Writer, r Result) error {
 }
 
 // mdHunks caps the hunks per change in Markdown: a PR comment has a size
-// limit, and the HTML report has them all.
+// limit while the HTML report has them all.
 const mdHunks = 10
 
 // markdownDiff writes a text or payload change's hunks as a collapsed
@@ -187,7 +187,7 @@ type junitFailure struct {
 }
 
 // JUnit writes one suite per change class (or per action, for a run).
-// Cases at or above failOn fail, and so does a failed action; with "none"
+// Cases at or above failOn fail, as does a failed action; with "none"
 // nothing fails. "" means DefaultFailOn: BROKE for a comparison, errors
 // for a run. Like FailOn it takes a Threshold or a plain string.
 func JUnit[T ~string](w io.Writer, r Result, failOn T) error {

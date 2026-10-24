@@ -72,7 +72,7 @@ func blackHole(t *testing.T) string {
 	return addr
 }
 
-// halfWorking answers MX for shop.test and A for its MX host, and drops
+// halfWorking answers MX for shop.test and A for its MX host. It drops
 // every TXT and CNAME query, like a resolver that times out on large or
 // filtered record types.
 func halfWorking(t *testing.T) string {
