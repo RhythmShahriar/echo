@@ -58,7 +58,7 @@ func TestSplitTokens(t *testing.T) {
 	}
 
 	// A write token can't read, not even its own site's mail.
-	const forbidden = "this is a write token: it may only send captures and begin or end actions; reading messages needs the read token"
+	const forbidden = "this is a write token: it may only send captures and begin, renew or end actions; reading messages needs the read token"
 	for _, path := range []string{"/v1/messages", "/v1/messages/" + da.ID, "/v1/wait?timeout=1ms", "/v1/events", "/v1/messages/latest",
 		"/api/v1/messages", "/api/v1/info"} {
 		if code, body := call(t, http.MethodGet, srv.URL+path, "wa", ""); code != http.StatusForbidden || strings.TrimSpace(body) != forbidden {
@@ -68,11 +68,14 @@ func TestSplitTokens(t *testing.T) {
 	if code, _ := call(t, http.MethodDelete, srv.URL+"/v1/messages", "wa", ""); code != http.StatusForbidden {
 		t.Errorf("DELETE with a write token: %d", code)
 	}
-	// It may begin and end actions and read health.
+	// It may begin, renew and end actions and read health.
 	code, body := call(t, http.MethodPost, srv.URL+"/v1/actions/begin", "wa", `{"run":"r1","action":"signup"}`)
 	var lease struct{ Lease string }
 	if code != http.StatusOK || json.Unmarshal([]byte(body), &lease) != nil || lease.Lease == "" {
 		t.Fatalf("begin with a write token: %d %s", code, body)
+	}
+	if code, body := call(t, http.MethodPost, srv.URL+"/v1/actions/renew", "wa", `{"lease":"`+lease.Lease+`"}`); code != http.StatusNoContent {
+		t.Errorf("renew with a write token: %d %s", code, body)
 	}
 	if code, body := call(t, http.MethodPost, srv.URL+"/v1/actions/end", "wa", `{"lease":"`+lease.Lease+`"}`); code != http.StatusNoContent {
 		t.Errorf("end with a write token: %d %s", code, body)

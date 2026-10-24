@@ -178,7 +178,7 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !writeRoute(r) {
-		http.Error(w, "this is a write token: it may only send captures and begin or end actions; reading messages needs the read token",
+		http.Error(w, "this is a write token: it may only send captures and begin, renew or end actions; reading messages needs the read token",
 			http.StatusForbidden)
 		return
 	}
@@ -206,7 +206,7 @@ func (s *Server) writeSite(tok string) (string, bool) {
 // connector or a runner on that site sends.
 func writeRoute(r *http.Request) bool {
 	switch r.Method + " " + r.URL.Path {
-	case "POST /v1/capture", "POST /v1/actions/begin", "POST /v1/actions/end", "GET /v1/health":
+	case "POST /v1/capture", "POST /v1/actions/begin", "POST /v1/actions/end", "POST /v1/actions/renew", "GET /v1/health":
 		return true
 	}
 	return false
