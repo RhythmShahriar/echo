@@ -59,6 +59,7 @@ func NewServer(inbox *Inbox, cfg Config) *Server {
 	s.mux.HandleFunc("GET /v1/wait", s.wait)
 	s.mux.HandleFunc("POST /v1/actions/begin", s.begin)
 	s.mux.HandleFunc("POST /v1/actions/end", s.end)
+	s.mailpitRoutes()
 	return s
 }
 

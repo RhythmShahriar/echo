@@ -194,3 +194,14 @@ func (in *Inbox) Clear(f Filter) int {
 	in.notify()
 	return n - len(in.msgs)
 }
+
+// Delete removes the messages of channel with the given IDs and returns
+// how many.
+func (in *Inbox) Delete(channel model.Channel, ids []string) int {
+	in.mu.Lock()
+	defer in.mu.Unlock()
+	n := len(in.msgs)
+	in.msgs = slices.DeleteFunc(in.msgs, func(m model.Message) bool { return m.Channel == channel && slices.Contains(ids, m.ID) })
+	in.notify()
+	return n - len(in.msgs)
+}
