@@ -1,0 +1,15 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+positive:
+  - name: send
+    url: https://messaging.bandwidth.com/api/v2/users/9900000/messages
+    body: {applicationId: app-1, to: ["+15550123"], from: "+15550100", text: "Hi Ann, your table is ready"}
+    want: {channel: sms, from: "+15550100", to: ["+15550123"], text: "Hi Ann, your table is ready"}
+negative:
+  - name: media
+    method: GET
+    url: https://messaging.bandwidth.com/api/v2/users/9900000/media
+  - name: voice API
+    url: https://voice.bandwidth.com/api/v2/accounts/9900000/calls
+    body: {to: "+15550123"}

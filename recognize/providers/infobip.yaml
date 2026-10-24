@@ -1,0 +1,25 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+# Infobip SMS: the advanced and single text APIs and the newer
+# /sms/3/messages, on the account's own base URL ({id}.api.infobip.com).
+provider: infobip
+name: Infobip
+channel: sms
+host: api.infobip.com
+path: [/sms/2/text/advanced, /sms/1/text/single, /sms/3/messages]
+method: POST
+to:
+  - $.messages[*].destinations[*].to
+  - $.to
+from:
+  - $.messages[0].from
+  - $.messages[0].sender
+  - $.from
+text:
+  - $.messages[0].text
+  - $.messages[0].content.text
+  - $.text
+reply:
+  status: 200
+  body: {"bulkId": "${id}", "messages": [{"messageId": "${id}", "status": {"groupId": 1, "groupName": "PENDING", "id": 26, "name": "PENDING_ACCEPTED", "description": "Message sent to next instance"}}]}

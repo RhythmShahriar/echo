@@ -25,6 +25,7 @@ func init() {
 	register(zapier)
 	register(makeHook)
 	register(n8n)
+	register(ifttt)
 }
 
 // restEvent names a REST call from its path words (IDs dropped, joined
@@ -52,11 +53,20 @@ func hookTo(r Request) string {
 	return r.URL.Hostname() + "/" + strings.Join(s, "/")
 }
 
+// hookFill fills a catch hook message: the masked hook as recipient and,
+// for a WooCommerce webhook pointed at the hook, its topic as the event.
+func hookFill(r Request, m *model.Message) {
+	m.To = []string{hookTo(r)}
+	m.Event = r.Header("x-wc-webhook-topic")
+}
+
 // hubspot: the CRM API (api.hubapi.com/crm/v3/objects/{type}…) and form
 // submissions (api.hsforms.com/submissions/v3/integration/submit/{portal}/{form}).
 var hubspot = Recognizer{
 	Provider: "hubspot",
+	Name:     "HubSpot",
 	Channel:  model.Webhook,
+	Hosts:    []string{"api.hubapi.com", "api.hubspot.com", "api.hsforms.com"},
 	Match: func(r Request) bool {
 		return host(r, "api.hubapi.com", "api.hubspot.com", "api.hsforms.com")
 	},
@@ -110,7 +120,9 @@ var hubspot = Recognizer{
 // list members added or updated by signup forms and shops.
 var mailchimp = Recognizer{
 	Provider: "mailchimp",
+	Name:     "Mailchimp",
 	Channel:  model.Webhook,
+	Hosts:    []string{"api.mailchimp.com"},
 	Match: func(r Request) bool {
 		return host(r, "api.mailchimp.com") && strings.HasPrefix(r.URL.Path, "/3.0/")
 	},
@@ -151,7 +163,9 @@ var mailchimp = Recognizer{
 // /api/track and /api/identify, which answer "1".
 var klaviyo = Recognizer{
 	Provider: "klaviyo",
+	Name:     "Klaviyo",
 	Channel:  model.Webhook,
+	Hosts:    []string{"a.klaviyo.com"},
 	Match:    func(r Request) bool { return host(r, "a.klaviyo.com") },
 	Fill: func(r Request, m *model.Message) {
 		var p map[string]any
@@ -191,7 +205,9 @@ var klaviyo = Recognizer{
 // contactLists, contactTags, deals).
 var activecampaign = Recognizer{
 	Provider: "activecampaign",
+	Name:     "ActiveCampaign",
 	Channel:  model.Webhook,
+	Hosts:    []string{"api-us1.com", "activehosted.com"},
 	Match: func(r Request) bool {
 		return host(r, "api-us1.com", "activehosted.com") && strings.HasPrefix(r.URL.Path, "/api/3/")
 	},
@@ -230,10 +246,12 @@ var activecampaign = Recognizer{
 // zapier: catch hooks, hooks.zapier.com/hooks/catch/{account}/{hook}/.
 var zapier = Recognizer{
 	Provider:  "zapier",
+	Name:      "Zapier",
 	SecretURL: true,
 	Channel:   model.Webhook,
+	Hosts:     []string{"hooks.zapier.com"},
 	Match:     func(r Request) bool { return host(r, "hooks.zapier.com") },
-	Fill:      func(r Request, m *model.Message) { m.To = []string{hookTo(r)} },
+	Fill:      hookFill,
 	Fake: func(Request, *model.Message) Fake {
 		return jsonFake(200, js(map[string]string{"attempt": uuid(), "id": uuid(), "request_id": uuid(), "status": "success"}))
 	},
@@ -243,13 +261,15 @@ var zapier = Recognizer{
 // hook.{region}.make.com/{token}. They answer "Accepted" as text.
 var makeHook = Recognizer{
 	Provider:  "make",
+	Name:      "Make",
 	SecretURL: true,
 	Channel:   model.Webhook,
+	Hosts:     []string{"hook.*.make.com", "hook.*.integromat.com"},
 	Match: func(r Request) bool {
 		h := strings.ToLower(r.URL.Hostname())
 		return strings.HasPrefix(h, "hook.") && (strings.HasSuffix(h, ".make.com") || strings.HasSuffix(h, ".integromat.com"))
 	},
-	Fill: func(r Request, m *model.Message) { m.To = []string{hookTo(r)} },
+	Fill: hookFill,
 	Fake: func(Request, *model.Message) Fake { return textFake(200, "Accepted") },
 }
 
@@ -260,8 +280,10 @@ var makeHook = Recognizer{
 // n8n's default port, 5678.
 var n8n = Recognizer{
 	Provider:  "n8n",
+	Name:      "n8n",
 	SecretURL: true,
 	Channel:   model.Webhook,
+	Hosts:     []string{"n8n.cloud", "n8n.*", "*-n8n.*", "*:5678"},
 	Match: func(r Request) bool {
 		p := r.URL.Path
 		if !strings.HasPrefix(p, "/webhook/") && !strings.HasPrefix(p, "/webhook-test/") {
@@ -269,9 +291,33 @@ var n8n = Recognizer{
 		}
 		return host(r, "n8n.cloud") || n8nHost(r.URL.Hostname()) || r.URL.Port() == "5678"
 	},
-	Fill: func(r Request, m *model.Message) { m.To = []string{hookTo(r)} },
+	Fill: hookFill,
 	Fake: func(Request, *model.Message) Fake {
 		return jsonFake(200, `{"message":"Workflow was started"}`)
+	},
+}
+
+// ifttt: Webhooks service triggers,
+// maker.ifttt.com/trigger/{event}/with/key/{key} (or .../json/with/key/{key}
+// to pass the whole body on). The key is the account's credential and the
+// last segment, so the URL is masked like a catch hook's.
+var ifttt = Recognizer{
+	Provider:  "ifttt",
+	Name:      "IFTTT",
+	SecretURL: true,
+	Channel:   model.Webhook,
+	Hosts:     []string{"maker.ifttt.com"},
+	Match: func(r Request) bool {
+		s := segments(r)
+		return host(r, "maker.ifttt.com") && len(s) >= 5 && s[0] == "trigger" && s[len(s)-2] == "key" && s[len(s)-3] == "with"
+	},
+	Fill: func(r Request, m *model.Message) {
+		event := segments(r)[1]
+		m.Event = event
+		m.To = []string{"ifttt " + event}
+	},
+	Fake: func(r Request, m *model.Message) Fake {
+		return textFake(200, "Congratulations! You've fired the "+m.Event+" event")
 	},
 }
 

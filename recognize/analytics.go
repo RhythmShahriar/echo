@@ -24,7 +24,9 @@ func init() {
 // with validation messages.
 var ga4 = Recognizer{
 	Provider: "ga4",
+	Name:     "GA4",
 	Channel:  model.Analytics,
+	Hosts:    []string{"google-analytics.com", "analytics.google.com"},
 	Match: func(r Request) bool {
 		return host(r, "google-analytics.com", "analytics.google.com") &&
 			(r.URL.Path == "/mp/collect" || r.URL.Path == "/debug/mp/collect")
@@ -67,7 +69,9 @@ var ga4 = Recognizer{
 // Meta; the fake simply reports every event received.
 var metaCAPI = Recognizer{
 	Provider: "meta-capi",
+	Name:     "Meta Conversions API",
 	Channel:  model.Analytics,
+	Hosts:    []string{"graph.facebook.com"},
 	Match: func(r Request) bool {
 		return host(r, "graph.facebook.com") && r.Method == "POST" && graphPath(r, "events")
 	},

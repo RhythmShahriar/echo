@@ -1,0 +1,16 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+# Bandwidth Messaging API v2: POST /api/v2/users/{accountId}/messages.
+provider: bandwidth
+name: Bandwidth
+channel: sms
+host: messaging.bandwidth.com
+path: /api/v2/users/*/messages
+method: POST
+to: $.to
+from: $.from
+text: $.text
+reply:
+  status: 202
+  body: {"id": "${id}", "owner": "", "applicationId": "", "time": "${now}", "segmentCount": 1, "direction": "out", "to": [], "from": "", "text": ""}

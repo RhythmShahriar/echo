@@ -1,0 +1,25 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+positive:
+  - name: track
+    url: https://api.segment.io/v1/track
+    body: {userId: user-1042, event: Order Completed, properties: {revenue: 40}}
+    want: {channel: analytics, to: [user-1042], event: Order Completed}
+  - name: identify, anonymous
+    url: https://api.segment.io/v1/identify
+    body: {anonymousId: anon-9, traits: {email: ann@example.com}}
+    want: {to: [anon-9], event: identify}
+  - name: batch
+    url: https://events.eu1.segmentapis.com/v1/batch
+    body:
+      batch:
+        - {type: track, event: Viewed, userId: u1}
+        - {type: track, event: Bought, userId: u2}
+    want: {to: [u1, u2], event: "Viewed,Bought"}
+negative:
+  - name: config API
+    url: https://api.segmentapis.com/sources
+  - name: CDN settings
+    method: GET
+    url: https://cdn.segment.com/v1/projects/abc/settings

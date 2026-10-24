@@ -1,0 +1,23 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+# Segment HTTP Tracking API: one call per spec method, or /v1/batch.
+provider: segment
+name: Segment
+channel: analytics
+host: [api.segment.io, events.eu1.segmentapis.com]
+path: [/v1/track, /v1/identify, /v1/page, /v1/screen, /v1/group, /v1/alias, /v1/batch, /v1/import]
+method: POST
+to:
+  - $.userId
+  - $.anonymousId
+  - $.batch[*].userId
+  - $.batch[*].anonymousId
+event:
+  - $.event
+  - $.batch[*].event
+  - $.type
+  - path:-1
+reply:
+  status: 200
+  body: {"success": true}

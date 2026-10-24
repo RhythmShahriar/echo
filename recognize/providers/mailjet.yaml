@@ -1,0 +1,33 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+# Mailjet Send API v3.1, used by WP Mail SMTP's Mailjet mailer and the
+# official SDKs.
+provider: mailjet
+name: Mailjet
+channel: email
+host: api.mailjet.com
+path: /v3.1/send
+method: POST
+to: $.Messages[*].To[*].Email
+cc: $.Messages[*].Cc[*].Email
+bcc: $.Messages[*].Bcc[*].Email
+from:
+  - $.Messages[0].From.Email
+  - $.Globals.From.Email
+reply_to:
+  - $.Messages[0].ReplyTo.Email
+  - $.Globals.ReplyTo.Email
+subject:
+  - $.Messages[0].Subject
+  - $.Globals.Subject
+text:
+  - $.Messages[0].TextPart
+  - $.Globals.TextPart
+html:
+  - $.Messages[0].HTMLPart
+  - $.Globals.HTMLPart
+event: $.Messages[0].TemplateID
+reply:
+  status: 200
+  body: {"Messages": [{"Status": "success", "CustomID": "", "To": [{"MessageUUID": "${uuid}", "MessageID": 288230376151711744, "MessageHref": ""}], "Cc": [], "Bcc": []}]}

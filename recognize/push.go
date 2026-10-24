@@ -3,12 +3,17 @@
 
 package recognize
 
-import "github.com/RhythmShahriar/echo/model"
+import (
+	"strings"
+
+	"github.com/RhythmShahriar/echo/model"
+)
 
 // Push notifications.
 func init() {
 	register(fcm)
 	register(onesignal)
+	register(apns)
 }
 
 // fcm: Firebase Cloud Messaging HTTP v1, POST
@@ -16,7 +21,9 @@ func init() {
 // token, a topic or a condition.
 var fcm = Recognizer{
 	Provider: "fcm",
+	Name:     "FCM",
 	Channel:  model.Push,
+	Hosts:    []string{"fcm.googleapis.com"},
 	Match: func(r Request) bool {
 		s := segments(r)
 		return host(r, "fcm.googleapis.com") && len(s) == 4 && s[0] == "v1" && s[1] == "projects" && s[3] == "messages:send"
@@ -48,7 +55,9 @@ var fcm = Recognizer{
 // subscription IDs, aliases, emails or phone numbers).
 var onesignal = Recognizer{
 	Provider: "onesignal",
+	Name:     "OneSignal",
 	Channel:  model.Push,
+	Hosts:    []string{"onesignal.com"},
 	Match: func(r Request) bool {
 		return host(r, "onesignal.com") && r.Method == "POST" &&
 			(r.URL.Path == "/api/v1/notifications" || r.URL.Path == "/notifications")
@@ -83,5 +92,40 @@ var onesignal = Recognizer{
 	},
 	Fake: func(_ Request, m *model.Message) Fake {
 		return jsonFake(200, js(map[string]any{"id": uuid(), "recipients": max(len(m.To), 1), "external_id": nil}))
+	},
+}
+
+// apns: Apple Push Notification service, HTTP/2 POST /3/device/{token}
+// with {"aps": {"alert": …}} and the app in apns-topic. Production and
+// development are separate hosts. It answers 200 with no body and the
+// notification's ID in apns-id.
+var apns = Recognizer{
+	Provider: "apns",
+	Name:     "APNs",
+	Channel:  model.Push,
+	Hosts:    []string{"api.push.apple.com", "api.sandbox.push.apple.com", "api.development.push.apple.com"},
+	Match: func(r Request) bool {
+		s := segments(r)
+		return host(r, "api.push.apple.com", "api.sandbox.push.apple.com", "api.development.push.apple.com") &&
+			r.Method == "POST" && len(s) == 3 && s[0] == "3" && s[1] == "device"
+	},
+	Fill: func(r Request, m *model.Message) {
+		m.To = []string{segments(r)[2]}
+		if t := r.Header("apns-push-type"); t != "" && t != "alert" {
+			m.Event = t
+		}
+		var p map[string]any
+		if !r.JSON(&p) {
+			return
+		}
+		switch a := dig(p, "aps", "alert").(type) {
+		case string:
+			m.Text = a
+		case map[string]any:
+			m.Subject, m.Text = str(a["title"]), str(a["body"])
+		}
+	},
+	Fake: func(Request, *model.Message) Fake {
+		return Fake{Status: 200, Headers: map[string]string{"apns-id": strings.ToUpper(uuid())}}
 	},
 }

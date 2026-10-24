@@ -13,6 +13,7 @@ import (
 	"net/url"
 	"slices"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/RhythmShahriar/echo/model"
 	"github.com/RhythmShahriar/rhythm/kit/secrets"
@@ -61,8 +62,23 @@ type Fake struct {
 
 // Recognizer understands one provider's API.
 type Recognizer struct {
+	// Provider is the slug stored on messages ("amazon-ses").
 	Provider string
-	Channel  model.Channel
+	// Name is the provider's display name ("Amazon SES"), for titles and
+	// reports. A provider with several recognizers names it on each.
+	Name    string
+	Channel model.Channel
+	// Hosts names the hosts the recognizer claims, for the catalog: a
+	// name covers its subdomains too ("api.twilio.com"), "*" stands for
+	// one or more labels ("email.*.amazonaws.com") and a pattern with a
+	// port is matched against host:port ("*:5678"). Match still decides;
+	// a test checks every positive fixture's host is covered.
+	Hosts []string
+	// Priority orders recognizers: higher ones are tried first. Host and
+	// path matchers use 0. One that matches on something any host can
+	// carry (a header) goes below 0, so a request to a known host is
+	// claimed by that host's recognizer first.
+	Priority int
 	// Match reports whether the request is for this provider.
 	Match func(r Request) bool
 	// Fill sets recipients, content and event on m from the request.
@@ -79,27 +95,42 @@ type Recognizer struct {
 	SecretURL bool
 }
 
-// registry holds every recognizer, most specific first. Recognizers are
-// added from init functions in this package's provider files.
+// registry holds every recognizer in the order Recognize tries them.
+// Recognizers are added from init functions in this package's provider
+// files. Go runs those in file-name order, so register sorts: by Priority,
+// then by Provider. Only a provider's own recognizers keep the order they
+// were registered in, which is the order within one file. Renaming a file
+// can't change which recognizer wins.
 var registry []Recognizer
 
-func register(r Recognizer) { registry = append(registry, r) }
+func register(r Recognizer) {
+	registry = append(registry, r)
+	slices.SortStableFunc(registry, func(a, b Recognizer) int {
+		if a.Priority != b.Priority {
+			return b.Priority - a.Priority
+		}
+		return strings.Compare(a.Provider, b.Provider)
+	})
+}
 
 // Recognize fills m from r: channel, provider, recipients, content. It
-// returns the matching recognizer, or the generic one.
+// returns the matching recognizer, or the generic one. The subject, text
+// and HTML it fills are masked with secrets.Redact, as the SMTP sink masks
+// them: a key in a mail sent through an API is stored masked too.
 func Recognize(r Request, m *model.Message) Recognizer {
-	for _, rec := range registry {
-		if rec.Match(r) {
-			m.Channel, m.Provider = rec.Channel, rec.Provider
-			if rec.Fill != nil {
-				rec.Fill(r, m)
-			}
-			return rec
+	rec := generic
+	for _, c := range registry {
+		if c.Match(r) {
+			rec = c
+			break
 		}
 	}
-	m.Channel, m.Provider = generic.Channel, generic.Provider
-	generic.Fill(r, m)
-	return generic
+	m.Channel, m.Provider = rec.Channel, rec.Provider
+	if rec.Fill != nil {
+		rec.Fill(r, m)
+	}
+	m.Subject, m.Text, m.HTML = secrets.Redact(m.Subject), secrets.Redact(m.Text), secrets.Redact(m.HTML)
+	return rec
 }
 
 // FakeFor returns the sealed answer for a recognized request.
@@ -122,23 +153,53 @@ func Providers() []string {
 	return out
 }
 
-// names are the providers' display names, for titles and reports.
-var names = map[string]string{
-	"twilio": "Twilio", "slack": "Slack", "discord": "Discord", "woocommerce": "WooCommerce", "teams": "Teams",
-	"sendgrid": "SendGrid", "mailgun": "Mailgun", "postmark": "Postmark", "resend": "Resend", "amazon-ses": "Amazon SES",
-	"brevo": "Brevo", "sparkpost": "SparkPost", "mandrill": "Mandrill",
-	"vonage": "Vonage", "messagebird": "MessageBird", "bird": "Bird", "plivo": "Plivo", "amazon-sns": "Amazon SNS",
-	"telnyx": "Telnyx", "clicksend": "ClickSend", "whatsapp-cloud": "WhatsApp Cloud API",
-	"ga4": "GA4", "meta-capi": "Meta Conversions API", "stripe": "Stripe", "paypal": "PayPal", "fcm": "FCM", "onesignal": "OneSignal",
-	"hubspot": "HubSpot", "mailchimp": "Mailchimp", "klaviyo": "Klaviyo", "activecampaign": "ActiveCampaign",
-	"zapier": "Zapier", "make": "Make", "n8n": "n8n",
+// Entry is one provider in the catalog.
+type Entry struct {
+	Provider string        // slug stored on messages ("mailjet")
+	Name     string        // display name ("Mailjet")
+	Channel  model.Channel // the channel its messages are filed under
+	// Hosts are the host patterns it claims (see Recognizer.Hosts), from
+	// all its recognizers. None means any host (WooCommerce webhooks are
+	// told by a header).
+	Hosts []string
+	// Declared is true for a provider described in YAML
+	// (recognize/providers) rather than Go.
+	Declared bool
+}
+
+// Catalog lists every provider Echo recognizes, by channel and then
+// slug, for `rhythm echo providers` and the docs.
+func Catalog() []Entry {
+	var out []Entry
+	for _, r := range registry {
+		i := slices.IndexFunc(out, func(e Entry) bool { return e.Provider == r.Provider })
+		if i < 0 {
+			out = append(out, Entry{Provider: r.Provider, Name: r.Name, Channel: r.Channel,
+				Declared: slices.ContainsFunc(declared, func(d declaredProvider) bool { return d.rec.Provider == r.Provider })})
+			i = len(out) - 1
+		}
+		for _, h := range r.Hosts {
+			if !slices.Contains(out[i].Hosts, h) {
+				out[i].Hosts = append(out[i].Hosts, h)
+			}
+		}
+	}
+	slices.SortFunc(out, func(a, b Entry) int {
+		if c := strings.Compare(string(a.Channel), string(b.Channel)); c != 0 {
+			return c
+		}
+		return strings.Compare(a.Provider, b.Provider)
+	})
+	return out
 }
 
 // Name returns a provider's display name ("amazon-ses" → "Amazon SES"),
 // or the slug itself for one Echo doesn't know.
 func Name(provider string) string {
-	if n, ok := names[provider]; ok {
-		return n
+	for _, r := range registry {
+		if r.Provider == provider && r.Name != "" {
+			return r.Name
+		}
 	}
 	return provider
 }
@@ -176,8 +237,44 @@ var generic = Recognizer{
 		if r.Method == "POST" || r.Method == "PUT" || r.Method == "PATCH" {
 			m.Channel = model.Webhook
 		}
-		m.To = []string{r.URL.Host + r.URL.Path}
+		m.To = []string{genericTo(r)}
 	},
+}
+
+// genericTo names an unknown destination by host and path, with every
+// segment that may be a credential replaced by "…": one longer than 20
+// characters (tokens, UUIDs, hashes) or shaped like a token. The full URL
+// is still stored, masked by RedactURL; To is what lists and compare show,
+// so it must never hold a key, even one no rule recognizes.
+func genericTo(r Request) string {
+	segs := strings.Split(r.URL.Path, "/")
+	for i, seg := range segs {
+		if utf8.RuneCountInString(seg) > 20 || tokenShaped(segs, i) {
+			segs[i] = "…"
+		}
+	}
+	return r.URL.Host + strings.Join(segs, "/")
+}
+
+// keySegments are path words that say the next segment is a credential
+// (IFTTT's /with/key/{key}, /token/{t} reset links).
+var keySegments = []string{"key", "token", "secret", "apikey", "api_key", "access_token"}
+
+// tokenShaped reports whether path segment i looks like a credential: a
+// Telegram bot token, the segment after a key word, or a value
+// secrets.Redact would mask.
+func tokenShaped(segs []string, i int) bool {
+	seg := segs[i]
+	if seg == "" {
+		return false
+	}
+	if telegramBot.MatchString(seg) {
+		return true
+	}
+	if i > 0 && slices.Contains(keySegments, strings.ToLower(segs[i-1])) {
+		return true
+	}
+	return secrets.Redact(seg) != seg
 }
 
 // secretQuery are query parameters that carry a URL's credential on top
@@ -187,8 +284,9 @@ var secretQuery = []string{"sig", "signature", "code"}
 
 // RedactURL masks the credentials in a request URL for storing and
 // showing it: what secrets.Redact finds (keys, Slack and Discord hook
-// tokens), signature parameters, and the secret last segment of catch
-// hooks (Zapier, Make, n8n). The masked form is the same every
+// tokens), signature parameters, Telegram bot tokens, the segment after
+// a key word (IFTTT's /with/key/{key}) and the secret last segment of
+// catch hooks (Zapier, Make, n8n). The masked form is the same every
 // run, so compare still pairs messages by URL.
 func RedactURL(rec Recognizer, raw string) string {
 	u, err := url.Parse(raw)
@@ -196,16 +294,28 @@ func RedactURL(rec Recognizer, raw string) string {
 		return secrets.Redact(raw)
 	}
 	changed := false
+	// Credentials in the path, whatever the recognizer: a Telegram bot
+	// token (bot<id>: is kept, it names the bot) and the segment after a
+	// key word.
+	segs := strings.Split(u.Path, "/")
+	for i, seg := range segs {
+		if t := telegramBot.FindStringSubmatch(seg); t != nil {
+			segs[i], changed = "bot"+t[1]+":"+secrets.Mask(t[2], 2), true
+		} else if seg != "" && i > 0 && slices.Contains(keySegments, strings.ToLower(segs[i-1])) && !strings.Contains(seg, "•") {
+			segs[i], changed = secrets.Mask(seg, 2), true
+		}
+	}
 	if rec.SecretURL {
-		segs := strings.Split(u.Path, "/")
 		for i := len(segs) - 1; i >= 0; i-- {
 			if segs[i] != "" {
-				segs[i], changed = secrets.Mask(segs[i], 2), true
+				if !strings.Contains(segs[i], "•") {
+					segs[i], changed = secrets.Mask(segs[i], 2), true
+				}
 				break
 			}
 		}
-		u.Path = strings.Join(segs, "/")
 	}
+	u.Path = strings.Join(segs, "/")
 	pairs := strings.Split(u.RawQuery, "&")
 	for i, p := range pairs {
 		k, v, _ := strings.Cut(p, "=")

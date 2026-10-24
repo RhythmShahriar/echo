@@ -66,11 +66,11 @@ func formReq(raw string, body string, headers ...string) Request {
 func join(parts ...string) string { return strings.Join(parts, "") }
 
 func allCases() []tcase {
-	return slices.Concat(emailCases, smsCases, chatCases, analyticsCases, pushCases, paymentCases, crmCases)
+	return slices.Concat(coreCases, emailCases, smsCases, chatCases, analyticsCases, pushCases, paymentCases, crmCases, mailboxCases, gatewayCases(), declaredCases())
 }
 
 func allNegatives() []negative {
-	return slices.Concat(emailNegatives, smsNegatives, chatNegatives, analyticsNegatives, pushNegatives, paymentNegatives, crmNegatives)
+	return slices.Concat(coreNegatives, emailNegatives, smsNegatives, chatNegatives, analyticsNegatives, pushNegatives, paymentNegatives, crmNegatives, mailboxNegatives, gatewayNegatives, declaredNegatives())
 }
 
 func TestRecognizers(t *testing.T) {
@@ -126,7 +126,8 @@ func TestFakesAreWellFormed(t *testing.T) {
 					t.Errorf("body without content type: %q", f.Body)
 				}
 			}
-			if f.Status != 204 && f.Status != 202 && f.Body == "" && c.provider != "sendgrid" {
+			// SendGrid and APNs answer success with no body.
+			if f.Status != 204 && f.Status != 202 && f.Body == "" && c.provider != "sendgrid" && c.provider != "apns" {
 				t.Errorf("empty body with status %d", f.Status)
 			}
 		})
@@ -148,21 +149,53 @@ func wellFormedXML(s string) bool {
 	}
 }
 
-func TestProvidersListsEveryRecognizer(t *testing.T) {
-	listed := Providers()
-	tested := map[string]bool{}
+// TestEveryProviderHasFixtures enforces the fixture rule: each provider
+// has a request it must claim and one it must leave alone.
+func TestEveryProviderHasFixtures(t *testing.T) {
+	pos, neg := map[string]int{}, map[string]int{}
 	for _, c := range allCases() {
-		tested[c.provider] = true
+		pos[c.provider]++
 	}
-	for p := range tested {
+	for _, n := range allNegatives() {
+		neg[n.provider]++
+	}
+	listed := Providers()
+	for p := range pos {
 		if !slices.Contains(listed, p) {
 			t.Errorf("Providers() is missing %q", p)
 		}
 	}
-	core := map[string]bool{"twilio": true, "slack": true, "discord": true, "woocommerce": true}
 	for _, p := range listed {
-		if !tested[p] && !core[p] {
-			t.Errorf("provider %q has no fixture", p)
+		if pos[p] < 1 || neg[p] < 1 {
+			t.Errorf("provider %q has %d positive and %d negative fixtures, want at least one of each", p, pos[p], neg[p])
+		}
+	}
+}
+
+// TestNoFixtureIsClaimedTwice: each positive fixture matches the
+// recognizers of one provider only, so the order in the registry is a
+// tie-break that never decides a real case by accident.
+func TestNoFixtureIsClaimedTwice(t *testing.T) {
+	for _, c := range allCases() {
+		var claimed []string
+		for _, rec := range registry {
+			if rec.Match(c.req) && !slices.Contains(claimed, rec.Provider) {
+				claimed = append(claimed, rec.Provider)
+			}
+		}
+		if len(claimed) != 1 {
+			t.Errorf("%s/%s: %s %s matched by %q", c.provider, c.name, c.req.Method, c.req.URL, claimed)
+		}
+	}
+}
+
+// TestRegistryOrderIsExplicit: the registry is sorted by Priority then
+// Provider, whatever order the init functions ran in.
+func TestRegistryOrderIsExplicit(t *testing.T) {
+	for i := 1; i < len(registry); i++ {
+		a, b := registry[i-1], registry[i]
+		if a.Priority < b.Priority || a.Priority == b.Priority && a.Provider > b.Provider {
+			t.Errorf("%s (priority %d) before %s (priority %d)", a.Provider, a.Priority, b.Provider, b.Priority)
 		}
 	}
 }
@@ -196,9 +229,9 @@ func TestProvidersAreListedOnce(t *testing.T) {
 }
 
 func TestEveryProviderHasADisplayName(t *testing.T) {
-	for _, p := range Providers() {
-		if _, ok := names[p]; !ok {
-			t.Errorf("no display name for %q", p)
+	for _, r := range registry {
+		if r.Name == "" {
+			t.Errorf("no display name for %q", r.Provider)
 		}
 	}
 	if Name("amazon-ses") != "Amazon SES" || Name("unknown-thing") != "unknown-thing" {
@@ -223,5 +256,37 @@ func TestRedactURLMasksHookSecrets(t *testing.T) {
 		if got != c.want || (c.secret != "" && strings.Contains(got, c.secret)) {
 			t.Errorf("RedactURL(%s) = %s, want %s", c.raw, got, c.want)
 		}
+	}
+}
+
+func TestRedactURLMasksPathTokens(t *testing.T) {
+	for _, c := range []struct{ raw, want string }{
+		{"https://api.telegram.org/bot" + tgToken + "/sendMessage", "https://api.telegram.org/bot123456789:AA•••••/sendMessage"},
+		{"https://maker.ifttt.com/trigger/order_paid/with/key/" + iftttKey, "https://maker.ifttt.com/trigger/order_paid/with/key/dQ•••••"},
+		{"https://api.shop.test/v1/token/" + join("r3s3t", "c0de"), "https://api.shop.test/v1/token/r3•••••"},
+		{"https://api.shop.test/v1/keys/list", "https://api.shop.test/v1/keys/list"},
+	} {
+		var m model.Message
+		if got := RedactURL(Recognize(req("POST", c.raw, nil, ""), &m), c.raw); got != c.want {
+			t.Errorf("RedactURL(%s) = %s, want %s", c.raw, got, c.want)
+		}
+	}
+}
+
+func TestGenericToHoldsNoToken(t *testing.T) {
+	for _, c := range []struct{ raw, want string }{
+		// A bot token on a host Echo doesn't know (a self-hosted Bot API).
+		{"https://tg.shop.test/bot" + tgToken + "/sendMessage", "tg.shop.test/…/sendMessage"},
+		{"https://hooks.shop.test/trigger/x/with/key/abc", "hooks.shop.test/trigger/x/with/key/…"},
+		{"https://crm.shop.test/hooks/" + join("9f86d081884c7d65", "9a2feaa0c55ad015"), "crm.shop.test/hooks/…"},
+		{"https://crm.shop.test/api/" + join("AKIA", "IOSFODNN7EXAMPLE") + "/leads", "crm.shop.test/api/…/leads"},
+		// Ordinary paths are kept whole.
+		{"https://crm.shop.test/api/v2/leads/1042", "crm.shop.test/api/v2/leads/1042"},
+		{"https://shop.test:8443/wp-json/wc/v3/orders", "shop.test:8443/wp-json/wc/v3/orders"},
+	} {
+		var m model.Message
+		rec := Recognize(jsonReq("POST", c.raw, `{}`), &m)
+		eq(t, "provider for "+c.raw, rec.Provider, "")
+		eqList(t, "to for "+c.raw, m.To, c.want)
 	}
 }

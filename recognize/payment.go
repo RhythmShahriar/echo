@@ -30,7 +30,9 @@ import (
 //     reports them so the catcher can mark the message blocked.
 //
 // Connectors mask keys before reporting them but keep the first eight
-// characters ("sk_live_•••••"), which is all the mode check needs.
+// characters ("sk_live_•••••"), which is all the mode check needs. The
+// other gateways (Adyen, Braintree, Square, Authorize.net, Mollie,
+// Razorpay) follow the same rules in gateways.go.
 func init() {
 	register(stripe)
 	register(paypal)
@@ -114,7 +116,9 @@ var stripePrefixes = map[string]string{
 // what was done to it: "payment_intents create", "payment_intents confirm".
 var stripe = Recognizer{
 	Provider: "stripe",
+	Name:     "Stripe",
 	Channel:  model.Payment,
+	Hosts:    []string{"api.stripe.com"},
 	Match:    func(r Request) bool { return host(r, "api.stripe.com") },
 	Fill: func(r Request, m *model.Message) {
 		if res, _, action := stripeCall(r); res != "" {
@@ -139,7 +143,7 @@ var stripe = Recognizer{
 			return jsonFake(403, js(map[string]any{"error": map[string]string{
 				"type":    "invalid_request_error",
 				"code":    "rhythm_echo_sealed",
-				"message": "Rhythm Echo refused a live-mode call from a sealed site. Use a Stripe test key (sk_test_…) on staging.",
+				"message": "Rhythm Echo refused a live-mode call. Use a Stripe test key (sk_test_…) on staging.",
 			}}))
 		}
 		res, withID, action := stripeCall(r)
@@ -198,7 +202,9 @@ var stripe = Recognizer{
 // "checkout.orders create", "checkout.orders capture", "oauth2.token".
 var paypal = Recognizer{
 	Provider: "paypal",
+	Name:     "PayPal",
 	Channel:  model.Payment,
+	Hosts:    []string{"api-m.paypal.com", "api.paypal.com", "api-m.sandbox.paypal.com", "api.sandbox.paypal.com"},
 	Match: func(r Request) bool {
 		return host(r, "api-m.paypal.com", "api.paypal.com", "api-m.sandbox.paypal.com", "api.sandbox.paypal.com")
 	},
@@ -226,11 +232,11 @@ var paypal = Recognizer{
 		if !paypalSandbox(r) {
 			if res == "oauth2.token" {
 				return jsonFake(401, js(map[string]string{"error": "invalid_client",
-					"error_description": "Rhythm Echo refused a live PayPal call from a sealed site. Use sandbox credentials on staging."}))
+					"error_description": "Rhythm Echo refused a live PayPal call. Use sandbox credentials on staging."}))
 			}
 			return jsonFake(403, js(map[string]any{"name": "NOT_AUTHORIZED", "message": "Authorization failed due to insufficient permissions.",
 				"debug_id": randHex(13), "details": []map[string]string{{"issue": "PERMISSION_DENIED",
-					"description": "Rhythm Echo refused a live PayPal call from a sealed site. Use the sandbox on staging."}},
+					"description": "Rhythm Echo refused a live PayPal call. Use the sandbox on staging."}},
 				"links": []any{}}))
 		}
 		id := strings.ToUpper(randHex(17))

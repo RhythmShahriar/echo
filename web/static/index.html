@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Echo Inbox</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="/assets/app.css">
+<script src="/assets/app.js" defer></script>
+</head>
+<body>
+<header class="bar">
+  <div class="brand"><span class="dot" id="live" title="Live updates"></span>Echo Inbox <span class="mode" id="mode"></span></div>
+  <form class="search" id="search" role="search">
+    <input id="q" type="search" placeholder="Search: to:ann@ subject:&quot;order&quot; check:placeholder has:attachment" aria-label="Search messages" autocomplete="off" spellcheck="false">
+    <select id="f-channel" aria-label="Channel"><option value="">All channels</option></select>
+    <select id="f-action" aria-label="Action"><option value="">All actions</option></select>
+    <select id="f-provider" aria-label="Provider"><option value="">All providers</option></select>
+    <select id="f-check" aria-label="Check"><option value="">All checks</option></select>
+  </form>
+  <div class="count" id="count" aria-live="polite"></div>
+  <form id="signout" method="post" action="/logout" hidden><button type="submit">Sign out</button></form>
+</header>
+<main class="panes">
+  <section class="list" aria-label="Messages">
+    <ul id="rows" tabindex="0"></ul>
+    <div class="more"><button type="button" id="more" hidden>Older messages</button></div>
+    <p class="empty" id="empty" hidden>Nothing captured yet. Point a connector, the SMTP sink or the proxy at Echo and it shows up here.</p>
+  </section>
+  <section class="detail" id="detail" aria-label="Message" hidden>
+    <div class="head">
+      <div class="meta">
+        <div class="kind" id="d-kind"></div>
+        <h1 id="d-title"></h1>
+        <dl id="d-fields"></dl>
+      </div>
+      <div class="tools">
+        <button type="button" id="d-delete" class="danger" title="Delete this message (Delete key)">Delete</button>
+      </div>
+    </div>
+    <nav class="tabs" id="tabs" role="tablist">
+      <button type="button" role="tab" data-tab="html">HTML</button>
+      <button type="button" role="tab" data-tab="text">Text</button>
+      <button type="button" role="tab" data-tab="headers">Headers</button>
+      <button type="button" role="tab" data-tab="raw">Raw</button>
+      <button type="button" role="tab" data-tab="json">JSON</button>
+      <button type="button" role="tab" data-tab="checks">Checks</button>
+      <button type="button" role="tab" data-tab="attachments">Attachments</button>
+    </nav>
+    <div class="tab" id="tab-html">
+      <div class="frame-tools"><label><input type="checkbox" id="images"> Load remote images</label></div>
+      <iframe id="frame" title="Message HTML" sandbox="allow-popups allow-popups-to-escape-sandbox" referrerpolicy="no-referrer"></iframe>
+    </div>
+    <pre class="tab" id="tab-text"></pre>
+    <div class="tab" id="tab-headers"><table id="headers"></table></div>
+    <pre class="tab" id="tab-raw"></pre>
+    <pre class="tab" id="tab-json"></pre>
+    <div class="tab" id="tab-checks"><ul id="checks"></ul></div>
+    <div class="tab" id="tab-attachments"><table id="attachments"></table></div>
+  </section>
+  <section class="placeholder" id="placeholder">
+    <p>Pick a message to see it. <kbd>j</kbd> <kbd>k</kbd> move, <kbd>/</kbd> searches.</p>
+  </section>
+</main>
+</body>
+</html>
