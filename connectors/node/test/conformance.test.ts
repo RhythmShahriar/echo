@@ -115,7 +115,7 @@ describe('an Echo that speaks wire 1', () => {
     await api.close();
   });
 
-  it('gets wire 1 captures after one refusal, and a warning once', async () => {
+  it('gets wire 1 captures after one refusal, with one warning', async () => {
     expect((await fetch(`${api.url}/a`)).status).toBe(200);
     expect((await fetch(`${api.url}/b`)).status).toBe(200);
     expect(echo.captures.map((c) => c.v)).toEqual([1, 1]);

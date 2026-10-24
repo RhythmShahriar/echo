@@ -69,7 +69,7 @@ func schema(t *testing.T) *Schema {
 }
 
 // Each vector's capture is valid or broken as it says, with the problems it
-// names, and Echo's real catcher answers the valid ones as the vector says.
+// names. Echo's real catcher answers the valid ones as the vector says.
 func TestVectors(t *testing.T) {
 	sc := schema(t)
 	for file, v := range vectors(t) {
@@ -225,7 +225,7 @@ func TestStandInFailsAMissingScenario(t *testing.T) {
 }
 
 // Speaking wire 1, the stand-in acts like an older Echo: health says 1, a
-// v2 capture gets an older Echo's refusal, and the report checks that the
+// v2 capture gets an older Echo's refusal. The report checks that the
 // connector then sent v1.
 func TestStandInWire1(t *testing.T) {
 	s, err := New(Options{Wire: 1})

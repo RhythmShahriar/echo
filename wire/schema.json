@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/RhythmShahriar/echo/blob/master/wire/schema.json",
   "title": "Rhythm Echo wire protocol",
-  "description": "Package wire is the small JSON protocol between Echo and the connectors inside a site (the WordPress mu-plugin, the Laravel package, the Node package): a connector reports each email and each outbound HTTP request, and for HTTP requests Echo answers whether to let it through or what to answer instead. Generated from wire/wire.go by conformance/gen: do not edit.",
+  "description": "Package wire is the small JSON protocol between Echo and the connectors inside a site (the WordPress mu-plugin, the Laravel package, the Node package): a connector reports each email and each outbound HTTP request. Generated from wire/wire.go by conformance/gen: do not edit.",
   "x-version": 2,
   "x-min-version": 1,
   "anyOf": [

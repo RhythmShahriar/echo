@@ -4,7 +4,7 @@
 // Package wire is the small JSON protocol between Echo and the connectors
 // inside a site (the WordPress mu-plugin, the Laravel package, the Node
 // package): a connector reports each email and each outbound HTTP
-// request, and for HTTP requests Echo answers whether to let it through or
+// request. For HTTP requests Echo answers whether to let it through or
 // what to answer instead. Keep it stable: connectors in other languages
 // implement it.
 //
