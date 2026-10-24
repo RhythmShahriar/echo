@@ -24,6 +24,12 @@ import (
 // latestWait is how long latest waits for a message unless --wait says.
 const latestWait = 10 * time.Second
 
+// latestWindow is how far back latest looks unless --since or --run
+// narrows it. Echo answers the newest match at once, so without a bound
+// a test that signs in the same user again would get the code from the
+// run before whenever the new email is a moment late.
+const latestWindow = time.Minute
+
 // linkKinds are the values --kind accepts: the kinds of link Echo reads
 // from a message.
 var linkKinds = []string{"magic", "verify", "reset", "login", "unsubscribe"}
@@ -135,7 +141,8 @@ func fetchLatest(ctx context.Context, c *client.Client, lq latestQuery) (latestR
 
 // cmdLatest prints the one-time code or link in the newest message to
 // --to, for a shell script or an end-to-end test that signs in: just the
-// code or the URL and a newline. It exits 1 when no message came within
+// code or the URL and a newline. It looks back latestWindow unless
+// --since or --run says otherwise. It exits 1 when no message came within
 // --wait, or the message has no code or link of the kind asked for.
 func cmdLatest(s *session) int {
 	o := s.o
@@ -169,12 +176,20 @@ func cmdLatest(s *session) int {
 			lq.Action = runner.ActionID(lq.Action)
 		}
 	}
-	if o.since > 0 {
+	window := ""
+	switch {
+	case o.since > 0:
 		lq.Since = time.Now().UTC().Add(-o.since)
+	case o.runID == "":
+		lq.Since, window = time.Now().UTC().Add(-latestWindow), shortDuration(latestWindow)
 	}
 	l, err := fetchLatest(s.ctx, s.echo, lq)
 	if errors.Is(err, errNoMatch) {
-		fmt.Fprintf(s.stderr, "rhythm echo: no message to %s arrived within %s\n", o.to, shortDuration(wait))
+		fmt.Fprintf(s.stderr, "rhythm echo: no message to %s arrived within %s", o.to, shortDuration(wait))
+		if window != "" {
+			fmt.Fprintf(s.stderr, " (nor in the %s before; --since looks further back)", window)
+		}
+		fmt.Fprintln(s.stderr)
 		return exitFindings
 	}
 	if err != nil {

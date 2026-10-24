@@ -252,12 +252,16 @@ Latest (latest --to <address>; prints only the code or link, for scripts and tes
       --to <address>         whose message: an email address or a phone number
       --channel <c,c>        only these channels, e.g. email,sms
       --action <name>        only messages from this action of a run
+      --run <id>             only messages from this run
+      --since <d>            only messages from this long ago on (default 1m unless --run)
       --wait <d>             how long to wait for a message (default 10s, at most 1m)
       --code                 print the one-time code (the default, else the first link)
       --link                 print the first link instead (magic, verify, reset, login or
                              unsubscribe)
       --kind <k>             with --link: only this kind of link, e.g. magic or reset
-                             Exits 1 when nothing arrives in time, or it has no code or link.
+  Exits 1 when nothing arrives in time, or it has no code or link. A test that signs
+  the same user in again should pass --run or a short --since, or clear --to first:
+  Echo answers the newest match at once, which may be the previous one.
 
 Deliverability (check, headers; never sends anything):
       --from-mail <file.eml> learn the real sender from a received email

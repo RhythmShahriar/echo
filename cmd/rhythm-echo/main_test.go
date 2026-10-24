@@ -1906,6 +1906,14 @@ func TestLatestPrintsTheCodeOrLink(t *testing.T) {
 		}
 	}
 
+	// Without --since it looks back a minute; with --run, at any age.
+	if code, _, _ := runCLI(t, "latest", "--to", "ann@shop.test"); code != exitOK || !strings.Contains(lastQuery(), "since=") {
+		t.Error("latest didn't send a default since")
+	}
+	if code, _, _ := runCLI(t, "latest", "--to", "ann@shop.test", "--run", "r1"); code != exitOK || strings.Contains(lastQuery(), "since=") {
+		t.Error("latest --run sent a since")
+	}
+
 	code, out, _ := runCLI(t, "latest", "--to", "ann@shop.test", "--json")
 	var data latestResult
 	if env := decodeEnvelope(t, []byte(out), kindLatest, &data); code != exitOK || data.Codes[0] != "482913" || len(data.Links) != 2 ||
@@ -1918,7 +1926,7 @@ func TestLatestPrintsTheCodeOrLink(t *testing.T) {
 	start := time.Now()
 	code, out, errOut = runCLI(t, "latest", "--to", "nobody@shop.test", "--wait", "300ms")
 	if took := time.Since(start); code != exitFindings || out != "" || took < 300*time.Millisecond || took > 5*time.Second ||
-		errOut != "rhythm echo: no message to nobody@shop.test arrived within 300ms\n" {
+		errOut != "rhythm echo: no message to nobody@shop.test arrived within 300ms (nor in the 1m before; --since looks further back)\n" {
 		t.Errorf("latest timeout: exit %d in %s, %q %q", code, took, out, errOut)
 	}
 	if !strings.Contains(lastQuery(), "wait=300ms") {
@@ -1979,5 +1987,94 @@ func TestLatestPrintsTheCodeOrLink(t *testing.T) {
 
 	if code, out, _ := runCLI(t, "latest", "--help"); code != exitOK || !strings.Contains(out, "--kind <k>") || !strings.Contains(out, "default 10s") {
 		t.Errorf("latest --help: %d\n%s", code, out)
+	}
+}
+
+// timedLatest answers /v1/messages/latest as Echo does: the newest
+// message to the recipient from since on, at once when there is one,
+// else the first to arrive within wait. Each message is a code and when
+// it arrived; add puts a new one in.
+func timedLatest(t *testing.T) (h http.Handler, add func(code string, at time.Time)) {
+	t.Helper()
+	type msg struct {
+		code string
+		at   time.Time
+	}
+	var (
+		mu      sync.Mutex
+		msgs    []msg
+		arrived = make(chan struct{})
+	)
+	add = func(code string, at time.Time) {
+		mu.Lock()
+		defer mu.Unlock()
+		msgs = append(msgs, msg{code, at})
+		close(arrived)
+		arrived = make(chan struct{})
+	}
+	newest := func(since time.Time) (string, <-chan struct{}) {
+		mu.Lock()
+		defer mu.Unlock()
+		for i := len(msgs) - 1; i >= 0; i-- {
+			if !msgs[i].at.Before(since) {
+				return msgs[i].code, nil
+			}
+		}
+		return "", arrived
+	}
+	h = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		var since time.Time
+		if s := q.Get("since"); s != "" {
+			since, _ = time.Parse(time.RFC3339Nano, s)
+		}
+		wait, _ := time.ParseDuration(q.Get("wait"))
+		deadline := time.After(wait)
+		for {
+			code, next := newest(since)
+			if code != "" {
+				w.Header().Set("Content-Type", "application/json")
+				_ = json.NewEncoder(w).Encode(map[string]any{"codes": []string{code}, "links": []any{},
+					"message": map[string]any{"id": "m-" + code, "channel": "email", "to": []string{q.Get("to")}}})
+				return
+			}
+			select {
+			case <-next:
+			case <-deadline:
+				http.Error(w, "no message matched", http.StatusNotFound)
+				return
+			}
+		}
+	})
+	return h, add
+}
+
+// An older message to the same person doesn't stand in for the one a
+// test is waiting for: latest looks back a minute unless told otherwise.
+func TestLatestWaitsForTheNewMessage(t *testing.T) {
+	t.Chdir(t.TempDir())
+	h, add := timedLatest(t)
+	echo := fixtureServer(t, 20473, h)
+	t.Setenv("RHYTHM_ECHO_URL", echo.URL)
+	add("111111", time.Now().Add(-5*time.Minute)) // the previous test run's
+
+	// Asked for, the old one is still there.
+	if code, out, errOut := runCLI(t, "latest", "--to", "ann@shop.test", "--since", "10m", "--wait", "0"); code != exitOK || out != "111111\n" {
+		t.Errorf("latest --since 10m: %d %q %q", code, out, errOut)
+	}
+	// By default it isn't: latest waits for the new one.
+	go func() {
+		time.Sleep(300 * time.Millisecond)
+		add("222222", time.Now())
+	}()
+	if code, out, errOut := runCLI(t, "latest", "--to", "ann@shop.test", "--wait", "20s"); code != exitOK || out != "222222\n" {
+		t.Errorf("latest while a new message arrives: %d %q %q", code, out, errOut)
+	}
+	// Nothing in time: the message says how far back it looked.
+	h2, _ := timedLatest(t)
+	t.Setenv("RHYTHM_ECHO_URL", fixtureServer(t, 20474, h2).URL)
+	code, _, errOut := runCLI(t, "latest", "--to", "ann@shop.test", "--wait", "200ms")
+	if code != exitFindings || errOut != "rhythm echo: no message to ann@shop.test arrived within 200ms (nor in the 1m before; --since looks further back)\n" {
+		t.Errorf("latest with nothing: %d %q", code, errOut)
 	}
 }
