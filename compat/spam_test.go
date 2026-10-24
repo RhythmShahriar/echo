@@ -15,9 +15,11 @@ import (
 	"time"
 )
 
+// Ports no other package's tests listen on: go test ./... runs packages
+// in parallel.
 const (
-	spamdAddr  = "127.0.0.1:20515"
-	closedAddr = "127.0.0.1:20516" // nothing listens here
+	spamdAddr  = "127.0.0.1:20518"
+	closedAddr = "127.0.0.1:20519" // nothing listens here
 )
 
 var gtube = []byte("From: shop@shop.test\r\nTo: ann@example.com\r\nSubject: Test\r\n\r\nXJS*C4JDBQADN1.NSBN3*2IDNEN*GTUBE-STANDARD-ANTI-UBE-TEST-EMAIL*C.34X\r\n")
@@ -118,14 +120,14 @@ func TestSpamErrors(t *testing.T) {
 	for _, tc := range []struct {
 		name, answer, want string
 	}{
-		{"not spamd", "HTTP/1.1 400 Bad Request\r\n\r\n", `spamassassin at 127.0.0.1:20515: not a spamd answer: "HTTP/1.1 400 Bad Request"`},
-		{"refused", "SPAMD/1.0 76 Bad header line: (EOF)\r\n", "spamassassin at 127.0.0.1:20515: spamd refused the message: 76 Bad header line: (EOF)"},
-		{"no score", "SPAMD/1.1 0 EX_OK\r\nContent-length: 0\r\n\r\n", "spamassassin at 127.0.0.1:20515: not a spamd answer: no Spam header"},
-		{"bad score", "SPAMD/1.1 0 EX_OK\r\nSpam: True ; lots\r\n\r\n", `spamassassin at 127.0.0.1:20515: not a spamd answer: Spam: "True ; lots"`},
-		{"cut short", "SPAMD/1.1 0 EX_OK\r\nSpam: True ; 9.0 / 5.0\r\n", "spamassassin at 127.0.0.1:20515: closed the connection without a score"},
-		{"huge body", "SPAMD/1.1 0 EX_OK\r\nContent-length: 99999999999\r\nSpam: True ; 9.0 / 5.0\r\n\r\nGTUBE", `spamassassin at 127.0.0.1:20515: not a spamd answer: Content-length "99999999999"`},
-		{"body over the limit", "SPAMD/1.1 0 EX_OK\r\nContent-length: 1048577\r\nSpam: True ; 9.0 / 5.0\r\n\r\nGTUBE", `spamassassin at 127.0.0.1:20515: not a spamd answer: Content-length "1048577"`},
-		{"short body", "SPAMD/1.1 0 EX_OK\r\nContent-length: 40\r\nSpam: True ; 9.0 / 5.0\r\n\r\nGTUBE", "spamassassin at 127.0.0.1:20515: closed the connection without a score"},
+		{"not spamd", "HTTP/1.1 400 Bad Request\r\n\r\n", `spamassassin at 127.0.0.1:20518: not a spamd answer: "HTTP/1.1 400 Bad Request"`},
+		{"refused", "SPAMD/1.0 76 Bad header line: (EOF)\r\n", "spamassassin at 127.0.0.1:20518: spamd refused the message: 76 Bad header line: (EOF)"},
+		{"no score", "SPAMD/1.1 0 EX_OK\r\nContent-length: 0\r\n\r\n", "spamassassin at 127.0.0.1:20518: not a spamd answer: no Spam header"},
+		{"bad score", "SPAMD/1.1 0 EX_OK\r\nSpam: True ; lots\r\n\r\n", `spamassassin at 127.0.0.1:20518: not a spamd answer: Spam: "True ; lots"`},
+		{"cut short", "SPAMD/1.1 0 EX_OK\r\nSpam: True ; 9.0 / 5.0\r\n", "spamassassin at 127.0.0.1:20518: closed the connection without a score"},
+		{"huge body", "SPAMD/1.1 0 EX_OK\r\nContent-length: 99999999999\r\nSpam: True ; 9.0 / 5.0\r\n\r\nGTUBE", `spamassassin at 127.0.0.1:20518: not a spamd answer: Content-length "99999999999"`},
+		{"body over the limit", "SPAMD/1.1 0 EX_OK\r\nContent-length: 1048577\r\nSpam: True ; 9.0 / 5.0\r\n\r\nGTUBE", `spamassassin at 127.0.0.1:20518: not a spamd answer: Content-length "1048577"`},
+		{"short body", "SPAMD/1.1 0 EX_OK\r\nContent-length: 40\r\nSpam: True ; 9.0 / 5.0\r\n\r\nGTUBE", "spamassassin at 127.0.0.1:20518: closed the connection without a score"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			fakeSpamd(t, func(string, []byte) string { return tc.answer })
@@ -139,7 +141,7 @@ func TestSpamErrors(t *testing.T) {
 
 func TestSpamConnectionRefused(t *testing.T) {
 	_, _, err := Spam(context.Background(), closedAddr, gtube)
-	if err == nil || !strings.HasPrefix(err.Error(), "spamassassin at 127.0.0.1:20516: couldn't connect: ") ||
+	if err == nil || !strings.HasPrefix(err.Error(), "spamassassin at 127.0.0.1:20519: couldn't connect: ") ||
 		!strings.Contains(err.Error(), "refused") {
 		t.Errorf("err %v", err)
 	}
@@ -151,7 +153,7 @@ func TestSpamTimeout(t *testing.T) {
 	defer cancel()
 	start := time.Now()
 	_, _, err := Spam(ctx, spamdAddr, gtube)
-	if err == nil || !strings.HasPrefix(err.Error(), "spamassassin at 127.0.0.1:20515: no answer within ") {
+	if err == nil || !strings.HasPrefix(err.Error(), "spamassassin at 127.0.0.1:20518: no answer within ") {
 		t.Errorf("err %v", err)
 	}
 	if d := time.Since(start); d > 2*time.Second {
@@ -164,14 +166,14 @@ func TestSpamCanceled(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	time.AfterFunc(100*time.Millisecond, cancel)
 	_, _, err := Spam(ctx, spamdAddr, gtube)
-	if err == nil || err.Error() != "spamassassin at 127.0.0.1:20515: canceled" {
+	if err == nil || err.Error() != "spamassassin at 127.0.0.1:20518: canceled" {
 		t.Errorf("err %v", err)
 	}
 }
 
 func TestSpamTooLarge(t *testing.T) {
 	_, _, err := Spam(context.Background(), closedAddr, make([]byte, MaxSpamSize+1))
-	if err == nil || err.Error() != "spamassassin at 127.0.0.1:20516: the message is 512001 bytes; spamd only scores messages up to 500 KB" {
+	if err == nil || err.Error() != "spamassassin at 127.0.0.1:20519: the message is 512001 bytes; spamd only scores messages up to 500 KB" {
 		t.Errorf("err %v", err)
 	}
 }

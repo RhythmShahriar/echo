@@ -32,9 +32,11 @@ import (
 )
 
 // Local SMTP servers: one with STARTTLS and a login, one without TLS.
+// They share a port, since no test starts both and each closes its own:
+// go test ./... runs packages in parallel and the fixture range is small.
 const (
 	tlsSMTP   = "127.0.0.1:20509"
-	plainSMTP = "127.0.0.1:20518"
+	plainSMTP = tlsSMTP
 	user      = "agency"
 	password  = "s3cret-relay-pass"
 	readToken = "read-token-0001"

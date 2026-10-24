@@ -29,9 +29,10 @@ import (
 	"time"
 )
 
-// Host ports the containers publish, on loopback only.
+// Host ports the containers publish, on loopback only. None of them is
+// a port another package's tests listen on (the Action's shop has 20515).
 const (
-	apiPort   = "20515"
+	apiPort   = "20508"
 	smtpPort  = "20516"
 	proxyPort = "20517"
 )

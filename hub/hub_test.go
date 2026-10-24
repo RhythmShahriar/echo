@@ -27,13 +27,14 @@ import (
 	"github.com/RhythmShahriar/echo/wire"
 )
 
-// Fixture ports on loopback.
+// Fixture ports on loopback. TestTLS reuses the hub's port, since no
+// other test listens while it runs.
 const (
 	hubAddr   = "127.0.0.1:20504"
 	smtpAddr  = "127.0.0.1:20505"
 	shopAAddr = "127.0.0.1:20506"
 	shopBAddr = "127.0.0.1:20507"
-	tlsAddr   = "127.0.0.1:20508"
+	tlsAddr   = hubAddr
 )
 
 var tokens = map[string]string{"READ": "read-token-0001", "TOKEN_A": "write-token-aaaa", "TOKEN_B": "write-token-bbbb"}
