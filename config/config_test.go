@@ -12,6 +12,8 @@ import (
 	"time"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/RhythmShahriar/echo/model"
 )
 
 func write(t *testing.T, s string) string {
@@ -176,6 +178,26 @@ func TestEveryKeyParses(t *testing.T) {
 
 // TestRoundTrip writes a loaded config back out: it must load again and
 // write the same YAML, so tools can rewrite configs without losing keys.
+// TestExpectEveryChannel: expect takes every channel Echo knows, as a
+// count or as counts per event.
+func TestExpectEveryChannel(t *testing.T) {
+	for _, ch := range model.Channels {
+		y := "actions:\n  - name: a\n    command: x\n    expect:\n      " + string(ch) + ": 3\n" +
+			"  - name: b\n    command: x\n    expect:\n      " + string(ch) + ": {purchase: 1, order.created: 2}\n"
+		c, err := Load(write(t, y))
+		if err != nil {
+			t.Errorf("%s: %v", ch, err)
+			continue
+		}
+		if n := c.Actions[0].Expect[ch]; n.N != 3 || n.Events != nil {
+			t.Errorf("%s count = %+v", ch, n)
+		}
+		if ev := c.Actions[1].Expect[ch].Events; ev["purchase"] != 1 || ev["order.created"] != 2 || c.Actions[1].Expect.Total() != 3 {
+			t.Errorf("%s events = %+v", ch, ev)
+		}
+	}
+}
+
 func TestRoundTrip(t *testing.T) {
 	c, err := Load(write(t, full))
 	if err != nil {

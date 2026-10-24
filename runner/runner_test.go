@@ -179,19 +179,50 @@ func TestSelect(t *testing.T) {
 }
 
 func TestExpectationsCoverEveryChannel(t *testing.T) {
-	msgs := []model.Message{{Channel: model.Email}, {Channel: model.Analytics, Event: "purchase"}}
-	e := config.Expect{model.Email: {N: 1}, model.Analytics: {Events: map[string]int{"purchase": 1, "add_to_cart": 1}}, model.Push: {N: 1}}
+	// Each channel short by one, then met: an issue per channel, then none.
+	for _, ch := range model.Channels {
+		e := config.Expect{ch: {N: 2}}
+		got := expectations(e, []model.Message{{Channel: ch}})
+		if len(got) != 1 || got[0].Check != "expect/unmet" || got[0].Detail != string(ch)+": expected 2, got 1" || got[0].Key == "" {
+			t.Errorf("%s short: %+v", ch, got)
+		}
+		if got := expectations(e, []model.Message{{Channel: ch}, {Channel: ch}}); len(got) != 0 {
+			t.Errorf("%s met: %+v", ch, got)
+		}
+	}
+	if len(expectations(nil, []model.Message{{Channel: model.Email}})) != 0 {
+		t.Error("no expect, no issues")
+	}
+}
+
+func TestExpectationsMatchEvents(t *testing.T) {
+	msgs := []model.Message{
+		{Channel: model.Email},
+		{Channel: model.Analytics, Event: "purchase"},
+		{Channel: model.Analytics, Event: "page_view"},
+		{Channel: model.Analytics, Event: "page_view"},
+		{Channel: model.Webhook, Event: "purchase"}, // same event on another channel doesn't count
+	}
+	e := config.Expect{
+		model.Email:     {N: 1},
+		model.Analytics: {Events: map[string]int{"purchase": 1, "add_to_cart": 1, "page_view": 2}},
+		model.Payment:   {Events: map[string]int{"purchase": 1}},
+		model.Push:      {N: 1},
+	}
 	var got []string
 	for _, i := range expectations(e, msgs) {
 		got = append(got, i.Check+": "+i.Title+" ("+i.Detail+")")
 	}
-	want := "expect/analytics: Sent fewer analytics events than expected (expected 2, got 1)\n" +
-		"expect/push: Sent fewer push notifications than expected (expected 1, got 0)"
+	want := `expect/unmet: Sent fewer "add_to_cart" analytics events than expected (analytics add_to_cart: expected 1, got 0)` + "\n" +
+		`expect/unmet: Sent fewer "purchase" payment calls than expected (payment purchase: expected 1, got 0)` + "\n" +
+		`expect/unmet: Sent fewer push notifications than expected (push: expected 1, got 0)`
 	if strings.Join(got, "\n") != want {
 		t.Errorf("got:\n%s", strings.Join(got, "\n"))
 	}
-	if len(expectations(nil, msgs)) != 0 {
-		t.Error("no expect, no issues")
+	// Four page_view events don't make up for a missing purchase.
+	msgs = []model.Message{{Channel: model.Analytics, Event: "page_view"}, {Channel: model.Analytics, Event: "page_view"}}
+	if got := expectations(config.Expect{model.Analytics: {Events: map[string]int{"purchase": 1}}}, msgs); len(got) != 1 {
+		t.Errorf("other events counted: %+v", got)
 	}
 }
 

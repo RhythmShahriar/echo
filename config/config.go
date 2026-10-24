@@ -678,6 +678,7 @@ actions: []
 #    expect: {email: 2}
 #  - name: Completed order
 #    command: wp eval 'do_action("woocommerce_order_status_completed", 123);'
+#    expect: {email: 1, analytics: {purchase: 1}}   # any channel: a count, or counts per event
 #  - name: Stripe payment succeeded
 #    replay: {event: payment_intent.succeeded, to: /?wc-api=wc_stripe, secret_env: ECHO_STRIPE_WEBHOOK_SECRET}
 `

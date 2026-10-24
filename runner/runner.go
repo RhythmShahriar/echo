@@ -16,6 +16,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"net/url"
 	"os"
@@ -257,25 +258,46 @@ func refuse(cfg config.Config, a config.Action, mode string, fake *fakeData) err
 }
 
 // expectations reports an action that sent fewer messages than its
-// config says it must.
+// config says it must: one expect/unmet issue per channel short of its
+// count, and per event short of its count (analytics: {purchase: 1}),
+// matched on the message's event. A shortfall is named in the title so
+// compare tells a missing purchase event from a missing email.
 func expectations(e config.Expect, msgs []model.Message) []model.Issue {
 	count := map[model.Channel]int{}
+	events := map[model.Channel]map[string]int{}
 	for _, m := range msgs {
 		count[m.Channel]++
+		if events[m.Channel] == nil {
+			events[m.Channel] = map[string]int{}
+		}
+		events[m.Channel][m.Event]++
 	}
 	var out []model.Issue
+	unmet := func(title, what string, want, got int) {
+		i := model.Issue{Check: "expect/unmet", Level: model.Error, Title: title,
+			Detail: fmt.Sprintf("%s: expected %d, got %d", what, want, got),
+			Fix:    "Check the settings of whatever sends them, or update expect in .echo/config.yaml if the change is intended."}
+		i.Identify()
+		out = append(out, i)
+	}
 	for _, ch := range model.Channels {
-		n := e[ch].Total()
-		if n > 0 && count[ch] < n {
-			i := model.Issue{Check: "expect/" + string(ch), Level: model.Error, Title: fmt.Sprintf("Sent fewer %s than expected", noun(ch)),
-				Detail: fmt.Sprintf("expected %d, got %d", n, count[ch]),
-				Fix:    "Check the settings of whatever sends them, or update expect in .echo/config.yaml if the change is intended."}
-			i.Identify()
-			out = append(out, i)
+		c := e[ch]
+		if c.N > 0 && count[ch] < c.N {
+			unmet(fmt.Sprintf("Sent fewer %s than expected", noun(ch)), string(ch), c.N, count[ch])
+		}
+		for _, ev := range slices.Sorted(maps.Keys(c.Events)) {
+			if n, got := c.Events[ev], events[ch][ev]; n > 0 && got < n {
+				unmet(fmt.Sprintf("Sent fewer %q %s than expected", ev, noun(ch)), string(ch)+" "+ev, n, got)
+			}
 		}
 	}
 	return out
 }
+
+// crm is the channel the roadmap adds for CRM API calls. model has no
+// constant for it yet, so it is spelled here to name its messages once
+// model.Channels lists it.
+const crm model.Channel = "crm"
 
 // noun names a channel's messages in a sentence.
 func noun(ch model.Channel) string {
@@ -296,6 +318,8 @@ func noun(ch model.Channel) string {
 		return "payment calls"
 	case model.Push:
 		return "push notifications"
+	case crm:
+		return "CRM calls"
 	}
 	return string(ch) + " messages"
 }
