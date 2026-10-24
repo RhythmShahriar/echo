@@ -123,6 +123,8 @@ func TestSpamErrors(t *testing.T) {
 		{"no score", "SPAMD/1.1 0 EX_OK\r\nContent-length: 0\r\n\r\n", "spamassassin at 127.0.0.1:20515: not a spamd answer: no Spam header"},
 		{"bad score", "SPAMD/1.1 0 EX_OK\r\nSpam: True ; lots\r\n\r\n", `spamassassin at 127.0.0.1:20515: not a spamd answer: Spam: "True ; lots"`},
 		{"cut short", "SPAMD/1.1 0 EX_OK\r\nSpam: True ; 9.0 / 5.0\r\n", "spamassassin at 127.0.0.1:20515: closed the connection without a score"},
+		{"huge body", "SPAMD/1.1 0 EX_OK\r\nContent-length: 99999999999\r\nSpam: True ; 9.0 / 5.0\r\n\r\nGTUBE", `spamassassin at 127.0.0.1:20515: not a spamd answer: Content-length "99999999999"`},
+		{"body over the limit", "SPAMD/1.1 0 EX_OK\r\nContent-length: 1048577\r\nSpam: True ; 9.0 / 5.0\r\n\r\nGTUBE", `spamassassin at 127.0.0.1:20515: not a spamd answer: Content-length "1048577"`},
 		{"short body", "SPAMD/1.1 0 EX_OK\r\nContent-length: 40\r\nSpam: True ; 9.0 / 5.0\r\n\r\nGTUBE", "spamassassin at 127.0.0.1:20515: closed the connection without a score"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

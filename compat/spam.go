@@ -26,6 +26,9 @@ const (
 	// larger ones by default too, since spamd gets slow on them and spam
 	// is rarely that big.
 	MaxSpamSize = 500 * 1024
+	// maxSpamdAnswer caps what Echo reads of spamd's answer and the
+	// Content-length it believes.
+	maxSpamdAnswer = 1 << 20
 )
 
 // SpamResult is spamd's verdict on one message.
@@ -100,7 +103,7 @@ func SpamCheck(ctx context.Context, addr string, raw []byte) (SpamResult, error)
 	// already have said why it stopped reading.
 	_, _ = io.WriteString(conn, req)
 	_, _ = conn.Write(raw)
-	r, perr := readSpamd(bufio.NewReader(io.LimitReader(conn, 1<<20)))
+	r, perr := readSpamd(bufio.NewReader(io.LimitReader(conn, maxSpamdAnswer)))
 	if perr != nil {
 		switch {
 		case errors.Is(ctx.Err(), context.Canceled):
@@ -157,7 +160,9 @@ func readSpamd(br *bufio.Reader) (SpamResult, error) {
 		value = strings.TrimSpace(value)
 		switch strings.ToLower(strings.TrimSpace(name)) {
 		case "content-length":
-			if length, err = strconv.Atoi(value); err != nil || length < 0 {
+			// The bound is checked before the body is allocated: the read
+			// limit alone wouldn't stop make() from asking for 99 GB.
+			if length, err = strconv.Atoi(value); err != nil || length < 0 || length > maxSpamdAnswer {
 				return SpamResult{}, fmt.Errorf("not a spamd answer: Content-length %q", value)
 			}
 		case "spam":
