@@ -31,13 +31,22 @@ import (
 // a fixture resolver, all on 127.0.0.1:23200-23239, apart from the
 // testbed's ports.
 const (
-	localAPI   = "127.0.0.1:23200"
-	localSMTP  = "127.0.0.1:23201"
-	localSite  = "127.0.0.1:23210"
-	localDNS   = "127.0.0.1:23220"
-	silentDNS  = "127.0.0.1:23221"           // takes queries and never answers
-	localToken = "echo-env-token-0123456789" //nolint:gosec // the local probes' own token, as the testbed's
+	localAPI  = "127.0.0.1:23200"
+	localSMTP = "127.0.0.1:23201"
+	localSite = "127.0.0.1:23210"
+	localDNS  = "127.0.0.1:23220"
+	silentDNS = "127.0.0.1:23221" // takes queries and never answers
 )
+
+// localToken is the local probes' own token, fresh for every run and
+// masked like the testbed's.
+var localToken = newToken()
+
+// probeConfig is the config every probe folder starts with. Echo finds
+// the nearest .echo/config.yaml here or above (since v1.1) and the work
+// folder is inside testbed/, whose config listens on 0.0.0.0 for the
+// containers: without this one a local probe would run with that.
+const probeConfig = "# A probe's own settings, so Echo doesn't read testbed/.echo/config.yaml above.\nmode: seal\n"
 
 // ProbeEnv is what a probe works with.
 type ProbeEnv struct {
@@ -59,6 +68,9 @@ type SiteBench struct {
 	Manifest *Manifest
 	Options  options
 	old      oldEcho
+	// oldCLI: the CLI is Echo 1.0.0's, which keeps its runs in the folder
+	// it runs in and has no --store.
+	oldCLI bool
 }
 
 // oldEcho builds Echo 1.0.0 once, for the version skew probe.
@@ -73,7 +85,8 @@ func (p *ProbeEnv) For(id, state string) *ProbeEnv {
 	q := *p
 	q.Work = filepath.Join(p.Work, id, state)
 	_ = os.RemoveAll(q.Work)
-	_ = os.MkdirAll(q.Work, 0o750)
+	_ = os.MkdirAll(filepath.Join(q.Work, ".echo"), 0o750)
+	_ = writeConfig(q.Work, probeConfig)
 	return &q
 }
 
@@ -232,6 +245,12 @@ func (p *ProbeEnv) stepEnv(ctx context.Context, name, dir string, env []string, 
 	}
 	o.Verdict = envelope.Verdict
 	switch envelope.Kind {
+	case "":
+		// A bare run, as Echo 1.0.0 writes it, with no envelope.
+		var r model.Run
+		if json.Unmarshal(data, &r) == nil && r.Schema != "" {
+			o.Output += "\n" + sentLines(&r)
+		}
 	case "run":
 		var r model.Run
 		if json.Unmarshal(envelope.Data, &r) == nil {
@@ -264,23 +283,23 @@ func sentLines(r *model.Run) string {
 }
 
 // run runs a command and returns its exit code (-1 when it couldn't
-// start or timed out) and everything it printed.
+// start or timed out) and everything it printed, masked.
 func (p *ProbeEnv) run(ctx context.Context, dir string, env []string, name string, args ...string) (int, string) {
 	ctx, cancel := context.WithTimeout(ctx, cmpTimeout(p.Timeout))
 	defer cancel()
 	cmd := exec.CommandContext(ctx, name, args...) //nolint:gosec // the benchmark runs the binary under test
 	cmd.Dir, cmd.Env = dir, env
 	var out bytes.Buffer
-	cmd.Stdout, cmd.Stderr = &out, &out
+	cmd.Stdout, cmd.Stderr = &out, &out // the same writer: os/exec writes it from one goroutine at a time
 	err := cmd.Run()
 	var ee *exec.ExitError
 	switch {
 	case err == nil:
-		return 0, out.String()
+		return 0, mask(out.String())
 	case errors.As(err, &ee) && ctx.Err() == nil:
-		return ee.ExitCode(), out.String()
+		return ee.ExitCode(), mask(out.String())
 	}
-	return -1, out.String() + "\n" + err.Error()
+	return -1, mask(out.String() + "\n" + err.Error())
 }
 
 func cmpTimeout(d time.Duration) time.Duration {

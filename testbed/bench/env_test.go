@@ -433,7 +433,9 @@ func TestBuggregatorAgainstAStub(t *testing.T) {
 // real address didn't reach the mail server.
 func TestStagingShieldAgainstAStub(t *testing.T) {
 	var mu sync.Mutex
-	sent, active, leaks := 0, false, false
+	// delivers: the email reaches Mailpit with the plugin inactive (the
+	// control); leaks: it still does with the plugin active.
+	sent, active, leaks, delivers := 0, false, false, true
 	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		mu.Lock()
 		defer mu.Unlock()
@@ -470,10 +472,7 @@ func TestStagingShieldAgainstAStub(t *testing.T) {
 		action: func(context.Context, string, string) error {
 			mu.Lock()
 			defer mu.Unlock()
-			if !active {
-				return fmt.Errorf("the plugin isn't active")
-			}
-			if leaks {
+			if (!active && delivers) || (active && leaks) {
 				sent++
 			}
 			return nil
@@ -500,8 +499,62 @@ func TestStagingShieldAgainstAStub(t *testing.T) {
 	if r := tool.Judge(context.Background(), s19, nil, nil, ""); r.Outcome != Missed || !strings.Contains(r.Detail, "still reached") {
 		t.Errorf("leaked: %+v", r)
 	}
+	// No positive control: the email doesn't reach Mailpit even with the
+	// plugin inactive, so "did not leave" can't be credited to it.
+	leaks, delivers = false, false
+	if r := tool.Judge(context.Background(), s19, nil, nil, ""); r.Outcome != Failed || !strings.Contains(r.Detail, "inactive") {
+		t.Errorf("no control: %+v", r)
+	}
 	if _, err := os.Stat(filepath.Join(dir, "state", "s19")); err == nil {
 		t.Error("s19 was left broken")
+	}
+}
+
+// TestCommandKeepsStdoutApart runs a command that writes to both streams
+// at once: standard output must come back whole and on its own (go test
+// -race checks the two copy goroutines don't race on one buffer) and a
+// failure's error must carry both, with the token masked.
+func TestCommandKeepsStdoutApart(t *testing.T) {
+	token := newToken()
+	script := `for i in $(seq 1 200); do echo out$i; echo err$i >&2; done; echo "` + token + `" >&2; exit 3`
+	out, err := command(context.Background(), time.Minute, t.TempDir(), nil, "sh", "-c", script)
+	if err == nil {
+		t.Fatal("want the exit status")
+	}
+	if strings.Contains(out, "err") || strings.Count(out, "\n") != 200 || !strings.HasPrefix(out, "out1\n") {
+		t.Errorf("standard output mixed or cut: %q", out[:min(len(out), 80)])
+	}
+	if strings.Contains(err.Error(), token) || !strings.Contains(err.Error(), "•••") {
+		t.Errorf("the token isn't masked: %v", err)
+	}
+}
+
+// TestTestbedToken reads runtime/token and refuses a missing or short one.
+func TestTestbedToken(t *testing.T) {
+	dir := t.TempDir()
+	if _, err := TestbedToken(dir); err == nil || !strings.Contains(err.Error(), "make -C testbed up") {
+		t.Errorf("no token file: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(dir, "runtime"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	f := filepath.Join(dir, "runtime", "token")
+	if err := os.WriteFile(f, []byte("short\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := TestbedToken(dir); err == nil || !strings.Contains(err.Error(), "shorter than 16") {
+		t.Errorf("a short token: %v", err)
+	}
+	tok := strings.Repeat("ab", 12)
+	if err := os.WriteFile(f, []byte(tok+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	got, err := TestbedToken(dir)
+	if err != nil || got != tok {
+		t.Fatalf("TestbedToken = %q, %v", got, err)
+	}
+	if m := mask("--proxy http://echo:" + tok + "@gate:18862"); m != "--proxy http://echo:•••@gate:18862" {
+		t.Errorf("mask = %q", m)
 	}
 }
 

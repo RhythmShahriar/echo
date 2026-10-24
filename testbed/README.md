@@ -31,7 +31,7 @@ The sites run on a Docker network with `internal: true`: Docker gives it no gate
 - the way in: it publishes the sites and Mailpit on 127.0.0.1:18850-18855, passing `X-Echo-Run` through
 - the way to Echo: it forwards ports 18860 (API), 18861 (SMTP) and 18862 (proxy) to the Echo on the host, at `host.docker.internal`
 
-Echo runs on the host, not in the stack: the benchmark starts its own (`rhythm-echo up` on 0.0.0.0:18860-18862 with `--mitm` and the testbed's token, `echo-testbed-token`), or start one with `make echo` (`make echo OBSERVE=1` for observe mode). It needs the token because it listens beyond loopback. Its proxy CA lives in `runtime/cache` (`XDG_CACHE_HOME`) and WordPress trusts the certificate (`runtime/ca.pem`, never the key).
+Echo runs on the host, not in the stack: the benchmark starts its own (`rhythm-echo up` on 0.0.0.0:18860-18862 with `--mitm` and the testbed's token), or start one with `make echo` (`make echo OBSERVE=1` for observe mode). It needs the token because it listens beyond loopback: Echo refuses to start there without one and its SMTP sink then wants the token as the AUTH password. `make up` writes a fresh random token to `runtime/token` (0600, gitignored) every time, or uses `TOKEN=...` (16 characters or more) and hands it to everything: compose's `RHYTHM_ECHO_TOKEN` for Laravel, Next.js and the plain-PHP sendmail shim (which logs in to the SMTP sink with it), the WordPress connector's settings (its API token and the proxy login) and, through `runtime/token`, the benchmark and `make echo`. The benchmark masks it in everything it writes. Its proxy CA lives in `runtime/config` (`XDG_CONFIG_HOME`; `runtime/cache` before v1.1) and WordPress trusts the certificate (`runtime/ca.pem`, never the key). The Next.js app runs `next start`, which sets `NODE_ENV=production`, so it sets `RHYTHM_ECHO_FORCE=1`: the Node connector's production guard would otherwise keep it off on this staging copy.
 
 So this is also the hard seal from [docs/seal/docker-compose.md](../docs/seal/docker-compose.md), with Echo outside the stack. In observe mode, what Echo lets through still can't leave: mail goes to Mailpit, the CRM is local and anything else fails.
 
@@ -117,7 +117,7 @@ The `environment:` list in `scenarios.yaml` (e01 to e15) is the other half: the 
 | e14 | local | the resolver refuses, then never answers, for s17's and s18's domains | exit 3 naming the resolver, within 30 s |
 | e15 | local | RTL, CJK and a right-to-left override in the order email | no mojibake or placeholder hit, no change, the override printed escaped |
 
-The local probes need no Docker: they run their own Echo, fixture site and resolver on 127.0.0.1:23200-23239 (`go run -tags testbed ./testbed/bench -only env -tools none`, or `TestLocalProbes`). e10 builds Echo 1.0.0 from its git tag with the modules in the Go cache.
+The local probes need no Docker: they run their own Echo, fixture site and resolver on 127.0.0.1:23200-23239 (`go run -tags testbed ./testbed/bench -only env -tools none`, or `TestLocalProbes`). e10 builds Echo 1.0.0 from its git tag: with the modules in the Go module cache when they are there, else it downloads them, so its first run needs the network unless the cache is warm (`go mod download` in a checkout of v1.0.0 warms it). Echo 1.0.0 runs with its own cache and config folders under the probe's work folder, so its CA never replaces the testbed's.
 
 ### Observe mode
 
@@ -128,25 +128,25 @@ s16 and s19 run Echo in observe mode, so the request or email really goes out. T
 ```sh
 make -C testbed up TOOLS="echo mailpit buggregator staging-shield"
 make -C testbed benchmark TOOLS="echo mailpit buggregator staging-shield"   # writes docs/benchmark.md
-make -C testbed reproduce   # twice; fails if any outcome differs
+make -C testbed reproduce TOOLS="echo mailpit buggregator staging-shield"   # twice; fails if any outcome differs
 make -C testbed demo        # the 60-second demo, docs/assets/demo.gif (needs VHS)
 make -C testbed down
 ```
 
-`TOOLS` names what is judged besides Echo. `buggregator` starts Buggregator (`ghcr.io/buggregator/server`, `BUGGREGATOR_VERSION` picks the tag, 2.4.1 by default) on 127.0.0.1:18857 (API) and 18858 (SMTP); `staging-shield` downloads the Staging Shield plugin from wordpress.org into the WordPress image when it is built (version 1.0.2 unless `STAGING_SHIELD` names another), inactive until the benchmark activates it. Without `TOOLS`, `make up` sets up Mailpit only, as before.
+`TOOLS` names what is judged besides Echo; give `reproduce` the same `TOOLS` as `up`, or it judges only Echo and Mailpit. `buggregator` starts Buggregator (`ghcr.io/buggregator/server`, `BUGGREGATOR_VERSION` picks the tag, 2.4.1 by default) on 127.0.0.1:18857 (API) and 18858 (SMTP); `staging-shield` downloads the Staging Shield plugin from wordpress.org into the WordPress image when it is built (version 1.0.2 unless `STAGING_SHIELD` names another), inactive until the benchmark activates it. Without `TOOLS`, `make up` sets up Mailpit only, as before.
 
 For each scenario, the harness in [`bench/`](bench/) does the following, in `testbed/bench/work/<id>/`:
 
 1. runs the manifest's `reset` commands (drain what an earlier broken flush left queued), sets the good state and starts Echo in the scenario's mode
-2. runs `rhythm-echo snapshot --config testbed/.echo/config.yaml --action "<action>" --name good --fail-on none --json -o good.json`
+2. runs `rhythm-echo snapshot --config testbed/.echo/config.yaml --action "<action>" --name good --fail-on none --json -o good.json --store testbed/bench/work/<id>/.echo` (since v1.1 Echo keeps snapshots beside the config unless `--store` says otherwise, which would share one `good` between scenarios)
 3. breaks the scenario
-4. runs `rhythm-echo compare --config … --action "<action>" --snapshot good --fail-on none --json -o compare.json` and reads the comparison from the envelope's `data`
+4. runs `rhythm-echo compare --config … --action "<action>" --snapshot good --fail-on none --json -o compare.json --store …` and reads the comparison from the envelope's `data`
 5. for `dns:` scenarios, runs `rhythm-echo check --fail-on none` on the From domains in each state (see above) and adds the difference to the comparison
 6. passes when the comparison has a change matching one of the scenario's `expect` entries
 
-Echo's commands get `TESTBED` (for the config's commands), `RHYTHM_ECHO_URL`, `RHYTHM_ECHO_TOKEN`, `XDG_CACHE_HOME` (the testbed's proxy CA) and `TESTBED_STRIPE_SECRET` (the Stripe test endpoint's signing secret, which `testbed-stripe.php` also builds). To run the actions by hand, start `make echo` and, from `testbed/`, set those variables the same way (see `bench/echo.go`).
+Echo's commands get `TESTBED` (for the config's commands), `RHYTHM_ECHO_URL`, `RHYTHM_ECHO_TOKEN` (from `runtime/token`; never on a command line, where `ps` shows it), `XDG_CONFIG_HOME` and `XDG_CACHE_HOME` (the testbed's proxy CA, so the user's own is never read or written), `RHYTHM_NO_UPDATE_CHECK=1` and `TESTBED_STRIPE_SECRET` (the Stripe test endpoint's signing secret, which `testbed-stripe.php` also builds). To run the actions by hand, start `make echo` and, from `testbed/`, set those variables the same way (see `bench/echo.go`).
 
-The other tools are judged on the same states. Mailpit and Buggregator: the harness delivers the SMTP email each state sent into the tool and reads it back through its API (rule in [`bench/tools.go`](bench/tools.go), adapters in [`bench/mailpit.go`](bench/mailpit.go) and [`bench/buggregator.go`](bench/buggregator.go)). Staging Shield ([`bench/stagingshield.go`](bench/stagingshield.go)): for the staging scenarios it is activated and the action run again: it counts when the email to the real address doesn't leave. The scoreboard says how each is judged. MessagePit isn't run.
+The other tools are judged on the same states. Mailpit and Buggregator: the harness delivers the SMTP email each state sent into the tool and reads it back through its API (rule in [`bench/tools.go`](bench/tools.go), adapters in [`bench/mailpit.go`](bench/mailpit.go) and [`bench/buggregator.go`](bench/buggregator.go)). Staging Shield ([`bench/stagingshield.go`](bench/stagingshield.go)): for the staging scenarios the action first runs with the plugin inactive, as a control that must deliver the email to the real address to Mailpit (or the scenario is an error, not a catch); then it is activated and the action run again: it counts when that email doesn't leave. The scoreboard says how each is judged. MessagePit isn't run.
 
 Flags:
 

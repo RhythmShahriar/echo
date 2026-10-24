@@ -25,7 +25,7 @@ networks:
 
 x-echo-env: &echo-env
   RHYTHM_ECHO_URL: http://gate:18860
-  RHYTHM_ECHO_TOKEN: ${TESTBED_TOKEN:-echo-testbed-token}
+  RHYTHM_ECHO_TOKEN: ${TESTBED_TOKEN:-} # runtime/token, a fresh one per make up
   RHYTHM_ECHO_SMTP: gate:18861
 
 x-db-env: &db-env
@@ -144,6 +144,10 @@ services:
     user: "${TESTBED_UID:-1000}:${TESTBED_GID:-1000}"
     environment:
       <<: *echo-env
+      # next start sets NODE_ENV=production, which the connector's
+      # production guard reads as a production server and stays off. This
+      # one is a staging copy, so it is told so, as the guard asks.
+      RHYTHM_ECHO_FORCE: "1"
       NEXT_TELEMETRY_DISABLED: "1"
       HOME: /tmp
     command: ["node_modules/.bin/next", "start", "-p", "3000", "-H", "0.0.0.0"]

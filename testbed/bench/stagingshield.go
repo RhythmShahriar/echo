@@ -47,7 +47,8 @@ func (stagingShield) About() string {
 	return "**Staging Shield** (" + stagingShieldVersion + ", free, from wordpress.org) is a WordPress plugin that detects a staging copy and stops its email. " +
 		"It keeps no record of what a site sends and no baseline, so a lost, changed or new message is **can't see** for it. " +
 		"For the staging scenarios the benchmark activates it in the testbed's WordPress, runs the scenario's action in its broken state with Echo observing " +
-		"(so mail really goes out, to the testbed's Mailpit) and counts it **caught** when the email to the real address did not leave."
+		"(so mail really goes out, to the testbed's Mailpit) and counts it **caught** when the email to the real address did not leave. " +
+		"A control run first, with the plugin inactive, must deliver that email to Mailpit, or the scenario is an error rather than a catch."
 }
 
 // wp runs WP-CLI in the testbed's WordPress.
@@ -83,25 +84,50 @@ func (t stagingShield) Judge(ctx context.Context, s Scenario, _, _ *model.Run, _
 	if err := t.start(ctx, s.Mode); err != nil {
 		return Result{Outcome: Failed, Detail: "starting Echo: " + err.Error()}
 	}
+	// The positive control: with the plugin inactive the email must reach
+	// Mailpit, or a later "did not leave" would say nothing about the
+	// plugin.
+	if code, out := t.wp(ctx, "plugin", "deactivate", "staging-shield"); code != 0 && !strings.Contains(out, "already deactivated") {
+		return Result{Outcome: Failed, Detail: "deactivating it for the control run: " + strings.TrimSpace(out)}
+	}
+	reached, err := t.delivered(ctx, filepath.Join(dir, "control"), s)
+	if err != nil {
+		return Result{Outcome: Failed, Detail: "control run: " + err.Error()}
+	}
+	if !reached {
+		return Result{Outcome: Failed, Detail: fmt.Sprintf("with the plugin inactive, the email to %s didn't reach the testbed's mail server either, so a block can't be credited to it", s.Mailpit)}
+	}
 	if code, out := t.wp(ctx, "plugin", "activate", "staging-shield"); code != 0 {
 		return Result{Outcome: Failed, Detail: "activating it: " + strings.TrimSpace(out)}
 	}
 	defer func() { _, _ = t.wp(context.WithoutCancel(ctx), "plugin", "deactivate", "staging-shield") }()
-	before, err := t.sentTo(ctx, s.Mailpit)
-	if err != nil {
+	if reached, err = t.delivered(ctx, filepath.Join(dir, "active"), s); err != nil {
 		return Result{Outcome: Failed, Detail: err.Error()}
 	}
+	if reached {
+		return Result{Outcome: Missed, Detail: fmt.Sprintf("with the plugin active, the email to %s still reached the testbed's mail server", s.Mailpit)}
+	}
+	return Result{Outcome: Caught, Found: fmt.Sprintf("with the plugin active, the email to %s did not leave (with it inactive, it did)", s.Mailpit)}
+}
+
+// delivered runs the scenario's action in dir and reports whether a new
+// email to the scenario's address reached Mailpit.
+func (t stagingShield) delivered(ctx context.Context, dir string, s Scenario) (bool, error) {
+	if err := os.MkdirAll(dir, 0o750); err != nil {
+		return false, err
+	}
+	before, err := t.sentTo(ctx, s.Mailpit)
+	if err != nil {
+		return false, err
+	}
 	if err := t.action(ctx, dir, s.Action); err != nil {
-		return Result{Outcome: Failed, Detail: err.Error()}
+		return false, err
 	}
 	after, err := t.sentTo(ctx, s.Mailpit)
 	if err != nil {
-		return Result{Outcome: Failed, Detail: err.Error()}
+		return false, err
 	}
-	if after > before {
-		return Result{Outcome: Missed, Detail: fmt.Sprintf("with the plugin active, the email to %s still reached the testbed's mail server", s.Mailpit)}
-	}
-	return Result{Outcome: Caught, Found: fmt.Sprintf("with the plugin active, the email to %s did not leave", s.Mailpit)}
+	return after > before, nil
 }
 
 // sentTo counts the messages Mailpit holds for address.

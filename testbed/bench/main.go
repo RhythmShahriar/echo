@@ -157,6 +157,9 @@ func run(ctx context.Context, o options) error {
 		}
 	}
 	if testbedUp {
+		if echo.Token, err = TestbedToken(dir); err != nil {
+			return err
+		}
 		for _, name := range toolNames {
 			t := newTool(name, dir, echo, o)
 			if err := t.Ready(ctx); err != nil {
@@ -221,13 +224,13 @@ func run(ctx context.Context, o options) error {
 	if err != nil {
 		return err
 	}
-	if err := os.WriteFile(filepath.Join(o.work, "results.json"), data, 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(o.work, "results.json"), []byte(mask(string(data))), 0o600); err != nil {
 		return err
 	}
 	if err := os.MkdirAll(filepath.Dir(o.out), 0o750); err != nil {
 		return err
 	}
-	if err := os.WriteFile(o.out, []byte(scoreboard(m, res)), 0o600); err != nil {
+	if err := os.WriteFile(o.out, []byte(mask(scoreboard(m, res))), 0o600); err != nil {
 		return err
 	}
 	if binErr != nil {
@@ -284,8 +287,8 @@ func newTool(name, dir string, echo *Echo, o options) Tool {
 			},
 			start: func(ctx context.Context, mode string) error { return echo.Start(ctx, mode) },
 			action: func(ctx context.Context, dir, action string) error {
-				_, err := echo.Run(ctx, o.timeout, dir, "snapshot", "--config", echo.Config(), "--action", action,
-					"--name", "staging-shield", "--fail-on", "none", "--json", "-o", "run.json")
+				_, err := echo.Run(ctx, o.timeout, dir, append([]string{"snapshot", "--config", echo.Config(), "--action", action,
+					"--name", "staging-shield", "--fail-on", "none", "--json", "-o", "run.json"}, Store(dir)...)...)
 				return err
 			}}
 	}
@@ -356,8 +359,8 @@ func benchScenario(ctx context.Context, o options, e *Echo, dir string, m *Manif
 	// --fail-on none: the exit code says only whether the command worked.
 	// A good state with error issues, or a compare that finds changes,
 	// isn't a failure here; Evaluate judges what was found.
-	if _, err := e.Run(ctx, o.timeout, wd, "snapshot", "--config", e.Config(), "--action", s.Action,
-		"--name", "good", "--fail-on", "none", "--json", "-o", "good.json"); err != nil {
+	if _, err := e.Run(ctx, o.timeout, wd, append([]string{"snapshot", "--config", e.Config(), "--action", s.Action,
+		"--name", "good", "--fail-on", "none", "--json", "-o", "good.json"}, Store(wd)...)...); err != nil {
 		return fail("snapshot: %v", err)
 	}
 	good, err := store.LoadRun(filepath.Join(wd, ".echo", "snapshots", "good"))
@@ -374,8 +377,8 @@ func benchScenario(ctx context.Context, o options, e *Echo, dir string, m *Manif
 	if err := Toggle(dir, s.ID, "broken"); err != nil {
 		return fail("%v", err)
 	}
-	_, cerr := e.Run(ctx, o.timeout, wd, "compare", "--config", e.Config(), "--action", s.Action,
-		"--snapshot", "good", "--fail-on", "none", "--json", "-o", "compare.json")
+	_, cerr := e.Run(ctx, o.timeout, wd, append([]string{"compare", "--config", e.Config(), "--action", s.Action,
+		"--snapshot", "good", "--fail-on", "none", "--json", "-o", "compare.json"}, Store(wd)...)...)
 	cmp, err := readComparison(filepath.Join(wd, "compare.json"))
 	switch {
 	case err != nil && cerr != nil:

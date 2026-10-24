@@ -14,13 +14,20 @@ COMPOSE  := docker compose -f docker-compose.yml
 GO       ?= $(shell command -v go 2>/dev/null || echo /usr/local/go/bin/go)
 RUNTIME  := runtime
 ECHO     := $(RUNTIME)/rhythm-echo
-TOKEN    ?= echo-testbed-token
-# Echo keeps its proxy CA in the user cache dir; the testbed keeps its own.
-ECHO_ENV := XDG_CACHE_HOME=$(CURDIR)/$(RUNTIME)/cache RHYTHM_ECHO_TOKEN=$(TOKEN) RHYTHM_ECHO_URL=http://127.0.0.1:18860
+# The token Echo, the connectors, the sendmail shim and the benchmark share.
+# Echo needs one because it listens beyond loopback (v1.1 refuses to
+# without one). make up writes a fresh random one to runtime/token (0600,
+# gitignored) every time, unless TOKEN=... is given; everything after
+# (make echo, the benchmark) reads it from there. It is never printed.
+TOKEN_FILE := $(RUNTIME)/token
+TOKEN    ?= $(shell cat $(TOKEN_FILE) 2>/dev/null)
+# Echo keeps its proxy CA in the user config dir (the cache dir before
+# v1.1); the testbed keeps its own in runtime/ and never touches the user's.
+ECHO_ENV = XDG_CACHE_HOME=$(CURDIR)/$(RUNTIME)/cache XDG_CONFIG_HOME=$(CURDIR)/$(RUNTIME)/config RHYTHM_ECHO_TOKEN=$(TOKEN) RHYTHM_ECHO_URL=http://127.0.0.1:18860
 
 export TESTBED_UID := $(shell id -u)
 export TESTBED_GID := $(shell id -g)
-export TESTBED_TOKEN := $(TOKEN)
+export TESTBED_TOKEN = $(TOKEN)
 
 TOOLS ?= echo mailpit
 export COMPOSE_PROFILES := $(if $(filter buggregator,$(TOOLS)),buggregator)
@@ -32,9 +39,9 @@ export STAGING_SHIELD ?= $(if $(filter staging-shield,$(TOOLS)),1.0.2)
 WORK  := bench/work
 VHS   ?= vhs
 
-.PHONY: up down reset good broken status logs wp echo binaries ca connector apps benchmark reproduce demo
+.PHONY: up down reset good broken status logs wp echo token binaries ca connector apps benchmark reproduce demo
 
-up: binaries ca connector apps ## build, start and seed everything (WordPress is fresh every time)
+up: token binaries ca connector apps ## build, start and seed everything (WordPress is fresh every time)
 	@mkdir -p state
 	$(COMPOSE) build -q wp
 	$(COMPOSE) up -d --wait
@@ -71,7 +78,9 @@ wp: ## run WP-CLI, e.g. make wp ARGS="option get admin_email"
 	bin/wp $(ARGS)
 
 echo: binaries ca ## run Echo in the foreground the way the benchmark does (sealed; OBSERVE=1 for observe mode)
-	$(ECHO_ENV) $(ECHO) up --config .echo/config.yaml --token $(TOKEN) $(if $(OBSERVE),--observe,--seal)
+	@test -n "$(TOKEN)" || { echo "no token in $(TOKEN_FILE): run make up first" >&2; exit 1; }
+	@echo "$(ECHO) up --config .echo/config.yaml $(if $(OBSERVE),--observe,--seal)  (token from $(TOKEN_FILE))"
+	@$(ECHO_ENV) $(ECHO) up --config .echo/config.yaml $(if $(OBSERVE),--observe,--seal)
 
 benchmark: binaries ## run every scenario for Echo and TOOLS; writes ../docs/benchmark.md and bench/work/results.json
 	cd .. && GOWORK=off $(GO) run -tags testbed ./testbed/bench -bin testbed/$(ECHO) -tools "$(TOOLS)"
@@ -92,13 +101,20 @@ binaries:
 	cd .. && GOWORK=off $(GO) build -o testbed/$(ECHO) ./cmd/rhythm-echo
 	cd .. && CGO_ENABLED=0 GOOS=linux GOWORK=off $(GO) build -o testbed/$(RUNTIME)/rhythm-echo-linux ./cmd/rhythm-echo
 
+# A fresh token for this testbed run, or TOKEN from the command line.
+token:
+	@mkdir -p $(RUNTIME)
+	@umask 077 && $(if $(filter command line,$(origin TOKEN)),printf '%s' '$(TOKEN)',od -An -N24 -tx1 /dev/urandom | tr -d ' \n') > $(TOKEN_FILE).tmp && mv $(TOKEN_FILE).tmp $(TOKEN_FILE)
+	@test "$$(wc -c < $(TOKEN_FILE))" -ge 16 || { echo "TOKEN must be at least 16 characters (Echo refuses a shorter one beyond loopback)" >&2; exit 1; }
+
 # The proxy's CA certificate (never its key), mounted into WordPress.
 ca:
 	@$(ECHO_ENV) $(ECHO) ca --pem > $(RUNTIME)/ca.pem.tmp && mv $(RUNTIME)/ca.pem.tmp $(RUNTIME)/ca.pem
 
 # Echo's WordPress connector, into the mounted mu-plugins (gitignored).
 connector:
-	$(ECHO) install wordpress wp --url http://gate:18860 --token $(TOKEN) \
+	@echo "$(ECHO) install wordpress wp --url http://gate:18860 --token ••• --proxy http://echo:•••@gate:18862 --ca /echo-ca/ca.pem"
+	@$(ECHO) install wordpress wp --url http://gate:18860 --token $(TOKEN) \
 		--proxy http://echo:$(TOKEN)@gate:18862 --ca /echo-ca/ca.pem
 
 apps:

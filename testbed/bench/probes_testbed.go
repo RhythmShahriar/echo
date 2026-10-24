@@ -26,11 +26,19 @@ func init() {
 }
 
 // siteStep runs an Echo command against the testbed as the named step,
-// like ProbeEnv.step with the benchmark Echo's environment and binary.
+// like ProbeEnv.step with the benchmark Echo's environment and binary, in
+// dir (created). A snapshot or compare keeps its runs in dir/.echo.
 func (p *ProbeEnv) siteStep(ctx context.Context, name, dir string, args ...string) Observation {
+	if err := os.MkdirAll(dir, 0o750); err != nil {
+		return Observation{Step: name, Exit: -1, Output: err.Error()}
+	}
 	q := *p
 	q.Bin = p.Site.Echo.Bin
-	return q.stepEnv(ctx, name, dir, p.Site.Echo.env(), append(args, "--config", p.Site.Echo.Config())...)
+	args = append(args, "--config", p.Site.Echo.Config())
+	if (args[0] == "snapshot" || args[0] == "compare") && !p.Site.oldCLI {
+		args = append(args, Store(dir)...)
+	}
+	return q.stepEnv(ctx, name, dir, p.Site.Echo.env(), args...)
 }
 
 // setState switches the testbed state file for an environment scenario,
@@ -173,7 +181,7 @@ func versionSkew(ctx context.Context, p *ProbeEnv, broken bool) ([]Observation, 
 	}
 	defer func() {
 		e.Stop()
-		e.Bin = current
+		e.Bin, e.Home = current, ""
 		_ = installConnector(ctx, p, current)
 	}()
 	var obs []Observation
@@ -193,20 +201,32 @@ func versionSkew(ctx context.Context, p *ProbeEnv, broken bool) ([]Observation, 
 	}
 	e.Stop()
 	e.Bin = old
+	if broken {
+		// Its own CA and settings: Echo 1.0.0 keeps its CA where this one
+		// migrates it from and would replace the testbed's.
+		e.Home = filepath.Join(p.Work, "home")
+	}
 	if err := e.Start(ctx, "seal"); err != nil {
 		return nil, err
 	}
 	q := *p
-	q.Site = &SiteBench{Echo: e, Manifest: p.Site.Manifest, Options: p.Site.Options}
-	obs = append(obs, q.siteStep(ctx, "old Echo", filepath.Join(p.Work, "echo"), "snapshot", "--action", "Contact form", "--name", "skew", "--fail-on", "none"))
+	q.Site = &SiteBench{Echo: e, Manifest: p.Site.Manifest, Options: p.Site.Options, oldCLI: broken}
+	args := []string{"snapshot", "--action", "Contact form", "--name", "skew", "--fail-on", "none"}
+	if broken {
+		// Echo 1.0.0's --fail-on has no none; its default (error) only
+		// makes the exit-code check stricter.
+		args = args[:len(args)-2]
+	}
+	obs = append(obs, q.siteStep(ctx, "old Echo", filepath.Join(p.Work, "echo"), args...))
 	return obs, nil
 }
 
 // installConnector writes bin's WordPress connector into the testbed's
 // mu-plugins, as make connector does.
 func installConnector(ctx context.Context, p *ProbeEnv, bin string) error {
-	exit, out := p.run(ctx, p.Testbed, os.Environ(), bin, "install", "wordpress", "wp", "--url", "http://gate:18860", "--token", echoToken,
-		"--proxy", "http://echo:"+echoToken+"@gate:18862", "--ca", "/echo-ca/ca.pem")
+	token := p.Site.Echo.Token
+	exit, out := p.run(ctx, p.Testbed, os.Environ(), bin, "install", "wordpress", "wp", "--url", "http://gate:18860", "--token", token,
+		"--proxy", "http://echo:"+token+"@gate:18862", "--ca", "/echo-ca/ca.pem")
 	if exit != 0 {
 		return fmt.Errorf("%s install wordpress exited %d: %s", filepath.Base(bin), exit, strings.TrimSpace(out))
 	}
@@ -216,8 +236,10 @@ func installConnector(ctx context.Context, p *ProbeEnv, bin string) error {
 // oldEchoTag is the release the version skew probe pits this one against.
 const oldEchoTag = "v1.0.0"
 
-// oldEcho builds Echo 1.0.0 from its git tag, once, with the modules
-// already in the Go cache (no download).
+// oldEcho builds Echo 1.0.0 from its git tag, once. Its modules come from
+// the Go module cache when they are there; otherwise they are downloaded
+// (from GOPROXY, as for any build), so the first run of this probe needs
+// the network unless the cache is warm. Without either the probe says so.
 func (s *SiteBench) oldEcho(ctx context.Context, root string) (string, error) {
 	s.old.once.Do(func() {
 		dir, err := os.MkdirTemp("", "echo-"+oldEchoTag+"-*")
@@ -235,10 +257,19 @@ func (s *SiteBench) oldEcho(ctx context.Context, root string) (string, error) {
 			goBin = "/usr/local/go/bin/go"
 		}
 		bin := filepath.Join(dir, "rhythm-echo-"+strings.TrimPrefix(oldEchoTag, "v"))
-		build := exec.CommandContext(ctx, goBin, "build", "-o", bin, "./cmd/rhythm-echo") //nolint:gosec // building a release of the tool under test
-		build.Dir, build.Env = dir, append(os.Environ(), "GOWORK=off", "GOFLAGS=-mod=mod", "GOPROXY=off")
-		if out, err := build.CombinedOutput(); err != nil {
-			s.old.err = fmt.Errorf("building Echo %s (its modules must be in the Go cache): %w: %s", oldEchoTag, err, out)
+		build := func(env ...string) ([]byte, error) {
+			c := exec.CommandContext(ctx, goBin, "build", "-o", bin, "./cmd/rhythm-echo") //nolint:gosec // building a release of the tool under test
+			c.Dir, c.Env = dir, append(append(os.Environ(), "GOWORK=off", "GOFLAGS=-mod=mod"), env...)
+			return c.CombinedOutput()
+		}
+		// The cache first, so a warm cache never touches the network.
+		if _, err := build("GOPROXY=off"); err == nil {
+			s.old.bin = bin
+			return
+		}
+		if out, err := build(); err != nil {
+			s.old.err = fmt.Errorf("building Echo %s needs its modules, from the Go module cache or downloaded (the network): %w: %s",
+				oldEchoTag, err, strings.TrimSpace(string(out)))
 			return
 		}
 		s.old.bin = bin
