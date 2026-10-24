@@ -6,7 +6,9 @@
 //
 // Delivery goes to Echo's SMTP sink (RHYTHM_ECHO_SMTP, default
 // 127.0.0.1:1025), or to the capture API when only RHYTHM_ECHO_URL is set.
-// Nothing is ever delivered for real.
+// Nothing is ever delivered for real. A message without its own X-Echo-Run
+// header is tagged with RHYTHM_ECHO_RUN, which Echo sets on the commands
+// its actions run, so cron jobs and scripts are tied to their action.
 package sendmail
 
 import (
@@ -36,6 +38,7 @@ const (
 	EnvURL   = "RHYTHM_ECHO_URL"   // Echo's API, e.g. http://127.0.0.1:8025
 	EnvToken = "RHYTHM_ECHO_TOKEN" //nolint:gosec // a variable name, not a credential; sent as X-Echo-Token
 	EnvForce = "RHYTHM_ECHO_FORCE" // "1" lets the shim run where the environment says production
+	EnvRun   = "RHYTHM_ECHO_RUN"   // "<run>/<action>", added as X-Echo-Run when the message has none
 
 	DefaultSMTP = "127.0.0.1:1025"
 )
@@ -238,6 +241,9 @@ func prepare(raw []byte, o options) (msg []byte, from string, rcpts []string, er
 		_, _ = rand.Read(b)
 		add.WriteString("Message-ID: <" + hex.EncodeToString(b) + "@rhythm-echo.sendmail>\r\n")
 	}
+	if run := strings.TrimSpace(os.Getenv(EnvRun)); run != "" && h.Get(wire.RunHeader) == "" && !strings.ContainsAny(run, "\r\n") {
+		add.WriteString(wire.RunHeader + ": " + run + "\r\n")
+	}
 	msg = append(append(append(add.Bytes(), head...), "\r\n"...), body...)
 	return msg, from, rcpts, nil
 }
@@ -327,7 +333,7 @@ func localUser() string {
 	return name + "@" + host
 }
 
-var errUnreachable = errors.New("echo is not reachable")
+var errUnreachable = errors.New("can't reach Echo")
 
 func viaSMTP(addr string, msg []byte, from string, rcpts []string) error {
 	conn, err := net.DialTimeout("tcp", addr, 10*time.Second) //nolint:gosec // the address is the operator's own Echo
@@ -405,7 +411,7 @@ func viaAPI(base, token string, msg []byte, from string, rcpts []string) error {
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		b, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
-		return fmt.Errorf("echo answered %s: %s", resp.Status, strings.TrimSpace(string(b)))
+		return fmt.Errorf("the capture API answered %s: %s", resp.Status, strings.TrimSpace(string(b)))
 	}
 	return nil
 }

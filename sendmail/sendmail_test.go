@@ -31,7 +31,7 @@ func sink(t *testing.T) *catcher.Server {
 }
 
 func clearEnv(t *testing.T) {
-	for _, k := range []string{EnvSMTP, EnvURL, EnvToken, EnvForce, "WP_ENVIRONMENT_TYPE", "APP_ENV", "VERCEL_ENV", "NODE_ENV"} {
+	for _, k := range []string{EnvSMTP, EnvURL, EnvToken, EnvForce, EnvRun, "WP_ENVIRONMENT_TYPE", "APP_ENV", "VERCEL_ENV", "NODE_ENV"} {
 		t.Setenv(k, "")
 	}
 }
@@ -101,6 +101,41 @@ func TestLoneDotEndsMessageWithoutI(t *testing.T) {
 	}
 	if m := one(t, s); strings.Contains(m.Text, "after the dot") {
 		t.Errorf("text = %q", m.Text)
+	}
+}
+
+func TestTagsRunFromEnvironment(t *testing.T) {
+	s := sink(t)
+	t.Setenv(EnvRun, "cron7/nightly-report")
+	if code, errOut := run(t, "Subject: Nightly\n\nAll good\n", "-i", "ops@example.test"); code != 0 {
+		t.Fatalf("exit %d: %s", code, errOut)
+	}
+	if m := one(t, s); m.Run != "cron7" || m.Action != "nightly-report" {
+		t.Errorf("run = %q/%q, want cron7/nightly-report", m.Run, m.Action)
+	}
+	// The message's own header wins over the environment.
+	s = sink(t)
+	t.Setenv(EnvRun, "cron7/nightly-report")
+	if code, errOut := run(t, phpStyle, "-t", "-i"); code != 0 {
+		t.Fatalf("exit %d: %s", code, errOut)
+	}
+	if m := one(t, s); m.Run != "r1" || m.Action != "checkout" {
+		t.Errorf("run = %q/%q, want the header's r1/checkout", m.Run, m.Action)
+	}
+}
+
+func TestTagsRunViaCaptureAPI(t *testing.T) {
+	clearEnv(t)
+	s := catcher.NewServer(catcher.NewInbox(100), catcher.Config{})
+	api := httptest.NewServer(s)
+	defer api.Close()
+	t.Setenv(EnvURL, api.URL)
+	t.Setenv(EnvRun, "job3/welcome")
+	if code, errOut := run(t, "Subject: Welcome\n\nHi\n", "-i", "ann@example.test"); code != 0 {
+		t.Fatalf("exit %d: %s", code, errOut)
+	}
+	if m := one(t, s); m.Run != "job3" || m.Action != "welcome" {
+		t.Errorf("run = %q/%q, want job3/welcome", m.Run, m.Action)
 	}
 }
 
