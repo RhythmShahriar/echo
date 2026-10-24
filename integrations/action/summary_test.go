@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -94,5 +95,92 @@ func golden(t *testing.T, path, got string) {
 	}
 	if got != string(want) {
 		t.Errorf("%s differs (go test -update rewrites it):\n%s", path, got)
+	}
+}
+
+func TestSummaryComment(t *testing.T) {
+	needBash(t, "jq")
+	sh := filepath.Join(root(t), "integrations", "action", "summary.sh")
+	env := []string{"GITHUB_RUN_ID=9", "GITHUB_REPOSITORY=o/r", "GITHUB_SERVER_URL=https://github.com"}
+	cases := []struct {
+		name    string
+		args    []string
+		want    []string
+		private bool // must hide what a message said
+	}{
+		{"comparison", []string{"testdata/comparison.json"}, []string{"**Something broke.** Compared with snapshot \"main\": 1 broke, 1 new, 1 changed.",
+			"**✗ BROKE (1)**\n\n- Email to ***@customer.example is no longer sent (Order form)", "**▲ NEW (1)**",
+			"[this run](https://github.com/o/r/actions/runs/9)"}, true},
+		{"details", []string{"--details", "testdata/comparison.json"}, []string{"- Email to jane.doe@customer.example is no longer sent (Order form)"}, false},
+		{"same", []string{"testdata/same.json"}, []string{"**Everything is still sent the same way.** Compared with the earlier run: 0 broke, 0 new, 0 changed."}, true},
+		{"run", []string{"testdata/run.json"}, []string{"**Something is wrong.** 2 actions run: 1 failed, 1 with errors.",
+			"- Action fails: POST http://127.0.0.1:20519/contact: connection refused (Contact form)",
+			"- Unfilled placeholder {first_name} in email to ***@customer.example (Order form)"}, true},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			out, errOut, code := script(t, sh, env, append([]string{"comment"}, c.args...)...)
+			if code != 0 {
+				t.Fatalf("exit %d: %s", code, errOut)
+			}
+			for _, w := range c.want {
+				if !strings.Contains(out, w) {
+					t.Errorf("comment lacks %q:\n%s", w, out)
+				}
+			}
+			if strings.Contains(out, "CHANGED") || strings.Contains(out, "FIXED") {
+				t.Errorf("comment lists more than broke and new:\n%s", out)
+			}
+			if c.private {
+				for _, p := range private {
+					if strings.Contains(out, p) {
+						t.Errorf("comment shows %q:\n%s", p, out)
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestSummaryError(t *testing.T) {
+	needBash(t, "jq")
+	sh := filepath.Join(root(t), "integrations", "action", "summary.sh")
+	dir := t.TempDir()
+	write := func(name, s string) string {
+		p := filepath.Join(dir, name)
+		if err := os.WriteFile(p, []byte(s), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		return p
+	}
+	var log strings.Builder
+	for i := 1; i <= 40; i++ {
+		log.WriteString("line " + strconv.Itoa(i) + "\n")
+	}
+	log.WriteString("12:00:01 email to jane@x.example: Your order for Jane [sealed]\n```\n")
+	logf := write("echo.log", log.String())
+	errf := write("stderr", "rhythm echo dev - http://shop.test\nrhythm echo: --fail-on \"often\": want broke, new or changed\n")
+
+	out, _, code := script(t, sh, nil, "error", "2", errf, logf)
+	if code != 0 {
+		t.Fatalf("exit %d", code)
+	}
+	for _, w := range []string{"**Echo didn't run: the command line or the config has a mistake (exit 2).**",
+		"```\nrhythm echo: --fail-on \"often\": want broke, new or changed\n```", // quotes kept: they say what was wrong
+		"<summary>The last 30 lines of echo.log</summary>", "line 13\n", "email to ***@x.example: *** [sealed]", "` ` `"} {
+		if !strings.Contains(out, w) {
+			t.Errorf("summary lacks %q:\n%s", w, out)
+		}
+	}
+	for _, p := range []string{"rhythm echo dev", "line 12\n", "jane@", "Your order"} {
+		if strings.Contains(out, p) {
+			t.Errorf("summary shows %q:\n%s", p, out)
+		}
+	}
+
+	// Output without an error line: its end. No log: no log section.
+	out, _, _ = script(t, sh, nil, "error", "3", write("plain", "dial tcp 127.0.0.1:1: connection refused\n"), filepath.Join(dir, "none"))
+	if !strings.Contains(out, "**Echo couldn't run (exit 3).**") || !strings.Contains(out, "connection refused") || strings.Contains(out, "echo.log") {
+		t.Errorf("exit 3 summary:\n%s", out)
 	}
 }

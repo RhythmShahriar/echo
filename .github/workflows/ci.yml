@@ -63,7 +63,7 @@ jobs:
       - if: matrix.php == '8.3'
         run: make -C connectors/laravel analyse PHP=php
 
-  # Windows: the store, config, runner and CLI tests, and a real snapshot
+  # Windows: the store, config, runner and CLI tests plus a real snapshot
   # and compare against the CI fixture under php -S (integrations/ci-fixture).
   go-windows:
     runs-on: windows-latest

@@ -3,6 +3,11 @@
 
 # Echo as a GitHub Action. See the wiki page Echo-CI for examples:
 # https://github.com/RhythmShahriar/rhythm/wiki/Echo-CI
+#
+# The bash steps keep their logic in integrations/action (summary.sh for
+# the job summary and the pull request comment body, comment.sh to post it)
+# and .github/scripts/verify-release.sh; go test ./integrations/action runs
+# these steps locally against the CI fixture.
 name: Rhythm Echo
 description: Is your site still saying what it should? Capture and compare every email, SMS and webhook your site sends, with staging sealed.
 author: Rhythm Shahriar
@@ -13,11 +18,21 @@ branding:
 inputs:
   mode:
     description: >
-      "up" starts Echo in the background for later steps (e.g. rhythm soundcheck --echo) and leaves
-      it running; "snapshot", "compare" or "run" start it, run the actions in .echo/config.yaml,
-      report, and stop it.
+      "snapshot", "compare" or "run" start Echo, run the actions in .echo/config.yaml, report and
+      stop it. "up" starts Echo in the background for later steps (e.g. rhythm soundcheck --echo)
+      and leaves it running; a later step with mode "stop" stops it and reports the latest run.
     required: false
     default: run
+  working-directory:
+    description: >
+      Folder to run Echo in: the one with .echo/ (config, snapshots and runs). Relative to the
+      workspace, e.g. sites/shop in a monorepo.
+    required: false
+    default: "."
+  config:
+    description: Config file, relative to working-directory. Default .echo/config.yaml.
+    required: false
+    default: ""
   name:
     description: Snapshot name for mode snapshot.
     required: false
@@ -25,7 +40,8 @@ inputs:
   fail-on:
     description: >
       Fail on changes at or above broke, new or changed (compare), or issues at or above error,
-      warning or notice (run, snapshot). Default: broke when comparing, error otherwise. "none" never fails.
+      warning or notice (run, snapshot or stop after a run). "none" never fails. Any case. Default,
+      as in the CLI: broke when comparing, error otherwise.
     required: false
     default: ""
   seal:
@@ -62,15 +78,29 @@ inputs:
   upload:
     description: >
       Upload the HTML and JUnit reports as the echo-report workflow artifact. Off by default: the
-      HTML report holds every captured recipient, subject and body, and anyone can download the
+      HTML report holds every captured recipient, subject and body; anyone can download the
       artifacts of a public repository's runs. The Action warns when it is on in a public repository.
     required: false
     default: "false"
+  log:
+    description: >
+      Upload Echo's log as the echo-log artifact when the step fails or finds something, masked
+      like the summary unless summary-details is true.
+    required: false
+    default: "true"
   summary-details:
     description: >
-      Show recipients, subjects and before and after values in the job summary. By default the
-      summary has counts, change titles and action names, with addresses, numbers and quoted text
-      masked, because anyone who can read the repository can read it.
+      Show recipients, subjects and before and after values in the job summary, the pull request
+      comment and the uploaded log. By default they have counts, change titles and action names,
+      with addresses, numbers and quoted text masked, because anyone who can read the repository
+      can read them.
+    required: false
+    default: "false"
+  pr-comment:
+    description: >
+      On a pull request, post one comment listing what broke and what is new, updated on every
+      later run. Needs "permissions: pull-requests: write" in the job; a pull request from
+      a fork gets a read-only token, so the Action warns and carries on.
     required: false
     default: "false"
 
@@ -91,21 +121,27 @@ outputs:
     description: >
       The command's exit code: 0 ok, 1 --fail-on hit, 2 usage error (flags or .echo/config.yaml),
       3 couldn't run, 130 interrupted.
-    value: ${{ steps.check.outputs.exit-code }}
+    value: ${{ steps.check.outputs.exit-code || steps.up.outputs.exit-code }}
   report:
-    description: Path of the standalone HTML report.
-    value: ${{ steps.check.outputs.report }}
+    description: >
+      Path of the standalone HTML report. For mode up, where the later mode stop step writes it.
+    value: ${{ steps.check.outputs.report || steps.up.outputs.report }}
   summary:
     description: Path of a copy of the job summary the Action wrote (Markdown).
-    value: ${{ steps.check.outputs.summary }}
+    value: ${{ steps.check.outputs.summary || steps.up.outputs.summary }}
+  comment-id:
+    description: ID of the pull request comment the Action posted or updated, with pr-comment.
+    value: ${{ steps.comment.outputs.id }}
 
 runs:
   using: composite
   steps:
     - name: Install cosign
+      if: inputs.mode != 'stop'
       uses: sigstore/cosign-installer@d58896d6a1865668819e1d91763c7751a165e159 # v3.9.2
 
     - name: Install Echo
+      if: inputs.mode != 'stop'
       shell: bash
       env:
         VERSION: ${{ inputs.version }}
@@ -143,18 +179,40 @@ runs:
 
     - name: Start Echo
       id: up
+      if: inputs.mode != 'stop'
       shell: bash
+      working-directory: ${{ inputs.working-directory }}
       env:
+        MODE: ${{ inputs.mode }}
         SEAL: ${{ inputs.seal }}
         LISTEN: ${{ inputs.listen }}
         SMTP: ${{ inputs.smtp }}
+        CONFIG: ${{ inputs.config }}
+        SUMMARY: ${{ github.action_path }}/integrations/action/summary.sh
       run: |
         set -euo pipefail
+        log="$RUNNER_TEMP/echo.log"
+        md="$RUNNER_TEMP/echo-summary.md"
+        # stop writes the summary and exit code of a failed start, so the
+        # job summary says why whatever the mode.
+        stop() {
+          echo "exit-code=$1" >> "$GITHUB_OUTPUT"
+          echo "::error::$2"
+          printf 'rhythm echo: %s\n' "$2" > "$RUNNER_TEMP/echo-error.txt"
+          bash "$SUMMARY" error "$1" "$RUNNER_TEMP/echo-error.txt" "$log" > "$md" || true
+          cat "$md" >> "$GITHUB_STEP_SUMMARY"
+          echo "summary=$md" >> "$GITHUB_OUTPUT"
+          exit "$1"
+        }
+        : > "$log"
+        case "$MODE" in snapshot|compare|run|up) ;; *) stop 2 "mode must be snapshot, compare, run, up or stop, not \"$MODE\"" ;; esac
         case "$SEAL" in
           true|seal) flag=--seal ;;
           false|observe) flag=--observe ;;
-          *) echo "::error::seal must be true or false, not $SEAL"; exit 2 ;;
+          *) stop 2 "seal must be true or false, not \"$SEAL\"" ;;
         esac
+        config=()
+        [ -z "$CONFIG" ] || config=(--config "$CONFIG")
         # host_of prints the host of host:port, without IPv6 brackets.
         host_of() { local h=${1%:*}; h=${h#[}; echo "${h%]}"; }
         loopback() { case "$(host_of "$1")" in 127.*|localhost|::1) return 0 ;; *) return 1 ;; esac; }
@@ -163,7 +221,7 @@ runs:
           token=$(head -c 24 /dev/urandom | od -An -tx1 | tr -d ' \n')
           echo "::add-mask::$token"
         fi
-        RHYTHM_ECHO_TOKEN="$token" nohup rhythm-echo up "$flag" --listen "$LISTEN" --smtp "$SMTP" --plain > "$RUNNER_TEMP/echo.log" 2>&1 &
+        RHYTHM_ECHO_TOKEN="$token" nohup rhythm-echo up "$flag" --listen "$LISTEN" --smtp "$SMTP" ${config[@]+"${config[@]}"} --plain > "$log" 2>&1 &
         echo $! > "$RUNNER_TEMP/echo.pid"
         # local: how steps on the runner reach Echo. site: how the site does,
         # which for a wildcard listen is the runner's own address.
@@ -178,14 +236,22 @@ runs:
           echo "$h:$port"
         }
         local_url="http://$(addr "$LISTEN" local)"
+        pid=$(cat "$RUNNER_TEMP/echo.pid")
         for _ in $(seq 1 50); do
           curl -fsS -H "X-Echo-Token: $token" "$local_url/v1/health" >/dev/null 2>&1 && break
+          # Echo exited (a bad config, a port in use): pass its exit code on.
+          if ! kill -0 "$pid" 2>/dev/null; then
+            code=0
+            wait "$pid" || code=$?
+            cat "$log"
+            [ "$code" -ge 2 ] || code=3
+            stop "$code" "Echo stopped as it started (exit $code); its log is below"
+          fi
           sleep 0.2
         done
         if ! curl -fsS -H "X-Echo-Token: $token" "$local_url/v1/health"; then
-          cat "$RUNNER_TEMP/echo.log"
-          echo "::error::Echo didn't start at $local_url"
-          exit 3
+          cat "$log"
+          stop 3 "Echo didn't start at $local_url"
         fi
         echo
         {
@@ -195,57 +261,128 @@ runs:
         } >> "$GITHUB_OUTPUT"
         echo "RHYTHM_ECHO_URL=$local_url" >> "$GITHUB_ENV"
         [ -z "$token" ] || echo "RHYTHM_ECHO_TOKEN=$token" >> "$GITHUB_ENV"
+        if [ "$MODE" = up ]; then
+          printf '## ♪ Echo\n\nEcho is running at %s (%s). A later step with `mode: stop` stops it and reports the latest run.\n' "$local_url" "${flag#--}" > "$md"
+          cat "$md" >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo "summary=$md"
+            echo "report=$RUNNER_TEMP/echo-report/echo-report.html"
+          } >> "$GITHUB_OUTPUT"
+        fi
 
     - name: Run Echo
       id: check
       if: inputs.mode != 'up'
       shell: bash
+      working-directory: ${{ inputs.working-directory }}
       env:
         MODE: ${{ inputs.mode }}
         NAME: ${{ inputs.name }}
         FAIL_ON: ${{ inputs.fail-on }}
+        CONFIG: ${{ inputs.config }}
         ARGS: ${{ inputs.args }}
         UPLOAD: ${{ inputs.upload }}
         DETAILS: ${{ inputs.summary-details }}
         PRIVATE: ${{ github.event.repository.private }}
         SUMMARY: ${{ github.action_path }}/integrations/action/summary.sh
       run: |
-        set -uo pipefail
-        level=$FAIL_ON
-        if [ -z "$level" ]; then
-          case "$MODE" in compare) level=broke ;; *) level=error ;; esac
+        # The runner starts bash with -e; this step reads exit codes itself.
+        set +e -uo pipefail
+        out="$RUNNER_TEMP/echo-report"
+        md="$RUNNER_TEMP/echo-summary.md"
+        json="$RUNNER_TEMP/echo-report.json"
+        errf="$RUNNER_TEMP/echo-error.txt"
+        mkdir -p "$out"
+        rm -f "$json"
+        : > "$errf"
+        # finish writes the summary of a command that couldn't run (exit 2
+        # and up) and exits with its code.
+        finish() {
+          echo "exit-code=$1" >> "$GITHUB_OUTPUT"
+          bash "$SUMMARY" error "$1" "$errf" "$RUNNER_TEMP/echo.log" > "$md" || true
+          cat "$md" >> "$GITHUB_STEP_SUMMARY"
+          echo "summary=$md" >> "$GITHUB_OUTPUT"
+          exit "$1"
+        }
+        usage() {
+          printf 'rhythm echo: %s\n' "$1" | tee "$errf" >&2
+          echo "::error::$1"
+          finish 2
+        }
+
+        compared=false
+        [ "$MODE" = compare ] && compared=true
+        if [ "$MODE" = stop ]; then
+          # Stop Echo first, so the log is complete and nothing more arrives.
+          if [ -f "$RUNNER_TEMP/echo.pid" ]; then
+            pid=$(cat "$RUNNER_TEMP/echo.pid")
+            kill "$pid" 2>/dev/null || true
+            for _ in $(seq 1 50); do kill -0 "$pid" 2>/dev/null || break; sleep 0.1; done
+            rm -f "$RUNNER_TEMP/echo.pid"
+          else
+            echo "::warning::No Echo to stop: run the Action with mode up first."
+          fi
+          if ! rhythm-echo report --json -o "$json" -q 2>/dev/null; then
+            printf '## ♪ Echo\n\nEcho stopped. There was no run in %s to report.\n' "$PWD" > "$md"
+            cat "$md" >> "$GITHUB_STEP_SUMMARY"
+            { echo "exit-code=0"; echo "summary=$md"; } >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          jq -e 'has("changes")' "$json" >/dev/null && compared=true
+        fi
+
+        # One --fail-on vocabulary, as in the CLI: any case, none never fails,
+        # and the default is broke when comparing and error otherwise.
+        level=$(printf '%s' "$FAIL_ON" | tr '[:upper:]' '[:lower:]')
+        if [ "$compared" = true ]; then
+          case "$level" in
+            "") level=broke ;;
+            none|broke|new|changed) ;;
+            *) usage "fail-on \"$FAIL_ON\": want none, broke, new or changed when comparing" ;;
+          esac
+        else
+          case "$level" in
+            "") level=error ;;
+            none|error|warning|notice) ;;
+            *) usage "fail-on \"$FAIL_ON\": want none, error, warning or notice (or broke, new, changed when comparing)" ;;
+          esac
         fi
         fail=()
         [ "$level" = none ] || fail=(--fail-on "$level")
+        config=()
+        [ -z "$CONFIG" ] || config=(--config "$CONFIG")
         # Split ARGS like a shell (quotes group words) without running it:
         # xargs only parses quotes.
         extra=()
         if [ -n "$ARGS" ]; then
           while IFS= read -r a; do extra+=("$a"); done < <(printf '%s' "$ARGS" | xargs -n1 printf '%s\n')
         fi
+        which=()
         case "$MODE" in
-          snapshot) cmd=(rhythm-echo snapshot --name "$NAME") ;;
+          snapshot) cmd=(rhythm-echo snapshot --name "$NAME"); which=("$NAME") ;;
           compare)  cmd=(rhythm-echo compare) ;;
           run)      cmd=(rhythm-echo run) ;;
-          *) echo "::error::unknown mode $MODE"; exit 2 ;;
+          stop)     cmd=(rhythm-echo report) ;;
+          *) usage "mode must be snapshot, compare, run, up or stop, not \"$MODE\"" ;;
         esac
-        "${cmd[@]}" ${fail[@]+"${fail[@]}"} ${extra[@]+"${extra[@]}"} --plain
+        [ "$MODE" = stop ] || cmd+=(${config[@]+"${config[@]}"})
+        # stderr goes to a file for the summary, then to the step log.
+        "${cmd[@]}" ${fail[@]+"${fail[@]}"} ${extra[@]+"${extra[@]}"} --plain 2> "$errf"
         code=$?
+        cat "$errf" >&2
+        [ "$code" -ge 2 ] && finish "$code"
         echo "exit-code=$code" >> "$GITHUB_OUTPUT"
-        [ "$code" -ge 2 ] && exit "$code"
-        which=()
-        [ "$MODE" = snapshot ] && which=("$NAME")
-        out="$RUNNER_TEMP/echo-report"
-        mkdir -p "$out"
-        # The summary is masked unless summary-details: true; a copy stays
-        # outside the uploaded folder for the summary output.
-        md="$RUNNER_TEMP/echo-summary.md"
+
+        # The summary is masked unless summary-details: true. A copy stays
+        # outside the uploaded folder for the summary output; so does the JSON
+        # for the pull request comment.
+        rhythm-echo report ${which[@]+"${which[@]}"} --json -o "$json" -q || true
         if [ "$DETAILS" = true ]; then
           rhythm-echo report ${which[@]+"${which[@]}"} --md > "$md" || true
-        elif rhythm-echo report ${which[@]+"${which[@]}"} --json -o "$RUNNER_TEMP/echo-report.json" -q; then
-          bash "$SUMMARY" report "$RUNNER_TEMP/echo-report.json" > "$md" || true
-          rm -f "$RUNNER_TEMP/echo-report.json"
+        elif [ -s "$json" ]; then
+          bash "$SUMMARY" report "$json" > "$md" || true
         fi
+        [ -s "$md" ] || printf '## ♪ Echo\n\nThe report could not be written; see the step log.\n' > "$md"
         cat "$md" >> "$GITHUB_STEP_SUMMARY"
         echo "summary=$md" >> "$GITHUB_OUTPUT"
         if [ "$UPLOAD" = true ] && [ "$PRIVATE" = false ]; then
@@ -257,7 +394,7 @@ runs:
         exit 0
 
     - name: Stop Echo
-      if: always() && inputs.mode != 'up'
+      if: always() && inputs.mode != 'up' && inputs.mode != 'stop'
       shell: bash
       run: |
         [ -f "$RUNNER_TEMP/echo.pid" ] && kill "$(cat "$RUNNER_TEMP/echo.pid")" 2>/dev/null || true
@@ -269,6 +406,56 @@ runs:
         name: echo-report
         path: ${{ runner.temp }}/echo-report/
         if-no-files-found: ignore
+
+    - name: Prepare the log
+      id: log
+      if: always() && inputs.log == 'true' && (failure() || (steps.check.outputs.exit-code != '' && steps.check.outputs.exit-code != '0'))
+      shell: bash
+      env:
+        DETAILS: ${{ inputs.summary-details }}
+        SUMMARY: ${{ github.action_path }}/integrations/action/summary.sh
+      run: |
+        [ -f "$RUNNER_TEMP/echo.log" ] || exit 0
+        mkdir -p "$RUNNER_TEMP/echo-log"
+        if [ "$DETAILS" = true ]; then
+          cp "$RUNNER_TEMP/echo.log" "$RUNNER_TEMP/echo-log/echo.log"
+        else
+          bash "$SUMMARY" mask < "$RUNNER_TEMP/echo.log" > "$RUNNER_TEMP/echo-log/echo.log"
+        fi
+        echo "path=$RUNNER_TEMP/echo-log/echo.log" >> "$GITHUB_OUTPUT"
+
+    - name: Upload the log
+      if: always() && steps.log.outputs.path != ''
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      with:
+        name: echo-log
+        path: ${{ steps.log.outputs.path }}
+        if-no-files-found: ignore
+
+    - name: Comment on the pull request
+      id: comment
+      if: always() && inputs.pr-comment == 'true' && (github.event_name == 'pull_request' || github.event_name == 'pull_request_target')
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+        PR: ${{ github.event.pull_request.number }}
+        KEY: ${{ inputs.working-directory }}
+        CODE: ${{ steps.check.outputs.exit-code || steps.up.outputs.exit-code }}
+        DETAILS: ${{ inputs.summary-details }}
+        SUMMARY: ${{ github.action_path }}/integrations/action/summary.sh
+        COMMENT: ${{ github.action_path }}/integrations/action/comment.sh
+      run: |
+        body="$RUNNER_TEMP/echo-comment.md"
+        details=()
+        [ "$DETAILS" = true ] && details=(--details)
+        if [ -n "$CODE" ] && [ "$CODE" -ge 2 ]; then
+          bash "$SUMMARY" error "$CODE" "$RUNNER_TEMP/echo-error.txt" /dev/null > "$body"
+        elif [ -s "$RUNNER_TEMP/echo-report.json" ]; then
+          bash "$SUMMARY" comment ${details[@]+"${details[@]}"} "$RUNNER_TEMP/echo-report.json" > "$body"
+        else
+          exit 0
+        fi
+        bash "$COMMENT" "$body"
 
     - name: Fail on changes
       if: steps.check.outputs.exit-code == '1'

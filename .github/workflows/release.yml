@@ -7,7 +7,7 @@ on:
     tags: ["v*"]
 jobs:
   release:
-    # Pinned by commit. The cosign certificate records this ref, and the
+    # Pinned by commit. The cosign certificate records this ref; the
     # Action's verify-release.sh accepts a branch, tag or commit here.
     uses: RhythmShahriar/.github/.github/workflows/release-go.yml@d296f34c9b6629211c68561504d938c404afaf74 # master
     permissions:

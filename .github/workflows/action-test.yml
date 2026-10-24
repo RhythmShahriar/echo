@@ -31,7 +31,12 @@ jobs:
         run: |
           rhythm-echo --version
           curl -fsS "$RHYTHM_ECHO_URL/v1/health"
-          kill "$(cat "$RUNNER_TEMP/echo.pid")"
+      - uses: ./
+        with:
+          mode: stop
+      - name: Echo stopped
+        run: |
+          if curl -fsS "$RHYTHM_ECHO_URL/v1/health"; then echo "::error::Echo still runs"; exit 1; fi
 
   # A release whose checksums.txt or archive changed after signing must
   # never install.
@@ -89,14 +94,14 @@ jobs:
         with:
           mode: snapshot
           name: good
-          args: --config integrations/ci-fixture/.echo/config.yaml
+          working-directory: integrations/ci-fixture
       - run: touch integrations/ci-fixture/php/broken
       - uses: ./
         id: masked
         with:
           mode: compare
           fail-on: none
-          args: --config integrations/ci-fixture/.echo/config.yaml
+          working-directory: integrations/ci-fixture
       - name: The summary is masked
         env:
           SUMMARY: ${{ steps.masked.outputs.summary }}
@@ -114,7 +119,7 @@ jobs:
           mode: compare
           fail-on: none
           summary-details: "true"
-          args: --config integrations/ci-fixture/.echo/config.yaml
+          working-directory: integrations/ci-fixture
       - name: summary-details shows everything
         env:
           SUMMARY: ${{ steps.details.outputs.summary }}
@@ -127,3 +132,123 @@ jobs:
         run: |
           names=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/artifacts" --jq '.artifacts[].name')
           if printf '%s\n' "$names" | grep -qx echo-report; then echo "::error::the report was uploaded by default"; exit 1; fi
+
+  # A site in a subfolder with an explicit config file. Echo is then left
+  # running with mode up for a later step and stopped with mode stop.
+  monorepo:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Move the fixture into a monorepo layout
+        run: |
+          mkdir -p "$RUNNER_TEMP/mono/sites" && cp -r integrations/ci-fixture "$RUNNER_TEMP/mono/sites/shop"
+          mv "$RUNNER_TEMP/mono" ./mono
+          php -S 127.0.0.1:20510 mono/sites/shop/php/index.php > "$RUNNER_TEMP/php.log" 2>&1 &
+      - uses: ./
+        id: snap
+        with:
+          mode: snapshot
+          name: good
+          working-directory: mono/sites/shop
+          config: .echo/config.yaml
+      - name: The snapshot is in the subfolder
+        run: test -d mono/sites/shop/.echo/snapshots/good
+      - uses: ./
+        id: up
+        with:
+          mode: up
+          working-directory: mono/sites/shop
+      - name: A later step runs the checks
+        working-directory: mono/sites/shop
+        run: rhythm-echo run --plain
+      - uses: ./
+        id: stop
+        with:
+          mode: stop
+          working-directory: mono/sites/shop
+      - name: stop reported the run where up said
+        env:
+          WANT: ${{ steps.up.outputs.report }}
+          GOT: ${{ steps.stop.outputs.report }}
+          SUMMARY: ${{ steps.stop.outputs.summary }}
+        run: |
+          cat "$SUMMARY"
+          test "$WANT" = "$GOT" && test -s "$GOT"
+          grep -F '1 action run; 1 email sent.' "$SUMMARY"
+
+  # Echo can't run (exit 3) and a usage error (exit 2): the step fails and
+  # the job summary still says why.
+  couldnt-run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: ./
+        id: dead
+        continue-on-error: true
+        with:
+          working-directory: integrations/ci-fixture
+          args: --url http://127.0.0.1:20519   # nothing listens there
+      - uses: ./
+        id: usage
+        continue-on-error: true
+        with:
+          working-directory: integrations/ci-fixture
+          mode: compare
+          fail-on: sometimes
+      - name: Both failed with a summary
+        env:
+          DEAD: ${{ steps.dead.outcome }} ${{ steps.dead.outputs.exit-code }}
+          USAGE: ${{ steps.usage.outcome }} ${{ steps.usage.outputs.exit-code }}
+          DEAD_SUMMARY: ${{ steps.dead.outputs.summary }}
+          USAGE_SUMMARY: ${{ steps.usage.outputs.summary }}
+        run: |
+          test "$DEAD" = "failure 3" && test "$USAGE" = "failure 2"
+          grep -F "**Echo couldn't run (exit 3).**" "$DEAD_SUMMARY"
+          grep -F "The last 30 lines of echo.log" "$DEAD_SUMMARY"
+          grep -F 'fail-on "sometimes": want none, broke, new or changed when comparing' "$USAGE_SUMMARY"
+
+  # pr-comment posts one comment, then updates it. Only on pull requests
+  # from this repository: a fork's token can't write.
+  pr-comment:
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - run: php -S 127.0.0.1:20510 integrations/ci-fixture/php/index.php > "$RUNNER_TEMP/php.log" 2>&1 &
+      - uses: ./
+        with:
+          mode: snapshot
+          name: good
+          working-directory: integrations/ci-fixture
+      - run: touch integrations/ci-fixture/php/broken
+      - uses: ./
+        id: first
+        with:
+          mode: compare
+          fail-on: none
+          pr-comment: "true"
+          working-directory: integrations/ci-fixture
+      - uses: ./
+        id: second
+        with:
+          mode: compare
+          fail-on: none
+          pr-comment: "true"
+          working-directory: integrations/ci-fixture
+      - name: One comment, with what broke, masked
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FIRST: ${{ steps.first.outputs.comment-id }}
+          SECOND: ${{ steps.second.outputs.comment-id }}
+        run: |
+          test -n "$FIRST" && test "$FIRST" = "$SECOND"
+          body=$(gh api "repos/$GITHUB_REPOSITORY/issues/comments/$FIRST" --jq .body)
+          printf '%s\n' "$body"
+          grep -F '<!-- rhythm-echo comment: integrations/ci-fixture -->' <<< "$body"
+          grep -F '**✗ BROKE (1)**' <<< "$body"
+          grep -F '**▲ NEW (1)**' <<< "$body"
+          if grep -F customer@example.com <<< "$body"; then echo "::error::the comment shows a recipient"; exit 1; fi
+          gh api -X DELETE "repos/$GITHUB_REPOSITORY/issues/comments/$FIRST"

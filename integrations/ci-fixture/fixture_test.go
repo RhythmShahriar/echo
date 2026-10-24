@@ -157,4 +157,3 @@ func waitTCP(t *testing.T, addr string) {
 	}
 	t.Fatalf("%s didn't open", addr)
 }
-

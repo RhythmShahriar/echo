@@ -23,7 +23,7 @@ func root(t *testing.T) string {
 	return r
 }
 
-// needBash skips on Windows, where the Action doesn't run, and where bash
+// needBash skips on Windows (where the Action doesn't run) and where bash
 // or the named tools are missing.
 func needBash(t *testing.T, tools ...string) {
 	t.Helper()
@@ -37,7 +37,7 @@ func needBash(t *testing.T, tools ...string) {
 	}
 }
 
-// script runs a bash script with args and extra environment, and returns
+// script runs a bash script with args and extra environment. It returns
 // its stdout, stderr and exit code.
 func script(t *testing.T, path string, env []string, args ...string) (stdout, stderr string, code int) {
 	t.Helper()

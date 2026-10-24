@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT
 
 # The slow suites, every night and on demand: the Docker tests (a sealed
-# container network, PHP's mail() through rhythm-echo sendmail, and the
+# container network, PHP's mail() through rhythm-echo sendmail plus the
 # WordPress connector inside a real WordPress) and WordPress's Plugin Check
 # on the mu-plugin.
 name: nightly
