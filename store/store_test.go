@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -596,4 +597,41 @@ func strays(t *testing.T, s Store) []string {
 		}
 	}
 	return left
+}
+
+// TestFoldersAreOwnerOnly: every folder the store makes is 0700, whoever
+// calls it (the CLI, MCP or the hub), and a runs or snapshots folder an
+// older version made 0750 is tightened.
+func TestFoldersAreOwnerOnly(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("no Unix modes")
+	}
+	s := Store{Root: filepath.Join(t.TempDir(), ".echo")}
+	if err := os.MkdirAll(filepath.Join(s.Root, Runs), 0o750); err != nil { //nolint:gosec // an older version's mode, on purpose
+		t.Fatal(err)
+	}
+	run, err := s.NewDir(Runs, "r")
+	if err != nil {
+		t.Fatal(err)
+	}
+	in, err := s.NewDir(Incoming, "good")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := SaveRun(in, &model.Run{Schema: model.Schema, Name: "good"}); err != nil {
+		t.Fatal(err)
+	}
+	snap, err := s.Promote(in, "good")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, d := range []string{filepath.Join(s.Root, Runs), run, filepath.Join(s.Root, "snapshots"), snap} {
+		fi, err := os.Stat(d)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if m := fi.Mode().Perm(); m != 0o700 {
+			t.Errorf("%s is %o, want 700", d, m)
+		}
+	}
 }

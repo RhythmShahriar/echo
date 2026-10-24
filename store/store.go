@@ -71,6 +71,21 @@ func Stamp(t time.Time) string { return t.Format("2006-01-02T15-04-05") }
 // Runs holds recent runs and comparisons, one folder each.
 const Runs = "runs"
 
+// dirMode is the mode of every folder the store makes: its files hold
+// captured messages (recipients, bodies), so only the owner may list
+// them, as only the owner may read the files (0600).
+const dirMode = 0o700
+
+// mkdirParent makes the folder dir sits in (runs or snapshots) and makes
+// it dirMode if an older version left it more open.
+func mkdirParent(dir string) error {
+	parent := filepath.Dir(dir)
+	if err := os.MkdirAll(parent, dirMode); err != nil {
+		return err
+	}
+	return os.Chmod(parent, dirMode)
+}
+
 // NewDir creates a folder for kind and returns it. For Runs it's
 // runs/<name>-<6 random hex digits>, made with a plain mkdir that retries
 // on a clash, so runs started in the same second (Stamp has one-second
@@ -89,15 +104,18 @@ func (s Store) NewDir(kind, name string) (string, error) {
 		if err := os.RemoveAll(dir); err != nil {
 			return "", err
 		}
-		return dir, os.MkdirAll(dir, 0o750)
+		if err := mkdirParent(dir); err != nil {
+			return "", err
+		}
+		return dir, os.Mkdir(dir, dirMode)
 	case Runs:
 		parent := filepath.Join(s.Root, Runs)
-		if err := os.MkdirAll(parent, 0o750); err != nil {
+		if err := mkdirParent(filepath.Join(parent, "x")); err != nil {
 			return "", err
 		}
 		for range 16 {
 			dir := filepath.Join(parent, name+"-"+randomHex(3))
-			err := os.Mkdir(dir, 0o750)
+			err := os.Mkdir(dir, dirMode)
 			if err == nil {
 				return dir, nil
 			}
@@ -108,10 +126,10 @@ func (s Store) NewDir(kind, name string) (string, error) {
 		return "", fmt.Errorf("no free folder for %s in %s", name, parent)
 	}
 	dir := filepath.Join(s.Root, kind, name)
-	if err := os.MkdirAll(filepath.Dir(dir), 0o750); err != nil {
+	if err := mkdirParent(dir); err != nil {
 		return "", err
 	}
-	return dir, os.Mkdir(dir, 0o750)
+	return dir, os.Mkdir(dir, dirMode)
 }
 
 func randomHex(n int) string {
@@ -164,7 +182,7 @@ func (s Store) Promote(dir, name string) (string, error) {
 		return "", err
 	}
 	final := filepath.Join(s.Root, "snapshots", name)
-	if err := os.MkdirAll(filepath.Dir(final), 0o750); err != nil {
+	if err := os.MkdirAll(filepath.Dir(final), dirMode); err != nil {
 		return "", err
 	}
 	names, err := s.Snapshots()
@@ -227,7 +245,7 @@ func (s Store) migrateLatest() {
 // and a rename, removing the temp file whenever a step fails, so a
 // failure never leaves a half-written pointer or a stray file behind.
 func writeAtomic(path string, data []byte) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), dirMode); err != nil {
 		return err
 	}
 	tmp, err := os.CreateTemp(filepath.Dir(path), filepath.Base(path)+".tmp-*")
