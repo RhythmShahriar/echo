@@ -1,0 +1,79 @@
+// Process-wide state. It lives on globalThis under a registered symbol, not
+// in module scope, because one process can load this package twice: the ESM
+// build through `node --import @rhythm/echo/register` and the CJS build
+// through the app's `require('@rhythm/echo')`, or a bundled copy next to an
+// external one. Both copies must patch once and share one run context.
+
+import type { Config } from './config.js';
+
+export interface Context {
+  /** "<run>/<action>" from X-Echo-Run. */
+  run?: string;
+  /** The incoming request's host: the site itself, never captured. */
+  host?: string;
+}
+
+export type Resolver = () => Context | undefined | Promise<Context | undefined>;
+
+export interface ALS<T> {
+  getStore(): T | undefined;
+  run<R>(store: T, fn: () => R): R;
+}
+
+export interface State {
+  cfg?: Config;
+  active: boolean;
+  /** Echo's mode from its last answer; seal until Echo says otherwise, so an unreachable Echo fails closed. */
+  mode: string;
+  origFetch?: typeof fetch;
+  patched: Set<string>;
+  als?: ALS<Context>;
+  /** Framework hooks that find the current request (Next.js), tried after the AsyncLocalStorage. */
+  resolvers: Resolver[];
+  warned: Set<string>;
+  /** "after" captures still on their way, for flush(). */
+  inflight: Set<Promise<unknown>>;
+}
+
+const KEY = Symbol.for('rhythm.echo.state');
+
+export function state(): State {
+  const g = globalThis as unknown as Record<symbol, State | undefined>;
+  let s = g[KEY];
+  if (!s) {
+    s = { active: false, mode: 'seal', patched: new Set(), resolvers: [], warned: new Set(), inflight: new Set() };
+    g[KEY] = s;
+  }
+  return s;
+}
+
+/** warnOnce logs a problem the first time it happens, so a broken Echo doesn't flood the app's logs. */
+export function warnOnce(key: string, msg: string): void {
+  const s = state();
+  if (s.warned.has(key)) return;
+  s.warned.add(key);
+  (s.cfg?.logger ?? console).warn(`[rhythm-echo] ${msg}`);
+}
+
+type ALSCtor = new <T>() => ALS<T>;
+
+/**
+ * als returns the shared AsyncLocalStorage: Next.js's Edge runtime puts the
+ * class on globalThis, Node has it in node:async_hooks. Reached through
+ * process.getBuiltinModule so this file stays importable from Edge bundles.
+ */
+export function als(): ALS<Context> | undefined {
+  const s = state();
+  if (s.als) return s.als;
+  let Ctor = (globalThis as { AsyncLocalStorage?: ALSCtor }).AsyncLocalStorage;
+  if (!Ctor) {
+    const p = (globalThis as { process?: { getBuiltinModule?: (id: string) => unknown } }).process;
+    try {
+      Ctor = (p?.getBuiltinModule?.('node:async_hooks') as { AsyncLocalStorage?: ALSCtor } | undefined)?.AsyncLocalStorage;
+    } catch {
+      Ctor = undefined;
+    }
+  }
+  if (Ctor) s.als = new Ctor<Context>();
+  return s.als;
+}

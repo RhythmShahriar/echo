@@ -1,0 +1,101 @@
+{
+  "name": "@rhythm/echo",
+  "version": "0.1.0",
+  "description": "Echo connector for Next.js and Node: captures outbound email and HTTP (fetch, http/https, Nodemailer) and seals staging sites.",
+  "keywords": [
+    "echo",
+    "rhythm",
+    "nextjs",
+    "staging",
+    "email",
+    "webhook",
+    "nodemailer",
+    "fetch",
+    "testing"
+  ],
+  "license": "MIT",
+  "author": "Rhythm Shahriar",
+  "homepage": "https://github.com/RhythmShahriar/echo/tree/master/connectors/node#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/RhythmShahriar/echo.git",
+    "directory": "connectors/node"
+  },
+  "bugs": {
+    "url": "https://github.com/RhythmShahriar/echo/issues"
+  },
+  "type": "module",
+  "main": "./dist/cjs/index.js",
+  "module": "./dist/esm/index.js",
+  "types": "./dist/cjs/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/esm/index.d.ts",
+        "default": "./dist/esm/index.js"
+      },
+      "require": {
+        "types": "./dist/cjs/index.d.ts",
+        "default": "./dist/cjs/index.js"
+      }
+    },
+    "./next": {
+      "import": {
+        "types": "./dist/esm/next.d.ts",
+        "default": "./dist/esm/next.js"
+      },
+      "require": {
+        "types": "./dist/cjs/next.d.ts",
+        "default": "./dist/cjs/next.js"
+      }
+    },
+    "./register": {
+      "import": {
+        "types": "./dist/esm/register.d.ts",
+        "default": "./dist/esm/register.js"
+      },
+      "require": {
+        "types": "./dist/cjs/register.d.ts",
+        "default": "./dist/cjs/register.js"
+      }
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "sideEffects": [
+    "./dist/esm/register.js",
+    "./dist/cjs/register.js"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "typecheck": "tsc -p tsconfig.json",
+    "lint": "tsc -p tsconfig.json",
+    "pretest": "npm run build",
+    "test": "vitest run",
+    "test:e2e": "npm run build && node fixtures/e2e.mjs",
+    "prepack": "npm run build"
+  },
+  "devDependencies": {
+    "@sendgrid/mail": "^8.1.6",
+    "@types/node": "^24.19.2",
+    "@types/nodemailer": "^8.0.2",
+    "axios": "^1.20.0",
+    "nodemailer": "^10.2.1",
+    "postmark": "^5.1.0",
+    "resend": "^6.34.1",
+    "twilio": "^6.2.0",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.5"
+  }
+}
