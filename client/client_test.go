@@ -143,3 +143,27 @@ func TestHealthFromOldEcho(t *testing.T) {
 		t.Errorf("old health: %+v %v", h, err)
 	}
 }
+
+func TestBeginExclusive(t *testing.T) {
+	srv := httptest.NewServer(catcher.NewServer(catcher.NewInbox(10), catcher.Config{Version: "test"}))
+	defer srv.Close()
+	ctx := context.Background()
+	c := New(srv.URL, "")
+	if h, _ := c.Health(ctx); !h.Supports("exclusive") {
+		t.Fatalf("capabilities: %v", h.Capabilities)
+	}
+	lease, err := c.BeginExclusive(ctx, "r1", "pay", 0)
+	if err != nil || lease == "" {
+		t.Fatalf("begin: %q %v", lease, err)
+	}
+	_, err = c.BeginExclusive(ctx, "r2", "pay", 20*time.Millisecond)
+	if !IsBusy(err) || !strings.Contains(err.Error(), "r1/pay holds Echo exclusively") {
+		t.Fatalf("second exclusive: %v", err)
+	}
+	if err := c.EndLease(ctx, lease); err != nil {
+		t.Fatal(err)
+	}
+	if l, err := c.BeginLease(ctx, "r3", "signup"); err != nil || l == "" || IsBusy(err) {
+		t.Fatalf("shared after the exclusive one ended: %q %v", l, err)
+	}
+}

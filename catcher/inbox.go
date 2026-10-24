@@ -39,6 +39,8 @@ type Inbox struct {
 	events   []Event          // the latest changes, oldest first, for subscribers
 	eventSeq uint64           // the Seq of the latest event
 	scopes   []scope          // the actions in progress, oldest first, for messages that don't say
+	ended    chan struct{}    // closed and replaced whenever an action ends or stops waiting, for BeginScope
+	queued   int              // exclusive actions waiting to begin: new shared ones wait behind them
 	closed   map[string]scope // the last action each run closed, for mail that arrives late
 	// found holds the codes and links read from each message before it
 	// was masked, by message ID. It lives in memory only, never with the
@@ -69,12 +71,23 @@ type scope struct {
 	owner  string // who opened it (the API caller's address), for an End without a lease
 	begun  time.Time
 	ended  time.Time // set once closed
+	// exclusive is an action no other may overlap, so all mail that
+	// arrives meanwhile is its own.
+	exclusive bool
+}
+
+// name is how an error names the action: run/action.
+func (sc scope) name() string {
+	if sc.action == "" {
+		return sc.run
+	}
+	return sc.run + "/" + sc.action
 }
 
 // NewInbox keeps at most max messages and DefaultMaxBytes of them (oldest
 // dropped first).
 func NewInbox(max int) *Inbox {
-	return &Inbox{max: max, maxBytes: DefaultMaxBytes, changed: make(chan struct{}), index: map[string]*entry{}, closed: map[string]scope{},
+	return &Inbox{max: max, maxBytes: DefaultMaxBytes, changed: make(chan struct{}), ended: make(chan struct{}), index: map[string]*entry{}, closed: map[string]scope{},
 		found: map[string]found{},
 		after: time.After, now: time.Now}
 }
@@ -180,6 +193,101 @@ func (in *Inbox) begin(run, action, owner string) string {
 	return sc.lease
 }
 
+// ScopeOptions describes an action BeginScope opens.
+type ScopeOptions struct {
+	Run, Action string
+	// Exclusive waits until no other action is open, then keeps new ones
+	// from opening until it ends: everything captured meanwhile is its
+	// own, even untagged SMTP mail. Shared actions (the default) may
+	// overlap each other, and untagged mail is then ambiguous.
+	Exclusive bool
+}
+
+// BusyError is why BeginScope gave up: ctx ended while other actions
+// kept it from opening.
+type BusyError struct {
+	Exclusive bool     // the action asked to begin was exclusive
+	Holder    string   // run/action of the exclusive action in the way, if one is open
+	Open      []string // run/action of each open action an exclusive one waited for
+}
+
+func (e *BusyError) Error() string {
+	switch {
+	case e.Holder != "":
+		return e.Holder + " holds Echo exclusively"
+	case e.Exclusive:
+		return "an exclusive action waits for every open one to end, and " + strings.Join(e.Open, ", ") + " " +
+			map[bool]string{true: "is", false: "are"}[len(e.Open) == 1] + " still open"
+	}
+	return "an exclusive action is waiting to begin, and new actions wait behind it"
+}
+
+// BeginScope opens an action as Begin does, waiting while other actions
+// keep it from opening: an exclusive action waits until none is open, and
+// any action waits while an exclusive one is open or waiting (so a stream
+// of overlapping shared actions can't keep it out forever). When ctx ends
+// first it returns a *BusyError. Begin itself never waits.
+func (in *Inbox) BeginScope(ctx context.Context, o ScopeOptions) (string, error) {
+	return in.beginScope(ctx, o, "")
+}
+
+func (in *Inbox) beginScope(ctx context.Context, o ScopeOptions, owner string) (string, error) {
+	if o.Run == "" && o.Action == "" {
+		return "", nil
+	}
+	in.mu.Lock()
+	defer in.mu.Unlock()
+	if o.Exclusive {
+		in.queued++
+		defer func() {
+			in.queued--
+			in.wake() // shared actions waiting behind this one may go now
+		}()
+	}
+	for !in.free(o.Exclusive) {
+		ch := in.ended
+		in.mu.Unlock()
+		select {
+		case <-ctx.Done():
+			in.mu.Lock()
+			return "", in.busy(o.Exclusive)
+		case <-ch:
+		}
+		in.mu.Lock()
+	}
+	sc := scope{lease: rand.Text(), run: o.Run, action: o.Action, owner: owner, begun: in.now(), exclusive: o.Exclusive}
+	in.scopes = append(in.scopes, sc)
+	return sc.lease, nil
+}
+
+// free reports whether an action may open now. Called with in.mu held.
+func (in *Inbox) free(exclusive bool) bool {
+	if exclusive {
+		return len(in.scopes) == 0
+	}
+	// This action's own place in queued doesn't count: it isn't exclusive.
+	return in.queued == 0 && !slices.ContainsFunc(in.scopes, func(sc scope) bool { return sc.exclusive })
+}
+
+// busy says what kept an action from opening. Called with in.mu held.
+func (in *Inbox) busy(exclusive bool) *BusyError {
+	e := &BusyError{Exclusive: exclusive}
+	for _, sc := range in.scopes {
+		if sc.exclusive {
+			e.Holder = sc.name()
+		}
+		e.Open = append(e.Open, sc.name())
+	}
+	return e
+}
+
+// wake tells BeginScope calls waiting that the open actions changed.
+// Called with in.mu held.
+func (in *Inbox) wake() {
+	close(in.ended)
+	in.ended = make(chan struct{})
+}
+
 // End closes the actions with the given leases; an unknown or already
 // closed lease is ignored. Called with no lease, it closes the oldest
 // action in progress, as End did before leases.
@@ -211,6 +319,7 @@ func (in *Inbox) close(i int) {
 		}
 	}
 	in.scopes = slices.Delete(in.scopes, i, i+1)
+	in.wake()
 }
 
 // endOldest closes the oldest action owner opened, for clients that don't

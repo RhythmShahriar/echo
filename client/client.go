@@ -316,6 +316,33 @@ func (c *Client) BeginLease(ctx context.Context, run, action string) (string, er
 	return out.Lease, err
 }
 
+// BeginExclusive is BeginLease for an action no other may overlap, such
+// as one of several parallel tests that each need their mail to
+// themselves. Echo waits until every open action has ended, then holds
+// new ones back until EndLease closes this one. It waits up to timeout
+// (0: Echo's default of 30s; at most a minute); when other actions are
+// still in the way then, Echo answers 409 (IsBusy) naming them. Shared
+// actions begun meanwhile wait behind it the same way. Needs an Echo with
+// the "exclusive" capability: an older one opens a shared action instead.
+func (c *Client) BeginExclusive(ctx context.Context, run, action string, timeout time.Duration) (string, error) {
+	body := map[string]any{"run": run, "action": action, "exclusive": true}
+	if timeout > 0 {
+		body["timeout"] = timeout.String()
+	}
+	var out struct {
+		Lease string `json:"lease"`
+	}
+	err := c.do(ctx, http.MethodPost, "/v1/actions/begin", nil, body, &out)
+	return out.Lease, err
+}
+
+// IsBusy reports whether err is Echo answering 409 to a begin: other
+// actions kept it from opening for as long as it waited.
+func IsBusy(err error) bool {
+	var ae *APIError
+	return errors.As(err, &ae) && ae.StatusCode == http.StatusConflict
+}
+
 // EndLease closes the action BeginLease returned lease for.
 func (c *Client) EndLease(ctx context.Context, lease string) error {
 	if lease == "" {

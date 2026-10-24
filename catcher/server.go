@@ -163,6 +163,7 @@ var capabilities = []string{
 	"events",      // GET /v1/events streams changes; DELETE /v1/messages/{id}
 	"attachments", // emails list their files: name, type, size and sha256
 	"codes",       // GET /v1/messages/latest answers one-time codes and links
+	"exclusive",   // begin takes "exclusive": true and waits for other actions
 }
 
 // health is what GET /v1/health answers, in this order.
@@ -662,17 +663,46 @@ type actionBody struct {
 	Run    string `json:"run"`
 	Action string `json:"action"`
 	Lease  string `json:"lease,omitempty"`
+	// Exclusive and Timeout are begin's: an exclusive action, and how
+	// long to wait for other actions to let it open (a Go duration).
+	Exclusive bool   `json:"exclusive,omitempty"`
+	Timeout   string `json:"timeout,omitempty"`
 }
 
+// How long begin waits for other actions by default, and at most.
+const (
+	beginWait    = 30 * time.Second
+	maxBeginWait = time.Minute
+)
+
 // begin opens an action and answers {"lease": "..."}, which end takes to
-// close exactly that action.
+// close exactly that action. With "exclusive": true it first waits for
+// every open action to end; any begin waits while an exclusive action is
+// open or waiting. Waiting longer than timeout answers 409.
 func (s *Server) begin(w http.ResponseWriter, r *http.Request) {
 	var b actionBody
 	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<16)).Decode(&b); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]string{"lease": s.Inbox.begin(b.Run, b.Action, caller(r))})
+	timeout := beginWait
+	if b.Timeout != "" {
+		d, err := time.ParseDuration(b.Timeout)
+		if err != nil || d <= 0 {
+			http.Error(w, "timeout: want a duration such as 30s", http.StatusBadRequest)
+			return
+		}
+		timeout = min(d, maxBeginWait)
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), timeout)
+	defer cancel()
+	lease, err := s.Inbox.beginScope(ctx, ScopeOptions{Run: b.Run, Action: b.Action, Exclusive: b.Exclusive}, caller(r))
+	if err != nil {
+		http.Error(w, fmt.Sprintf("begin: waited %s: %v; end the actions in the way (POST /v1/actions/end) or retry with a longer timeout", timeout, err),
+			http.StatusConflict)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"lease": lease})
 }
 
 // end closes the action named by {"lease": "..."}. Clients from before
