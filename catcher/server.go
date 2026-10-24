@@ -47,11 +47,20 @@ const (
 
 // Config is how the catcher behaves.
 type Config struct {
-	Mode    string   // seal (default) or observe
-	Allow   []string // hosts that may be reached even when sealed: "api.stripe.com", "*.sandbox.paypal.com"
-	Token   string   // required in X-Echo-Token when set (Echo listening beyond loopback)
-	Listen  string   // the address Echo listens on; its host is accepted in Host besides loopback names
-	MaxBody int      // bytes of body kept per message; default 256 KiB
+	Mode  string   // seal (default) or observe
+	Allow []string // hosts that may be reached even when sealed: "api.stripe.com", "*.sandbox.paypal.com"
+	Token string   // required in X-Echo-Token when set (Echo listening beyond loopback)
+	// WriteTokens and ReadToken split Token's access, so one Echo can
+	// serve many sites (an agency hub) without each site's connector
+	// reading every site's mail. A write token, mapped to the ID of the
+	// site that holds it, may only send captures and begin and end
+	// actions (and read health); what it captures is marked with that
+	// site (Source.Site), so `site:client-a` finds it. Everything else
+	// needs ReadToken (or Token), which reads every site's messages.
+	WriteTokens map[string]string
+	ReadToken   string
+	Listen      string // the address Echo listens on; its host is accepted in Host besides loopback names
+	MaxBody     int    // bytes of body kept per message; default 256 KiB
 	// Site is the site being tested (a URL or host): links to it aren't
 	// development links. AllowRecipients are the address and number globs
 	// that may really be messaged. Both feed the checks run on every
@@ -120,7 +129,11 @@ func NewServer(inbox *Inbox, cfg Config) *Server {
 	s.mux.HandleFunc("POST /v1/actions/begin", s.begin)
 	s.mux.HandleFunc("POST /v1/actions/end", s.end)
 	s.mailpitRoutes()
-	s.handler = Protect(http.HandlerFunc(s.serve), ProtectOptions{Token: cfg.Token, Hosts: listenHosts(cfg.Listen)})
+	tokens := []string{cfg.ReadToken}
+	for t := range cfg.WriteTokens {
+		tokens = append(tokens, t)
+	}
+	s.handler = Protect(http.HandlerFunc(s.serve), ProtectOptions{Token: cfg.Token, Tokens: tokens, Hosts: listenHosts(cfg.Listen)})
 	return s
 }
 
@@ -146,11 +159,62 @@ func (s *Server) BootID() string { return s.cfg.BootID }
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) { s.handler.ServeHTTP(w, r) }
 
 func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
-	if s.cfg.Token != "" && subtle.ConstantTimeCompare([]byte(r.Header.Get(wire.TokenHeader)), []byte(s.cfg.Token)) != 1 {
+	if s.cfg.Token == "" && s.cfg.ReadToken == "" && len(s.cfg.WriteTokens) == 0 {
+		s.mux.ServeHTTP(w, r)
+		return
+	}
+	tok := r.Header.Get(wire.TokenHeader)
+	if tok != "" && (same(tok, s.cfg.Token) || same(tok, s.cfg.ReadToken)) {
+		s.mux.ServeHTTP(w, r)
+		return
+	}
+	site, ok := s.writeSite(tok)
+	if !ok {
 		http.Error(w, "missing or wrong "+wire.TokenHeader, http.StatusUnauthorized)
 		return
 	}
-	s.mux.ServeHTTP(w, r)
+	if !writeRoute(r) {
+		http.Error(w, "this is a write token: it may only send captures and begin or end actions; reading messages needs the read token",
+			http.StatusForbidden)
+		return
+	}
+	s.mux.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), siteKey{}, site)))
+}
+
+// same compares a token in constant time; an empty want never matches.
+func same(got, want string) bool {
+	return want != "" && subtle.ConstantTimeCompare([]byte(got), []byte(want)) == 1
+}
+
+// writeSite returns the site of the write token tok. Every token is
+// compared, so the time taken doesn't tell which one nearly matched.
+func (s *Server) writeSite(tok string) (string, bool) {
+	site, found := "", false
+	for t, id := range s.cfg.WriteTokens {
+		if tok != "" && same(tok, t) {
+			site, found = id, true
+		}
+	}
+	return site, found
+}
+
+// writeRoute reports whether a write token may make request r: what a
+// connector or a runner on that site sends.
+func writeRoute(r *http.Request) bool {
+	switch r.Method + " " + r.URL.Path {
+	case "POST /v1/capture", "POST /v1/actions/begin", "POST /v1/actions/end", "GET /v1/health":
+		return true
+	}
+	return false
+}
+
+// siteKey holds the site of a request made with a write token.
+type siteKey struct{}
+
+// requestSite returns the site r's write token is for, or "".
+func requestSite(r *http.Request) string {
+	site, _ := r.Context().Value(siteKey{}).(string)
+	return site
 }
 
 // capabilities are the API features this catcher has beyond wire version
@@ -164,6 +228,7 @@ var capabilities = []string{
 	"attachments", // emails list their files: name, type, size and sha256
 	"codes",       // GET /v1/messages/latest answers one-time codes and links
 	"exclusive",   // begin takes "exclusive": true and waits for other actions
+	"site-tokens", // per-site write tokens and a read token can split the single token
 }
 
 // health is what GET /v1/health answers, in this order.
@@ -197,7 +262,7 @@ func (s *Server) capture(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "bad capture: "+err.Error(), http.StatusBadRequest)
 		return
 	}
-	d, err := s.Capture(c)
+	d, err := s.captureFor(c, requestSite(r))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -207,12 +272,22 @@ func (s *Server) capture(w http.ResponseWriter, r *http.Request) {
 
 // Capture records c and returns the decision. Connectors reach it through
 // the API; the SMTP sink and the proxy call it directly.
-func (s *Server) Capture(c wire.Capture) (wire.Decision, error) {
+func (s *Server) Capture(c wire.Capture) (wire.Decision, error) { return s.captureFor(c, "") }
+
+// captureFor is Capture for a site's write token: site marks what's
+// captured, and an after phase only updates that site's own messages.
+func (s *Server) captureFor(c wire.Capture, site string) (wire.Decision, error) {
 	if c.Version > wire.Version {
 		return wire.Decision{}, errors.New("this connector is newer than Echo; run: rhythm update")
 	}
 	run, action, _ := strings.Cut(c.Run, "/")
-	src := model.Source{Via: c.Source.Via, Stack: c.Source.Stack, Plugin: c.Source.Plugin, Hook: c.Source.Hook, Host: c.Source.Host}
+	src := model.Source{Via: c.Source.Via, Stack: c.Source.Stack, Plugin: c.Source.Plugin, Hook: c.Source.Hook, Host: c.Source.Host,
+		Site: site}
+	if c.Phase == wire.After && c.ID != "" && site != "" {
+		if m, ok := s.Inbox.Get(c.ID); ok && m.Source.Site != site {
+			return wire.Decision{}, errors.New("no message with that ID was captured by this site")
+		}
+	}
 	switch c.Kind {
 	case "email":
 		// After a real send (observe mode), a connector may report how it

@@ -20,6 +20,9 @@ type ProtectOptions struct {
 	// every check: a web page can't know it, so it can't be a forged
 	// cross-site request.
 	Token string
+	// Tokens are more tokens that pass the same way (read and write
+	// tokens); empty ones are ignored.
+	Tokens []string
 	// Hosts are host names accepted besides loopback ones: the host part
 	// of the address Echo listens on ("echo" in Docker Compose).
 	Hosts []string
@@ -45,7 +48,7 @@ type ProtectOptions struct {
 // Origin and a plain Host and pass unchanged.
 func Protect(next http.Handler, o ProtectOptions) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if o.Token != "" && subtle.ConstantTimeCompare([]byte(r.Header.Get(wire.TokenHeader)), []byte(o.Token)) == 1 {
+		if o.hasToken(r.Header.Get(wire.TokenHeader)) {
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -63,6 +66,20 @@ func Protect(next http.Handler, o ProtectOptions) http.Handler {
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+// hasToken reports whether tok is one of the configured tokens.
+func (o ProtectOptions) hasToken(tok string) bool {
+	if tok == "" {
+		return false
+	}
+	ok := false
+	for _, t := range append([]string{o.Token}, o.Tokens...) {
+		if t != "" && subtle.ConstantTimeCompare([]byte(tok), []byte(t)) == 1 {
+			ok = true
+		}
+	}
+	return ok
 }
 
 func (o ProtectOptions) hostAllowed(hostport string) bool {

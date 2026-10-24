@@ -1,1 +1,1 @@
-{"tool":"rhythm-echo","version":"1.2.3","mode":"seal","wire":1,"smtp":"127.0.0.1:1025","proxy":"off","boot_id":"boot-1","store":"jsonl","capabilities":["leases","issues","late","search","events","attachments","codes","exclusive"],"providers":["…"]}
+{"tool":"rhythm-echo","version":"1.2.3","mode":"seal","wire":1,"smtp":"127.0.0.1:1025","proxy":"off","boot_id":"boot-1","store":"jsonl","capabilities":["leases","issues","late","search","events","attachments","codes","exclusive","site-tokens"],"providers":["…"]}
