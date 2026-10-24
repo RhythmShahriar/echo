@@ -1,0 +1,37 @@
+Delivered-To: jamie@example.net
+Return-Path: <bounce-mc.us21_12345678.987654-jamie=example.net@mail134.atl121.rsgsv.net>
+Received: from mail134.atl121.rsgsv.net (mail134.atl121.rsgsv.net. [198.2.134.218])
+        by mx.google.com with ESMTPS id d9443c01a7336-20e1a2b3c4dsi7788990.12.2026.10.18.12.00.03
+        for <jamie@example.net>
+        (version=TLS1_3 cipher=TLS_AES_256_GCM_SHA384 bits=256/256);
+        Sun, 18 Oct 2026 12:00:04 -0700 (PDT)
+Received-SPF: pass (google.com: domain of bounce-mc.us21_12345678.987654-jamie=example.net@mail134.atl121.rsgsv.net designates 198.2.134.218 as permitted sender) client-ip=198.2.134.218;
+Authentication-Results: mx.google.com;
+       dkim=pass header.i=@shop.example header.s=k1 header.b=Mc11Ch22;
+       dkim=pass header.i=@mcsv.net header.s=k2 header.b=Mc33Ch44;
+       spf=pass smtp.mailfrom=bounce-mc.us21_12345678.987654-jamie=example.net@mail134.atl121.rsgsv.net;
+       dmarc=pass (p=QUARANTINE sp=QUARANTINE dis=NONE) header.from=shop.example
+DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed; d=shop.example; s=k1;
+	h=Subject:From:Reply-To:To:Date:Message-ID:List-ID:List-Unsubscribe:List-Unsubscribe-Post:Content-Type:MIME-Version;
+	bh=RmFrZUJvZHlIYXNoRm9yVGVzdGluZ09ubHkxMjM0NTY=; b=Mc11Ch22RmFrZVNpZ25hdHVyZQ==
+DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed; d=mcsv.net; s=k2;
+	h=Subject:From:Reply-To:To:Date:Message-ID:List-ID:List-Unsubscribe:List-Unsubscribe-Post:Content-Type:MIME-Version;
+	bh=RmFrZUJvZHlIYXNoRm9yVGVzdGluZ09ubHkxMjM0NTY=; b=Mc33Ch44RmFrZVNpZ25hdHVyZQ==
+Subject: =?utf-8?Q?Autumn=20collection=20=E2=80=94=20just=20landed?=
+From: =?utf-8?Q?Example=20Shop?= <news@shop.example>
+Reply-To: Example Shop <news@shop.example>
+To: <jamie@example.net>
+Date: Sun, 18 Oct 2026 19:00:03 +0000
+Message-ID: <a1b2c3d4e5f6a7b8c9d0e1f2a.0123456789.20261018190003.fake1234@mail134.atl121.rsgsv.net>
+X-Mailer: Mailchimp Mailer - **CIDa1b2c3d4e5f6a7b8c9d0**
+X-Campaign: mailchimpa1b2c3d4e5f6a7b8c9d0.f1e2d3c4b5
+X-campaignid: mailchimpa1b2c3d4e5f6a7b8c9d0.f1e2d3c4b5
+List-ID: a1b2c3d4e5f6a7b8c9d0e1f2amc list <a1b2c3d4e5f6a7b8c9d0e1f2a.123456.list-id.mcsv.net>
+List-Unsubscribe: <https://shop.us21.list-manage.com/unsubscribe?u=fake&id=fake&e=fake>, <mailto:unsubscribe-mc.us21_fake@unsubscribe.mailchimpapp.net?subject=unsubscribe>
+List-Unsubscribe-Post: List-Unsubscribe=One-Click
+X-MC-User: a1b2c3d4e5f6a7b8c9d0e1f2a
+Precedence: bulk
+MIME-Version: 1.0
+Content-Type: text/plain; charset="utf-8"
+
+New arrivals for autumn.

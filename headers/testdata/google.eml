@@ -1,0 +1,37 @@
+Delivered-To: jamie@example.net
+Received: by 2002:a05:6214:1c8e:b0:6b5:2e1d:3f10 with SMTP id gn14csp88qvb;
+        Mon, 19 Oct 2026 03:22:10 -0700 (PDT)
+Return-Path: <owner@shop.example>
+Received: from mail-sor-f41.google.com (mail-sor-f41.google.com. [209.85.220.41])
+        by mx.google.com with SMTPS id 98e67ed59e1d1-2e2a1b2c3d4sor1234567a91.5.2026.10.19.03.22.09
+        for <jamie@example.net>
+        (Google Transport Security);
+        Mon, 19 Oct 2026 03:22:10 -0700 (PDT)
+Received-SPF: pass (google.com: domain of owner@shop.example designates 209.85.220.41 as permitted sender) client-ip=209.85.220.41;
+Authentication-Results: mx.google.com;
+       dkim=pass header.i=@shop.example header.s=google header.b=Go11Og22;
+       spf=pass (google.com: domain of owner@shop.example designates 209.85.220.41 as permitted sender) smtp.mailfrom=owner@shop.example;
+       dmarc=pass (p=REJECT sp=REJECT dis=NONE) header.from=shop.example
+DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed;
+        d=shop.example; s=google; t=1792405329; x=1793010129;
+        h=to:subject:message-id:date:from:mime-version:from:to:cc:subject:date:message-id:reply-to;
+        bh=RmFrZUJvZHlIYXNoRm9yVGVzdGluZ09ubHkxMjM0NTY=;
+        b=Go11Og22RmFrZVNpZ25hdHVyZQ==
+X-Google-DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed;
+        d=1e100.net; s=20230601; t=1792405329; x=1793010129;
+        h=to:subject:message-id:date:from:mime-version;
+        bh=RmFrZUJvZHlIYXNoRm9yVGVzdGluZ09ubHkxMjM0NTY=;
+        b=Go33Og44RmFrZVNpZ25hdHVyZQ==
+X-Gm-Message-State: AOJu0YxFakeMessageStateForTestingOnly1234567890abcdefg==
+X-Google-Smtp-Source: AGHT+IFakeSmtpSourceForTestingOnly1234567890abcdef==
+X-Received: by 2002:a17:90b:1e10:b0:2e2:a1b2:c3d4 with SMTP id pg16mr123456pjb.5.1792405329123;
+        Mon, 19 Oct 2026 03:22:09 -0700 (PDT)
+MIME-Version: 1.0
+From: Sam Owner <owner@shop.example>
+Date: Mon, 19 Oct 2026 11:22:08 +0100
+Message-ID: <CAFake1234567890abcdefghijklmnopqrstuvwxyzABCDEF@mail.gmail.com>
+Subject: Re: your wholesale enquiry
+To: jamie@example.net
+Content-Type: text/plain; charset="UTF-8"
+
+Thanks Jamie, attached is our price list.

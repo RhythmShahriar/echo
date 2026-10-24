@@ -1,0 +1,32 @@
+Delivered-To: jamie@example.net
+Return-Path: <bounces-1a2b3c4d5e@sendibt2.com>
+Received: from smtp-relay.sendinblue.com (smtp-relay.sendinblue.com. [185.41.28.109])
+        by mx.google.com with ESMTPS id 2adb3069b0e04-539a1b2c3d4si6677889.01.2026.10.19.06.30.12
+        for <jamie@example.net>
+        (version=TLS1_3 cipher=TLS_AES_256_GCM_SHA384 bits=256/256);
+        Mon, 19 Oct 2026 06:30:13 -0700 (PDT)
+Received-SPF: pass (google.com: domain of bounces-1a2b3c4d5e@sendibt2.com designates 185.41.28.109 as permitted sender) client-ip=185.41.28.109;
+Authentication-Results: mx.google.com;
+       dkim=pass header.i=@shop.example header.s=brevo1 header.b=Br11Ev22;
+       dkim=pass header.i=@sendinblue.com header.s=mail header.b=Br33Ev44;
+       spf=pass smtp.mailfrom=bounces-1a2b3c4d5e@sendibt2.com;
+       dmarc=pass (p=NONE sp=NONE dis=NONE) header.from=shop.example
+DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed; d=shop.example; s=brevo1;
+	h=from:to:subject:date:list-unsubscribe:message-id:mime-version:content-type;
+	bh=RmFrZUJvZHlIYXNoRm9yVGVzdGluZ09ubHkxMjM0NTY=; b=Br11Ev22RmFrZVNpZ25hdHVyZQ==
+DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed; d=sendinblue.com; s=mail;
+	h=from:to:subject:date:list-unsubscribe:message-id:mime-version:content-type;
+	bh=RmFrZUJvZHlIYXNoRm9yVGVzdGluZ09ubHkxMjM0NTY=; b=Br33Ev44RmFrZVNpZ25hdHVyZQ==
+From: Example Shop <news@shop.example>
+To: jamie@example.net
+Subject: October deals inside
+Date: Mon, 19 Oct 2026 13:30:12 +0000
+List-Unsubscribe: <https://shop.example.r.af.d.sendibt2.com/tr/un/fakeToken123>
+Message-Id: <202610191330.12345678901@smtp-relay.mailin.fr>
+X-Mailin-EID: MTIzNDU2Nzg5MHxqYW1pZUBleGFtcGxlLm5ldA%3D%3D
+X-sib-id: RmFrZVNpYklkRm9yVGVzdGluZw
+Precedence: bulk
+MIME-Version: 1.0
+Content-Type: text/plain; charset=utf-8
+
+This month's deals.

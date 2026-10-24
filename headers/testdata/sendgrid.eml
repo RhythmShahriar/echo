@@ -1,0 +1,52 @@
+Delivered-To: jamie@example.net
+Received: by 2002:a05:6214:1c8e:b0:6b5:2e1d:3f10 with SMTP id gn14csp412337qvb;
+        Tue, 20 Oct 2026 09:14:07 -0700 (PDT)
+X-Received: by 2002:a05:620a:4410:b0:79f:1e1a:c2a1 with SMTP id v16mr18342qkp.31.1792512847111;
+        Tue, 20 Oct 2026 09:14:07 -0700 (PDT)
+ARC-Seal: i=1; a=rsa-sha256; t=1792512847; cv=none; d=google.com; s=arc-20240605; b=QmFzZTY0QXJjU2VhbEZpeHR1cmVOb3RBUmVhbFNpZ25hdHVyZQ==
+ARC-Authentication-Results: i=1; mx.google.com;
+       dkim=pass header.i=@shop.example header.s=s1 header.b=Ab12Cd34;
+       spf=pass (google.com: domain of bounces+4815162-ab12-jamie=example.net@em123.shop.example designates 167.89.12.34 as permitted sender) smtp.mailfrom="bounces+4815162-ab12-jamie=example.net@em123.shop.example";
+       dmarc=pass (p=REJECT sp=REJECT dis=NONE) header.from=shop.example
+Return-Path: <bounces+4815162-ab12-jamie=example.net@em123.shop.example>
+Received: from o1.em123.shop.example (o1.em123.shop.example. [167.89.12.34])
+        by mx.google.com with ESMTPS id d75a77b69052e-4608a1b2c3dsi1234567cf.12.2026.10.20.09.14.06
+        for <jamie@example.net>
+        (version=TLS1_3 cipher=TLS_AES_128_GCM_SHA256 bits=128/128);
+        Tue, 20 Oct 2026 09:14:07 -0700 (PDT)
+Received-SPF: pass (google.com: domain of bounces+4815162-ab12-jamie=example.net@em123.shop.example designates 167.89.12.34 as permitted sender) client-ip=167.89.12.34;
+Authentication-Results: mx.google.com;
+       dkim=pass header.i=@shop.example header.s=s1 header.b=Ab12Cd34;
+       dkim=pass header.i=@sendgrid.info header.s=smtpapi header.b=Ef56Gh78;
+       spf=pass (google.com: domain of bounces+4815162-ab12-jamie=example.net@em123.shop.example designates 167.89.12.34 as permitted sender) smtp.mailfrom="bounces+4815162-ab12-jamie=example.net@em123.shop.example";
+       dmarc=pass (p=REJECT sp=REJECT dis=NONE) header.from=shop.example
+DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed; d=shop.example;
+	h=content-type:from:mime-version:subject:list-unsubscribe:list-unsubscribe-post:to:cc:content-type:from:subject:to;
+	s=s1; bh=RmFrZUJvZHlIYXNoRm9yVGVzdGluZ09ubHkxMjM0NTY=;
+	b=Ab12Cd34RmFrZVNpZ25hdHVyZUZvclRlc3RpbmdPbmx5
+DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed; d=sendgrid.info;
+	h=content-type:from:mime-version:subject:list-unsubscribe:list-unsubscribe-post:to:cc:content-type:from:subject:to;
+	s=smtpapi; bh=RmFrZUJvZHlIYXNoRm9yVGVzdGluZ09ubHkxMjM0NTY=;
+	b=Ef56Gh78RmFrZVNpZ25hdHVyZUZvclRlc3RpbmdPbmx5
+Received: by filterdrecv-5d4f6c8b9-x7k2p with SMTP id filterdrecv-5d4f6c8b9-x7k2p-1-6715A1B2-3
+        2026-10-20 16:14:06.123456789 +0000 UTC m=+1234.567890123
+Received: from c2hvcC5leGFtcGxl (unknown) by geopod-ismtpd-12 (SG) with HTTP
+	id 9xYzAbCdQ1u2v3w4x5y6zA Tue, 20 Oct 2026 16:14:06.001 +0000 (UTC)
+Content-Type: multipart/alternative; boundary=b1a2c3d4e5f6
+Date: Tue, 20 Oct 2026 16:14:06 +0000 (UTC)
+From: Example Shop <orders@shop.example>
+Mime-Version: 1.0
+Message-ID: <9xYzAbCdQ1u2v3w4x5y6zA@geopod-ismtpd-12>
+Subject: Your order #10234 has shipped
+List-Unsubscribe: <https://u4815162.ct.sendgrid.net/lu/unsubscribe?oc=fake123>, <mailto:unsubscribe@em123.shop.example?subject=unsub>
+List-Unsubscribe-Post: List-Unsubscribe=One-Click
+X-SG-EID: RmFrZUVJREZvclRlc3RpbmdPbmx5QWJjZGVmZ2hpams=
+X-SG-ID: RmFrZUlERm9yVGVzdGluZ09ubHk=
+To: jamie@example.net
+X-Entity-ID: u001.fakeEntityId==
+
+--b1a2c3d4e5f6
+Content-Type: text/plain; charset=utf-8
+
+Hi Jamie, your order #10234 is on its way.
+--b1a2c3d4e5f6--

@@ -1,0 +1,29 @@
+Delivered-To: jamie@example.net
+Return-Path: <bounce-md_31050260.6716a1b2.v1-0a1b2c3d4e5f60718293a4b5c6d7e8f9@mandrillapp.com>
+Received: from mail187-15.suw11.mandrillapp.com (mail187-15.suw11.mandrillapp.com. [198.2.187.15])
+        by mx.google.com with ESMTPS id 00721157ae682-6e5a1b2c3d4si8899001.23.2026.10.17.09.10.22
+        for <jamie@example.net>
+        (version=TLS1_3 cipher=TLS_AES_256_GCM_SHA384 bits=256/256);
+        Sat, 17 Oct 2026 09:10:23 -0700 (PDT)
+Received-SPF: pass (google.com: domain of bounce-md_31050260.6716a1b2.v1-0a1b2c3d4e5f60718293a4b5c6d7e8f9@mandrillapp.com designates 198.2.187.15 as permitted sender) client-ip=198.2.187.15;
+Authentication-Results: mx.google.com;
+       dkim=pass header.i=@shop.example header.s=mte1 header.b=Md11Rl22;
+       dkim=pass header.i=@mandrillapp.com header.s=mte1 header.b=Md33Rl44;
+       spf=pass smtp.mailfrom=bounce-md_31050260.6716a1b2.v1-0a1b2c3d4e5f60718293a4b5c6d7e8f9@mandrillapp.com;
+       dmarc=pass (p=REJECT sp=REJECT dis=NONE) header.from=shop.example
+DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed; d=shop.example; s=mte1;
+	h=From:Subject:Message-Id:To:Date:MIME-Version:Content-Type;
+	bh=RmFrZUJvZHlIYXNoRm9yVGVzdGluZ09ubHkxMjM0NTY=; b=Md11Rl22RmFrZVNpZ25hdHVyZQ==
+DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed; d=mandrillapp.com; s=mte1;
+	h=From:Subject:Message-Id:To:Date:MIME-Version:Content-Type;
+	bh=RmFrZUJvZHlIYXNoRm9yVGVzdGluZ09ubHkxMjM0NTY=; b=Md33Rl44RmFrZVNpZ25hdHVyZQ==
+From: Example Shop <orders@shop.example>
+Subject: Your invoice INV-2026-0042
+Message-Id: <31050260.20261017161022.6716a1b2c3d4e5.12345678@mail187-15.suw11.mandrillapp.com>
+To: jamie@example.net
+X-Mandrill-User: md_31050260
+Date: Sat, 17 Oct 2026 16:10:22 +0000
+MIME-Version: 1.0
+Content-Type: text/plain; charset=utf-8
+
+Invoice attached.

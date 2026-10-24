@@ -1,0 +1,34 @@
+Delivered-To: jamie@example.net
+Return-Path: <info@shop.example>
+Received: from EUR05-AM6-obe.outbound.protection.outlook.com (mail-am6eur05on2101.outbound.protection.outlook.com. [40.107.22.101])
+        by mx.google.com with ESMTPS id 4fb4d7f45d1cf-5c9a1b2c3d4si2233445.67.2026.10.20.02.15.30
+        for <jamie@example.net>
+        (version=TLS1_2 cipher=ECDHE-ECDSA-AES128-GCM-SHA256 bits=128/128);
+        Tue, 20 Oct 2026 02:15:31 -0700 (PDT)
+Received-SPF: pass (google.com: domain of info@shop.example designates 40.107.22.101 as permitted sender) client-ip=40.107.22.101;
+Authentication-Results: mx.google.com;
+       dkim=pass header.i=@shopexample.onmicrosoft.com header.s=selector1-shopexample-onmicrosoft-com header.b=Ms11Ft22;
+       arc=pass (i=1 spf=pass spfdomain=shop.example dmarc=pass fromdomain=shop.example);
+       spf=pass (google.com: domain of info@shop.example designates 40.107.22.101 as permitted sender) smtp.mailfrom=info@shop.example;
+       dmarc=pass (p=QUARANTINE sp=QUARANTINE dis=NONE) header.from=shop.example
+DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed;
+ d=shopexample.onmicrosoft.com; s=selector1-shopexample-onmicrosoft-com;
+ h=From:Date:Subject:Message-ID:Content-Type:MIME-Version:X-MS-Exchange-SenderADCheck;
+ bh=RmFrZUJvZHlIYXNoRm9yVGVzdGluZ09ubHkxMjM0NTY=;
+ b=Ms11Ft22RmFrZVNpZ25hdHVyZQ==
+Received: from AM0PR02MB5123.eurprd02.prod.outlook.com (2603:10a6:208:12a::18)
+ by DB9PR02MB7001.eurprd02.prod.outlook.com (2603:10a6:10:1f4::9) with
+ Microsoft SMTP Server (version=TLS1_2,
+ cipher=TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384) id 15.20.8093.18; Tue, 20 Oct
+ 2026 09:15:29 +0000
+From: Example Shop Info <info@shop.example>
+To: "jamie@example.net" <jamie@example.net>
+Subject: Opening hours this week
+Date: Tue, 20 Oct 2026 09:15:28 +0000
+Message-ID: <AM0PR02MB5123A1B2C3D4E5F6A7B8C9D0E1F2A@AM0PR02MB5123.eurprd02.prod.outlook.com>
+Content-Type: text/plain; charset="us-ascii"
+MIME-Version: 1.0
+X-MS-Exchange-CrossTenant-Id: 00000000-1111-2222-3333-444444444444
+X-MS-Exchange-SenderADCheck: 1
+
+We're open 9 to 5 this week.

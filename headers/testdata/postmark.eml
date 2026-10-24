@@ -1,0 +1,35 @@
+Delivered-To: jamie@example.net
+Return-Path: <pm_bounces@pm-bounces.shop.example>
+Received: from sc-ord-mta113.mtasv.net (sc-ord-mta113.mtasv.net. [50.31.156.113])
+        by mx.google.com with ESMTPS id 5b1f17b1804b1-43161a2b3c4si4455667.88.2026.10.22.08.01.33
+        for <jamie@example.net>
+        (version=TLS1_3 cipher=TLS_AES_256_GCM_SHA384 bits=256/256);
+        Thu, 22 Oct 2026 08:01:34 -0700 (PDT)
+Received-SPF: pass (google.com: domain of pm_bounces@pm-bounces.shop.example designates 50.31.156.113 as permitted sender) client-ip=50.31.156.113;
+Authentication-Results: mx.google.com;
+       dkim=pass header.i=@shop.example header.s=20240101pm header.b=Pm11Aa22;
+       dkim=pass header.i=@pm.mtasv.net header.s=pm20240101 header.b=Pm33Bb44;
+       spf=pass smtp.mailfrom=pm_bounces@pm-bounces.shop.example;
+       dmarc=pass (p=REJECT sp=REJECT dis=NONE) header.from=shop.example
+DKIM-Signature: v=1; a=rsa-sha256; d=shop.example; s=20240101pm; c=relaxed/relaxed;
+	i=@shop.example; t=1792681293; x=1792767693;
+	h=date:date:from:from:message-id:reply-to:sender:subject:subject:to:to;
+	bh=RmFrZUJvZHlIYXNoRm9yVGVzdGluZ09ubHkxMjM0NTY=;
+	b=Pm11Aa22RmFrZVNpZ25hdHVyZUZvclRlc3Rpbmc=
+DKIM-Signature: v=1; a=rsa-sha256; d=pm.mtasv.net; s=pm20240101; c=relaxed/relaxed;
+	i=@pm.mtasv.net; t=1792681293; x=1792767693;
+	h=date:date:from:from:message-id:reply-to:sender:subject:subject:to:to;
+	bh=RmFrZUJvZHlIYXNoRm9yVGVzdGluZ09ubHkxMjM0NTY=;
+	b=Pm33Bb44RmFrZVNpZ25hdHVyZUZvclRlc3Rpbmc=
+Date: Thu, 22 Oct 2026 15:01:33 +0000
+From: Example Shop <receipts@shop.example>
+To: jamie@example.net
+Message-Id: <a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d@mtasv.net>
+Subject: Receipt for order #10235
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+X-PM-Message-Id: a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d
+X-PM-RCPT: |bTB8NDQ1NTY2fDEyMzQ1Nnxqb2huQGV4YW1wbGUubmV0|
+X-PM-Message-Stream: outbound
+
+Thanks for your purchase.

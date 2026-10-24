@@ -1,0 +1,31 @@
+Delivered-To: jamie@example.net
+Return-Path: <0100019a2b3c4d5e-6f7a8b9c-0d1e-4f2a-b3c4-d5e6f7a8b9c0-000000@send.shop.example>
+Received: from a48-110.smtp-out.amazonses.com (a48-110.smtp-out.amazonses.com. [54.240.48.110])
+        by mx.google.com with ESMTPS id 41be03b00d2f7-7e9a1b2c3d4si5566778.99.2026.10.23.10.20.05
+        for <jamie@example.net>
+        (version=TLS1_3 cipher=TLS_AES_128_GCM_SHA256 bits=128/128);
+        Fri, 23 Oct 2026 10:20:06 -0700 (PDT)
+Received-SPF: pass (google.com: domain of 0100019a2b3c4d5e-6f7a8b9c-0d1e-4f2a-b3c4-d5e6f7a8b9c0-000000@send.shop.example designates 54.240.48.110 as permitted sender) client-ip=54.240.48.110;
+Authentication-Results: mx.google.com;
+       dkim=pass header.i=@shop.example header.s=resend header.b=Rs12Tu34;
+       dkim=pass header.i=@amazonses.com header.s=224i4yxa5dv7c2xz3womw6peuasteono header.b=Vw56Xy78;
+       spf=pass smtp.mailfrom=0100019a2b3c4d5e-6f7a8b9c-0d1e-4f2a-b3c4-d5e6f7a8b9c0-000000@send.shop.example;
+       dmarc=pass (p=QUARANTINE sp=QUARANTINE dis=NONE) header.from=shop.example
+DKIM-Signature: v=1; a=rsa-sha256; q=dns/txt; c=relaxed/simple; s=resend; d=shop.example;
+	t=1792776005; h=From:To:Subject:MIME-Version:Content-Type:Message-ID:Date;
+	bh=RmFrZUJvZHlIYXNoRm9yVGVzdGluZ09ubHkxMjM0NTY=; b=Rs12Tu34RmFrZVNpZ25hdHVyZQ==
+DKIM-Signature: v=1; a=rsa-sha256; q=dns/txt; c=relaxed/simple;
+	s=224i4yxa5dv7c2xz3womw6peuasteono; d=amazonses.com; t=1792776005;
+	h=From:To:Subject:MIME-Version:Content-Type:Message-ID:Date:Feedback-ID;
+	bh=RmFrZUJvZHlIYXNoRm9yVGVzdGluZ09ubHkxMjM0NTY=; b=Vw56Xy78RmFrZVNpZ25hdHVyZQ==
+From: Example Shop <hello@shop.example>
+To: jamie@example.net
+Subject: Confirm your email
+MIME-Version: 1.0
+Content-Type: text/html; charset=UTF-8
+Message-ID: <0100019a2b3c4d5e-6f7a8b9c-0d1e-4f2a-b3c4-d5e6f7a8b9c0-000000@email.amazonses.com>
+Date: Fri, 23 Oct 2026 17:20:05 +0000
+X-Entity-Ref-ID: 6f1e2d3c-4b5a-4968-8776-5f4e3d2c1b0a
+Feedback-ID: 1.us-east-1.RmFrZVJlc2VuZEZlZWRiYWNr=:AmazonSES
+
+<p>Confirm your email: <a href="https://shop.example/confirm?t=fake">confirm</a></p>

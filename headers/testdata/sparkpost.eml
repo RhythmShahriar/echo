@@ -1,0 +1,26 @@
+Delivered-To: jamie@example.net
+Return-Path: <msprvs1=19738ABCdefGH=bounces-123456@bounces.shop.example>
+Received: from mta-120-23.sparkpostmail.com (mta-120-23.sparkpostmail.com. [192.174.90.23])
+        by mx.google.com with ESMTPS id 6a1803df08f44-6cc1a2b3c4dsi9900112.34.2026.10.16.14.40.50
+        for <jamie@example.net>
+        (version=TLS1_2 cipher=ECDHE-RSA-AES128-GCM-SHA256 bits=128/128);
+        Fri, 16 Oct 2026 14:40:51 -0700 (PDT)
+Received-SPF: softfail (google.com: domain of transitioning msprvs1=19738ABCdefGH=bounces-123456@bounces.shop.example does not designate 192.174.90.23 as permitted sender) client-ip=192.174.90.23;
+Authentication-Results: mx.google.com;
+       dkim=pass header.i=@shop.example header.s=scph0124 header.b=Sp11Ar22;
+       spf=softfail (google.com: domain of transitioning msprvs1=19738ABCdefGH=bounces-123456@bounces.shop.example does not designate 192.174.90.23 as permitted sender) smtp.mailfrom="msprvs1=19738ABCdefGH=bounces-123456@bounces.shop.example";
+       dmarc=pass (p=REJECT sp=REJECT dis=NONE) header.from=shop.example
+X-MSFBL: RmFrZU1TRkJMRm9yVGVzdGluZ09ubHk=
+DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed; d=shop.example; s=scph0124; t=1792186850;
+	i=@shop.example; bh=RmFrZUJvZHlIYXNoRm9yVGVzdGluZ09ubHkxMjM0NTY=;
+	h=To:Message-ID:Date:Content-Type:Subject:From:From:To:Cc:Subject:Date;
+	b=Sp11Ar22RmFrZVNpZ25hdHVyZQ==
+To: jamie@example.net
+Message-ID: <F1.A2.12345.6789ABCD@momentum1-mta>
+Date: Fri, 16 Oct 2026 21:40:50 +0000
+Content-Type: text/plain; charset=utf-8
+Subject: Your account statement
+From: Example Shop <billing@shop.example>
+MIME-Version: 1.0
+
+Your statement is ready.
