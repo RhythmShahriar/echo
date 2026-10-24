@@ -257,8 +257,8 @@ func TestCheckRefusedResolverJSON(t *testing.T) {
 		Resolver    string        `json:"resolver"`
 		Issues      []model.Issue `json:"issues"`
 	}
-	if err := json.Unmarshal([]byte(out), &rep); err != nil {
-		t.Fatalf("%v\n%s", err, out)
+	if env := decodeEnvelope(t, []byte(out), kindCheck, &rep); env.Complete || env.Verdict != verdictError {
+		t.Errorf("an unanswered check is complete %v, verdict %q; want false and error", env.Complete, env.Verdict)
 	}
 	if !rep.Unreachable || rep.Resolver != addr || len(rep.Issues) != 1 || rep.Issues[0].Check != "dns/resolver" ||
 		!strings.Contains(rep.Issues[0].Fix, "at "+addr) {
@@ -288,5 +288,35 @@ func TestAnsweredLookups(t *testing.T) {
 	}
 	if got := lookupCause(&net.DNSError{Err: "dial udp 127.0.0.1:2: i/o timeout", Server: "127.0.0.53:53"}); got != "i/o timeout" {
 		t.Errorf("lookupCause: %q", got)
+	}
+}
+
+func TestDeliverabilityAndReplayJSON(t *testing.T) {
+	var hdr struct {
+		Provider string `json:"provider"`
+	}
+	code, out, _ := runCLI(t, "headers", "../../headers/testdata/sendgrid.eml", "--json")
+	if decodeEnvelope(t, []byte(out), kindHeaders, &hdr); code != 0 || hdr.Provider != "SendGrid" {
+		t.Errorf("headers --json: %d %+v", code, hdr)
+	}
+	addr, _ := nxdomain(t)
+	var rep struct {
+		Domain string `json:"domain"`
+	}
+	code, out, _ = runCLI(t, "check", "shop.test", "--resolver", addr, "--json", "--fail-on", "none")
+	if env := decodeEnvelope(t, []byte(out), kindCheck, &rep); code != 0 || rep.Domain != "shop.test" || env.Verdict != verdictFindings || !env.Complete {
+		t.Errorf("check --json: %d %+v %+v", code, env, rep)
+	}
+
+	secret := strings.Join([]string{"wh", "sec_", "CliTestSigningSecret0123456789"}, "")
+	t.Setenv("ECHO_STRIPE_WEBHOOK_SECRET", secret)
+	echoSrv := fixtureServer(t, 20469, catcher.NewServer(catcher.NewInbox(100), catcher.Config{Version: "test"}))
+	shop := stripeShop(t, secret, client.New(echoSrv.URL, ""), nil)
+	defer shop.Close()
+	t.Chdir(t.TempDir())
+	var data replayData
+	code, out, errOut := runCLI(t, "replay", "payment_intent.succeeded", "--to", shop.URL+"/webhook", "--url", echoSrv.URL, "--json", "--wait", "2s")
+	if env := decodeEnvelope(t, []byte(out), kindReplay, &data); code != 0 || env.Summary.Messages != 1 || data.Replay.Status != 200 || len(data.Messages) != 1 {
+		t.Errorf("replay --json: %d %+v %+v\n%s", code, env.Summary, data, errOut)
 	}
 }

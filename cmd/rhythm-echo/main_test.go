@@ -139,9 +139,9 @@ func TestSnapshotCompareThroughTheCLI(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var c model.Comparison
-	if err := json.Unmarshal(data, &c); err != nil {
-		t.Fatal(err)
+	var c struct{ Changes []model.Change } // data's actions are the run's, not a count
+	if env := decodeEnvelope(t, data, kindComparison, &c); env.Summary.Broke == 0 || env.Verdict != verdictFindings {
+		t.Errorf("summary %+v, verdict %q; want a BROKE and findings", env.Summary, env.Verdict)
 	}
 	var got []string
 	for _, ch := range c.Changes {
@@ -412,7 +412,7 @@ func TestUnusedFlagsAreRejected(t *testing.T) {
 		{[]string{"check", "shop.test", "--url", "http://127.0.0.1:1"}, "--url has no effect on check"},
 		{[]string{"report", "--url", "http://127.0.0.1:1"}, "--url has no effect on report"},
 		{[]string{"up", "--fail-on", "none"}, "--fail-on has no effect on up"},
-		{[]string{"doctor", "--json"}, "--json has no effect on doctor"},
+		{[]string{"doctor", "--md"}, "--md has no effect on doctor"},
 	} {
 		code, out, errOut := runCLI(t, tc.args...)
 		if code != exitUsage || !strings.Contains(errOut, tc.want) {
@@ -762,8 +762,8 @@ func TestListSince(t *testing.T) {
 	in.Add(model.Message{Channel: model.Email, To: []string{"new@shop.test"}, Subject: "New"})
 	code, out, errOut := runCLI(t, "ls", "--url", srv.URL, "--json", "--since", "10m")
 	var ms []model.Message
-	if err := json.Unmarshal([]byte(out), &ms); code != 0 || err != nil || len(ms) != 1 || ms[0].Subject != "New" {
-		t.Errorf("ls --since 10m: %d %v %s\n%s", code, err, errOut, out)
+	if decodeEnvelope(t, []byte(out), kindMessages, &ms); code != 0 || len(ms) != 1 || ms[0].Subject != "New" {
+		t.Errorf("ls --since 10m: %d %s\n%s", code, errOut, out)
 	}
 	if code, _, errOut := runCLI(t, "ls", "--since", "-5m"); code != exitUsage || !strings.Contains(errOut, "--since") {
 		t.Errorf("negative --since: %d %q", code, errOut)
@@ -897,7 +897,7 @@ func TestRunCommand(t *testing.T) {
 	}
 	code, out, _ = runCLI(t, "run", "--url", srv.URL, "--json")
 	var res model.Run
-	if code != exitOK || json.Unmarshal([]byte(out), &res) != nil || len(res.Actions) != 1 || len(res.Actions[0].Messages) != 1 {
+	if decodeEnvelope(t, []byte(out), kindRun, &res); code != exitOK || len(res.Actions) != 1 || len(res.Actions[0].Messages) != 1 {
 		t.Errorf("run --json: %d\n%s", code, out)
 	}
 	md := filepath.Join("out", "run.md")
@@ -1554,5 +1554,119 @@ func TestImportRefusesArchivesThatEscape(t *testing.T) {
 	_ = os.WriteFile(notGz, []byte("not gzip"), 0o600)
 	if code, _, errOut := runCLI(t, "snapshot", "--import", notGz); code != exitUsage || !strings.Contains(errOut, "not a snapshot archive") {
 		t.Errorf("import of a non-archive: %d %q", code, errOut)
+	}
+}
+
+// decodeEnvelope checks out is one JSON envelope of kind, with every
+// field of one, and decodes its data into data.
+func decodeEnvelope(t *testing.T, out []byte, kind jsonKind, data any) envelope {
+	t.Helper()
+	var keys map[string]json.RawMessage
+	if err := json.Unmarshal(out, &keys); err != nil {
+		t.Fatalf("not JSON: %v\n%s", err, out)
+	}
+	for _, k := range []string{"schema", "kind", "tool", "version", "complete", "summary", "verdict", "data"} {
+		if _, ok := keys[k]; !ok {
+			t.Errorf("the envelope has no %q:\n%s", k, out)
+		}
+	}
+	var env envelope
+	if err := json.Unmarshal(out, &env); err != nil {
+		t.Fatal(err)
+	}
+	if env.Schema != model.Schema || env.Kind != kind || env.Tool != "rhythm-echo" || env.Version == "" {
+		t.Errorf("envelope %s/%s/%s/%s; want %s, %s, rhythm-echo and a version", env.Schema, env.Kind, env.Tool, env.Version, model.Schema, kind)
+	}
+	switch env.Verdict {
+	case verdictOK, verdictFindings, verdictError:
+	default:
+		t.Errorf("verdict %q", env.Verdict)
+	}
+	if data != nil {
+		if err := json.Unmarshal(keys["data"], data); err != nil {
+			t.Errorf("data: %v\n%s", err, keys["data"])
+		}
+	}
+	return env
+}
+
+func TestEveryCommandWritesTheEnvelope(t *testing.T) {
+	if _, err := exec.LookPath("curl"); err != nil {
+		t.Skip("no curl")
+	}
+	inbox := catcher.NewInbox(1000)
+	echo := fixtureServer(t, 20468, catcher.NewServer(inbox, catcher.Config{Version: "test"}))
+	root := t.TempDir()
+	t.Setenv("HOME", root)
+	t.Chdir(root)
+	writeConfig(t, "smtp: \"off\"\n"+captureConfig(echo.URL, "Order received"))
+	cli := func(kind jsonKind, data any, want int, args ...string) envelope {
+		t.Helper()
+		code, out, errOut := runCLI(t, args...)
+		if code != want {
+			t.Errorf("%v: exit %d, want %d\n%s", args, code, want, errOut)
+		}
+		return decodeEnvelope(t, []byte(out), kind, data)
+	}
+
+	var run model.Run
+	env := cli(kindRun, &run, exitOK, "snapshot", "--url", echo.URL, "--name", "base", "--json")
+	if env.Summary.Actions != 1 || env.Summary.Messages != 1 || env.Verdict != verdictOK || !env.Complete || run.Name != "base" {
+		t.Errorf("snapshot --json: %+v %s, run %q", env.Summary, env.Verdict, run.Name)
+	}
+	if env := cli(kindRun, &run, exitOK, "run", "--url", echo.URL, "--json"); env.Summary.Messages != 1 {
+		t.Errorf("run --json: %+v", env.Summary)
+	}
+	writeConfig(t, "smtp: \"off\"\n"+captureConfig(echo.URL, "Your order"))
+	var cmpData struct {
+		Changes []model.Change `json:"changes"`
+		Actions []model.Action `json:"actions"`
+	}
+	env = cli(kindComparison, &cmpData, exitOK, "compare", "--url", echo.URL, "--json")
+	if env.Summary.Changed == 0 || env.Summary.Actions != 1 || env.Verdict != verdictFindings || len(cmpData.Actions) != 1 || len(cmpData.Changes) == 0 {
+		t.Errorf("compare --json: %+v %s, data %+v", env.Summary, env.Verdict, cmpData)
+	}
+	if env := cli(kindComparison, nil, exitOK, "report", "--json"); env.Summary.Changed == 0 {
+		t.Errorf("report --json: %+v", env.Summary)
+	}
+	// -o writes the envelope too.
+	if code, _, errOut := runCLI(t, "report", "-o", "out.json"); code != 0 {
+		t.Fatalf("report -o: %d %s", code, errOut)
+	}
+	if b, err := os.ReadFile("out.json"); err != nil {
+		t.Error(err)
+	} else {
+		decodeEnvelope(t, b, kindComparison, nil)
+	}
+
+	var ms []model.Message
+	if env := cli(kindMessages, &ms, exitOK, "ls", "--url", echo.URL, "--json"); env.Summary.Messages != len(ms) || len(ms) < 3 {
+		t.Errorf("ls --json: %+v, %d messages", env.Summary, len(ms))
+	}
+	var one []model.Message
+	if cli(kindMessages, &one, exitOK, "show", ms[0].ID, "--url", echo.URL); len(one) != 1 || one[0].ID != ms[0].ID {
+		t.Errorf("show: %+v", one)
+	}
+
+	var snaps []snapshotEntry
+	cli(kindSnapshots, &snaps, exitOK, "snapshots", "--json")
+	if len(snaps) != 1 || snaps[0].Name != "base" || !snaps[0].Latest || snaps[0].Actions != 1 || snaps[0].Messages != 1 || snaps[0].Started.IsZero() {
+		t.Errorf("snapshots --json: %+v", snaps)
+	}
+
+	var checks []doctorCheck
+	env = cli(kindDoctor, &checks, exitOK, "doctor", "--url", echo.URL, "--json")
+	if len(checks) == 0 || checks[0].Name != "Echo" || checks[0].Status != "ok" {
+		t.Errorf("doctor --json: %+v", checks)
+	}
+	env = cli(kindDoctor, &checks, exitFindings, "doctor", "--url", "http://127.0.0.1:20479", "--json")
+	if env.Summary.Errors != 1 || env.Verdict != verdictFindings || checks[0].Status != "error" {
+		t.Errorf("doctor --json with no Echo: %+v %s %+v", env.Summary, env.Verdict, checks)
+	}
+
+	// An empty list is [], not null.
+	t.Chdir(t.TempDir())
+	if code, out, _ := runCLI(t, "snapshots", "--json"); code != 0 || !strings.Contains(out, `"data": []`) {
+		t.Errorf("snapshots --json with none: %d\n%s", code, out)
 	}
 }

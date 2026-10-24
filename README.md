@@ -119,6 +119,7 @@ rhythm echo compare --open                       # what changed, in a report
 | Fail CI when a message stops being sent | `rhythm echo compare` (exits 1 on BROKE by default; `--fail-on new` is stricter) |
 | Compare in CI with a baseline from another job | `rhythm echo snapshot --export base.tgz` there, `rhythm echo compare --against base.tgz` here |
 | Stream what the site sends into a script | `rhythm echo watch --json` (one JSON object per line) |
+| Read any result in a script | `--json` on any command: one shape, with `kind`, `summary`, `verdict` and `data` |
 
 ## What it catches
 

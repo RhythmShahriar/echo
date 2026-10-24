@@ -29,6 +29,8 @@ import (
 	"github.com/RhythmShahriar/echo/client"
 	"github.com/RhythmShahriar/echo/compare"
 	"github.com/RhythmShahriar/echo/config"
+	"github.com/RhythmShahriar/echo/dns"
+	"github.com/RhythmShahriar/echo/headers"
 	"github.com/RhythmShahriar/echo/model"
 	"github.com/RhythmShahriar/echo/replay"
 	"github.com/RhythmShahriar/echo/report"
@@ -153,7 +155,7 @@ func (s *session) finish(res report.Result, hint string) int {
 		write := func(w io.Writer) error {
 			switch s.format {
 			case "json":
-				return report.JSON(w, res)
+				return writeEnvelope(w, resultKind(res), res)
 			case "md":
 				return report.Markdown(w, res)
 			case "junit":
@@ -666,7 +668,7 @@ func cmdList(s *session) int {
 		return s.fail(err)
 	}
 	if s.o.json {
-		return jsonOut(s, ms)
+		return jsonOut(s, kindMessages, ms)
 	}
 	if len(ms) == 0 && !s.o.quiet {
 		fmt.Fprintln(s.stderr, "No messages captured yet.")
@@ -689,7 +691,7 @@ func cmdShow(s *session) int {
 	if err != nil {
 		return s.fail(err)
 	}
-	return jsonOut(s, m)
+	return jsonOut(s, kindMessages, []model.Message{m})
 }
 
 func cmdClear(s *session) int {
@@ -725,11 +727,27 @@ func cmdSnapshots(s *session) int {
 	if err != nil {
 		return s.fail(err)
 	}
+	latest, _ := st.Snapshot("")
+	if s.o.json {
+		entries := make([]snapshotEntry, 0, len(names))
+		for _, n := range names {
+			dir := filepath.Join(st.Root, "snapshots", n)
+			r, err := store.LoadRun(dir)
+			if err != nil {
+				continue // the table says why; JSON lists what compare can use
+			}
+			e := snapshotEntry{Name: n, Started: r.Started, Actions: len(r.Actions), Latest: dir == latest}
+			for _, a := range r.Actions {
+				e.Messages += len(a.Messages)
+			}
+			entries = append(entries, e)
+		}
+		return jsonOut(s, kindSnapshots, entries)
+	}
 	if len(names) == 0 {
 		fmt.Fprintln(s.stdout, "No snapshots yet. Take one: rhythm echo snapshot")
 		return exitOK
 	}
-	latest, _ := st.Snapshot("")
 	fmt.Fprintf(s.stdout, "%-24s %-8s %-12s %s\n", "NAME", "ACTIONS", "TAKEN", "SENT")
 	for _, n := range names {
 		dir := filepath.Join(st.Root, "snapshots", n)
@@ -840,8 +858,9 @@ func cmdUpdate(_ []string, stdout, _ io.Writer) int {
 	return exitOK
 }
 
-func jsonOut(s *session, v any) int {
-	if err := report.JSONValue(s.stdout, v); err != nil {
+// jsonOut writes v to stdout in an envelope of kind.
+func jsonOut(s *session, kind jsonKind, v any) int {
+	if err := writeEnvelope(s.stdout, kind, v); err != nil {
 		return s.fail(err)
 	}
 	return exitOK
@@ -908,4 +927,204 @@ func plural(n int, word string) string {
 		return "1 " + word
 	}
 	return fmt.Sprintf("%d %ss", n, word)
+}
+
+// jsonKind says what a JSON envelope holds. The kinds, the envelope and
+// its counts stand in for report.Kind, report.Envelope and
+// report.WriteJSON until those are released, with the same fields.
+type jsonKind string
+
+// The kinds of --json output, one per command family. replay is the
+// CLI's own: the report package has no replay kind yet.
+const (
+	kindRun        jsonKind = "run"        // run, snapshot: the run with its actions
+	kindComparison jsonKind = "comparison" // compare, report on a comparison
+	kindCheck      jsonKind = "check"      // check <domain>: the DNS report
+	kindHeaders    jsonKind = "headers"    // headers <file.eml>
+	kindMessages   jsonKind = "messages"   // ls, show: captured messages
+	kindSnapshots  jsonKind = "snapshots"  // snapshots: the stored snapshots
+	kindDoctor     jsonKind = "doctor"     // doctor: what was checked and how it went
+	kindReplay     jsonKind = "replay"     // replay: the site's answer and what it sent
+)
+
+// The verdicts of an envelope. They don't depend on --fail-on, which
+// decides only the exit code.
+const (
+	verdictOK       = "ok"       // nothing found
+	verdictFindings = "findings" // changes or issues
+	verdictError    = "error"    // part couldn't be checked: an action failed, DNS didn't answer
+)
+
+// envelope is the one JSON shape every command's --json writes: what it
+// is, counts and a verdict that read the same for every kind, and the
+// command's own data.
+type envelope struct {
+	Schema   string      `json:"schema"`
+	Kind     jsonKind    `json:"kind"`
+	Tool     string      `json:"tool"`
+	Version  string      `json:"version"`
+	Complete bool        `json:"complete"` // false when part of it couldn't be checked (the verdict is then error)
+	Summary  jsonSummary `json:"summary"`
+	Verdict  string      `json:"verdict"`
+	Data     any         `json:"data"`
+}
+
+// jsonSummary counts what an envelope holds. A count that doesn't apply
+// to the kind is 0.
+type jsonSummary struct {
+	Broke         int `json:"broke"`
+	New           int `json:"new"`
+	Changed       int `json:"changed"`
+	Fixed         int `json:"fixed"`
+	Errors        int `json:"errors"`
+	Warnings      int `json:"warnings"`
+	Notices       int `json:"notices"`
+	Actions       int `json:"actions"` // run: actions run; comparison: actions compared
+	Messages      int `json:"messages"`
+	FailedActions int `json:"failed_actions"`
+}
+
+// snapshotEntry is one snapshot in snapshots --json.
+type snapshotEntry struct {
+	Name     string    `json:"name"`
+	Started  time.Time `json:"started"`
+	Actions  int       `json:"actions"`
+	Messages int       `json:"messages"`
+	Latest   bool      `json:"latest"` // the snapshot compare uses when none is named
+}
+
+// doctorCheck is one line of doctor --json.
+type doctorCheck struct {
+	Name   string `json:"name"`
+	Status string `json:"status"` // ok, warning or error
+	Detail string `json:"detail,omitempty"`
+	Fix    string `json:"fix,omitempty"`
+}
+
+// replayData is replay --json's data.
+type replayData struct {
+	Replay   replay.Result   `json:"replay"`
+	Messages []model.Message `json:"messages"`
+}
+
+// comparisonData is a comparison as an envelope holds it: "actions" is
+// the compared run's actions, as in a run, and their count is in the
+// summary.
+type comparisonData struct {
+	*model.Comparison
+	Actions []model.Action `json:"actions"`
+}
+
+// newEnvelope wraps v as kind and counts what it holds.
+func newEnvelope(kind jsonKind, v any) envelope {
+	e := envelope{Schema: model.Schema, Kind: kind, Tool: "rhythm-echo", Version: version, Complete: true, Data: v}
+	var issues []model.Issue
+	switch t := v.(type) {
+	case report.Result:
+		if t.Compared() {
+			c := t.Comparison
+			e.Version = cmp.Or(c.Version, e.Version)
+			e.Summary.Broke, e.Summary.New = c.Count(model.Broke), c.Count(model.New)
+			e.Summary.Changed, e.Summary.Fixed = c.Count(model.Changed), c.Count(model.Fixed)
+			e.Summary.Actions = c.Actions
+			var actions []model.Action
+			if t.Run != nil {
+				actions = t.Run.Actions
+			}
+			e.Data = comparisonData{Comparison: c, Actions: nonNil(actions)}
+		}
+		if t.Run != nil {
+			e.addRun(t.Run, !t.Compared())
+			issues = report.Issues(t.Run)
+			if !t.Compared() {
+				e.Data = t.Run
+			}
+		}
+	case unreachableReport:
+		issues = t.Issues
+		e.Complete = !t.Unreachable
+	case dns.Report:
+		issues = t.Issues
+	case headers.Result:
+		issues = t.Issues
+	case []model.Message:
+		e.Summary.Messages = len(t)
+		e.Data = nonNil(t)
+	case replayData:
+		e.Summary.Messages = len(t.Messages)
+		t.Messages = nonNil(t.Messages)
+		e.Data = t
+	case []snapshotEntry:
+		e.Data = nonNil(t)
+	case []doctorCheck:
+		for _, c := range t {
+			switch c.Status {
+			case string(model.Error):
+				e.Summary.Errors++
+			case string(model.Warning):
+				e.Summary.Warnings++
+			}
+		}
+		e.Data = nonNil(t)
+	}
+	if len(issues) > 0 {
+		n := report.Counts(issues)
+		e.Summary.Errors, e.Summary.Warnings, e.Summary.Notices = n[model.Error], n[model.Warning], n[model.Notice]
+	}
+	s := e.Summary
+	switch {
+	case !e.Complete:
+		e.Verdict = verdictError
+	case s.Broke+s.New+s.Changed+s.Errors+s.Warnings+s.Notices > 0:
+		e.Verdict = verdictFindings
+	default:
+		e.Verdict = verdictOK
+	}
+	return e
+}
+
+// addRun counts a run's actions and messages; a failed action or a
+// payload cut to size makes the result incomplete. actions says whether
+// the run's action count is the summary's (a comparison counts the
+// actions it compared instead).
+func (e *envelope) addRun(r *model.Run, actions bool) {
+	e.Version = cmp.Or(r.Version, e.Version)
+	if actions && r.Mode != "check" { // check and headers run no actions
+		e.Summary.Actions = len(r.Actions)
+	}
+	failed, _ := failedActions(r)
+	e.Summary.FailedActions = failed
+	for _, a := range r.Actions {
+		e.Summary.Messages += len(a.Messages)
+		for _, m := range a.Messages {
+			if strings.HasSuffix(m.Body, "…(truncated)") {
+				e.Complete = false
+			}
+		}
+	}
+	if failed > 0 {
+		e.Complete = false
+	}
+}
+
+// writeEnvelope writes v in an envelope of kind, indented as
+// report.JSONValue does.
+func writeEnvelope(w io.Writer, kind jsonKind, v any) error {
+	return report.JSONValue(w, newEnvelope(kind, v))
+}
+
+// resultKind is the kind of a run or comparison result.
+func resultKind(res report.Result) jsonKind {
+	if res.Compared() {
+		return kindComparison
+	}
+	return kindRun
+}
+
+// nonNil makes an empty list encode as [] rather than null.
+func nonNil[T any](s []T) []T {
+	if s == nil {
+		return []T{}
+	}
+	return s
 }

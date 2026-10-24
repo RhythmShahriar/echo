@@ -119,17 +119,33 @@ func cmdDoctor(s *session) int {
 	return d.end()
 }
 
-// doctor counts and prints doctor's checks.
+// doctor counts, prints and keeps doctor's checks.
 type doctor struct {
 	s         *session
 	run       string // the run ID canaries are tagged with
 	ok, fails int
+	checks    []doctorCheck // for --json
 }
 
-func (d *doctor) pass(label, detail string) { d.ok++; d.s.doctorLine(doctorOK, label, detail) }
-func (d *doctor) fail(label, detail string) { d.fails++; d.s.doctorLine(doctorFail, label, detail) }
-func (d *doctor) note(label, detail string) { d.s.doctorLine(doctorNote, label, detail) }
-func (d *doctor) end() int                  { return d.s.doctorEnd(d.ok, d.fails) }
+func (d *doctor) pass(label, detail string) { d.ok++; d.add(doctorOK, label, detail) }
+func (d *doctor) fail(label, detail string) { d.fails++; d.add(doctorFail, label, detail) }
+func (d *doctor) note(label, detail string) { d.add(doctorNote, label, detail) }
+
+func (d *doctor) add(r doctorResult, label, detail string) {
+	d.checks = append(d.checks, doctorCheck{Name: label, Status: r.status, Detail: detail})
+	d.s.doctorLine(r, label, detail)
+}
+
+// end prints the tally, or writes the checks with --json, and picks the
+// exit code.
+func (d *doctor) end() int {
+	if d.s.o.json {
+		if err := writeEnvelope(d.s.stdout, kindDoctor, d.checks); err != nil {
+			return d.s.fail(err)
+		}
+	}
+	return d.s.doctorEnd(d.ok, d.fails)
+}
 
 // smtp sends a canary through the SMTP sink at addr. When it doesn't
 // reach Echo, it says what is on that port instead, since a Mailpit left
@@ -513,17 +529,19 @@ func shell(ctx context.Context, line string) *exec.Cmd {
 	return cmd
 }
 
-// How a doctor check turned out: a glyph on a terminal, a word in --plain.
-type doctorResult struct{ glyph, word, color string }
+// How a doctor check turned out: a glyph on a terminal, a word in
+// --plain and its status in --json (a note is a warning there: something
+// went unchecked or may not work).
+type doctorResult struct{ glyph, word, color, status string }
 
 var (
-	doctorOK   = doctorResult{"✓", "ok", ui.Ok}
-	doctorFail = doctorResult{"✗", "FAIL", ui.Danger}
-	doctorNote = doctorResult{"·", "note", ui.Muted}
+	doctorOK   = doctorResult{"✓", "ok", ui.Ok, "ok"}
+	doctorFail = doctorResult{"✗", "FAIL", ui.Danger, string(model.Error)}
+	doctorNote = doctorResult{"·", "note", ui.Muted, string(model.Warning)}
 )
 
 func (s *session) doctorLine(r doctorResult, label, detail string) {
-	if s.o.quiet && r != doctorFail {
+	if s.o.json || s.o.quiet && r != doctorFail {
 		return
 	}
 	if s.plain {
@@ -535,7 +553,7 @@ func (s *session) doctorLine(r doctorResult, label, detail string) {
 }
 
 func (s *session) doctorEnd(ok, fails int) int {
-	if !s.o.quiet {
+	if !s.o.quiet && !s.o.json {
 		fmt.Fprintf(s.stdout, "\n  %s passed, %d failed.\n\n", plural(ok, "check"), fails)
 	}
 	if fails > 0 {

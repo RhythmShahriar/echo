@@ -264,6 +264,8 @@ Exit codes (as in Tuner and Soundcheck):
   sendmail exits with sendmail's codes instead (sysexits: 64 usage, 69 Echo unreachable…)
 
 Each command takes only the flags it reads; rhythm echo <command> --help lists them.
+--json writes one shape for every command: schema, kind, summary, verdict and data
+(watch --json streams one message per line instead).
 
 Examples:
   rhythm echo up                                   # seal this machine's staging sites

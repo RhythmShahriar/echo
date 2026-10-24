@@ -103,7 +103,7 @@ func cmdCheck(s *session) int {
 		issue := pr.issue()
 		rep.Issues = []model.Issue{issue}
 		if s.format == "json" {
-			if err := s.writeJSON(unreachableReport{Report: rep, Unreachable: true, Resolver: s.o.resolver}); err != nil {
+			if err := s.writeJSON(kindCheck, unreachableReport{Report: rep, Unreachable: true, Resolver: s.o.resolver}); err != nil {
 				return s.fail(err)
 			}
 			return exitError
@@ -112,7 +112,7 @@ func cmdCheck(s *session) int {
 		return exitError
 	}
 	s.view.Step("Records", deliverySummary(rep))
-	return s.issues(domain, rep.Issues, rep)
+	return s.issues(kindCheck, domain, rep.Issues, rep)
 }
 
 // dnsOptions are the DNS check settings from --resolver and
@@ -332,12 +332,13 @@ func cmdHeaders(s *session) int {
 	if args[0] == "-" {
 		label = "the message"
 	}
-	return s.issues(label, issues, r)
+	return s.issues(kindHeaders, label, issues, r)
 }
 
 // issues prints issues as a run would and picks the exit code. A JSON
-// report is v, the command's own result, to stdout or -o.
-func (s *session) issues(title string, is []model.Issue, v any) int {
+// report is v, the command's own result, in an envelope of kind, to
+// stdout or -o.
+func (s *session) issues(kind jsonKind, title string, is []model.Issue, v any) int {
 	if err := s.checkFailOn(false); err != nil {
 		return s.fail(err)
 	}
@@ -348,7 +349,7 @@ func (s *session) issues(title string, is []model.Issue, v any) int {
 	case "":
 		s.view.Summary(res, "")
 	case "json":
-		if err := s.writeJSON(v); err != nil {
+		if err := s.writeJSON(kind, v); err != nil {
 			return s.fail(err)
 		}
 	default:
@@ -360,12 +361,12 @@ func (s *session) issues(title string, is []model.Issue, v any) int {
 	return exitOK
 }
 
-// writeJSON writes v as JSON to the -o file, or to stdout.
-func (s *session) writeJSON(v any) error {
+// writeJSON writes v in an envelope of kind to the -o file, or to stdout.
+func (s *session) writeJSON(kind jsonKind, v any) error {
 	if s.o.output == "" {
-		return report.JSONValue(s.stdout, v)
+		return writeEnvelope(s.stdout, kind, v)
 	}
-	if err := writeFile(s.o.output, func(w io.Writer) error { return report.JSONValue(w, v) }); err != nil {
+	if err := writeFile(s.o.output, func(w io.Writer) error { return writeEnvelope(w, kind, v) }); err != nil {
 		return err
 	}
 	if !s.o.quiet {
@@ -433,7 +434,10 @@ func cmdReplay(s *session) int {
 		s.view.Message(m)
 	}
 	if s.o.json {
-		return jsonOut(s, map[string]any{"replay": res, "messages": msgs})
+		if code := jsonOut(s, kindReplay, replayData{Replay: res, Messages: msgs}); code != exitOK || res.OK() {
+			return code
+		}
+		return exitFindings
 	}
 	if !s.o.quiet {
 		fmt.Fprintf(s.stdout, "\n  The site answered %d and sent %s in response.\n\n", res.Status, report.Tally(&model.Run{Actions: []model.Action{{Messages: msgs}}}))
