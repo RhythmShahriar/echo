@@ -5,11 +5,16 @@ package runner
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"os/exec"
+	"path/filepath"
+	"reflect"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -227,5 +232,90 @@ func TestReplayOnlySealed(t *testing.T) {
 				t.Errorf("seal: error %q, %d requests", got.Error, hits.Load())
 			}
 		}
+	}
+}
+
+// capture is a transport that keeps the request body instead of sending it.
+type capture struct{ body []byte }
+
+func (c *capture) RoundTrip(r *http.Request) (*http.Response, error) {
+	c.body, _ = io.ReadAll(r.Body)
+	return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader("")), Request: r}, nil
+}
+
+// TestJSONBodyPlaceholders: placeholders in a JSON body are filled before
+// it's encoded, so any value gives valid JSON.
+func TestJSONBodyPlaceholders(t *testing.T) {
+	values := map[string]string{
+		"ZZ_QUOTE":     `O"Brien \ Ltd`,
+		"ZZ_NEWLINE":   "line one\nline two\r\n\ttabbed",
+		"ZZ_UNICODE":   "Zoë 東京 \u202eevil \U0001F600 \u2028",
+		"ZZ_BRACES":    `}],"x":{`,
+		"ZZ_KEY":       `k"ey\`,
+		"ZZ_EMPTY_NOT": "",
+	}
+	for k, v := range values {
+		t.Setenv(k, v)
+	}
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	yml := `site: http://shop.test
+actions:
+  - name: Order
+    http:
+      url: /order
+      json:
+        name: "${env:ZZ_QUOTE}"
+        note: "${env:ZZ_NEWLINE}"
+        city: "Hi ${env:ZZ_UNICODE}!"
+        "${env:ZZ_KEY}": "${env:ZZ_BRACES}"
+        lines: ["${env:ZZ_QUOTE}", 2, true, null, {sku: "${fake:tag}"}]
+        empty: "${env:ZZ_EMPTY_NOT}"
+        1: one
+        count: 3
+`
+	if err := os.WriteFile(path, []byte(yml), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := config.Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var tr capture
+	fake := &fakeData{tag: "abc123"}
+	o := Options{Config: cfg, HTTP: &http.Client{Transport: &tr}}
+	if err := doHTTP(context.Background(), o, cfg.Actions[0], "run", fake); err != nil {
+		t.Fatal(err)
+	}
+	if !json.Valid(tr.body) {
+		t.Fatalf("invalid JSON: %s", tr.body)
+	}
+	var got map[string]any
+	if err := json.Unmarshal(tr.body, &got); err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]any{
+		"name":           values["ZZ_QUOTE"],
+		"note":           values["ZZ_NEWLINE"],
+		"city":           "Hi " + values["ZZ_UNICODE"] + "!",
+		values["ZZ_KEY"]: values["ZZ_BRACES"],
+		"lines":          []any{values["ZZ_QUOTE"], 2.0, true, nil, map[string]any{"sku": "abc123"}},
+		"empty":          "",
+		"1":              "one",
+		"count":          3.0,
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("body = %#v\nwant   %#v", got, want)
+	}
+}
+
+func TestExpandJSONLeavesOtherValues(t *testing.T) {
+	f := &fakeData{tag: "t"}
+	for _, v := range []any{nil, 3, 2.5, true, "plain", "${fake:unknown}"} {
+		if got := f.expandJSON(v); got != v {
+			t.Errorf("expandJSON(%#v) = %#v", v, got)
+		}
+	}
+	if got := f.expandJSON("${fake:tag}"); got != "t" {
+		t.Errorf("a top-level string: %#v", got)
 	}
 }

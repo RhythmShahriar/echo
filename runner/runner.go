@@ -284,11 +284,11 @@ func doHTTP(ctx context.Context, o Options, a config.Action, runValue string, fa
 		}
 		body, ctype = strings.NewReader(v.Encode()), "application/x-www-form-urlencoded"
 	case h.JSON != nil:
-		b, err := json.Marshal(h.JSON)
+		b, err := json.Marshal(fake.expandJSON(h.JSON))
 		if err != nil {
 			return err
 		}
-		body, ctype = bytes.NewReader([]byte(fake.expand(string(b)))), "application/json"
+		body, ctype = bytes.NewReader(b), "application/json"
 	case h.Body != "":
 		body = strings.NewReader(fake.expand(h.Body))
 	}
@@ -387,6 +387,37 @@ func (f *fakeData) expand(s string) string {
 		}
 		return m
 	})
+}
+
+// expandJSON fills placeholders in the string keys and values of a JSON
+// body as YAML decoded it, before it's marshaled: expanding the encoded
+// text instead let a value such as O"Brien break the JSON. YAML maps
+// with non-string keys come back as map[any]any, which json.Marshal
+// refuses, so their keys become strings here.
+func (f *fakeData) expandJSON(v any) any {
+	switch v := v.(type) {
+	case string:
+		return f.expand(v)
+	case map[string]any:
+		out := make(map[string]any, len(v))
+		for k, val := range v {
+			out[f.expand(k)] = f.expandJSON(val)
+		}
+		return out
+	case map[any]any:
+		out := make(map[string]any, len(v))
+		for k, val := range v {
+			out[f.expand(fmt.Sprint(k))] = f.expandJSON(val)
+		}
+		return out
+	case []any:
+		out := make([]any, len(v))
+		for i, val := range v {
+			out[i] = f.expandJSON(val)
+		}
+		return out
+	}
+	return v
 }
 
 func token(n int) string {
