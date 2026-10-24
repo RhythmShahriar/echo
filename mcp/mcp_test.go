@@ -348,8 +348,8 @@ func TestSession(t *testing.T) {
 		if acts, _ := res["actions"].([]any); len(acts) != 1 || acts[0].(map[string]any)["label"] != "Checkout" {
 			t.Errorf("run: %s", text)
 		}
-		// The run has its report.html, as a CLI run does, and only its
-		// owner may open the folder or the files.
+		// The run has its report.html as a CLI run does. Only its owner
+		// may open the folder or the files.
 		dir, _ := res["dir"].(string)
 		fi, err := os.Stat(filepath.Join(dir, "report.html"))
 		if err != nil || fi.Size() == 0 {

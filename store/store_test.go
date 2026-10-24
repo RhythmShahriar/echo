@@ -600,7 +600,7 @@ func strays(t *testing.T, s Store) []string {
 }
 
 // TestFoldersAreOwnerOnly: every folder the store makes is 0700, whoever
-// calls it (the CLI, MCP or the hub), and a runs or snapshots folder an
+// calls it (the CLI, MCP or the hub). A runs or snapshots folder an
 // older version made 0750 is tightened.
 func TestFoldersAreOwnerOnly(t *testing.T) {
 	if runtime.GOOS == "windows" {

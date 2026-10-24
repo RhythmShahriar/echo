@@ -45,7 +45,7 @@ func TestMCPHubAndScheduleAreCommands(t *testing.T) {
 			t.Errorf("help %s: %d\n%s", c.name, code, out)
 		}
 	}
-	// sendmail's help says where the message goes, in order, and the
+	// sendmail's help says in order where the message goes and lists the
 	// variables it reads; --help prints it too.
 	code, out, _ := runCLI(t, "sendmail", "--help")
 	if code != exitOK {
