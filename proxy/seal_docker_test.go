@@ -15,6 +15,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
 	"testing"
@@ -24,24 +26,19 @@ import (
 // TestComposeSeal brings up docs/seal/examples/docker-compose.yml (with a
 // small app) and checks the seal: the app can't reach the internet, can
 // reach Echo, its requests and mail are captured and the proxy wants
-// the token. Echo is played by testdata/echostub until the CLI exists.
+// the token. Echo is the image built from this checkout's Dockerfile, as
+// RHYTHM_ECHO_IMAGE lets the Compose file take it.
 func TestComposeSeal(t *testing.T) {
 	needDocker(t, "nginx:1.27-alpine")
 	needDocker(t, "alpine:3.20")
-	dir := t.TempDir()
-	bin := filepath.Join(dir, "rhythm-echo")
-	build := exec.Command("go", "build", "-o", bin, "./testdata/echostub")
-	build.Env = append(os.Environ(), "CGO_ENABLED=0", "GOWORK=off")
-	if out, err := build.CombinedOutput(); err != nil {
-		t.Fatalf("build stub: %v\n%s", err, out)
-	}
+	image := echoImage(t)
 	b := make([]byte, 4)
 	_, _ = rand.Read(b)
 	project, token := "echo-seal-test-"+hex.EncodeToString(b), "tok"+hex.EncodeToString(b)
 	compose := func(args ...string) *exec.Cmd {
 		c := exec.Command("docker", append([]string{"compose", "-p", project, "-f", "../docs/seal/examples/docker-compose.yml",
 			"-f", "testdata/compose.override.yml"}, args...)...)
-		c.Env = append(os.Environ(), "RHYTHM_ECHO_BIN="+bin, "RHYTHM_ECHO_TOKEN="+token,
+		c.Env = append(os.Environ(), "RHYTHM_ECHO_IMAGE="+image, "RHYTHM_ECHO_TOKEN="+token,
 			"RHYTHM_ECHO_PORT=18925", "RHYTHM_FRONT_PORT=18980")
 		return c
 	}
@@ -146,4 +143,42 @@ func TestComposeSeal(t *testing.T) {
 			t.Errorf("front: %s %.80s", resp.Status, body)
 		}
 	})
+}
+
+// echoImage builds Echo's image from the Dockerfile at the repository root
+// for this machine's architecture, the way the release does: a static
+// binary at linux/<arch>/rhythm-echo in the build context. It skips when
+// docker buildx or the Dockerfile's base image isn't there, rather than
+// pull from a registry itself.
+func echoImage(t *testing.T) string {
+	t.Helper()
+	if exec.Command("docker", "buildx", "version").Run() != nil {
+		t.Skip("docker buildx not installed")
+	}
+	dockerfile, err := os.ReadFile(filepath.Join("..", "Dockerfile"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := regexp.MustCompile(`(?m)^FROM\s+(\S+)`).FindSubmatch(dockerfile)
+	if m == nil {
+		t.Fatal("the Dockerfile has no FROM line")
+	}
+	needDocker(t, string(m[1]))
+	ctx := t.TempDir()
+	bin := filepath.Join(ctx, "linux", runtime.GOARCH, "rhythm-echo")
+	build := exec.Command("go", "build", "-trimpath", "-o", bin, "./cmd/rhythm-echo")
+	build.Dir = ".."
+	build.Env = append(os.Environ(), "CGO_ENABLED=0", "GOOS=linux", "GOARCH="+runtime.GOARCH, "GOWORK=off")
+	if out, err := build.CombinedOutput(); err != nil {
+		t.Fatalf("go build: %v\n%s", err, out)
+	}
+	b := make([]byte, 4)
+	_, _ = rand.Read(b)
+	tag := "rhythm-echo-seal-test:" + hex.EncodeToString(b)
+	if out, err := exec.Command("docker", "buildx", "build", "--load", "--platform", "linux/"+runtime.GOARCH, //nolint:gosec // our own Dockerfile
+		"-f", filepath.Join("..", "Dockerfile"), "-t", tag, ctx).CombinedOutput(); err != nil {
+		t.Fatalf("docker build: %v\n%s", err, out)
+	}
+	t.Cleanup(func() { _ = exec.Command("docker", "image", "rm", "-f", tag).Run() })
+	return tag
 }
