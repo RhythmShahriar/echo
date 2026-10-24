@@ -169,8 +169,9 @@ func TestSnapshotCompareThroughTheCLI(t *testing.T) {
 	assertPrivate(t, "result.json", ".echo/runs", ".echo/snapshots")
 }
 
-// assertPrivate fails for any file under paths that others can read:
-// reports and runs hold the captured messages themselves.
+// assertPrivate fails for any file or folder under paths that others
+// can read: reports and runs hold the captured messages themselves.
+// Files must be 0600 and folders 0700.
 func assertPrivate(t *testing.T, paths ...string) {
 	t.Helper()
 	if runtime.GOOS == "windows" {
@@ -179,16 +180,21 @@ func assertPrivate(t *testing.T, paths ...string) {
 	seen := 0
 	for _, root := range paths {
 		err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
-			if err != nil || d.IsDir() {
+			if err != nil {
 				return err
 			}
 			info, err := d.Info()
 			if err != nil {
 				return err
 			}
-			seen++
-			if mode := info.Mode().Perm(); mode != 0o600 {
-				t.Errorf("%s: mode %o, want 600", path, mode)
+			want := fs.FileMode(0o600)
+			if d.IsDir() {
+				want = 0o700
+			} else {
+				seen++
+			}
+			if mode := info.Mode().Perm(); mode != want {
+				t.Errorf("%s: mode %o, want %o", path, mode, want)
 			}
 			return nil
 		})

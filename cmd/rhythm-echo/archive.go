@@ -183,7 +183,7 @@ func importSnapshot(st store.Store, file, name string, replace bool) (string, er
 		return "", err
 	}
 	defer func() { _ = f.Close() }()
-	tmp, err := st.NewDir(store.Incoming, "import-"+store.Stamp(time.Now()))
+	tmp, err := newDir(st, store.Incoming, "import-"+store.Stamp(time.Now()))
 	if err != nil {
 		return "", err
 	}

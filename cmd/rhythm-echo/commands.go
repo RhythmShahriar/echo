@@ -312,7 +312,7 @@ func cmdSnapshot(s *session) int {
 		return s.fail(err)
 	}
 	name := cmp.Or(s.o.name, store.Stamp(time.Now()))
-	dir, err := s.st.NewDir(store.Incoming, name)
+	dir, err := newDir(s.st, store.Incoming, name)
 	if err != nil {
 		return s.fail(err)
 	}
@@ -431,7 +431,7 @@ func cmdCompare(s *session) int {
 	if err := s.selectActions(); err != nil {
 		return s.fail(err)
 	}
-	dir, err := s.st.NewDir("runs", store.Stamp(time.Now()))
+	dir, err := newDir(s.st, "runs", store.Stamp(time.Now()))
 	if err != nil {
 		return s.fail(err)
 	}
@@ -469,7 +469,7 @@ func cmdRun(s *session) int {
 	if err := s.selectActions(); err != nil {
 		return s.fail(err)
 	}
-	dir, err := s.st.NewDir("runs", store.Stamp(time.Now()))
+	dir, err := newDir(s.st, "runs", store.Stamp(time.Now()))
 	if err != nil {
 		return s.fail(err)
 	}
@@ -886,6 +886,23 @@ func jsonOut(s *session, kind jsonKind, v any) int {
 		return s.fail(err)
 	}
 	return exitOK
+}
+
+// newDir is st.NewDir with the folder and the one it sits in (runs or
+// snapshots) made 0700, as writeFile's folders are: the store makes them
+// 0750 and its files hold captured messages. Promote moves the folder
+// whole, so a snapshot keeps the mode.
+func newDir(st store.Store, kind, name string) (string, error) {
+	dir, err := st.NewDir(kind, name)
+	if err != nil {
+		return "", err
+	}
+	for _, d := range []string{filepath.Dir(dir), dir} {
+		if err := os.Chmod(d, 0o700); err != nil { //nolint:gosec // a folder: 0700 lets only its owner list it
+			return "", err
+		}
+	}
+	return dir, nil
 }
 
 // writeFile writes a report atomically, readable only by its owner: a
