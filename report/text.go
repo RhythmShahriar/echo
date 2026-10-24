@@ -1,0 +1,204 @@
+package report
+
+import (
+	"encoding/json"
+	"encoding/xml"
+	"fmt"
+	"io"
+	"slices"
+	"strings"
+	"time"
+
+	"github.com/RhythmShahriar/echo/model"
+)
+
+// JSON writes the comparison, or the run, in the rhythm-echo/v1 schema.
+func JSON(w io.Writer, r Result) error {
+	enc := json.NewEncoder(w)
+	enc.SetIndent("", "  ")
+	enc.SetEscapeHTML(false)
+	if r.Compared() {
+		return enc.Encode(r.Comparison)
+	}
+	return enc.Encode(r.Run)
+}
+
+// Markdown writes a report for pull requests and CI summaries.
+func Markdown(w io.Writer, r Result) error {
+	var b strings.Builder
+	run := r.Run
+	b.WriteString("## ♪ Echo\n\n")
+	if r.Compared() {
+		c := r.Comparison
+		fmt.Fprintf(&b, "**%s.** %s compared with %s; this run sent %s.\n\n", verdict(c), plural(c.Actions, "action", "actions"), snapshotAt(c.Before), Tally(run))
+		b.WriteString("| Broke | New | Changed | Fixed |\n|---:|---:|---:|---:|\n|")
+		for _, class := range model.Classes {
+			fmt.Fprintf(&b, " %d |", c.Count(class))
+		}
+		b.WriteString("\n\n")
+		for _, class := range model.Classes {
+			var cs []model.Change
+			for _, ch := range c.Changes {
+				if ch.Class == class {
+					cs = append(cs, ch)
+				}
+			}
+			if len(cs) == 0 {
+				continue
+			}
+			info := classInfo[class]
+			fmt.Fprintf(&b, "### %s %s (%d)\n\n_%s._\n\n| Change | Actions | Before → after | Fix |\n|---|---|---|---|\n", info.Glyph, info.Label, len(cs), capitalize(info.Blurb))
+			for _, ch := range cs {
+				title := cell(ch.Title)
+				if ch.Detail != "" {
+					title += "<br><sub>" + cell(firstLine(ch.Detail)) + "</sub>"
+				}
+				fix := ""
+				if class != model.Fixed {
+					fix = cell(firstLine(ch.Fix))
+				}
+				fmt.Fprintf(&b, "| %s | %s | %s | %s |\n", title, cell(actionsLabel(ch.Actions, 3)), cell(beforeAfter(ch)), fix)
+			}
+			b.WriteString("\n")
+		}
+		notes(&b, c.Warnings)
+	} else {
+		issues := Issues(run)
+		counts := Counts(issues)
+		fmt.Fprintf(&b, "**%s.** %s run; %s sent.\n\n", capitalize(runVerdict(run, counts)), plural(len(run.Actions), "action", "actions"), Tally(run))
+		b.WriteString("| Action | Sent | Issues |\n|---|---|---:|\n")
+		for _, a := range run.Actions {
+			sent := Tally(&model.Run{Actions: []model.Action{a}})
+			if a.Error != "" {
+				sent = "failed: " + cell(firstLine(a.Error))
+			}
+			fmt.Fprintf(&b, "| %s | %s | %d |\n", cell(a.Label), sent, len(a.Issues))
+		}
+		b.WriteString("\n")
+		if len(issues) > 0 {
+			b.WriteString("| Level | Issue | Actions | Fix |\n|---|---|---|---|\n")
+			for _, i := range issues {
+				fmt.Fprintf(&b, "| %s | %s | %s | %s |\n", i.Level, cell(i.Title), cell(actionsLabel(i.Actions, 3)), cell(firstLine(i.Fix)))
+			}
+			b.WriteString("\n")
+		}
+		notes(&b, run.Warnings)
+	}
+	fmt.Fprintf(&b, "<sub>rhythm-echo %s · %s mode · %s</sub>\n", run.Version, run.Mode, run.Started.UTC().Format("2006-01-02 15:04 MST"))
+	_, err := io.WriteString(w, b.String())
+	return err
+}
+
+func notes(b *strings.Builder, ns []string) {
+	if len(ns) == 0 {
+		return
+	}
+	fmt.Fprintf(b, "<details><summary>%s</summary>\n\n", plural(len(ns), "note", "notes"))
+	for _, n := range ns {
+		fmt.Fprintf(b, "- %s\n", cell(n))
+	}
+	b.WriteString("\n</details>\n\n")
+}
+
+func cell(s string) string {
+	return strings.NewReplacer("|", `\|`, "\n", " ", "\r", "", "<", "&lt;", ">", "&gt;").Replace(s)
+}
+
+type junitSuites struct {
+	XMLName  xml.Name     `xml:"testsuites"`
+	Name     string       `xml:"name,attr"`
+	Tests    int          `xml:"tests,attr"`
+	Failures int          `xml:"failures,attr"`
+	Time     float64      `xml:"time,attr"`
+	Suites   []junitSuite `xml:"testsuite"`
+}
+
+type junitSuite struct {
+	Name      string      `xml:"name,attr"`
+	Tests     int         `xml:"tests,attr"`
+	Failures  int         `xml:"failures,attr"`
+	Timestamp string      `xml:"timestamp,attr"`
+	Cases     []junitCase `xml:"testcase"`
+}
+
+type junitCase struct {
+	Name      string        `xml:"name,attr"`
+	Classname string        `xml:"classname,attr"`
+	Failure   *junitFailure `xml:"failure,omitempty"`
+	Out       string        `xml:"system-out,omitempty"`
+}
+
+type junitFailure struct {
+	Message string `xml:"message,attr"`
+	Type    string `xml:"type,attr"`
+	Text    string `xml:",chardata"`
+}
+
+// JUnit writes one suite per change class (or per action, for a run).
+// Cases at or above failOn fail; without failOn, BROKE and NEW (or errors
+// and failed actions) fail.
+func JUnit(w io.Writer, r Result, failOn string) error {
+	out := junitSuites{Name: "echo", Time: r.Run.Duration / 1000}
+	stamp := r.Run.Started.UTC().Format(time.RFC3339)
+	if r.Compared() {
+		limit := slices.Index(model.Classes, failOn)
+		if failOn == "" {
+			limit = slices.Index(model.Classes, model.New)
+		}
+		for i, class := range model.Classes {
+			s := junitSuite{Name: "echo." + class, Timestamp: stamp}
+			for _, ch := range r.Comparison.Changes {
+				if ch.Class != class {
+					continue
+				}
+				text := strings.TrimSpace(strings.Join([]string{"actions: " + actionsLabel(ch.Actions, 10), beforeAfter(ch), ch.Detail, ch.Fix}, "\n"))
+				tc := junitCase{Name: ch.Title, Classname: strings.ReplaceAll(ch.Check, "/", "."), Out: text}
+				if i <= limit && class != model.Fixed {
+					tc.Failure, tc.Out = &junitFailure{Message: classInfo[class].Label + ": " + ch.Title, Type: class, Text: text}, ""
+					s.Failures++
+				}
+				s.Cases = append(s.Cases, tc)
+			}
+			s.Tests = len(s.Cases)
+			out.Suites = append(out.Suites, s)
+		}
+	} else {
+		limit := model.Level(failOn).Rank()
+		if failOn == "" {
+			limit = model.Error.Rank()
+		}
+		for _, a := range r.Run.Actions {
+			s := junitSuite{Name: "echo." + a.ID, Timestamp: stamp}
+			tc := junitCase{Name: a.Label + " sends its messages", Classname: "echo.action", Out: Tally(&model.Run{Actions: []model.Action{a}})}
+			if a.Error != "" {
+				tc.Failure, tc.Out = &junitFailure{Message: a.Error, Type: "action"}, ""
+				s.Failures++
+			}
+			s.Cases = append(s.Cases, tc)
+			for _, i := range a.Issues {
+				c := junitCase{Name: i.Title, Classname: strings.ReplaceAll(i.Check, "/", "."), Out: i.Detail}
+				if i.Level.Rank() <= limit {
+					c.Failure, c.Out = &junitFailure{Message: i.Title, Type: string(i.Level), Text: i.Detail + "\n" + i.Fix}, ""
+					s.Failures++
+				}
+				s.Cases = append(s.Cases, c)
+			}
+			s.Tests = len(s.Cases)
+			out.Suites = append(out.Suites, s)
+		}
+	}
+	for _, s := range out.Suites {
+		out.Tests += s.Tests
+		out.Failures += s.Failures
+	}
+	if _, err := io.WriteString(w, xml.Header); err != nil {
+		return err
+	}
+	enc := xml.NewEncoder(w)
+	enc.Indent("", "  ")
+	if err := enc.Encode(out); err != nil {
+		return err
+	}
+	_, err := io.WriteString(w, "\n")
+	return err
+}

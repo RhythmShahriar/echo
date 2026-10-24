@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="generator" content="rhythm-echo {{.Version}}">
+<title>{{.Title}}</title>
+<style>
+:root {
+  --dot: #E8603A; --bg: #FAFAF9; --card: #FFFFFF; --text: #100F0D; --muted: #6B7280; --line: #E7E5E4; --soft: #F5F5F4;
+  --broke: #DC2626; --new: #EA580C; --changed: #CA8A04; --fixed: #059669; --ok: #059669;
+  --error: #DC2626; --warning: #EA580C; --notice: #6B7280; --sent: #EA580C; --faked: #059669; --blocked: #CA8A04; --failed: #DC2626;
+  --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+  --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --dot: #FF7C52; --bg: #100F0D; --card: #1A1917; --text: #F5F5F4; --muted: #A8A29E; --line: #2E2C29; --soft: #23211E;
+    --broke: #EF4444; --new: #F97316; --changed: #EAB308; --fixed: #10B981; --ok: #10B981;
+    --error: #EF4444; --warning: #F97316; --notice: #A8A29E; --sent: #F97316; --faked: #10B981; --blocked: #EAB308; --failed: #EF4444;
+  }
+}
+:root[data-theme="dark"] {
+  --dot: #FF7C52; --bg: #100F0D; --card: #1A1917; --text: #F5F5F4; --muted: #A8A29E; --line: #2E2C29; --soft: #23211E;
+  --broke: #EF4444; --new: #F97316; --changed: #EAB308; --fixed: #10B981; --ok: #10B981;
+  --error: #EF4444; --warning: #F97316; --notice: #A8A29E; --sent: #F97316; --faked: #10B981; --blocked: #EAB308; --failed: #EF4444;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.55 var(--sans); }
+.wrap { max-width: 1080px; margin: 0 auto; padding: 0 16px 64px; }
+header.top { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 22px 0 18px; border-bottom: 1px solid var(--line); }
+.brand { display: flex; align-items: baseline; gap: 10px; font-weight: 700; }
+.brand .dot { color: var(--dot); font-size: 20px; }
+.brand small, .meta { color: var(--muted); font-size: 13px; }
+.brand small { font-family: var(--mono); font-size: 12px; font-weight: 500; }
+.meta { text-align: right; overflow-wrap: anywhere; }
+.meta b { color: var(--text); font-family: var(--mono); font-weight: 600; }
+.theme { border: 1px solid var(--line); background: var(--card); color: var(--muted); border-radius: 8px; padding: 4px 8px; cursor: pointer; font: inherit; font-size: 12px; }
+.hero { padding: 36px 0 22px; }
+.eyebrow { text-transform: uppercase; letter-spacing: .12em; font-size: 11px; color: var(--muted); font-weight: 600; }
+.verdict { font-size: clamp(28px, 5vw, 44px); line-height: 1.1; font-weight: 750; letter-spacing: -.025em; margin: 6px 0 8px; }
+.verdict::before { content: ""; display: inline-block; width: .42em; height: .42em; border-radius: 50%; margin-right: .32em; vertical-align: .14em; background: var(--tone); }
+.tone-broke { --tone: var(--broke); } .tone-new { --tone: var(--new); } .tone-changed { --tone: var(--changed); } .tone-ok { --tone: var(--ok); }
+.sub { color: var(--muted); margin: 0; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 20px; }
+.chip { --c: var(--muted); border: 1px solid var(--line); background: var(--card); border-radius: 999px; padding: 6px 14px 6px 10px; font-size: 13px; }
+.chip b { color: var(--c); margin-right: 4px; }
+.k-broke { --c: var(--broke); } .k-new { --c: var(--new); } .k-changed { --c: var(--changed); } .k-fixed { --c: var(--fixed); }
+.k-error { --c: var(--error); } .k-warning { --c: var(--warning); } .k-notice { --c: var(--notice); }
+h2 { font-size: 13px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin: 34px 0 12px; }
+.item { background: var(--card); border: 1px solid var(--line); border-left: 4px solid var(--c, var(--muted)); border-radius: 12px; padding: 14px 18px; margin-bottom: 10px; }
+.item .head { display: flex; justify-content: space-between; gap: 12px; }
+.badge { display: inline-block; font-size: 11px; font-weight: 700; letter-spacing: .08em; color: #fff; background: var(--c, var(--muted)); border-radius: 6px; padding: 2px 7px; margin-right: 8px; vertical-align: 2px; }
+.item h3 { margin: 0; font-size: 15.5px; font-weight: 650; overflow-wrap: anywhere; }
+.where { color: var(--muted); font: 12px/1.6 var(--mono); flex: none; max-width: 40%; text-align: right; overflow-wrap: anywhere; }
+.facts { color: var(--muted); font-size: 13px; margin-top: 8px; overflow-wrap: anywhere; }
+.facts code { font: 12.5px var(--mono); background: var(--soft); border-radius: 5px; padding: 1px 5px; color: var(--text); }
+.fix { margin: 10px 0 0; padding: 9px 12px; background: var(--soft); border-radius: 8px; font-size: 14px; }
+.fix::before { content: "→ "; color: var(--dot); font-weight: 700; }
+details.action { background: var(--card); border: 1px solid var(--line); border-radius: 12px; margin-bottom: 10px; }
+details.action > summary { cursor: pointer; padding: 14px 18px; display: flex; justify-content: space-between; gap: 12px; list-style: none; }
+details.action > summary::-webkit-details-marker { display: none; }
+details.action > summary b { font-weight: 650; }
+details.action > summary span { color: var(--muted); font-size: 13px; }
+.failed-action { color: var(--failed); font-size: 13px; padding: 0 18px 12px; }
+.msgs { border-top: 1px solid var(--line); }
+.msg { padding: 14px 18px; border-bottom: 1px solid var(--line); }
+.msg:last-child { border-bottom: 0; }
+.msg .row { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+.glyph { color: var(--dot); font-size: 16px; width: 18px; }
+.kind { font-weight: 650; }
+.to { font-family: var(--mono); font-size: 13px; overflow-wrap: anywhere; }
+.status { margin-left: auto; font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--s, var(--muted)); }
+.s-sent { --s: var(--sent); } .s-faked { --s: var(--faked); } .s-blocked { --s: var(--blocked); } .s-failed { --s: var(--failed); }
+.time, .via { color: var(--muted); font: 12px var(--mono); }
+.subject { margin: 6px 0 0 28px; font-weight: 600; overflow-wrap: anywhere; }
+.preview { margin: 10px 0 0 28px; }
+.preview iframe { width: 100%; height: 360px; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
+.bubble { display: inline-block; max-width: 520px; background: var(--soft); border-radius: 16px 16px 16px 4px; padding: 10px 14px; white-space: pre-wrap; overflow-wrap: anywhere; }
+pre { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font: 12.5px/1.5 var(--mono); background: var(--soft); border-radius: 8px; padding: 10px 12px; max-height: 360px; overflow: auto; }
+.issues { margin: 8px 0 0 28px; color: var(--warning); font-size: 13px; }
+.issues li { margin: 2px 0; }
+.empty { text-align: center; padding: 48px 16px; color: var(--muted); border: 1px dashed var(--line); border-radius: 14px; margin-top: 26px; }
+.empty b { display: block; font-size: 19px; color: var(--text); margin-bottom: 6px; }
+details.notes { margin-top: 30px; color: var(--muted); font-size: 13px; }
+footer { margin-top: 44px; color: var(--muted); font-size: 12px; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+@media (max-width: 640px) { header.top { flex-wrap: wrap; } .meta { text-align: left; } .item .head { flex-direction: column; } .where { max-width: none; text-align: left; } .subject, .preview, .issues { margin-left: 0; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="brand"><span class="dot">♪</span> rhythm echo <small>{{.Version}}</small></div>
+    <div class="meta">{{if .Target}}<b>{{.Target}}</b><br>{{end}}{{.Created}} · {{.Mode}} mode{{if .Against}} · against {{.Against}}{{end}}
+      <button class="theme" type="button" id="theme" aria-label="Switch light or dark theme">◐ theme</button></div>
+  </header>
+
+  <div class="hero tone-{{.Tone}}">
+    <div class="eyebrow">{{if .Compared}}Is the site still saying what it should?{{else}}What the site sends{{end}}</div>
+    <h1 class="verdict">{{.Verdict}}</h1>
+    <p class="sub">{{len .Actions}} actions · {{.Tally}}</p>
+    <div class="chips">{{range .Chips}}<span class="chip k-{{.Key}}"><b>{{.Glyph}} {{.N}}</b>{{.Label}}</span>{{end}}</div>
+  </div>
+
+  {{if .Compared}}
+    {{if .Changes}}<h2>Changes</h2>{{range .Changes}}
+    <article class="item k-{{.Key}}"><div class="head"><h3><span class="badge">{{.Label}}</span>{{.Title}}</h3><div class="where">{{.Where}}</div></div>
+      {{if or .BeforeAfter .Detail}}<div class="facts">{{if .BeforeAfter}}<code>{{.BeforeAfter}}</code> {{end}}{{.Detail}}</div>{{end}}
+      {{if gt (len .Actions) 1}}<div class="facts">{{range $i, $a := .Actions}}{{if $i}}, {{end}}{{$a}}{{end}}</div>{{end}}
+      {{if .Fix}}<p class="fix">{{.Fix}}</p>{{end}}</article>{{end}}
+    {{else}}<div class="empty"><b>No differences</b>Every action sends what it sent in the snapshot.</div>{{end}}
+  {{else}}
+    {{if .Issues}}<h2>Issues</h2>{{range .Issues}}
+    <article class="item k-{{.Key}}"><div class="head"><h3><span class="badge">{{.Label}}</span>{{.Title}}</h3><div class="where">{{.Where}}</div></div>
+      {{if .Detail}}<div class="facts">{{.Detail}}</div>{{end}}{{if .Fix}}<p class="fix">{{.Fix}}</p>{{end}}</article>{{end}}{{end}}
+  {{end}}
+
+  <h2>Messages by action</h2>
+  {{range .Actions}}
+  <details class="action"{{if .Error}} open{{end}}>
+    <summary><b>{{.Label}}</b><span>{{.Tally}}{{if .Issues}} · {{.Issues}} issues{{end}}</span></summary>
+    {{if .Error}}<div class="failed-action">The action failed: {{.Error}}</div>{{end}}
+    {{if .Messages}}<div class="msgs">{{range .Messages}}
+      <div class="msg">
+        <div class="row"><span class="glyph">{{.Glyph}}</span><span class="kind">{{.Kind}}</span><span class="to">→ {{if .To}}{{.To}}{{else}}{{.URL}}{{end}}</span>
+          <span class="status s-{{.StatusKey}}">{{.Status}}</span></div>
+        <div class="row"><span class="time">{{.Time}}</span>{{if .From}}<span class="via">from {{.From}}</span>{{end}}{{if .Via}}<span class="via">via {{.Via}}</span>{{end}}{{if .Method}}<span class="via">{{.Method}} {{.URL}}</span>{{end}}</div>
+        {{if .Subject}}<div class="subject">{{.Subject}}</div>{{end}}
+        {{if .Event}}<div class="subject">event: {{.Event}}</div>{{end}}
+        <div class="preview">
+          {{if .HTML}}<iframe sandbox title="Email preview" srcdoc="{{.HTML}}"></iframe>
+          {{else if and (eq .Channel "email") .Text}}<pre>{{.Text}}</pre>
+          {{else if .Text}}<div class="bubble">{{.Text}}</div>
+          {{else if .Body}}<pre>{{.Body}}</pre>{{end}}
+          {{if .Response}}<pre style="margin-top:8px">↩ {{.Response}}</pre>{{end}}
+          {{if .Error}}<pre style="margin-top:8px">{{.Error}}</pre>{{end}}
+        </div>
+        {{if .Issues}}<ul class="issues">{{range .Issues}}<li>{{.}}</li>{{end}}</ul>{{end}}
+      </div>{{end}}</div>{{end}}
+  </details>
+  {{else}}<div class="empty"><b>No actions</b>Nothing was run.</div>{{end}}
+
+  {{if .Notes}}<details class="notes"><summary>Notes ({{len .Notes}})</summary><ul>{{range .Notes}}<li>{{.}}</li>{{end}}</ul></details>{{end}}
+
+  <footer><span>Made with ♪ rhythm echo {{.Version}}. In seal mode nothing was really sent: Echo answered for the services.</span><span>rythm.sh/echo</span></footer>
+</div>
+<script>
+(function () {
+  var root = document.documentElement;
+  try { var t = localStorage.getItem("echo-theme"); if (t) root.setAttribute("data-theme", t); } catch (e) {}
+  document.getElementById("theme").addEventListener("click", function () {
+    var dark = root.getAttribute("data-theme") ? root.getAttribute("data-theme") === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+    var next = dark ? "light" : "dark";
+    root.setAttribute("data-theme", next);
+    try { localStorage.setItem("echo-theme", next); } catch (e) {}
+  });
+})();
+</script>
+</body>
+</html>
