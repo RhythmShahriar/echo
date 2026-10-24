@@ -194,7 +194,7 @@ scenarios:
     channel: webhook
     toggle: "the lead goes to a test Zap's catch hook instead of the live one (wp/plugins/testbed-forms)"
     expect:
-      - {class: broke, check: message/missing, title: "hooks.zapier.com is no longer sent"}
+      - {class: broke, check: message/missing, title: "Zapier webhook to hooks.zapier.com/hooks/catch/1234567/ab"}
 
   - id: s16
     name: The order webhook to the CRM fails (and WooCommerce disables it after five failures)
