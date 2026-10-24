@@ -313,8 +313,11 @@ func snapshot(ctx context.Context, st store.Store, o runner.Options) (string, er
 
 // after runs the update command in the site's folder. Its output goes to
 // the log; RHYTHM_ECHO_SITE and RHYTHM_ECHO_URL say which site and hub.
-// It never sees the hub's tokens: a plugin update in one client's site
-// runs that plugin's code, which must not read every client's mail.
+// The hub's tokens are hidden from it, so a plugin update in one client's
+// site can't ask the hub for every client's mail. That is all it hides:
+// the command runs as the hub's user and can still read the store's
+// inbox.jsonl, which holds every site's mail. Run it as another user
+// (sudo -u www-data …) to keep it out of the store.
 func after(ctx context.Context, o WindowOptions, site *Site) error {
 	ctx, cancel := context.WithTimeout(ctx, o.AfterTimeout)
 	defer cancel()

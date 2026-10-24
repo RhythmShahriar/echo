@@ -231,6 +231,10 @@ then a compare. Results are kept in the store, per site.
 
 Exit codes with --now and --once: 0 nothing broke, 1 a site broke or its
 update failed, 2 wrong command line or sites file, 3 couldn't run.
+
+The command never sees the hub's tokens. It still runs as your user and can
+read the store, which holds every site's mail. Run it as a user that can't
+read the store, like --after "sudo -u www-data wp plugin update --all".
 `
 
 // ScheduleMain runs update windows, for rhythm echo schedule.
