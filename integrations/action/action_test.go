@@ -310,17 +310,20 @@ func TestActionPRComment(t *testing.T) {
 		t.Fatalf("comment-id %q\n%s", res.outputs["comment-id"], res.log)
 	}
 	calls := gh.calls(t)
-	if len(calls) != 2 || !strings.HasPrefix(calls[0], "api --paginate repos/RhythmShahriar/echo/issues/7/comments") ||
-		!strings.HasPrefix(calls[1], "api -X POST repos/RhythmShahriar/echo/issues/7/comments -f body=<!-- rhythm-echo comment: sites/shop -->") {
+	// The workflow token can't ask gh api user, so the comment is
+	// github-actions[bot]'s.
+	if len(calls) != 3 || calls[0] != "api user --jq .login" ||
+		!strings.HasPrefix(calls[1], "api --paginate repos/RhythmShahriar/echo/issues/7/comments") ||
+		!strings.HasPrefix(calls[2], "api -X POST repos/RhythmShahriar/echo/issues/7/comments -f body=<!-- rhythm-echo comment: sites/shop -->") {
 		t.Fatalf("gh calls: %q", calls)
 	}
-	contains(t, "comment", calls[1], "**Something broke.**", "**✗ BROKE (1)**", "**▲ NEW (1)**", "[this run](https://github.com/RhythmShahriar/echo/actions/runs/42)")
-	lacks(t, "comment", calls[1], "customer@example.com", "New order W-1001")
+	contains(t, "comment", calls[2], "**Something broke.**", "**✗ BROKE (1)**", "**▲ NEW (1)**", "[this run](https://github.com/RhythmShahriar/echo/actions/runs/42)")
+	lacks(t, "comment", calls[2], "customer@example.com", "New order W-1001")
 
-	gh.reply(t, `[{"id": 5, "body": "someone else"}, {"id": 101, "body": "<!-- rhythm-echo comment: sites/shop -->\nold"}]`, "")
+	gh.reply(t, `[{"id": 5, "user": {"login": "ann"}, "body": "someone else"}, {"id": 101, "user": {"login": "github-actions[bot]"}, "body": "<!-- rhythm-echo comment: sites/shop -->\nold"}]`, "")
 	r.use(in("mode", "compare", "pr-comment", "true"))
 	calls = gh.calls(t)
-	if len(calls) != 2 || !strings.HasPrefix(calls[1], "api -X PATCH repos/RhythmShahriar/echo/issues/comments/101 -f body=") {
+	if len(calls) != 3 || !strings.HasPrefix(calls[2], "api -X PATCH repos/RhythmShahriar/echo/issues/comments/101 -f body=") {
 		t.Fatalf("second run's gh calls: %q", calls)
 	}
 }
