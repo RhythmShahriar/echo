@@ -61,6 +61,16 @@ func TestSomeActionsFailed(t *testing.T) {
 	if !FailOn(r, "changed") || verdict(r) != "Could not compare: 1 of 2 actions failed in this run" {
 		t.Errorf("FailOn = %v, verdict = %q", FailOn(r, "changed"), verdict(r))
 	}
+	// The summary doesn't then say the actions were compared.
+	var buf bytes.Buffer
+	NewPretty(&buf, &buf, PrettyOptions{Plain: true}).Summary(r, "")
+	if out := buf.String(); !strings.Contains(out, "failed in this run - 1 broke, 0 new, 0 changed, 0 fixed - 2 actions run, ") || strings.Contains(out, "actions compared") {
+		t.Errorf("summary:\n%s", out)
+	}
+	buf.Reset()
+	if err := Markdown(&buf, r); err != nil || !strings.Contains(buf.String(), "2 actions run against the earlier run") {
+		t.Errorf("markdown: %v\n%s", err, buf.String())
+	}
 }
 
 func TestFixedFailureDoesNotFail(t *testing.T) {

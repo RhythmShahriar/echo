@@ -322,6 +322,18 @@ func verdict(r Result) string {
 	return "Everything is still sent the same way"
 }
 
+// comparedWith counts the actions a comparison covers, with the word that
+// leads to the snapshot: "2 actions compared" and "with". When some failed
+// in this run, what they sent wasn't compared, so it counts the actions
+// run instead ("2 actions run", "against"), which the verdict then
+// explains.
+func comparedWith(r Result) (count, with string) {
+	if failed, total := failedActions(r.Run); failed > 0 {
+		return plural(total, "action", "actions") + " run", "against"
+	}
+	return plural(r.Comparison.Actions, "action", "actions") + " compared", "with"
+}
+
 func runVerdict(r *model.Run, counts map[model.Level]int) string {
 	prefix := ""
 	if r.Name != "" {

@@ -37,7 +37,8 @@ func Markdown(w io.Writer, r Result) error {
 	b.WriteString("## ♪ Echo\n\n")
 	if r.Compared() {
 		c := r.Comparison
-		fmt.Fprintf(&b, "**%s.** %s compared with %s; this run sent %s.\n\n", verdict(r), plural(c.Actions, "action", "actions"), snapshotAt(c.Before), Tally(run))
+		count, with := comparedWith(r)
+		fmt.Fprintf(&b, "**%s.** %s %s %s; this run sent %s.\n\n", verdict(r), count, with, snapshotAt(c.Before), Tally(run))
 		b.WriteString("| Broke | New | Changed | Fixed |\n|---:|---:|---:|---:|\n|")
 		for _, class := range model.Classes {
 			fmt.Fprintf(&b, " %d |", c.Count(class))

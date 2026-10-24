@@ -280,7 +280,8 @@ func (p *Pretty) comparison(r Result, hint string) {
 		for _, class := range model.Classes {
 			parts = append(parts, fmt.Sprintf("%d %s", c.Count(class), class))
 		}
-		fmt.Fprintf(p.w, "\n%s - %s - %s compared, %s\n", verdict(r), strings.Join(parts, ", "), plural(c.Actions, "action", "actions"), Tally(r.Run))
+		count, _ := comparedWith(r)
+		fmt.Fprintf(p.w, "\n%s - %s - %s, %s\n", verdict(r), strings.Join(parts, ", "), count, Tally(r.Run))
 		p.notes(c.Warnings)
 		if hint != "" {
 			fmt.Fprintln(p.w, hint)
@@ -319,7 +320,8 @@ func (p *Pretty) comparison(r Result, hint string) {
 		return
 	}
 	fmt.Fprintln(p.w, comparePanel(r))
-	fmt.Fprintf(p.w, "  %s\n", muted.Render(fmt.Sprintf("%s compared with %s · %s", plural(c.Actions, "action", "actions"), snapshotName(c.Before), Tally(r.Run))))
+	count, with := comparedWith(r)
+	fmt.Fprintf(p.w, "  %s\n", muted.Render(fmt.Sprintf("%s %s %s · %s", count, with, snapshotName(c.Before), Tally(r.Run))))
 	p.notes(c.Warnings)
 	if hint != "" {
 		fmt.Fprintf(p.w, "\n  %s %s\n", ui.Brand.Render("→"), muted.Render(hint))
