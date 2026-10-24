@@ -23,6 +23,16 @@ import (
 // DefaultMaxBytes is how much message data an inbox holds by default.
 const DefaultMaxBytes = 256 << 20
 
+// DefaultLeaseTTL is how long an action stays open without an end or a
+// renewal. A runner killed between begin and end (Ctrl-C, a crashed CI
+// job) would otherwise hold its action open until Echo restarts: every
+// later untagged message would be credited to it or marked ambiguous,
+// and no exclusive action could begin.
+const DefaultLeaseTTL = 10 * time.Minute
+
+// MaxLeaseTTL is the longest lifetime a begin may ask for.
+const MaxLeaseTTL = time.Hour
+
 // Inbox holds captured messages, newest last: in memory (NewInbox), or
 // also in a folder that outlives a restart (OpenInbox).
 type Inbox struct {
@@ -42,6 +52,11 @@ type Inbox struct {
 	ended    chan struct{}    // closed and replaced whenever an action ends or stops waiting, for BeginScope
 	queued   int              // exclusive actions waiting to begin: new shared ones wait behind them
 	closed   map[string]scope // the last action each run closed, for mail that arrives late
+	leaseTTL time.Duration    // how long an action stays open unrenewed
+	// onExpire is told the run/action of each action dropped because its
+	// lease ran out. It's called with in.mu held, so it must not call the
+	// inbox.
+	onExpire func(name string)
 	// found holds the codes and links read from each message before it
 	// was masked, by message ID. It lives in memory only, never with the
 	// messages, so nothing that stores or reports them sees it.
@@ -72,6 +87,10 @@ type scope struct {
 	owner  string // who opened it (the API caller's address), for an End without a lease
 	begun  time.Time
 	ended  time.Time // set once closed
+	// ttl is how long the action lives unrenewed and expires when it's
+	// dropped (begun or the last renewal plus ttl).
+	ttl     time.Duration
+	expires time.Time
 	// exclusive is an action no other may overlap, so all mail that
 	// arrives meanwhile is its own.
 	exclusive bool
@@ -89,7 +108,7 @@ func (sc scope) name() string {
 // dropped first).
 func NewInbox(max int) *Inbox {
 	return &Inbox{max: max, maxBytes: DefaultMaxBytes, changed: make(chan struct{}), ended: make(chan struct{}), index: map[string]*entry{}, closed: map[string]scope{},
-		found: map[string]found{},
+		found: map[string]found{}, leaseTTL: DefaultLeaseTTL,
 		after: time.After, now: time.Now}
 }
 
@@ -172,6 +191,24 @@ func (in *Inbox) SetCheck(fn func(model.Message) []model.Issue) {
 	in.mu.Unlock()
 }
 
+// SetLeaseTTL sets how long an action Begin opens stays open without an
+// End or a Renew (DefaultLeaseTTL unless set). Zero or less keeps the
+// default.
+func (in *Inbox) SetLeaseTTL(d time.Duration) {
+	in.mu.Lock()
+	in.leaseTTL = cmp.Or(max(d, 0), DefaultLeaseTTL)
+	in.mu.Unlock()
+}
+
+// OnLeaseExpired registers fn to be told the run/action of every action
+// dropped because its lease ran out, for the log. fn is called with the
+// inbox locked and must not call it.
+func (in *Inbox) OnLeaseExpired(fn func(name string)) {
+	in.mu.Lock()
+	in.onExpire = fn
+	in.mu.Unlock()
+}
+
 // Begin marks run/action as in progress and returns a lease that End
 // takes to close it. Messages captured meanwhile that don't carry their
 // own run (SMTP mail, connectors that couldn't see the X-Echo-Run header,
@@ -180,7 +217,8 @@ func (in *Inbox) SetCheck(fn func(model.Message) []model.Issue) {
 // a manual send): untagged mail is then marked ambiguous instead of being
 // credited to whichever began last. Mail dated before the open action
 // began goes to the action its run closed last instead, marked late (see
-// late). An empty run and action open nothing.
+// late). An action not ended within the inbox's lease TTL is dropped
+// (see SetLeaseTTL and Renew). An empty run and action open nothing.
 func (in *Inbox) Begin(run, action string) string { return in.begin(run, action, "") }
 
 func (in *Inbox) begin(run, action, owner string) string {
@@ -188,10 +226,62 @@ func (in *Inbox) begin(run, action, owner string) string {
 		return ""
 	}
 	in.mu.Lock()
-	sc := scope{lease: rand.Text(), run: run, action: action, owner: owner, begun: in.now()}
+	defer in.mu.Unlock()
+	in.dropStale()
+	return in.open(scope{run: run, action: action, owner: owner})
+}
+
+// open adds sc to the open actions with a new lease, an expiry and the
+// inbox's TTL when sc has none, and returns the lease. Called with in.mu
+// held.
+func (in *Inbox) open(sc scope) string {
+	sc.lease, sc.begun = rand.Text(), in.now()
+	sc.ttl = cmp.Or(sc.ttl, in.leaseTTL)
+	sc.expires = sc.begun.Add(sc.ttl)
 	in.scopes = append(in.scopes, sc)
-	in.mu.Unlock()
 	return sc.lease
+}
+
+// Renew keeps the action with lease open for another TTL from now, for
+// a runner whose action takes longer than its TTL. It reports whether
+// the action was still open: false means it ended or its lease ran out.
+func (in *Inbox) Renew(lease string) bool {
+	in.mu.Lock()
+	defer in.mu.Unlock()
+	in.dropStale()
+	i := slices.IndexFunc(in.scopes, func(sc scope) bool { return sc.lease == lease })
+	if lease == "" || i < 0 {
+		return false
+	}
+	in.scopes[i].expires = in.now().Add(in.scopes[i].ttl)
+	return true
+}
+
+// dropStale closes every open action whose lease ran out and tells
+// onExpire. Called with in.mu held.
+func (in *Inbox) dropStale() {
+	now := in.now()
+	for i := 0; i < len(in.scopes); {
+		sc := in.scopes[i]
+		if now.Before(sc.expires) {
+			i++
+			continue
+		}
+		in.closeAt(i, sc.expires)
+		if in.onExpire != nil {
+			in.onExpire(sc.name())
+		}
+	}
+}
+
+// nextExpiry is how long until the first open action's lease runs out,
+// and false when none is open. Called with in.mu held.
+func (in *Inbox) nextExpiry() (time.Duration, bool) {
+	if len(in.scopes) == 0 {
+		return 0, false
+	}
+	first := slices.MinFunc(in.scopes, func(a, b scope) int { return a.expires.Compare(b.expires) })
+	return max(first.expires.Sub(in.now()), 0), true
 }
 
 // ScopeOptions describes an action BeginScope opens.
@@ -202,6 +292,9 @@ type ScopeOptions struct {
 	// own, even untagged SMTP mail. Shared actions (the default) may
 	// overlap each other; untagged mail is then ambiguous.
 	Exclusive bool
+	// TTL is how long the action stays open without an End or a Renew.
+	// Zero takes the inbox's (see SetLeaseTTL).
+	TTL time.Duration
 }
 
 // BusyError is why BeginScope gave up: ctx ended while other actions
@@ -248,20 +341,25 @@ func (in *Inbox) beginScope(ctx context.Context, o ScopeOptions, owner string) (
 			in.wake() // shared actions waiting behind this one may go now
 		}()
 	}
-	for !in.free(o.Exclusive) {
+	for in.dropStale(); !in.free(o.Exclusive); in.dropStale() {
 		ch := in.ended
+		// An action in the way whose runner died ends when its lease
+		// runs out, not with an End: look again then.
+		var stale <-chan time.Time
+		if d, ok := in.nextExpiry(); ok {
+			stale = in.after(d)
+		}
 		in.mu.Unlock()
 		select {
 		case <-ctx.Done():
 			in.mu.Lock()
 			return "", in.busy(o.Exclusive)
 		case <-ch:
+		case <-stale:
 		}
 		in.mu.Lock()
 	}
-	sc := scope{lease: rand.Text(), run: o.Run, action: o.Action, owner: owner, begun: in.now(), exclusive: o.Exclusive}
-	in.scopes = append(in.scopes, sc)
-	return sc.lease, nil
+	return in.open(scope{run: o.Run, action: o.Action, owner: owner, exclusive: o.Exclusive, ttl: o.TTL}), nil
 }
 
 // free reports whether an action may open now. Called with in.mu held.
@@ -298,6 +396,7 @@ func (in *Inbox) wake() {
 func (in *Inbox) End(leases ...string) {
 	in.mu.Lock()
 	defer in.mu.Unlock()
+	in.dropStale()
 	if len(leases) == 0 {
 		if len(in.scopes) > 0 {
 			in.close(0)
@@ -314,9 +413,13 @@ func (in *Inbox) End(leases ...string) {
 // close ends the i-th open action and remembers it as its run's last, so
 // mail it caused that arrives during the run's next action can still be
 // credited to it. Called with in.mu held.
-func (in *Inbox) close(i int) {
+func (in *Inbox) close(i int) { in.closeAt(i, in.now()) }
+
+// closeAt is close for an action that ended at t (its expiry, for one
+// whose lease ran out). Called with in.mu held.
+func (in *Inbox) closeAt(i int, t time.Time) {
 	sc := in.scopes[i]
-	sc.ended = in.now()
+	sc.ended = t
 	if sc.run != "" {
 		if last, ok := in.closed[sc.run]; !ok || !last.ended.After(sc.ended) {
 			in.closed[sc.run] = sc
@@ -331,6 +434,7 @@ func (in *Inbox) close(i int) {
 func (in *Inbox) endOldest(owner string) bool {
 	in.mu.Lock()
 	defer in.mu.Unlock()
+	in.dropStale()
 	i := slices.IndexFunc(in.scopes, func(sc scope) bool { return sc.owner == owner })
 	if i < 0 {
 		return false
@@ -345,6 +449,7 @@ func (in *Inbox) attribute(m *model.Message) {
 	if m.Run != "" || m.Action != "" {
 		return
 	}
+	in.dropStale()
 	if last, ok := in.late(*m); ok {
 		m.Run, m.Attribution, m.LateFor = last.run, model.Late, last.action
 		return

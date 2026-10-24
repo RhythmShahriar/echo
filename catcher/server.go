@@ -114,6 +114,9 @@ func NewServer(inbox *Inbox, cfg Config) *Server {
 	if cfg.Warn == nil {
 		cfg.Warn = func(msg string) { log.Print("echo: " + msg) }
 	}
+	inbox.OnLeaseExpired(func(name string) {
+		cfg.Warn("action " + name + " was never ended, so it closed when its lease ran out; mail that doesn't name its run is no longer credited to it")
+	})
 	s := &Server{Inbox: inbox, cfg: cfg, mux: http.NewServeMux(), pit: mailpitState{started: time.Now(), read: map[string]bool{}}}
 	opts := check.Options{SiteHost: hostOnly(cfg.Site), AllowRecipients: cfg.AllowRecipients}
 	inbox.SetCheck(func(m model.Message) []model.Issue { return check.Message(m, opts) })
@@ -128,6 +131,7 @@ func NewServer(inbox *Inbox, cfg Config) *Server {
 	s.mux.HandleFunc("GET /v1/wait", s.wait)
 	s.mux.HandleFunc("POST /v1/actions/begin", s.begin)
 	s.mux.HandleFunc("POST /v1/actions/end", s.end)
+	s.mux.HandleFunc("POST /v1/actions/renew", s.renew)
 	s.mailpitRoutes()
 	tokens := []string{cfg.ReadToken}
 	for t := range cfg.WriteTokens {
@@ -231,6 +235,7 @@ var capabilities = []string{
 	"site-tokens", // per-site write tokens and a read token can split the single token
 	"sites",       // a capture may name its site in source.site (wire 2)
 	"signed-runs", // a run value may be signed: "<run>/<action>.<sig>" (wire 2)
+	"lease-ttl",   // an action not ended or renewed within its ttl closes; POST /v1/actions/renew
 }
 
 // health is what GET /v1/health answers, in this order.
@@ -759,6 +764,9 @@ type actionBody struct {
 	// long to wait for other actions to let it open (a Go duration).
 	Exclusive bool   `json:"exclusive,omitempty"`
 	Timeout   string `json:"timeout,omitempty"`
+	// TTL is begin's too: how long the action stays open without an end
+	// or a renew (a Go duration; Echo's default when empty).
+	TTL string `json:"ttl,omitempty"`
 }
 
 // How long begin waits for other actions by default and at most.
@@ -770,7 +778,9 @@ const (
 // begin opens an action and answers {"lease": "..."}, which end takes to
 // close exactly that action. With "exclusive": true it first waits for
 // every open action to end; any begin waits while an exclusive action is
-// open or waiting. Waiting longer than timeout answers 409.
+// open or waiting. Waiting longer than timeout answers 409. The action
+// closes by itself once ttl (at most an hour) passes without an end or a
+// renew, so a runner that dies can't hold it open.
 func (s *Server) begin(w http.ResponseWriter, r *http.Request) {
 	var b actionBody
 	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<16)).Decode(&b); err != nil {
@@ -786,9 +796,18 @@ func (s *Server) begin(w http.ResponseWriter, r *http.Request) {
 		}
 		timeout = min(d, maxBeginWait)
 	}
+	var ttl time.Duration
+	if b.TTL != "" {
+		d, err := time.ParseDuration(b.TTL)
+		if err != nil || d <= 0 {
+			http.Error(w, "ttl: want a duration such as 10m", http.StatusBadRequest)
+			return
+		}
+		ttl = min(d, MaxLeaseTTL)
+	}
 	ctx, cancel := context.WithTimeout(r.Context(), timeout)
 	defer cancel()
-	lease, err := s.Inbox.beginScope(ctx, ScopeOptions{Run: b.Run, Action: b.Action, Exclusive: b.Exclusive}, caller(r))
+	lease, err := s.Inbox.beginScope(ctx, ScopeOptions{Run: b.Run, Action: b.Action, Exclusive: b.Exclusive, TTL: ttl}, caller(r))
 	if err != nil {
 		http.Error(w, fmt.Sprintf("begin: waited %s: %v; end the actions in the way (POST /v1/actions/end) or retry with a longer timeout", timeout, err),
 			http.StatusConflict)
@@ -810,6 +829,21 @@ func (s *Server) end(w http.ResponseWriter, r *http.Request) {
 		s.Inbox.End(b.Lease)
 	} else {
 		s.Inbox.endOldest(caller(r))
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// renew keeps the action named by {"lease": "..."} open for another ttl.
+// It answers 404 when the action already ended or its lease ran out.
+func (s *Server) renew(w http.ResponseWriter, r *http.Request) {
+	var b actionBody
+	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<16)).Decode(&b); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if !s.Inbox.Renew(b.Lease) {
+		http.Error(w, "renew: no open action has that lease; it ended or its ttl ran out, so begin it again", http.StatusNotFound)
+		return
 	}
 	w.WriteHeader(http.StatusNoContent)
 }

@@ -102,6 +102,24 @@ func TestLeases(t *testing.T) {
 	}
 }
 
+func TestRenewLease(t *testing.T) {
+	srv := httptest.NewServer(catcher.NewServer(catcher.NewInbox(10), catcher.Config{}))
+	defer srv.Close()
+	ctx := context.Background()
+	c := New(srv.URL, "")
+	lease, err := c.BeginLease(ctx, "r1", "a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := c.RenewLease(ctx, lease); err != nil {
+		t.Errorf("renew an open action: %v", err)
+	}
+	_ = c.EndLease(ctx, lease)
+	if err := c.RenewLease(ctx, lease); !IsNotFound(err) {
+		t.Errorf("renew an ended action: %v, want a 404", err)
+	}
+}
+
 // An Echo from before leases answers begin with 204 and no body.
 func TestBeginLeaseOnOldEcho(t *testing.T) {
 	var ends []string

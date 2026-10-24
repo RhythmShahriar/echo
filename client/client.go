@@ -351,6 +351,15 @@ func (c *Client) EndLease(ctx context.Context, lease string) error {
 	return c.do(ctx, http.MethodPost, "/v1/actions/end", nil, map[string]string{"lease": lease}, nil)
 }
 
+// RenewLease keeps the action BeginLease returned lease for open for
+// another lease TTL (Echo's default is 10 minutes). Call it now and then
+// during an action that may run longer. An error that IsNotFound reports
+// means the action already ended or its lease ran out. Needs an Echo with
+// the "lease-ttl" capability.
+func (c *Client) RenewLease(ctx context.Context, lease string) error {
+	return c.do(ctx, http.MethodPost, "/v1/actions/renew", nil, map[string]string{"lease": lease}, nil)
+}
+
 // Capture sends a capture, as a connector would. Echo's own tools (the
 // sendmail shim, tests) use it.
 func (c *Client) Capture(ctx context.Context, cp wire.Capture) (wire.Decision, error) {
