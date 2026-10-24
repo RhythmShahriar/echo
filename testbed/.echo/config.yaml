@@ -59,6 +59,12 @@ actions:
       url: http://localhost:18851/orders
       form: {email: "${fake:email}", phone: "${fake:phone}"}
 
+  - name: Laravel newsletter
+    http:
+      method: POST
+      url: http://localhost:18851/newsletter
+      form: {email: "${fake:email}"}
+
   - name: Next.js signup
     http:
       method: POST

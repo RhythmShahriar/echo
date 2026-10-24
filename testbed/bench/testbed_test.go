@@ -67,6 +67,9 @@ func TestManifest(t *testing.T) {
 	if len(m.Scenarios) != 20 {
 		t.Errorf("%d scenarios, want 20", len(m.Scenarios))
 	}
+	if len(m.Environment) != 15 {
+		t.Errorf("%d environment scenarios, want 15", len(m.Environment))
+	}
 	for _, s := range m.Scenarios {
 		if err := Toggle(dir, s.ID, "good"); err != nil {
 			t.Errorf("%s: %v", s.ID, err)

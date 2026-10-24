@@ -9,13 +9,19 @@
 // it again with `rhythm-echo compare` and checks the comparison against
 // the scenario's expectation. Deliverability scenarios also run
 // `rhythm-echo check` on the From domains against a fixture DNS server.
-// Mailpit, the usual staging mail catcher, is judged on the same states.
-// The scoreboard is written to docs/benchmark.md.
+// Other tools (Mailpit, Buggregator, Staging Shield) are judged on the
+// same states. Then the environment scenarios check Echo when what's
+// around it goes wrong (see environment.go). The scoreboard is written
+// to docs/benchmark.md.
 //
 // Run from the module root with the testbed up (make -C testbed up):
 //
 //	make build
-//	go run -tags testbed ./testbed/bench [-bin bin/rhythm-echo] [-only s01,s05] [-tools auto|none|mailpit]
+//	go run -tags testbed ./testbed/bench [-bin bin/rhythm-echo] [-only s01,e05,env] [-tools "mailpit buggregator"]
+//	go run -tags testbed ./testbed/bench -diff run1.json run2.json
+//
+// The local environment scenarios need no testbed: -only env -tools none
+// runs them anywhere.
 package main
 
 import (
@@ -25,9 +31,12 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime"
+	"slices"
 	"strings"
 	"time"
 
@@ -44,14 +53,30 @@ type options struct {
 
 func main() {
 	var o options
-	var only string
+	var only, diff string
 	flag.StringVar(&o.bin, "bin", "bin/rhythm-echo", "the rhythm-echo binary to benchmark")
 	flag.StringVar(&o.out, "out", "docs/benchmark.md", "where to write the scoreboard")
 	flag.StringVar(&o.work, "work", "", "working folder for runs (default testbed/bench/work)")
-	flag.StringVar(&only, "only", "", "comma-separated scenario IDs to run (default all)")
-	flag.StringVar(&o.tools, "tools", "auto", "comparison tools: auto (Mailpit when the testbed's answers), none, or mailpit")
+	flag.StringVar(&only, "only", "", "comma-separated scenario IDs to run, env for every environment scenario (default all)")
+	flag.StringVar(&o.tools, "tools", "auto", "other tools to judge: auto (each that answers), none, or names such as \"mailpit buggregator staging-shield\"")
 	flag.DurationVar(&o.timeout, "timeout", 3*time.Minute, "time limit for each command")
+	flag.StringVar(&diff, "diff", "", "compare the outcomes in two results.json files (this flag and one argument) and exit 1 if they differ")
 	flag.Parse()
+	if diff != "" {
+		if flag.NArg() != 1 {
+			fmt.Fprintln(os.Stderr, "bench: -diff takes two files: -diff a.json b.json")
+			os.Exit(2)
+		}
+		same, err := diffResults(diff, flag.Arg(0), os.Stdout)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "bench:", err)
+			os.Exit(2)
+		}
+		if !same {
+			os.Exit(1)
+		}
+		return
+	}
 	if only != "" {
 		o.only = strings.Split(only, ",")
 	}
@@ -78,8 +103,16 @@ type Run struct {
 	Duration time.Duration
 	Partial  bool
 	BinErr   error
-	Mailpit  error // why Mailpit wasn't judged; nil when it was
+	Tools    []Tool           // judged, in column order
+	ToolErr  map[string]error // why a tool wasn't judged
 	Outcomes []Outcome
+	Env      []EnvOutcome
+}
+
+// Results is results.json: every outcome, for -diff and for a reader.
+type Results struct {
+	Sites       []Outcome    `json:"sites"`
+	Environment []EnvOutcome `json:"environment"`
 }
 
 func run(ctx context.Context, o options) error {
@@ -91,7 +124,11 @@ func run(ctx context.Context, o options) error {
 	if err != nil {
 		return err
 	}
-	scenarios, err := m.Pick(o.only)
+	scenarios, envs, err := m.Pick(o.only)
+	if err != nil {
+		return err
+	}
+	toolNames, required, err := parseTools(o.tools)
 	if err != nil {
 		return err
 	}
@@ -104,77 +141,83 @@ func run(ctx context.Context, o options) error {
 	if err := os.MkdirAll(o.work, 0o750); err != nil {
 		return err
 	}
-	res := &Run{Started: time.Now(), Partial: len(o.only) > 0}
+	res := &Run{Started: time.Now(), Partial: len(o.only) > 0, ToolErr: map[string]error{}}
 	bin, version, binErr := echoBinary(ctx, o.bin)
 	res.Version, res.BinErr = version, binErr
-	switch o.tools {
-	case "none":
-		res.Mailpit = errors.New("-tools none")
-	case "auto", "mailpit", "":
-		res.Mailpit = mailpitReady(ctx)
-		if res.Mailpit != nil && o.tools == "mailpit" {
-			return res.Mailpit
-		}
-	default:
-		return fmt.Errorf("-tools: unknown %q (auto, none, mailpit)", o.tools)
-	}
-
-	zone, err := LoadZone(filepath.Join(dir, "dns", "zone.yaml"))
-	if err != nil {
-		return err
-	}
-	dnsServer := &DNSServer{Zone: zone, State: filepath.Join(dir, "state")}
-	if err := dnsServer.Start(DNSAddr); err != nil {
-		return err
-	}
-	defer dnsServer.Close()
 
 	echo := &Echo{Bin: bin, Testbed: dir, Work: o.work}
 	defer echo.Stop()
-	if err := Toggle(dir, "all", "good"); err != nil {
-		return err
+	// The Docker testbed is needed by the site scenarios and some
+	// environment ones; the rest run anywhere.
+	testbedUp := len(scenarios) > 0 || slices.ContainsFunc(envs, func(s EnvScenario) bool { return s.Needs == "testbed" })
+	if testbedUp {
+		testbedUp = sitesAnswer(ctx, m)
+		if !testbedUp && len(scenarios) > 0 {
+			return errors.New("the testbed's sites don't answer; start them with make -C testbed up")
+		}
 	}
-	defer func() { _ = Toggle(dir, "all", "good") }()
+	if testbedUp {
+		for _, name := range toolNames {
+			t := newTool(name, dir, echo, o)
+			if err := t.Ready(ctx); err != nil {
+				if required {
+					return err
+				}
+				res.ToolErr[name] = err
+				continue
+			}
+			res.Tools = append(res.Tools, t)
+		}
+		if len(scenarios) > 0 {
+			zone, err := LoadZone(filepath.Join(dir, "dns", "zone.yaml"))
+			if err != nil {
+				return err
+			}
+			dnsServer := &DNSServer{Zone: zone, State: filepath.Join(dir, "state")}
+			if err := dnsServer.Start(DNSAddr); err != nil {
+				return err
+			}
+			defer dnsServer.Close()
+		}
+		if err := Toggle(dir, "all", "good"); err != nil {
+			return err
+		}
+		defer func() { _ = Toggle(dir, "all", "good") }()
+	}
 	stamp := res.Started.UTC().Format("150405")
 
 	for _, s := range scenarios {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
+		res.Outcomes = append(res.Outcomes, siteScenario(ctx, o, res, echo, dir, m, s, stamp))
+	}
+
+	probe := &ProbeEnv{Bin: bin, Root: filepath.Dir(dir), Testbed: dir, Work: filepath.Join(o.work, "env"), Timeout: o.timeout,
+		Windows: runtime.GOOS == "windows"}
+	if testbedUp {
+		probe.Site = &SiteBench{Echo: echo, Manifest: m, Options: o}
+	}
+	for _, s := range envs {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
 		start := time.Now()
 		fmt.Fprintf(os.Stderr, "%s %s\n", s.ID, s.Name)
-		out := Outcome{Scenario: s, Tools: map[string]Result{}}
-		wd := filepath.Join(o.work, s.ID)
-		if err := os.RemoveAll(wd); err != nil {
-			return err
-		}
-		if err := os.MkdirAll(wd, 0o750); err != nil {
-			return err
-		}
-		var good, broken *model.Run
+		var out EnvOutcome
 		if binErr != nil {
-			out.Echo = Result{Outcome: NotRun, Detail: binErr.Error()}
+			out = EnvOutcome{Scenario: s, Echo: Result{Outcome: NotRun, Detail: binErr.Error()}}
 		} else {
-			out.Echo, good, broken = benchScenario(ctx, o, echo, dir, m, s, wd)
-		}
-		switch {
-		case res.Mailpit != nil:
-		case good == nil || broken == nil:
-			out.Tools["mailpit"] = Result{Outcome: Failed, Detail: "Echo's runs, which Mailpit is fed from, are missing"}
-		default:
-			out.Tools["mailpit"] = judgeMailpit(ctx, s, good, broken, stamp)
+			out = runEnv(ctx, probe, s)
 		}
 		out.Seconds = time.Since(start).Seconds()
 		fmt.Fprintf(os.Stderr, "    echo: %s %s\n", out.Echo.Outcome, out.Echo.Found+out.Echo.Detail)
-		if r, ok := out.Tools["mailpit"]; ok {
-			fmt.Fprintf(os.Stderr, "    mailpit: %s %s\n", r.Outcome, r.Found+r.Detail)
-		}
-		res.Outcomes = append(res.Outcomes, out)
+		res.Env = append(res.Env, out)
 	}
 	echo.Stop()
 	res.Duration = time.Since(res.Started)
 
-	data, err := json.MarshalIndent(res.Outcomes, "", "  ")
+	data, err := json.MarshalIndent(Results{Sites: res.Outcomes, Environment: res.Env}, "", "  ")
 	if err != nil {
 		return err
 	}
@@ -190,14 +233,97 @@ func run(ctx context.Context, o options) error {
 	if binErr != nil {
 		fmt.Fprintf(os.Stderr, "Echo wasn't run: %v. Scoreboard: %s\n", binErr, o.out)
 	} else {
-		fmt.Fprintf(os.Stderr, "Echo caught %d of %d in %s. Scoreboard: %s\n", res.caught(), len(res.Outcomes), res.Duration.Round(time.Second), o.out)
+		fmt.Fprintf(os.Stderr, "Echo caught %d of %d site scenarios and %d of %d environment scenarios in %s. Scoreboard: %s\n",
+			res.caught(), len(res.Outcomes), res.envCaught(), len(res.Env), res.Duration.Round(time.Second), o.out)
 	}
 	return nil
+}
+
+// siteScenario runs one site scenario for Echo and every tool.
+func siteScenario(ctx context.Context, o options, res *Run, echo *Echo, dir string, m *Manifest, s Scenario, stamp string) Outcome {
+	start := time.Now()
+	fmt.Fprintf(os.Stderr, "%s %s\n", s.ID, s.Name)
+	out := Outcome{Scenario: s, Tools: map[string]Result{}}
+	wd := filepath.Join(o.work, s.ID)
+	if err := os.RemoveAll(wd); err == nil {
+		_ = os.MkdirAll(wd, 0o750)
+	}
+	var good, broken *model.Run
+	if res.BinErr != nil {
+		out.Echo = Result{Outcome: NotRun, Detail: res.BinErr.Error()}
+	} else {
+		out.Echo, good, broken = benchScenario(ctx, o, echo, dir, m, s, wd)
+	}
+	for _, t := range res.Tools {
+		if good == nil || broken == nil {
+			out.Tools[t.Name()] = Result{Outcome: Failed, Detail: "Echo's runs, which " + t.Title() + " is judged from, are missing"}
+			continue
+		}
+		out.Tools[t.Name()] = t.Judge(ctx, s, good, broken, stamp)
+	}
+	out.Seconds = time.Since(start).Seconds()
+	fmt.Fprintf(os.Stderr, "    echo: %s %s\n", out.Echo.Outcome, out.Echo.Found+out.Echo.Detail)
+	for _, t := range res.Tools {
+		r := out.Tools[t.Name()]
+		fmt.Fprintf(os.Stderr, "    %s: %s %s\n", t.Name(), r.Outcome, r.Found+r.Detail)
+	}
+	return out
+}
+
+// newTool returns the tool named name, set up for the testbed.
+func newTool(name, dir string, echo *Echo, o options) Tool {
+	mp := mailpit{api: mailpitAPI, smtp: mailpitSMTP}
+	switch name {
+	case "buggregator":
+		return buggregator{api: buggregatorAPI, smtp: buggregatorSMTP}
+	case "staging-shield":
+		probe := &ProbeEnv{Timeout: o.timeout}
+		return stagingShield{testbed: dir, mail: mp, work: o.work,
+			run: func(ctx context.Context, dir string, args ...string) (int, string) {
+				return probe.run(ctx, dir, os.Environ(), args[0], args[1:]...)
+			},
+			start: func(ctx context.Context, mode string) error { return echo.Start(ctx, mode) },
+			action: func(ctx context.Context, dir, action string) error {
+				_, err := echo.Run(ctx, o.timeout, dir, "snapshot", "--config", echo.Config(), "--action", action,
+					"--name", "staging-shield", "--fail-on", "none", "--json", "-o", "run.json")
+				return err
+			}}
+	}
+	return mp
+}
+
+// sitesAnswer reports whether every site of the testbed answers.
+func sitesAnswer(ctx context.Context, m *Manifest) bool {
+	for _, u := range m.Sites {
+		ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, u+"/", nil)
+		if err != nil {
+			cancel()
+			return false
+		}
+		resp, err := http.DefaultClient.Do(req)
+		cancel()
+		if err != nil {
+			return false
+		}
+		_ = resp.Body.Close()
+	}
+	return true
 }
 
 func (r *Run) caught() int {
 	n := 0
 	for _, o := range r.Outcomes {
+		if o.Echo.Outcome == Caught {
+			n++
+		}
+	}
+	return n
+}
+
+func (r *Run) envCaught() int {
+	n := 0
+	for _, o := range r.Env {
 		if o.Echo.Outcome == Caught {
 			n++
 		}

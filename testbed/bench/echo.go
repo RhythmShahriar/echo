@@ -38,8 +38,21 @@ var stripeSecret = strings.Join([]string{"whsec", "_", "testbed", strings.Repeat
 type Echo struct {
 	Bin, Testbed, Work string
 	Mode               string
-	cmd                *exec.Cmd
-	log                *os.File
+	// Ports, when set, moves the API, SMTP sink and proxy off the ports
+	// the testbed's gate forwards (18860-18862), so the sites can't reach
+	// Echo while the benchmark still can.
+	Ports []string
+	cmd   *exec.Cmd
+	log   *os.File
+	ports string // what the running Echo listens on
+}
+
+// api is the base URL the running Echo answers on.
+func (e *Echo) api() string {
+	if len(e.Ports) == 3 {
+		return "http://127.0.0.1:" + e.Ports[0]
+	}
+	return echoAPI
 }
 
 // env is what every Echo command gets: the testbed's CA folder (so the
@@ -48,7 +61,7 @@ type Echo struct {
 func (e *Echo) env() []string {
 	return append(os.Environ(),
 		"XDG_CACHE_HOME="+filepath.Join(e.Testbed, "runtime", "cache"),
-		"RHYTHM_ECHO_URL="+echoAPI, "RHYTHM_ECHO_TOKEN="+echoToken,
+		"RHYTHM_ECHO_URL="+e.api(), "RHYTHM_ECHO_TOKEN="+echoToken,
 		"TESTBED="+e.Testbed, "TESTBED_STRIPE_SECRET="+stripeSecret)
 }
 
@@ -58,12 +71,12 @@ func (e *Echo) Config() string { return filepath.Join(e.Testbed, ".echo", "confi
 // Start runs Echo in mode (seal or observe), restarting it if it runs in
 // the other mode and waits until it answers.
 func (e *Echo) Start(ctx context.Context, mode string) error {
-	if e.cmd != nil && e.Mode == mode {
+	if e.cmd != nil && e.Mode == mode && e.ports == strings.Join(e.Ports, ",") {
 		return nil
 	}
 	e.Stop()
-	if healthy(ctx) {
-		return errors.New("something already answers on " + echoAPI + " (a `make echo`?); stop it first")
+	if healthy(ctx, e.api()) {
+		return errors.New("something already answers on " + e.api() + " (a `make echo`?); stop it first")
 	}
 	if err := os.MkdirAll(e.Work, 0o750); err != nil {
 		return err
@@ -73,21 +86,25 @@ func (e *Echo) Start(ctx context.Context, mode string) error {
 		return err
 	}
 	fmt.Fprintf(log, "\n--- %s: rhythm-echo up --%s\n", time.Now().Format(time.RFC3339), mode)
-	cmd := exec.Command(e.Bin, "up", "--config", e.Config(), "--token", echoToken, "--"+mode, "--plain") //nolint:gosec,noctx // the binary under test; stopped with SIGINT
+	args := []string{"up", "--config", e.Config(), "--token", echoToken, "--" + mode, "--plain"}
+	if len(e.Ports) == 3 {
+		args = append(args, "--listen", "0.0.0.0:"+e.Ports[0], "--smtp", "0.0.0.0:"+e.Ports[1], "--proxy", "0.0.0.0:"+e.Ports[2])
+	}
+	cmd := exec.Command(e.Bin, args...) //nolint:gosec,noctx // the binary under test; stopped with SIGINT
 	cmd.Dir, cmd.Env, cmd.Stdout, cmd.Stderr = e.Work, e.env(), log, log
 	if err := cmd.Start(); err != nil {
 		_ = log.Close()
 		return err
 	}
-	e.cmd, e.log, e.Mode = cmd, log, mode
+	e.cmd, e.log, e.Mode, e.ports = cmd, log, mode, strings.Join(e.Ports, ",")
 	for i := 0; i < 100; i++ {
-		if healthy(ctx) {
+		if healthy(ctx, e.api()) {
 			return nil
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
 	e.Stop()
-	return fmt.Errorf("rhythm-echo up didn't answer on %s (see %s)", echoAPI, filepath.Join(e.Work, "echo.log"))
+	return fmt.Errorf("rhythm-echo up didn't answer on %s (see %s)", e.api(), filepath.Join(e.Work, "echo.log"))
 }
 
 // Stop stops Echo.
@@ -105,13 +122,13 @@ func (e *Echo) Stop() {
 		<-done
 	}
 	_ = e.log.Close()
-	e.cmd, e.Mode = nil, ""
+	e.cmd, e.Mode, e.ports = nil, "", ""
 }
 
-func healthy(ctx context.Context) bool {
+func healthy(ctx context.Context, api string) bool {
 	ctx, cancel := context.WithTimeout(ctx, time.Second)
 	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, echoAPI+"/v1/health", nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, api+"/v1/health", nil)
 	if err != nil {
 		return false
 	}

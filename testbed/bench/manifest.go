@@ -21,9 +21,10 @@ import (
 
 // Manifest is testbed/scenarios.yaml.
 type Manifest struct {
-	Sites     map[string]string `yaml:"sites"`
-	Reset     []string          `yaml:"reset"`
-	Scenarios []Scenario        `yaml:"scenarios"`
+	Sites       map[string]string `yaml:"sites"`
+	Reset       []string          `yaml:"reset"`
+	Scenarios   []Scenario        `yaml:"scenarios"`
+	Environment []EnvScenario     `yaml:"environment"`
 }
 
 // Scenario is one case of a site that stops saying what it should.
@@ -123,23 +124,61 @@ func LoadManifest(path string) (*Manifest, error) {
 		}
 		seen[s.ID] = true
 	}
+	for _, s := range m.Environment {
+		switch {
+		case s.ID == "" || seen[s.ID]:
+			return nil, fmt.Errorf("%s: missing or duplicate id %q", path, s.ID)
+		case s.Name == "" || s.Toggle == "":
+			return nil, fmt.Errorf("%s: %s: no name or toggle", path, s.ID)
+		case probes[s.Probe] == nil:
+			return nil, fmt.Errorf("%s: %s: no probe named %q", path, s.ID, s.Probe)
+		case !slices.Contains(needs, s.Needs):
+			return nil, fmt.Errorf("%s: %s: needs %q isn't one of %s", path, s.ID, s.Needs, strings.Join(needs, ", "))
+		case len(s.Good) == 0 || len(s.Broken) == 0:
+			return nil, fmt.Errorf("%s: %s: needs checks for both the good and the broken state", path, s.ID)
+		}
+		for _, c := range append(slices.Clone(s.Good), s.Broken...) {
+			if c.Step == "" {
+				return nil, fmt.Errorf("%s: %s: a check without a step", path, s.ID)
+			}
+			if c.Change != nil && !slices.Contains(model.Classes, c.Change.Class) {
+				return nil, fmt.Errorf("%s: %s: unknown class %q", path, s.ID, c.Change.Class)
+			}
+			for _, cl := range c.NoClass {
+				if !slices.Contains(model.Classes, cl) {
+					return nil, fmt.Errorf("%s: %s: unknown class %q", path, s.ID, cl)
+				}
+			}
+		}
+		seen[s.ID] = true
+	}
 	return &m, nil
 }
 
-// Pick returns the scenarios whose IDs are in only (all when empty).
-func (m *Manifest) Pick(only []string) ([]Scenario, error) {
+// Pick returns the site and environment scenarios whose IDs are in only
+// (all when empty). "env" picks every environment scenario.
+func (m *Manifest) Pick(only []string) ([]Scenario, []EnvScenario, error) {
 	if len(only) == 0 {
-		return m.Scenarios, nil
+		return m.Scenarios, m.Environment, nil
 	}
-	var out []Scenario
+	var sites []Scenario
+	var env []EnvScenario
 	for _, id := range only {
-		i := slices.IndexFunc(m.Scenarios, func(s Scenario) bool { return s.ID == id })
-		if i < 0 {
-			return nil, fmt.Errorf("unknown scenario %q", id)
+		if id == "env" {
+			env = append(env, m.Environment...)
+			continue
 		}
-		out = append(out, m.Scenarios[i])
+		if i := slices.IndexFunc(m.Scenarios, func(s Scenario) bool { return s.ID == id }); i >= 0 {
+			sites = append(sites, m.Scenarios[i])
+			continue
+		}
+		i := slices.IndexFunc(m.Environment, func(s EnvScenario) bool { return s.ID == id })
+		if i < 0 {
+			return nil, nil, fmt.Errorf("unknown scenario %q", id)
+		}
+		env = append(env, m.Environment[i])
 	}
-	return out, nil
+	return sites, env, nil
 }
 
 // Outcomes of a scenario for one tool.

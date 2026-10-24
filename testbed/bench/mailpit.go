@@ -40,23 +40,85 @@ const (
 // miss: the inbox has one email fewer and nothing in Mailpit says one is
 // missing.
 
-// mailpitReady reports whether Mailpit answers.
-func mailpitReady(ctx context.Context) error {
+// mailpit is the Mailpit column.
+type mailpit struct{ api, smtp string }
+
+func (mailpit) Name() string  { return "mailpit" }
+func (mailpit) Title() string { return "Mailpit" }
+
+func (mailpit) About() string {
+	return "**Mailpit** (`axllent/mailpit:v1.29.2`) is the usual staging mail catcher: it receives mail over SMTP and shows it in an inbox. " +
+		"It has no notion of a baseline, so it can't report a change; the question here is whether a person reading the Mailpit inbox would have seen the problem. " +
+		"For each state, the benchmark delivers into the testbed's Mailpit, over SMTP, the emails Echo captured that the site would have handed to an SMTP server " +
+		"(mail sent through a provider's API, such as Resend's, never reaches an SMTP catcher), then reads them back through Mailpit's API. " +
+		"It counts as **caught** when the broken-state inbox visibly shows the problem (the scenario's `mailpit` text is in a message's From, To, Subject or body and wasn't in the good state's). " +
+		"A message that is no longer sent is a **miss**: the inbox just has one email fewer. SMS, chat, webhooks, analytics and DNS are **can't see**."
+}
+
+// Ready reports whether Mailpit answers.
+func (t mailpit) Ready(ctx context.Context) error {
 	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, mailpitAPI+"/api/v1/info", nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, t.api+"/api/v1/info", nil)
 	if err != nil {
 		return err
 	}
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("mailpit isn't reachable at %s (make -C testbed up): %w", mailpitAPI, err)
+		return fmt.Errorf("mailpit isn't reachable at %s (make -C testbed up): %w", t.api, err)
 	}
 	_ = resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("mailpit answered %s", resp.Status)
 	}
 	return nil
+}
+
+// Judge decides the Mailpit column for one scenario.
+func (t mailpit) Judge(ctx context.Context, s Scenario, good, broken *model.Run, stamp string) Result {
+	return judgeInbox(ctx, "Mailpit", t, s, good, broken, stamp)
+}
+
+// deliver sends the run's SMTP mail into Mailpit tagged with tag and
+// returns how many it sent.
+func (t mailpit) deliver(_ context.Context, r *model.Run, tag string) (int, error) {
+	return deliverSMTP(t.smtp, "Mailpit", r, tag)
+}
+
+// read returns the messages Mailpit holds with tag.
+func (t mailpit) read(ctx context.Context, tag string) ([]inboxMessage, error) {
+	time.Sleep(300 * time.Millisecond) // Mailpit stores asynchronously
+	var list struct {
+		Messages []struct {
+			ID string `json:"ID"`
+		} `json:"messages"`
+	}
+	if err := getJSON(ctx, t.api+"/api/v1/search?limit=200&query="+url.QueryEscape(`tag:"`+tag+`"`), &list); err != nil {
+		return nil, err
+	}
+	out := make([]inboxMessage, 0, len(list.Messages))
+	for _, s := range list.Messages {
+		var m struct {
+			Subject string `json:"Subject"`
+			From    struct {
+				Address string `json:"Address"`
+			} `json:"From"`
+			To []struct {
+				Address string `json:"Address"`
+			} `json:"To"`
+			Text string `json:"Text"`
+			HTML string `json:"HTML"`
+		}
+		if err := getJSON(ctx, t.api+"/api/v1/message/"+url.PathEscape(s.ID), &m); err != nil {
+			return nil, err
+		}
+		im := inboxMessage{Subject: m.Subject, From: m.From.Address, Text: m.Text, HTML: m.HTML}
+		for _, to := range m.To {
+			im.To = append(im.To, to.Address)
+		}
+		out = append(out, im)
+	}
+	return out, nil
 }
 
 // smtpMail is whether a captured email would have reached an SMTP server
@@ -67,9 +129,9 @@ func smtpMail(m model.Message) bool {
 	return m.Channel == model.Email && m.Provider == ""
 }
 
-// deliverToMailpit sends the run's SMTP mail into Mailpit tagged with tag
-// and returns how many it sent.
-func deliverToMailpit(r *model.Run, tag string) (int, error) {
+// deliverSMTP sends the run's SMTP mail to addr tagged with tag and
+// returns how many it sent.
+func deliverSMTP(addr, tool string, r *model.Run, tag string) (int, error) {
 	n := 0
 	for _, a := range r.Actions {
 		for _, m := range a.Messages {
@@ -80,8 +142,8 @@ func deliverToMailpit(r *model.Run, tag string) (int, error) {
 			if from == "" {
 				from = "wordpress@shop.example.com"
 			}
-			if err := smtp.SendMail(mailpitSMTP, nil, address(from), addresses(m.To), mimeOf(m, from, tag)); err != nil {
-				return n, fmt.Errorf("delivering to Mailpit: %w", err)
+			if err := smtp.SendMail(addr, nil, address(from), addresses(m.To), mimeOf(m, from, tag)); err != nil {
+				return n, fmt.Errorf("delivering to %s: %w", tool, err)
 			}
 			n++
 		}
@@ -131,49 +193,6 @@ func mimeOf(m model.Message, from, tag string) []byte {
 	return []byte(b.String())
 }
 
-// inboxMessage is what Mailpit shows of one message.
-type inboxMessage struct {
-	ID      string `json:"ID"`
-	Subject string `json:"Subject"`
-	From    struct {
-		Address string `json:"Address"`
-	} `json:"From"`
-	To []struct {
-		Address string `json:"Address"`
-	} `json:"To"`
-	Text string `json:"Text"`
-	HTML string `json:"HTML"`
-}
-
-func (m inboxMessage) visible() string {
-	var to []string
-	for _, t := range m.To {
-		to = append(to, t.Address)
-	}
-	return strings.Join([]string{m.From.Address, strings.Join(to, ","), m.Subject, m.Text, m.HTML}, "\n")
-}
-
-// inbox returns the messages Mailpit holds with tag.
-func inbox(ctx context.Context, tag string) ([]inboxMessage, error) {
-	var list struct {
-		Messages []struct {
-			ID string `json:"ID"`
-		} `json:"messages"`
-	}
-	if err := getJSON(ctx, mailpitAPI+"/api/v1/search?limit=200&query="+url.QueryEscape(`tag:"`+tag+`"`), &list); err != nil {
-		return nil, err
-	}
-	out := make([]inboxMessage, 0, len(list.Messages))
-	for _, s := range list.Messages {
-		var m inboxMessage
-		if err := getJSON(ctx, mailpitAPI+"/api/v1/message/"+url.PathEscape(s.ID), &m); err != nil {
-			return nil, err
-		}
-		out = append(out, m)
-	}
-	return out, nil
-}
-
 func getJSON(ctx context.Context, u string, v any) error {
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
@@ -187,58 +206,7 @@ func getJSON(ctx context.Context, u string, v any) error {
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("mailpit %s: %s", u, resp.Status)
+		return fmt.Errorf("GET %s: %s", u, resp.Status)
 	}
 	return json.NewDecoder(resp.Body).Decode(v)
-}
-
-// judgeMailpit decides the Mailpit column for one scenario.
-func judgeMailpit(ctx context.Context, s Scenario, good, broken *model.Run, stamp string) Result {
-	if s.Channel != string(model.Email) {
-		what := map[string]string{"sms": "SMS", "chat": "chat messages", "analytics": "analytics events", "webhook": "webhooks", "dns": "DNS records"}[s.Channel]
-		return Result{Outcome: CantSee, Detail: "Mailpit only receives email; " + what + " never reach it"}
-	}
-	gt, bt := s.ID+"-good-"+stamp, s.ID+"-broken-"+stamp
-	gn, err := deliverToMailpit(good, gt)
-	if err != nil {
-		return Result{Outcome: Failed, Detail: err.Error()}
-	}
-	if _, err := deliverToMailpit(broken, bt); err != nil {
-		return Result{Outcome: Failed, Detail: err.Error()}
-	}
-	if gn == 0 {
-		return Result{Outcome: CantSee, Detail: "the email goes through a provider's API, not SMTP, so it never reaches Mailpit"}
-	}
-	time.Sleep(300 * time.Millisecond) // Mailpit stores asynchronously
-	gi, err := inbox(ctx, gt)
-	if err != nil {
-		return Result{Outcome: Failed, Detail: err.Error()}
-	}
-	bi, err := inbox(ctx, bt)
-	if err != nil {
-		return Result{Outcome: Failed, Detail: err.Error()}
-	}
-	if s.Mailpit != "" {
-		want := strings.ToLower(s.Mailpit)
-		inGood := false
-		for _, m := range gi {
-			inGood = inGood || strings.Contains(strings.ToLower(m.visible()), want)
-		}
-		for _, m := range bi {
-			if strings.Contains(strings.ToLower(m.visible()), want) && !inGood {
-				return Result{Outcome: Caught, Found: fmt.Sprintf("the inbox shows %q in “%s”", s.Mailpit, m.Subject)}
-			}
-		}
-	}
-	if len(bi) < len(gi) {
-		return Result{Outcome: Missed, Detail: fmt.Sprintf("the inbox has %s instead of %d; Mailpit keeps no baseline, so nothing says one is missing", emails(len(bi)), len(gi))}
-	}
-	return Result{Outcome: Missed, Detail: fmt.Sprintf("%s in the inbox and the problem isn't visible there", emails(len(bi)))}
-}
-
-func emails(n int) string {
-	if n == 1 {
-		return "1 email"
-	}
-	return fmt.Sprintf("%d emails", n)
 }

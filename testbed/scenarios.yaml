@@ -25,6 +25,22 @@
 #             person reading the broken-state inbox (see bench/mailpit.go)
 #   known_issue  an Echo bug that keeps the scenario from being caught, as
 #             reported; shown in the scoreboard while it misses
+#
+# environment: lists the other kind of scenario, where the site sends what
+# it always did but what's around Echo goes wrong: the site is down, two
+# runs share one Echo, Echo restarts, the resolver is gone. Each has a probe
+# (bench/probes.go and bench/probes_testbed.go) that sets up the good or
+# the broken state and runs Echo's commands, as steps. Fields:
+#   probe     the probe's name
+#   needs     local (an Echo and fixtures of its own on 127.0.0.1:23200-23239),
+#             testbed (the Docker sites too) or windows (run there only)
+#   toggle    what the broken state is
+#   good, broken  checks, each on one step of the probe: exit (code),
+#             verdict (of --json), says and never (text in what the step
+#             printed, case-insensitive), change (a change the comparison
+#             must have, matched like expect) and no_class (classes it must
+#             not have). The good state must pass its checks for the
+#             scenario to count; the broken state passing its own is caught.
 
 sites:
   wordpress: http://localhost:18850
@@ -186,7 +202,7 @@ scenarios:
     channel: webhook
     toggle: "order.created no longer carries billing.email (wp/plugins/testbed-shop)"
     expect:
-      - {class: changed, check: message/fields-lost, title: "payload lost fields"}
+      - {class: broke, check: message/fields-lost, title: "payload lost fields"}
 
   # Integrations.
   - id: s15
@@ -257,3 +273,185 @@ scenarios:
     toggle: "gateway 9.0 handles charge.succeeded instead of payment_intent.succeeded; Stripe still gets its 200 (wp/plugins/testbed-stripe)"
     expect:
       - {class: broke, check: message/missing, title: "email to jamie@example.net is no longer sent"}
+
+environment:
+  # v1.0.1: the environment scenarios first in line.
+  - id: e01
+    name: The site is down at snapshot and at compare
+    probe: site-down
+    needs: local
+    toggle: "the fixture site stops answering: before the snapshot, then before the compare against a snapshot taken while it was up"
+    good:
+      - {step: snapshot, exit: 0}
+      - {step: compare, exit: 0}
+    broken:
+      - {step: snapshot, exit: 3, says: ["every action failed"]}
+      - {step: compare, exit: 3, verdict: error, never: ["nothing broke", "all clear"]}
+
+  - id: e02
+    name: Two compares run at once against one Echo
+    probe: two-runs
+    needs: local
+    toggle: "two projects compare at the same moment, as two CI jobs would; one site tags all its mail, the other sends the owner's copy over plain SMTP with no run"
+    good:
+      - {step: compare a, exit: 0, never: ["could not be tied", "foreign mail"]}
+      - {step: compare b, exit: 0, never: ["could not be tied", "foreign mail"]}
+    broken:
+      - {step: compare a, exit: 0, never: ["foreign mail", "messages could not be tied"], no_class: [broke]}
+      - {step: compare b, exit: 0, says: ["1 message could not be tied"], never: ["foreign mail", "messages could not be tied"]}
+
+  - id: e03
+    name: A token-protected Echo on 0.0.0.0, as the GitHub Action's service container runs it
+    probe: token
+    needs: local
+    toggle: "Echo listens on 0.0.0.0 with a token and is asked from another container (Host: echo:23200), instead of on loopback without one"
+    good:
+      - {step: requests, says: ["live view without the token: 200", "API without the token: 200"]}
+    broken:
+      - {step: up without a token, exit: 2, says: ["set --token"]}
+      - step: requests
+        says:
+          - "live view without the token: 401"
+          - "live view with the token: 200"
+          - "API without the token: 401"
+          - "API with the token: 200"
+
+  # The other twelve.
+  - id: e04
+    name: The queue sends the receipt later than quiet
+    probe: slow-queue
+    needs: local
+    toggle: "the receipt goes through a queue that sends it 2.5 s after checkout, while the next action runs; quiet is 1 s"
+    good:
+      - {step: compare, exit: 0, never: ["after the action ended"], no_class: [broke]}
+    broken:
+      - {step: compare, exit: 0, says: ["after the action ended and is counted with it"], no_class: [broke]}
+
+  - id: e05
+    name: The PDF invoice is no longer attached
+    probe: attachment
+    needs: local
+    toggle: "the invoice plugin stops attaching invoice-1042.pdf after an update; the receipt itself is still sent"
+    good:
+      - {step: compare, exit: 0, no_class: [broke]}
+    broken:
+      - {step: compare, exit: 0, change: {class: broke, check: message/attachment-lost, title: "invoice-1042.pdf"}}
+
+  - id: e06
+    name: A large newsletter through the Laravel connector
+    probe: large-laravel
+    needs: testbed
+    toggle: "the newsletter grows to 2 MB of HTML with a 5 MB PDF; the connector waits 2 s for Echo (laravel/overlay/routes/web.php)"
+    good:
+      - {step: snapshot, exit: 0, says: ["message: email to"], never: ["[blocked]", "[failed]", "action error"]}
+    broken:
+      - {step: snapshot, exit: 0, says: ["message: email to"], never: ["[blocked]", "[failed]", "action error"]}
+
+  - id: e07
+    name: Echo restarts in the middle of a compare
+    probe: restart
+    needs: local
+    toggle: "Echo is stopped and started again while the first of two actions runs; its inbox is in memory"
+    good:
+      - {step: compare, exit: 0, never: ["echo restarted"]}
+    broken:
+      - {step: compare, says: ["echo restarted during the run"]}
+
+  - id: e08
+    name: The sites can't reach Echo while it is sealed
+    probe: unreachable
+    needs: testbed
+    toggle: "Echo moves off the ports the gate forwards (18863-18865), so every connector and the sendmail stand-in fail to reach it; the CLI still can"
+    good:
+      - {step: wordpress, never: ["can't reach echo"]}
+      - {step: laravel, never: ["can't reach echo"]}
+      - {step: next, never: ["can't reach echo"]}
+      - {step: php, never: ["can't reach echo"]}
+    broken:
+      - {step: wordpress, says: ["can't reach echo"], change: {class: broke, check: message/missing, title: ""}}
+      - {step: laravel, says: ["can't reach echo"], change: {class: broke, check: message/missing, title: ""}}
+      - {step: next, says: ["can't reach echo"], change: {class: broke, check: message/missing, title: ""}}
+      - {step: php, never: ["nothing broke"], change: {class: broke, check: message/missing, title: ""}}
+
+  - id: e09
+    name: Order numbers, dates and links change on every run
+    probe: noise
+    needs: testbed
+    toggle: "s10, s11 and s12 broken, whose emails carry an order number and a date that differ on every run, compared with their good state"
+    good:
+      - {step: s10, no_class: [broke, new, changed]}
+      - {step: s11, no_class: [broke, new, changed]}
+      - {step: s12, no_class: [broke, new, changed]}
+    broken:
+      - {step: s10, no_class: [changed], change: {class: broke, check: content/placeholder, title: "{customer_first_name}"}}
+      - {step: s11, no_class: [changed], change: {class: broke, check: content/php-error, title: "PHP error"}}
+      - {step: s12, no_class: [changed], change: {class: new, check: content/dev-link, title: "staging.shop.test"}}
+
+  - id: e10
+    name: Connector and Echo versions differ
+    probe: version-skew
+    needs: testbed
+    toggle: "the WordPress connector of Echo 1.0.0 (wire 1) against this Echo, then this connector against Echo 1.0.0, both built from this repository"
+    good:
+      - {step: old connector, exit: 0, says: ["message: email to"], never: ["action error"]}
+      - {step: old Echo, exit: 0, says: ["message: email to"], never: ["action error"]}
+    broken:
+      - {step: old connector, exit: 0, says: ["message: email to"], never: ["action error"]}
+      - {step: old Echo, exit: 0, says: ["message: email to"], never: ["action error"]}
+
+  - id: e11
+    name: The snapshot was taken by an older Echo
+    probe: old-snapshot
+    needs: local
+    toggle: "the baseline is a real snapshot from each released schema (bench/testdata/runs/<version>/run.json), from before an upgrade"
+    good:
+      - {step: compare, exit: 0, no_class: [broke]}
+    broken:
+      - {step: compare, exit: 0, never: ["take a new snapshot", "incompatible"], no_class: [broke]}
+
+  - id: e12
+    name: Two action names collide
+    probe: colliding-names
+    needs: local
+    toggle: "a second action is named contact-form next to Contact form, so both would get the ID action:contact-form"
+    good:
+      - {step: snapshot, exit: 0}
+    broken:
+      - {step: snapshot, exit: 2, says: ["both get the ID action:contact-form"]}
+
+  - id: e13
+    name: Snapshot and compare on a Windows runner
+    probe: windows
+    needs: windows
+    toggle: "on Windows, a command action (cmd /C), a flush command and an HTTP action; the command stops sending its email"
+    good:
+      - {step: snapshot, exit: 0, says: ["message: email to ann@shop.test"]}
+      - {step: compare, exit: 0, no_class: [broke]}
+    broken:
+      - {step: compare, exit: 0, change: {class: broke, check: message/missing, title: "ann@shop.test"}}
+
+  - id: e14
+    name: The DNS resolver is down for the deliverability checks
+    probe: resolver-down
+    needs: local
+    toggle: "check on s17's and s18's From domains while the resolver refuses queries, then while it takes them and never answers"
+    good:
+      - {step: s17, exit: 0, never: ["could not reach the resolver"]}
+      - {step: s18, exit: 0, never: ["could not reach the resolver"]}
+    broken:
+      - {step: s17, exit: 3, says: ["could not reach the resolver"]}
+      - {step: s18, exit: 3, says: ["could not reach the resolver"]}
+      - {step: silent, exit: 3, says: ["could not reach the resolver"], never: ["slower than 30 s"]}
+
+  - id: e15
+    name: Right-to-left, CJK and bidi override text
+    probe: non-ascii
+    needs: local
+    toggle: "the order email has a CJK subject, Arabic and Hebrew text and a name wrapped in a right-to-left override (U+202E), the same at snapshot and compare"
+    good:
+      - {step: snapshot, exit: 0, never: ["content/mojibake", "content/placeholder"]}
+      - {step: compare, exit: 0, no_class: [broke, new, changed]}
+    broken:
+      - {step: snapshot, exit: 0, never: ["content/mojibake", "content/placeholder"]}
+      - {step: list, exit: 0, says: ['\u202e'], never: ["\u202e"]}
+      - {step: compare, exit: 0, no_class: [broke, new, changed]}
