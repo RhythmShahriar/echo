@@ -101,6 +101,11 @@ func TestGatewaysRefuseLiveCalls(t *testing.T) {
 		if rec.Provider != g.provider || !Refuses(rec, g.live) || f.Status < 400 || !strings.Contains(f.Body, "Rhythm Echo refused a live") {
 			t.Errorf("%s live %s: provider %q, refused %v, fake %d %s", g.provider, g.live.URL, rec.Provider, Refuses(rec, g.live), f.Status, f.Body)
 		}
+		// Live calls are refused in observe mode and for allowed hosts
+		// too, so the text must not say the site is sealed.
+		if strings.Contains(f.Body, "sealed") {
+			t.Errorf("%s refusal names a sealed site: %s", g.provider, f.Body)
+		}
 		m = model.Message{}
 		rec = Recognize(g.sandbox, &m)
 		f = FakeFor(rec, g.sandbox, &m)

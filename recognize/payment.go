@@ -143,7 +143,7 @@ var stripe = Recognizer{
 			return jsonFake(403, js(map[string]any{"error": map[string]string{
 				"type":    "invalid_request_error",
 				"code":    "rhythm_echo_sealed",
-				"message": "Rhythm Echo refused a live-mode call from a sealed site. Use a Stripe test key (sk_test_…) on staging.",
+				"message": "Rhythm Echo refused a live-mode call. Use a Stripe test key (sk_test_…) on staging.",
 			}}))
 		}
 		res, withID, action := stripeCall(r)
@@ -232,11 +232,11 @@ var paypal = Recognizer{
 		if !paypalSandbox(r) {
 			if res == "oauth2.token" {
 				return jsonFake(401, js(map[string]string{"error": "invalid_client",
-					"error_description": "Rhythm Echo refused a live PayPal call from a sealed site. Use sandbox credentials on staging."}))
+					"error_description": "Rhythm Echo refused a live PayPal call. Use sandbox credentials on staging."}))
 			}
 			return jsonFake(403, js(map[string]any{"name": "NOT_AUTHORIZED", "message": "Authorization failed due to insufficient permissions.",
 				"debug_id": randHex(13), "details": []map[string]string{{"issue": "PERMISSION_DENIED",
-					"description": "Rhythm Echo refused a live PayPal call from a sealed site. Use the sandbox on staging."}},
+					"description": "Rhythm Echo refused a live PayPal call. Use the sandbox on staging."}},
 				"links": []any{}}))
 		}
 		id := strings.ToUpper(randHex(17))

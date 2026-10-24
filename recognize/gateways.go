@@ -128,7 +128,7 @@ func (g gateway) recognizer() Recognizer {
 
 // refusal is the sentence every refusal carries.
 func refusal(name, fix string) string {
-	return "Rhythm Echo refused a live " + name + " call from a sealed site. " + fix
+	return "Rhythm Echo refused a live " + name + " call. " + fix
 }
 
 var (
