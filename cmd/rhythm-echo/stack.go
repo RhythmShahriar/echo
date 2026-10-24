@@ -135,7 +135,7 @@ func starterFor(stack, dir string) starter {
 	}
 	return starter{name: "Home page", needSite: true, actions: `actions:
   - name: Home page
-    # Works on any site, but sends little. A form's POST or a sign-up is
+    # Works on any site but sends little. A form's POST or a sign-up is
     # what to check: add those and remove this one.
     http: {method: GET, url: /}
 #  - name: Contact form
@@ -149,7 +149,7 @@ func starterFor(stack, dir string) starter {
 var templateSite = regexp.MustCompile(`(?m)^site: ""( +)#`)
 
 // initConfig is the config init writes for stack: config.Template with
-// a working first action in place of its examples, and site: filled in
+// a working first action in place of its examples and site: filled in
 // when it can be found.
 func initConfig(st starter) string {
 	t := config.Template

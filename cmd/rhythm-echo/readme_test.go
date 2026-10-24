@@ -71,7 +71,7 @@ func TestReadmePaymentPromise(t *testing.T) {
 		u, _ := url.Parse(c.url)
 		r := recognize.Request{Method: c.method, URL: u, Headers: map[string]string{"authorization": c.auth}}
 		if !recognize.Refuses(recognize.Recognize(r, &model.Message{}), r) {
-			t.Errorf("README says a test can never charge a card, but a live %s call (%s) isn't refused", c.gateway, c.url)
+			t.Errorf("README says a test can never charge a card but a live %s call (%s) isn't refused", c.gateway, c.url)
 		}
 	}
 }

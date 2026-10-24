@@ -273,7 +273,7 @@ var errNoConfig = errors.New("no .echo/config.yaml here or above; run rhythm ech
 
 // findConfig returns the absolute path of the nearest .echo/config.yaml
 // in start or a folder above it, within sendmail.FindConfig's bounds:
-// the repository root, below $HOME, and only folders that are yours and
+// the repository root, below $HOME and only folders that are yours and
 // that others can't write to. A config it won't use is a
 // *sendmail.UntrustedError.
 //

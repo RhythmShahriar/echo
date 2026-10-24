@@ -119,7 +119,7 @@ func (s *session) selectActions() error {
 	return err
 }
 
-// start prints the header and the one-time notice, and checks for a new
+// start prints the header and the one-time notice and checks for a new
 // release in the background.
 func (s *session) start(target string) {
 	if kitconfig.FirstRun("echo-authorised-use") && !s.o.quiet {
@@ -1037,7 +1037,7 @@ type doctorCheck struct {
 	Detail string `json:"detail,omitempty"`
 }
 
-// doctorChecks is what doctor --json writes: the checks, and whether
+// doctorChecks is what doctor --json writes: the checks and whether
 // doctor stopped early (Echo couldn't be reached, so nothing else was
 // checked), which makes the envelope incomplete.
 type doctorChecks struct {

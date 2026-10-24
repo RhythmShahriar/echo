@@ -7,7 +7,7 @@
 
 <p align="center">
   <b>Is your site still saying what it should?</b><br>
-  Echo captures every email, SMS, webhook and API call your site sends, seals staging so nothing reaches real people, and shows what each form, order or sign-up sends before and after a change. Built for PHP &amp; WordPress, with Laravel and Next.js connectors.
+  Echo captures every email, SMS, webhook and API call your site sends, seals staging so nothing reaches real people and shows what each form, order or sign-up sends before and after a change. Built for PHP &amp; WordPress, with Laravel and Next.js connectors.
 </p>
 
 <p align="center">
@@ -30,7 +30,7 @@
 <br>
 
 <p align="center">
-  <img alt="An Echo comparison after a plugin update: the shop owner's notification email is no longer sent, an SMS now has an unfilled placeholder, and a webhook lost a field" src="docs/assets/compare.svg" width="720">
+  <img alt="An Echo comparison after a plugin update: the shop owner's notification email is no longer sent, an SMS now has an unfilled placeholder and a webhook lost a field" src="docs/assets/compare.svg" width="720">
 </p>
 
 <br>
@@ -68,7 +68,7 @@ rhythm echo watch                                # see each message as it's sent
 
 | Stack | Connector | Catches |
 |---|---|---|
-| **WordPress** | one mu-plugin, written by `install` | every `wp_mail()` (beats FluentSMTP, Post SMTP), every `wp_remote_*()` call (SMS plugins, Woo webhooks, Slack, GA4, Meta CAPI, API mailers), and raw cURL SDKs through Echo's proxy |
+| **WordPress** | one mu-plugin, written by `install` | every `wp_mail()` (beats FluentSMTP, Post SMTP), every `wp_remote_*()` call (SMS plugins, Woo webhooks, Slack, GA4, Meta CAPI, API mailers) and raw cURL SDKs through Echo's proxy |
 | **Laravel** | `composer require rhythmsh/echo-laravel` | every mailer and transport, the `Http` client, Vonage and Slack notifications, queued jobs (the action follows them) |
 | **Next.js · Node** | `npm i -D @rhythmsh/echo` + `instrumentation.ts` | `fetch` (Node and Edge), `http`/`https` (axios, SDKs), Nodemailer; built for Vercel previews too |
 | **Anything** | SMTP, `sendmail_path`, `HTTPS_PROXY` | mail and outbound HTTPS from any language, through Echo's SMTP sink and MITM proxy |
@@ -93,7 +93,7 @@ actions:
 
 Each action counts as done when nothing new arrives for `quiet` (default 2s), or after `timeout` (default 30s). Echo caps `quiet` at 30s and `timeout` at 60s: a longer value acts as the cap. For one run, `--quiet 500ms` and `--timeout 10s` on snapshot, compare and run override them (within the same caps; a value outside them is refused).
 
-Commands find `.echo/config.yaml` in the folder you're in or one above it, so they work from any subfolder: flush and command actions run in the project's folder, and snapshot, compare, run and doctor name the config they use. The search stops at the repository root, or below your home folder outside a repository, and skips a folder above that isn't yours or that anyone can write to (such as `/tmp`), since a config there could run someone else's commands. Snapshots and runs are kept next to the config; `--config` points at another one (its snapshots come with it) and `--store <dir>` keeps them elsewhere.
+Commands find `.echo/config.yaml` in the folder you're in or one above it, so they work from any subfolder: flush and command actions run in the project's folder. Snapshot, compare, run and doctor name the config they use. The search stops at the repository root (below your home folder outside a repository) and skips a folder above that isn't yours or that anyone can write to (such as `/tmp`), since a config there could run someone else's commands. Snapshots and runs are kept next to the config; `--config` points at another one (its snapshots come with it) and `--store <dir>` keeps them elsewhere.
 
 > [!WARNING]
 > **`.echo/config.yaml` is code.** A `command` action or a `flush` entry runs in your shell on every `snapshot`, `compare` and `run`. `${env:NAME}` puts an environment variable into an `http` action, which sends it to the URL the action names. Read a config from a repository you didn't write before you run Echo in it, as you would a Makefile.
@@ -108,7 +108,7 @@ rhythm echo compare --open                       # what changed, in a report
 |---|---|
 | **BROKE** | a message sent in the snapshot is missing now, fails, or has a new error (an unfilled `{first_name}`, a PHP warning in the email) |
 | **NEW** | a message or a problem that wasn't there before |
-| **CHANGED** | the same message, but different: recipient, subject, text, sender, fields of a payload |
+| **CHANGED** | the same message but different: recipient, subject, text, sender, fields of a payload |
 | **FIXED** | a problem from the snapshot is gone |
 
 | You want to… | Run |
@@ -203,7 +203,7 @@ The connectors have their own tests: `make -C connectors/laravel check` (Docker)
 Echo is built to help people **test their own sites safely**.
 
 - **Use it only on sites you own or are authorized to test.** Replays and actions send real requests to the site you point them at.
-- **Captured messages contain personal data.** They stay on your machine (or CI runner); credentials are masked, content isn't. Treat `.echo/` like a database dump, and use test data on staging.
+- **Captured messages contain personal data.** They stay on your machine (or CI runner); credentials are masked, content isn't. Treat `.echo/` like a database dump and use test data on staging.
 - **Observe mode really sends.** Seal is the default for a reason; use observe only where real delivery is safe.
 - **No warranty.** Echo is provided "as is", as set out in the [license](LICENSE). A connector can miss a message sent in a way it doesn't hook; use a hard seal where a leak would matter.
 

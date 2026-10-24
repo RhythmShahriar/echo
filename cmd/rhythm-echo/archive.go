@@ -163,7 +163,7 @@ func writeEntry(target string, r io.Reader, size int64) error {
 // (or, when name is "", under the name it was exported with) and makes it
 // the latest. An existing snapshot of that name is replaced only when
 // replace is set. The archive is unpacked next to the snapshots and
-// checked to hold a run Echo can read before it takes a snapshot's place,
+// checked to hold a run Echo can read before it takes a snapshot's place
 // and its HTML report is written anew from that run.
 func importSnapshot(st store.Store, file, name string, replace bool) (string, error) {
 	f, err := os.Open(file) //nolint:gosec // the user names the archive

@@ -130,7 +130,7 @@ Environment, on staging or your machine only:
 
   RHYTHM_ECHO_URL=%s%s
 
-The connector is off on VERCEL_ENV=production, and on NODE_ENV=production unless
+The connector is off on VERCEL_ENV=production and on NODE_ENV=production unless
 RHYTHM_ECHO_URL is set: setting it there turns the connector on.
 
 Express/Fastify: app.use(echoMiddleware()) ties messages to the request that caused them.
@@ -257,7 +257,7 @@ func installWordPress(target string, s wordpress.Settings, wpcli bool, container
 		fmt.Fprintf(stdout, "  wp-config.php sets WP_ENVIRONMENT_TYPE to %s, so the connector runs.\n", env)
 	default:
 		fmt.Fprint(stdout, `  It runs only where WP_ENVIRONMENT_TYPE is local, development or staging. WordPress
-  treats an unset WP_ENVIRONMENT_TYPE as production, and there the connector does
+  treats an unset WP_ENVIRONMENT_TYPE as production and there the connector does
   nothing. On staging, add this to wp-config.php, above "That's all, stop editing!":
 
     define( 'WP_ENVIRONMENT_TYPE', 'staging' );
@@ -295,7 +295,7 @@ func wpEnvironment(target string, remote bool) string {
 	return ""
 }
 
-// installNext adds instrumentation.ts when the project has none, and says
+// installNext adds instrumentation.ts when the project has none and says
 // how to wrap next.config (the project's own file, so it's not edited).
 func installNext(dir, url, token string, stdout, stderr io.Writer) int {
 	if !hasPackageJSON(dir, "Next.js", stderr) {
@@ -338,13 +338,13 @@ Environment (.env.local, or the Preview environment on Vercel):
 
   RHYTHM_ECHO_URL=%s%s
 
-Then: rhythm echo up, and rhythm echo watch while you use the app.
+Then: rhythm echo up and rhythm echo watch while you use the app.
 `, url, tokenLine(token))
 	_, _ = stdout.Write(b.Bytes())
 	return exitOK
 }
 
-// hasPackageJSON reports whether dir is a Node project, and says so when
+// hasPackageJSON reports whether dir is a Node project and says so when
 // it isn't: the package goes into that project's package.json, so
 // install next and install node both stop outside one.
 func hasPackageJSON(dir, label string, stderr io.Writer) bool {

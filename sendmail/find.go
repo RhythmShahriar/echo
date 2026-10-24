@@ -99,7 +99,6 @@ func untrusted(path string) string {
 	return untrustedInfo(fi)
 }
 
-
 // rel names path for a message: relative to dir when it is inside it.
 func rel(dir, path string) string {
 	if r, err := filepath.Rel(dir, path); err == nil {

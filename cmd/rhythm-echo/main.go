@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 // Command rhythm-echo captures every email, SMS, webhook and API call a
-// site sends, seals staging so none of it reaches real people, and
+// site sends, seals staging so none of it reaches real people and
 // compares what each action sends before and after a change. It is
 // normally run as `rhythm echo`; the rhythm CLI runs this binary.
 //
@@ -33,7 +33,7 @@ var version = "dev"
 // Exit codes, as in Tuner and Soundcheck. Every command returns one of
 // these; the help text lists them under "Exit codes".
 const (
-	exitOK       = 0   // done, and nothing at or above --fail-on
+	exitOK       = 0   // done and nothing at or above --fail-on
 	exitFindings = 1   // --fail-on hit, an action failed, a doctor check failed, or the site rejected a replay
 	exitUsage    = 2   // wrong command line, or .echo/config.yaml asks for what isn't there
 	exitError    = 3   // couldn't run: Echo not reachable, every action failed, no DNS answer, a file or network error
@@ -141,7 +141,7 @@ func unknownCommand(name string, stderr io.Writer) int {
 func usage(w io.Writer) {
 	fmt.Fprintln(w, kit.Banner("rhythm echo", version))
 	fmt.Fprint(w, `Is your site still saying what it should? Capture every email, SMS, webhook
-and API call a site sends, seal staging so nothing reaches real people, and
+and API call a site sends, seal staging so nothing reaches real people and
 compare what each action sends before and after a change.
 
 rhythm echo and rhythm-echo are the same command: the rhythm CLI runs this binary.

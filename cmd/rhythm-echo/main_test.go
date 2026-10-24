@@ -1122,7 +1122,7 @@ func TestFindConfigStopsAtTheRepoAndHome(t *testing.T) {
 }
 
 // From a subfolder, flush and command actions run in the project's
-// folder, as they do from the folder itself, and the command says which
+// folder, as they do from the folder itself and the command says which
 // config it uses.
 func TestCommandsRunInTheProjectFolder(t *testing.T) {
 	if _, err := exec.LookPath("test"); err != nil {
@@ -1289,7 +1289,7 @@ func TestInitWritesAnActionPerStack(t *testing.T) {
 }
 
 // echoHealth answers /v1/health as an Echo that reports its SMTP sink at
-// smtp, and everything else as h.
+// smtp and everything else as h.
 func echoHealth(h http.Handler, smtp string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/v1/health" {
@@ -1364,7 +1364,7 @@ func TestDoctorNamesMailpit(t *testing.T) {
 		t.Errorf("doctor against Mailpit's API: %d\n%s", code, out)
 	}
 
-	// The SMTP port comes from Echo's health, and Mailpit on it is named.
+	// The SMTP port comes from Echo's health and Mailpit on it is named.
 	fakeMailpitSMTP(t, 20464)
 	echo := fixtureServer(t, 20463, echoHealth(catcher.NewServer(catcher.NewInbox(10), catcher.Config{Version: "test"}), "0.0.0.0:20464"))
 	code, out, _ = runCLI(t, "doctor", "--url", echo.URL, "--plain")
@@ -1527,7 +1527,7 @@ func TestBaselinesTravel(t *testing.T) {
 	}
 }
 
-// assertArchive checks the tgz holds the names, and only files that
+// assertArchive checks the tgz holds the names and only files that
 // are private to their owner.
 func assertArchive(t *testing.T, tgz string, names ...string) {
 	t.Helper()
@@ -1643,7 +1643,7 @@ func TestImportRefusesArchivesThatEscape(t *testing.T) {
 }
 
 // decodeEnvelope checks out is one JSON envelope of kind, with every
-// field of one, and decodes its data into data.
+// field of one and decodes its data into data.
 func decodeEnvelope(t *testing.T, out []byte, kind jsonKind, data any) envelope {
 	t.Helper()
 	var keys map[string]json.RawMessage
@@ -1779,7 +1779,7 @@ func TestQuietAndTimeoutFlags(t *testing.T) {
 		t.Errorf("run --quiet=200ms: %d\n%s", code, out)
 	}
 
-	// Two emails are expected and one comes: only the timeout ends it,
+	// Two emails are expected and one comes: only the timeout ends it
 	// and the runner counts the wait that ran out as the action failing.
 	// The config's timeout is a minute.
 	writeConfig(t, "site: "+shop.URL+"\nquiet: 200ms\ntimeout: 1m\n"+action+"    expect: {email: 2}\n")
@@ -1840,7 +1840,7 @@ func TestQuietAndTimeoutFlags(t *testing.T) {
 
 // fakeLatest is an Echo with GET /v1/messages/latest as the catcher
 // answers it: Ann's login email with a code and a magic link, Bob's SMS
-// with neither, and for anyone else a 404 once wait has passed. Each
+// with neither and for anyone else a 404 once wait has passed. Each
 // query it got is kept, to check what the flags sent.
 func fakeLatest(t *testing.T, token string, queries chan<- string) http.Handler {
 	t.Helper()
@@ -1991,7 +1991,7 @@ func TestLatestPrintsTheCodeOrLink(t *testing.T) {
 		}
 	}
 
-	// A wrong token, an Echo from before codes, and no Echo at all.
+	// A wrong token, an Echo from before codes and no Echo at all.
 	t.Setenv("RHYTHM_ECHO_TOKEN", "wrong")
 	if code, _, errOut := runCLI(t, "latest", "--to", "ann@shop.test"); code != exitError || !strings.Contains(errOut, "401") {
 		t.Errorf("latest with a wrong token: %d %q", code, errOut)

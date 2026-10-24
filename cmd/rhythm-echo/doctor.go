@@ -33,7 +33,7 @@ import (
 )
 
 // cmdDoctor checks every capture layer end to end: Echo is up, its SMTP
-// sink and proxy answer, the connector for the project's stack is active,
+// sink and proxy answer, the connector for the project's stack is active
 // and canary messages sent through each layer arrive. Only the checks for
 // the stack detectStack finds run, so a plain PHP site isn't told to
 // install the WordPress connector. It never sends anything real: canaries
@@ -219,7 +219,7 @@ func (d *doctor) wordpress(site string, live, local bool) {
 	default:
 		detail := fmt.Sprintf("active (%s), layers: %s", ping.Environment, strings.Join(ping.Layers, ", "))
 		if !ping.Echo.Reachable {
-			d.fail("WordPress", "active, but it can't reach Echo at "+ping.Echo.URL+" (in Docker use host.docker.internal)")
+			d.fail("WordPress", "active but it can't reach Echo at "+ping.Echo.URL+" (in Docker use host.docker.internal)")
 		} else {
 			d.pass("WordPress", detail)
 		}
@@ -276,7 +276,7 @@ await flush();
 console.log(res.status);
 `
 
-// node runs nodeCanary in dir with the connector's register hook, and
+// node runs nodeCanary in dir with the connector's register hook and
 // checks Echo caught the request and answered for Twilio. A sealed
 // Echo is required: in observe mode the request would really go out.
 func (d *doctor) node(dir, stack, mode string) {
@@ -353,8 +353,8 @@ func (s *session) captureAddrs() (smtpAddr, proxyAddr string, reported bool) {
 	return dialAddr(smtpAddr, host), dialAddr(proxyAddr, host), reported
 }
 
-// dialAddr is a listen address as a client reaches it: "" when it's off,
-// and urlHost in place of a wildcard host.
+// dialAddr is a listen address as a client reaches it: "" when it's off;
+// otherwise with urlHost in place of a wildcard host.
 func dialAddr(addr, urlHost string) string {
 	if addr == "" || addr == "off" {
 		return ""
@@ -519,7 +519,7 @@ func sameSite(a, b string) bool {
 const shellWaitDelay = 2 * time.Second
 
 // shell runs line in the platform's shell: sh -c, or cmd /C on Windows,
-// which has no sh. Canceling ctx kills the shell, but a child it started
+// which has no sh. Canceling ctx kills the shell but a child it started
 // (sleep, wp cron) can live on and hold the output pipe open, so Wait
 // would block until that child exits. WaitDelay closes the pipe instead,
 // so Ctrl+C returns within two seconds.

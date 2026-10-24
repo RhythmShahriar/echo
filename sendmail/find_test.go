@@ -15,7 +15,7 @@ import (
 )
 
 // tree makes each folder under a new temporary root, with a config in
-// each folder named in configs, and returns the root.
+// each folder named in configs and returns the root.
 func tree(t *testing.T, dirs []string, configs ...string) string {
 	t.Helper()
 	root := t.TempDir()
