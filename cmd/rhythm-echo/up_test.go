@@ -818,6 +818,8 @@ func TestEnvLinesPerStack(t *testing.T) {
 		append(base, "MAIL_MAILER=smtp", "MAIL_HOST=127.0.0.1", "MAIL_PORT=11025   (Laravel .env)")...)
 	eqLines(envLines("wordpress", "127.0.0.1:18025", "127.0.0.1:11025", "/bin/rhythm-echo"),
 		append(base, `sendmail_path = "RHYTHM_ECHO_SMTP=127.0.0.1:11025 /bin/rhythm-echo sendmail -t -i"   (php.ini)`)...)
+	eqLines(envLines("php", "127.0.0.1:18025", "127.0.0.1:11025", "/Users/me/Library/Application Support/rhythm-echo"),
+		append(base, `sendmail_path = "RHYTHM_ECHO_SMTP=127.0.0.1:11025 '/Users/me/Library/Application Support/rhythm-echo' sendmail -t -i"   (php.ini)`)...)
 	eqLines(envLines("next", "127.0.0.1:18025", "127.0.0.1:11025", ""), base...)
 	eqLines(envLines("laravel", "127.0.0.1:18025", "", ""), base[0])
 }

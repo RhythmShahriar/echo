@@ -400,7 +400,9 @@ func envLines(stack, listen, smtp, exe string) []string {
 	case "wordpress", "php", "":
 		// PHP runs sendmail_path through the shell, so the variable can
 		// sit in front of the command.
-		out = append(out, fmt.Sprintf(`sendmail_path = "RHYTHM_ECHO_SMTP=%s %s sendmail -t -i"   (php.ini)`, smtp, exe))
+		// The path is shell-quoted ('Program Files', 'Application
+		// Support'); single quotes need no escaping in a php.ini value.
+		out = append(out, fmt.Sprintf(`sendmail_path = "RHYTHM_ECHO_SMTP=%s %s sendmail -t -i"   (php.ini)`, smtp, shellQuote(exe)))
 	}
 	return out
 }
