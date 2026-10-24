@@ -11,6 +11,7 @@ import (
 	"net"
 	"net/http"
 	"net/smtp"
+	"net/url"
 	"os"
 	"os/exec"
 	"runtime"
@@ -20,6 +21,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/RhythmShahriar/echo/client"
+	"github.com/RhythmShahriar/echo/config"
 	"github.com/RhythmShahriar/echo/connectors/wordpress"
 	"github.com/RhythmShahriar/echo/sendmail"
 	"github.com/RhythmShahriar/echo/wire"
@@ -71,9 +73,16 @@ func cmdDoctor(s *session) int {
 		}
 	}
 
-	// WordPress connector.
+	// WordPress connector. A live site gets no canaries: doctor would
+	// send them through the real site.
 	site := strings.TrimRight(s.cfg.Site, "/")
-	if site != "" {
+	reason, live := productionReason(s.cfg, s.cfg.Site)
+	if reason != "" {
+		fail("Site", reason)
+	}
+	if live {
+		note("WordPress", "not checked: doctor sends canaries through the site, and this one is live")
+	} else if site != "" {
 		ping, err := s.wpPing(site)
 		switch {
 		case err != nil:
@@ -97,9 +106,6 @@ func cmdDoctor(s *session) int {
 			} else {
 				fail("Canaries", fmt.Sprintf("only %d of 2 canaries arrived", got))
 			}
-		}
-		if s.cfg.IsProduction(site) {
-			fail("Site", site+" is listed under production: Echo's actions and replays refuse it")
 		}
 	} else {
 		note("WordPress", "no site: in .echo/config.yaml, so the site connector wasn't checked")
@@ -134,6 +140,64 @@ func cmdDoctor(s *session) int {
 	}
 	_, _ = s.echo.Clear(context.WithoutCancel(s.ctx), client.Filter{Run: run})
 	return s.doctorEnd(ok, fails)
+}
+
+// productionReason says why site counts as a live site under the
+// config's production: list, or "" when it doesn't; live is false when
+// an entry only catches it by accident. It names the entry
+// and says only what Echo does about it today: http actions refuse a URL
+// that starts with an entry exactly as written, and command actions run
+// all the same. Replays never read the list; they send only to staging:
+// and local addresses. An entry that differs only in case, port or a
+// subdomain is not matched by the actions, so doctor says so rather
+// than promise a refusal. A prefix of another host's URL is matched,
+// which refuses a staging site's actions, so doctor names that too.
+//
+// This stands in for config.ProductionReason until that is released.
+func productionReason(cfg config.Config, site string) (reason string, live bool) {
+	if site == "" {
+		return "", false
+	}
+	// Actions ask for site plus a path, so an entry ending in / that
+	// equals site with a / added matches them too.
+	withSlash := strings.TrimRight(site, "/") + "/"
+	for _, p := range cfg.Production {
+		if p == "" {
+			continue
+		}
+		prefix, same := strings.HasPrefix(site, p) || strings.HasPrefix(withSlash, p), sameSite(site, p)
+		if prefix && !same {
+			// https://shop.example is a prefix of https://shop.example.staging.test.
+			return fmt.Sprintf("%s is another host, but it starts with production: entry %s, so its http actions are "+
+				"refused; end the entry with a / to match only that site", site, p), false
+		}
+		if prefix {
+			return fmt.Sprintf("%s is listed under production: (%s). http actions to it are refused, but command actions "+
+				"still run against it; point site: at a staging copy", site, p), true
+		}
+		if same {
+			return fmt.Sprintf("%s looks like production: entry %s, but actions match an entry exactly as written, "+
+				"so they would run against it; point site: at a staging copy or write the entry as %s", site, p, site), true
+		}
+	}
+	return "", false
+}
+
+// sameSite reports whether a and b name the same host, or a is on a
+// subdomain of b, ignoring case, scheme and port.
+func sameSite(a, b string) bool {
+	host := func(raw string) string {
+		if !strings.Contains(raw, "://") {
+			raw = "https://" + raw
+		}
+		u, err := url.Parse(raw)
+		if err != nil {
+			return ""
+		}
+		return strings.TrimSuffix(strings.ToLower(u.Hostname()), ".")
+	}
+	ha, hb := host(a), host(b)
+	return ha != "" && hb != "" && (ha == hb || strings.HasSuffix(ha, "."+hb))
 }
 
 // shellWaitDelay is how long a canceled command's output may stay open.

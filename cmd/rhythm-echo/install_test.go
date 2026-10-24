@@ -5,10 +5,12 @@ package main
 
 import (
 	"net"
+	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/RhythmShahriar/echo/catcher"
@@ -122,6 +124,69 @@ func TestDoctorChecksEchoAndSMTP(t *testing.T) {
 	}
 	if code, out, _ := runCLI(t, "doctor", "--url", "http://127.0.0.1:1", "--plain"); code != exitFindings || !strings.Contains(out, "FAIL  Echo: ") {
 		t.Errorf("doctor without Echo: %d\n%s", code, out)
+	}
+}
+
+func TestDoctorFailsOnAProductionSite(t *testing.T) {
+	t.Chdir(t.TempDir())
+	api := httptest.NewServer(catcher.NewServer(catcher.NewInbox(100), catcher.Config{Version: "test"}))
+	defer api.Close()
+	var hits atomic.Int32
+	shop := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { hits.Add(1) }))
+	defer shop.Close()
+	_ = os.MkdirAll(config.Dir, 0o750)
+	write := func(prod string) {
+		_ = os.WriteFile(config.Path(), []byte("smtp: off\nsite: "+shop.URL+"\nproduction:\n  - "+prod+"\n"), 0o600)
+	}
+	write(shop.URL)
+	code, out, errOut := runCLI(t, "doctor", "--url", api.URL, "--plain")
+	want := "FAIL  Site: " + shop.URL + " is listed under production: (" + shop.URL + "). http actions to it are refused, " +
+		"but command actions still run against it"
+	if code != exitFindings || !strings.Contains(out, want) {
+		t.Fatalf("doctor: %d\n%s\n%s", code, out, errOut)
+	}
+	if strings.Contains(out, "replays refuse") || hits.Load() != 0 {
+		t.Errorf("doctor promised a replay refusal or sent canaries to a live site (%d requests):\n%s", hits.Load(), out)
+	}
+	// A listing actions wouldn't match is still a live site, said plainly.
+	write(strings.ToUpper(shop.URL))
+	if code, out, _ := runCLI(t, "doctor", "--url", api.URL, "--plain"); code != exitFindings ||
+		!strings.Contains(out, "looks like production: entry "+strings.ToUpper(shop.URL)+", but actions match an entry exactly as written") {
+		t.Errorf("case variant: %d\n%s", code, out)
+	}
+	// Another site in the list is no reason to fail.
+	write("https://shop.example")
+	if _, out, _ := runCLI(t, "doctor", "--url", api.URL, "--plain"); strings.Contains(out, "FAIL  Site") || hits.Load() == 0 {
+		t.Errorf("staging site:\n%s", out)
+	}
+}
+
+func TestProductionReason(t *testing.T) {
+	cfg := config.Config{Production: []string{"", "https://shop.example"}}
+	for site, want := range map[string]string{
+		"https://shop.example":              "is listed under production: (https://shop.example)",
+		"https://shop.example/":             "is listed under production:",
+		"https://shop.example/shop":         "is listed under production:",
+		"HTTPS://SHOP.example":              "looks like production: entry https://shop.example",
+		"http://www.shop.example:8443":      "looks like production: entry",
+		"https://shop.example.staging.test": "is another host, but it starts with production: entry https://shop.example",
+		"https://staging.example":           "",
+		"":                                  "",
+	} {
+		got, live := productionReason(cfg, site)
+		if (want == "") != (got == "") || !strings.Contains(got, want) {
+			t.Errorf("%q: %q, want %q", site, got, want)
+		}
+		if accident := strings.Contains(want, "another host"); got != "" && live == accident {
+			t.Errorf("%q: live %v", site, live)
+		}
+	}
+	slash := config.Config{Production: []string{"https://shop.example/"}}
+	if got, live := productionReason(slash, "https://shop.example"); !live || !strings.Contains(got, "is listed") {
+		t.Errorf("an entry with a / still refuses site's actions: %q", got)
+	}
+	if got, _ := productionReason(slash, "https://shop.example.staging.test"); got != "" {
+		t.Errorf("a / ends the match: %q", got)
 	}
 }
 
