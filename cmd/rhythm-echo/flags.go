@@ -481,8 +481,8 @@ var flagDocs = map[string]flagDoc{
 
 	"private-network": {"--private-network", "listen beyond loopback without a token, on private (RFC 1918)\nand container networks only; prints a warning"},
 	"free-ports":      {"--free-ports", "when 8025 or 1025 is taken (Mailpit in DDEV, Lando, Sail), move to\nthe next free pair from 18025/11025 and save it to the config\nwithout asking"},
-	"login":           {"--login <user:pass>", "let viewers sign in to Echo Inbox, read only, for 8 hours.\nPrefer RHYTHM_ECHO_LOGIN: other users can read a flag in ps"},
-	"keep":            {"--keep <n>", "the most messages kept (default 10000, and never more than\n256 MiB of them)"},
+	"login":           {"--login <user:pass>", "let viewers sign in to Echo Inbox, read only, for 8 hours\n(with relay: they may also release an email). Prefer\nRHYTHM_ECHO_LOGIN: other users can read a flag in ps"},
+	"keep":            {"--keep <n>", "the most messages kept (default 10000; never more than\n256 MiB of them)"},
 	"keep-for":        {"--keep-for <d>", "with --store: drop messages older than this, e.g. 14d"},
 	"sites":           {"--sites <file>", "give each site its own write token (captures only), from a\nsites.yaml as rhythm echo hub reads it; its read token reads all"},
 	"hostname":        {"--hostname <name>", "also answer to this name without a token, e.g. *.ddev.site\n(repeatable; RHYTHM_ECHO_HOSTNAMES, comma-separated)"},

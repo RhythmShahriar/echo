@@ -242,7 +242,8 @@ Catcher (up):
       --free-ports           when 8025 or 1025 is taken (Mailpit in DDEV, Lando, Sail), move
                              to the next free pair and save it to the config without asking
       --login <user:pass>    let viewers sign in to Echo Inbox, read only, for 8 hours
-                             (prefer RHYTHM_ECHO_LOGIN)
+                             (with relay: they may also release an email; prefer
+                             RHYTHM_ECHO_LOGIN)
       --sites <file>         a write token per site (captures only), from a hub sites.yaml
       --store <dir>          keep what Echo catches in this folder, across restarts
       --keep <n>             the most messages kept (default 10000; at most 256 MiB)
