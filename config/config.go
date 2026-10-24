@@ -26,6 +26,8 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/RhythmShahriar/echo/check"
+	"github.com/RhythmShahriar/echo/compare"
 	"github.com/RhythmShahriar/echo/model"
 )
 
@@ -206,6 +208,30 @@ type Rule struct {
 	Level    Level           `yaml:"level,omitempty"`   // notice, warning (default) or error
 	Message  string          `yaml:"message,omitempty"` // the issue's title; default "Matched <id>"
 	Fixtures *RuleFixtures   `yaml:"fixtures,omitempty"`
+}
+
+// testFixtures checks the rule against its fixtures, so a rule that
+// doesn't find what it was written for fails when the config loads
+// rather than in a run that misses it.
+func (r Rule) testFixtures() error {
+	if r.Fixtures == nil {
+		return nil
+	}
+	re, err := r.Pattern()
+	if err != nil {
+		return err
+	}
+	for _, text := range r.Fixtures.Match {
+		if !re.MatchString(text) {
+			return fmt.Errorf("fixtures: doesn't match %q, which it should", text)
+		}
+	}
+	for _, text := range r.Fixtures.NoMatch {
+		if re.MatchString(text) {
+			return fmt.Errorf("fixtures: matches %q, which it shouldn't", text)
+		}
+	}
+	return nil
 }
 
 // RuleFixtures are texts a rule must and must not match, so a rule is
@@ -418,7 +444,25 @@ func (c Config) Validate() error {
 				return fmt.Errorf("%srule %q: %q isn't a channel; use %s", c.at("rules", i, "channels", j), r.ID, ch, channelList())
 			}
 		}
+		if _, builtin := check.Lookup(r.ID); builtin {
+			return fmt.Errorf("%srule %q: that is a built-in check; give the rule its own id", at, r.ID)
+		}
+		if err := r.testFixtures(); err != nil {
+			return fmt.Errorf("%srule %q: %w", c.at("rules", i, "fixtures"), r.ID, err)
+		}
 		rules[r.ID] = true
+	}
+	var custom []check.Rule
+	for id := range rules {
+		custom = append(custom, check.Rule{ID: id})
+	}
+	levels := make(map[string]string, len(c.Checks))
+	for id, l := range c.Checks {
+		levels[id] = string(l)
+	}
+	if unknown := compare.UnknownChecks(levels, custom); len(unknown) > 0 {
+		id := unknown[0]
+		return fmt.Errorf("%schecks: %s isn't a check; rhythm echo checks lists them", c.at("checks", id), id)
 	}
 	if c.Inbox != nil {
 		switch {

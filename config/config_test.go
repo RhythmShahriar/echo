@@ -242,12 +242,16 @@ func TestErrorsNameTheLine(t *testing.T) {
 		"actions:\n  - name: a\n    command: x\n    quiet: soon\n":                                "line 4: \"soon\" isn't a duration",
 		"actions:\n  - name: a\n    command: x\n    parallel: maybe\n":                            "line 4",
 		"actions:\n  - name: a\n    command: x\n    parallels: false\n":                           "line 4: field parallels not found",
-		"inbox: {keep: -1}\n":                                                                     "line 1: inbox: keep can't be negative",
-		"inbox: {store: x, keepfor: 1d}\n":                                                        "field keepfor not found",
-		"relay:\n  url: http://user:secret@x.test\n":                                              "line 2: relay: url wants smtp://",
-		"relay:\n  allow: [\"[a\"]\n":                                                             "line 2: relay: allow: \"[a\" isn't a valid pattern",
-		"mode: loud\n":                                                                            "line 1: mode",
-		"actions:\n  - name: a\n    command: x\n  - name: a\n    command: y\n":                    "line 4: action \"a\" is listed twice (line 2)",
+		"checks:\n  content/unfilled-placeholder: off\n":                                          "line 2: checks: content/unfilled-placeholder isn't a check; rhythm echo checks lists them",
+		"rules:\n  - id: content/placeholder\n    match: x\n":                                     "line 2: rule \"content/placeholder\": that is a built-in check",
+		"rules:\n  - id: a\n    match: x\n    fixtures: {match: [y]}\n":                           "line 4: rule \"a\": fixtures: doesn't match \"y\", which it should",
+		"rules:\n  - id: a\n    regex: (?i)x\n    fixtures: {no_match: [X]}\n":                    "line 4: rule \"a\": fixtures: matches \"X\", which it shouldn't",
+		"inbox: {keep: -1}\n":                        "line 1: inbox: keep can't be negative",
+		"inbox: {store: x, keepfor: 1d}\n":           "field keepfor not found",
+		"relay:\n  url: http://user:secret@x.test\n": "line 2: relay: url wants smtp://",
+		"relay:\n  allow: [\"[a\"]\n":                "line 2: relay: allow: \"[a\" isn't a valid pattern",
+		"mode: loud\n":                               "line 1: mode",
+		"actions:\n  - name: a\n    command: x\n  - name: a\n    command: y\n": "line 4: action \"a\" is listed twice (line 2)",
 	} {
 		_, err := Load(write(t, in))
 		if err == nil || !strings.Contains(err.Error(), want) {
