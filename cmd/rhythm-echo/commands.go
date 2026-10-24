@@ -682,17 +682,37 @@ func cmdSnapshots(s *session) int {
 	return exitOK
 }
 
+// initUsage is init's help and its usage line.
+const initUsage = `usage: rhythm echo init [--stack s] [--force]
+  --stack s   wordpress, laravel, next, node or php (default: from this folder's files)
+  --force     replace an existing .echo/config.yaml`
+
+// cmdInit writes .echo/config.yaml with one action for the project's
+// stack, so the first snapshot has something to run.
 func cmdInit(args []string, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("init", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	force := fs.Bool("force", false, "")
+	stackFlag := fs.String("stack", "", "")
 	if err := fs.Parse(args); err != nil || fs.NArg() > 0 {
 		if errors.Is(err, flag.ErrHelp) {
-			fmt.Fprintln(stdout, "usage: rhythm echo init [--force]   (--force replaces an existing config)")
+			fmt.Fprintln(stdout, initUsage)
 			return exitOK
 		}
-		fmt.Fprintln(stderr, "rhythm echo: usage: rhythm echo init [--force]")
+		if err != nil {
+			c, _ := lookup("init")
+			fmt.Fprintln(stderr, "rhythm echo:", flagError(err, c))
+		}
+		fmt.Fprintln(stderr, initUsage)
 		return exitUsage
+	}
+	stack := detectStack(".")
+	if *stackFlag != "" {
+		var ok bool
+		if stack, ok = stackNames[strings.ToLower(*stackFlag)]; !ok {
+			fmt.Fprintf(stderr, "rhythm echo: --stack %q: use wordpress, laravel, next, node or php\n", *stackFlag)
+			return exitUsage
+		}
 	}
 	path := config.Path()
 	if _, err := os.Stat(path); err == nil && !*force {
@@ -708,12 +728,24 @@ func cmdInit(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintln(stderr, "rhythm echo:", err)
 		return exitError
 	}
-	if err := os.WriteFile(path, []byte(config.Template), 0o644); err != nil { //nolint:gosec // a project file meant to be committed
+	st := starterFor(stack, ".")
+	if err := os.WriteFile(path, []byte(initConfig(st)), 0o644); err != nil { //nolint:gosec // a project file meant to be committed
 		fmt.Fprintln(stderr, "rhythm echo:", err)
 		return exitError
 	}
 	store.Store{Root: config.Dir}.ExcludeFromGit()
-	fmt.Fprintf(stdout, "Wrote %s. Every setting is optional; add actions to snapshot and compare.\n", path)
+	if stack == "" {
+		fmt.Fprintf(stdout, "Wrote %s with one action to start from (%s).\n", path, st.name)
+	} else {
+		fmt.Fprintf(stdout, "Wrote %s for a %s site, with one action to start from (%s).\n", path, stackLabel(stack), st.name)
+	}
+	switch {
+	case st.needSite && st.site == "":
+		fmt.Fprintf(stdout, "Set site: in it to your staging site's URL; the action's URL is relative to it.\n")
+	case st.site != "":
+		fmt.Fprintf(stdout, "site: is %s; change it if your staging site is elsewhere.\n", st.site)
+	}
+	fmt.Fprintln(stdout, "Then: rhythm echo up, rhythm echo doctor and rhythm echo snapshot.")
 	return exitOK
 }
 

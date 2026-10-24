@@ -118,6 +118,9 @@ HTTPS_PROXY=http://%s and trust: %s
 	case "next", "nextjs":
 		return installNext(cmp.Or(second(pos), "."), echoURL, tok, stdout, stderr)
 	case "node":
+		if !hasPackageJSON(cmp.Or(second(pos), "."), "Node", stderr) {
+			return exitUsage
+		}
 		fmt.Fprintf(stdout, `Node: add the package and load it before your app.
 
   npm install --save-dev @rhythmsh/echo   # or a regular dependency if staging installs without dev deps
@@ -295,8 +298,7 @@ func wpEnvironment(target string, remote bool) string {
 // installNext adds instrumentation.ts when the project has none, and says
 // how to wrap next.config (the project's own file, so it's not edited).
 func installNext(dir, url, token string, stdout, stderr io.Writer) int {
-	if _, err := os.Stat(filepath.Join(dir, "package.json")); err != nil { //nolint:gosec // the user's own project folder
-		fmt.Fprintf(stderr, "rhythm echo: %s has no package.json; run this in the Next.js project\n", dir)
+	if !hasPackageJSON(dir, "Next.js", stderr) {
 		return exitUsage
 	}
 	inst := ""
@@ -340,6 +342,17 @@ Then: rhythm echo up, and rhythm echo watch while you use the app.
 `, url, tokenLine(token))
 	_, _ = stdout.Write(b.Bytes())
 	return exitOK
+}
+
+// hasPackageJSON reports whether dir is a Node project, and says so when
+// it isn't: the package goes into that project's package.json, so
+// install next and install node both stop outside one.
+func hasPackageJSON(dir, label string, stderr io.Writer) bool {
+	if _, err := os.Stat(filepath.Join(dir, "package.json")); err != nil { //nolint:gosec // the user's own project folder
+		fmt.Fprintf(stderr, "rhythm echo: %s has no package.json; run this in the %s project, or name its folder\n", displayDir(dir), label)
+		return false
+	}
+	return true
 }
 
 // importsEcho reports whether a source file already loads the connector.

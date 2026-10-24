@@ -39,7 +39,7 @@ func TestInstallWordPressOnDisk(t *testing.T) {
 }
 
 func TestInstallInstructions(t *testing.T) {
-	for stack, want := range map[string]string{"laravel": "rhythmsh/echo-laravel", "node": "@rhythmsh/echo/register", "generic": "sendmail_path"} {
+	for stack, want := range map[string]string{"laravel": "rhythmsh/echo-laravel", "generic": "sendmail_path"} {
 		if code, out, _ := runCLI(t, "install", stack); code != 0 || !strings.Contains(out, want) {
 			t.Errorf("%s: %d\n%s", stack, code, out)
 		}
@@ -49,6 +49,9 @@ func TestInstallInstructions(t *testing.T) {
 	}
 	dir := t.TempDir()
 	_ = os.WriteFile(filepath.Join(dir, "package.json"), []byte("{}"), 0o600)
+	if code, out, _ := runCLI(t, "install", "node", dir); code != 0 || !strings.Contains(out, "@rhythmsh/echo/register") {
+		t.Errorf("node: %d\n%s", code, out)
+	}
 	if code, out, _ := runCLI(t, "install", "next", dir); code != 0 || !strings.Contains(out, "Wrote instrumentation.ts") {
 		t.Errorf("next: %d\n%s", code, out)
 	}

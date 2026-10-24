@@ -460,7 +460,7 @@ var commands = []cmdSpec{
 			{"mta-sts-fetch", ""}, {"resolver", ""}, {"fail-on", failOnIssues}}, reportFlags)},
 	{name: "headers", use: "headers <file.eml | ->", about: "check a real received email's authentication",
 		flags: flags([]flagUse{{"check", ""}, {"hops", ""}, {"resolver", ""}, {"mta-sts-fetch", ""}, {"fail-on", failOnIssues}}, reportFlags)},
-	{name: "init", use: "init [--force]", about: "write .echo/config.yaml to edit (--force replaces it)", own: true},
+	{name: "init", use: "init [--stack s] [--force]", about: "write .echo/config.yaml with an action for this stack (--force replaces it)", own: true},
 	{name: "ca", use: "ca [--pem]", about: "print the proxy's CA certificate path (--pem: the certificate)", own: true},
 	{name: "sendmail", use: "sendmail [-t] [-i] [-f from] [rcpt…]", about: "sendmail stand-in for sendmail_path; reads the message on stdin", own: true},
 	{name: "update", use: "update", about: "nothing to refresh; kept for rhythm update", hidden: true},

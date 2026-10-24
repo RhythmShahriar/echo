@@ -77,7 +77,7 @@ Connectors switch themselves off in production. For a seal that can't be bypasse
 
 ## Check a change
 
-List the actions that make your site send things in `.echo/config.yaml` (`rhythm echo init` writes examples): HTTP requests, WP-CLI or artisan commands, or signed webhook replays. Forms and multi-step journeys are driven by [Soundcheck](https://github.com/RhythmShahriar/soundcheck) with `--echo`.
+List the actions that make your site send things in `.echo/config.yaml` (`rhythm echo init` writes a first one for WordPress, Laravel, Next.js, Node or PHP): HTTP requests, WP-CLI or artisan commands, or signed webhook replays. Forms and multi-step journeys are driven by [Soundcheck](https://github.com/RhythmShahriar/soundcheck) with `--echo`.
 
 ```yaml
 # .echo/config.yaml: ask WordPress for a password reset, which sends one email

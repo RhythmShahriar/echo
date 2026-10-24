@@ -4,6 +4,7 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -1115,5 +1116,266 @@ func TestFindConfigStopsAtTheRepoAndHome(t *testing.T) {
 	}
 	if got, err := findConfig(home); err != nil || got != filepath.Join(home, config.Path()) {
 		t.Errorf("findConfig($HOME) = %q, %v", got, err)
+	}
+}
+
+// fixtureServer serves h on 127.0.0.1:port, a port in the range these
+// tests keep for their own servers.
+func fixtureServer(t *testing.T, port int, h http.Handler) *httptest.Server {
+	t.Helper()
+	ln, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", port))
+	if err != nil {
+		t.Fatalf("fixture port %d: %v", port, err)
+	}
+	srv := httptest.NewUnstartedServer(h)
+	_ = srv.Listener.Close()
+	srv.Listener = ln
+	srv.Start()
+	t.Cleanup(srv.Close)
+	return srv
+}
+
+// writeFiles creates each name in dir with the given contents.
+func writeFiles(t *testing.T, dir string, files map[string]string) {
+	t.Helper()
+	for name, body := range files {
+		p := filepath.Join(dir, name)
+		if err := os.MkdirAll(filepath.Dir(p), 0o750); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+func TestDetectStack(t *testing.T) {
+	for _, tc := range []struct {
+		files []string
+		want  string
+	}{
+		{[]string{"wp-config.php", "index.php"}, stackWordPress},
+		{[]string{"wp-load.php"}, stackWordPress},
+		{[]string{"artisan", "package.json", "index.php"}, stackLaravel},
+		{[]string{"next.config.mjs", "package.json"}, stackNext},
+		{[]string{"package.json"}, stackNode},
+		{[]string{"index.php"}, stackPHP},
+		{[]string{"README.md"}, ""},
+	} {
+		dir := t.TempDir()
+		files := map[string]string{}
+		for _, f := range tc.files {
+			files[f] = ""
+		}
+		writeFiles(t, dir, files)
+		if got := detectStack(dir); got != tc.want {
+			t.Errorf("%v: detectStack = %q, want %q", tc.files, got, tc.want)
+		}
+	}
+}
+
+func TestInitWritesAnActionPerStack(t *testing.T) {
+	for _, tc := range []struct {
+		files      map[string]string
+		args       []string
+		action     string
+		site, says string
+	}{
+		{map[string]string{"wp-config.php": "<?php\ndefine( 'WP_HOME', 'https://staging.shop.test/' );\n"}, nil,
+			"Lost password", "https://staging.shop.test", "for a WordPress site"},
+		{map[string]string{"artisan": "", ".env": "APP_URL=\"http://shop.test\"\n"}, nil, "Connector canary", "http://shop.test", "for a Laravel site"},
+		{map[string]string{"next.config.ts": "", "package.json": "{}"}, nil, "Sign-up", "http://localhost:3000", "for a Next.js site"},
+		{map[string]string{"package.json": "{}"}, nil, "Sign-up", "http://localhost:3000", "for a Node site"},
+		{map[string]string{"index.php": ""}, nil, "Home page", "", "Set site: in it"},
+		{map[string]string{}, nil, "Home page", "", "with one action to start from (Home page)"},
+		{map[string]string{"index.php": ""}, []string{"--stack", "WP"}, "Lost password", "", "for a WordPress site"},
+	} {
+		dir := t.TempDir()
+		t.Chdir(dir)
+		writeFiles(t, dir, tc.files)
+		code, out, errOut := runCLI(t, append([]string{"init"}, tc.args...)...)
+		if code != 0 || !strings.Contains(out, tc.says) {
+			t.Errorf("%v %v: init exit %d\n%s\n%s", tc.files, tc.args, code, out, errOut)
+			continue
+		}
+		cfg, err := config.Load(config.Path())
+		if err != nil {
+			t.Errorf("%v: the config doesn't load: %v", tc.files, err)
+			continue
+		}
+		if len(cfg.Actions) != 1 || cfg.Actions[0].Name != tc.action || cfg.Site != tc.site {
+			t.Errorf("%v: actions %+v, site %q; want one %q and site %q", tc.files, cfg.Actions, cfg.Site, tc.action, tc.site)
+		}
+		b, _ := os.ReadFile(config.Path())
+		if tc.action != "Lost password" && strings.Contains(string(b), "woocommerce") {
+			t.Errorf("%v: a non-WordPress config has WordPress examples:\n%s", tc.files, b)
+		}
+	}
+	t.Chdir(t.TempDir())
+	if code, _, errOut := runCLI(t, "init", "--stack", "rails"); code != exitUsage || !strings.Contains(errOut, `--stack "rails": use wordpress, laravel, next, node or php`) {
+		t.Errorf("init --stack rails: %d %q", code, errOut)
+	}
+}
+
+// echoHealth answers /v1/health as an Echo that reports its SMTP sink at
+// smtp, and everything else as h.
+func echoHealth(h http.Handler, smtp string) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/health" {
+			h.ServeHTTP(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintf(w, `{"tool":"rhythm-echo","version":"test","mode":"seal","wire":1,"smtp":%q,"proxy":"off","providers":[]}`, smtp)
+	})
+}
+
+// fakeMailpitSMTP greets as Mailpit on port and accepts any mail.
+func fakeMailpitSMTP(t *testing.T, port int) {
+	t.Helper()
+	ln, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", port))
+	if err != nil {
+		t.Fatalf("fixture port %d: %v", port, err)
+	}
+	t.Cleanup(func() { _ = ln.Close() })
+	go func() {
+		for {
+			c, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			go func() {
+				defer func() { _ = c.Close() }()
+				_ = c.SetDeadline(time.Now().Add(5 * time.Second))
+				fmt.Fprint(c, "220 mailpit Mailpit ESMTP Service ready\r\n")
+				r := bufio.NewReader(c)
+				data := false
+				for {
+					line, err := r.ReadString('\n')
+					if err != nil {
+						return
+					}
+					switch cmd := strings.ToUpper(strings.TrimSpace(line)); {
+					case data:
+						if cmd == "." {
+							data = false
+							fmt.Fprint(c, "250 OK\r\n")
+						}
+					case strings.HasPrefix(cmd, "EHLO"), strings.HasPrefix(cmd, "HELO"):
+						fmt.Fprint(c, "250 mailpit\r\n")
+					case cmd == "DATA":
+						data = true
+						fmt.Fprint(c, "354 go ahead\r\n")
+					case cmd == "QUIT":
+						fmt.Fprint(c, "221 bye\r\n")
+						return
+					default:
+						fmt.Fprint(c, "250 OK\r\n")
+					}
+				}
+			}()
+		}
+	}()
+}
+
+func TestDoctorNamesMailpit(t *testing.T) {
+	t.Chdir(t.TempDir())
+	writeConfig(t, "smtp: \"off\"\n")
+	mailpit := fixtureServer(t, 20462, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v1/info" {
+			fmt.Fprint(w, `{"Version":"v1.21.0","Database":"/data/mailpit.db"}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	code, out, _ := runCLI(t, "doctor", "--url", mailpit.URL, "--plain")
+	if code != exitFindings || !strings.Contains(out, mailpit.URL+" is Mailpit, not Echo; start Echo on a free port") {
+		t.Errorf("doctor against Mailpit's API: %d\n%s", code, out)
+	}
+
+	// The SMTP port comes from Echo's health, and Mailpit on it is named.
+	fakeMailpitSMTP(t, 20464)
+	echo := fixtureServer(t, 20463, echoHealth(catcher.NewServer(catcher.NewInbox(10), catcher.Config{Version: "test"}), "0.0.0.0:20464"))
+	code, out, _ = runCLI(t, "doctor", "--url", echo.URL, "--plain")
+	if code != exitFindings || !strings.Contains(out, "127.0.0.1:20464 is Mailpit, not Echo's sink") {
+		t.Errorf("doctor with Mailpit on the SMTP port: %d\n%s", code, out)
+	}
+}
+
+func TestDoctorRunsOnlyTheStacksChecks(t *testing.T) {
+	echo := fixtureServer(t, 20465, catcher.NewServer(catcher.NewInbox(10), catcher.Config{Version: "test"}))
+	for _, tc := range []struct {
+		files      map[string]string
+		want, not  string
+		wantStatus int
+	}{
+		{map[string]string{"index.php": "<?php mail('a@b.test', 'Hi', 'Hi');"}, "note  PHP: no connector to check", "WordPress", exitOK},
+		{map[string]string{"README.md": ""}, "note  Site: no Echo connector answered at http://127.0.0.1:20479", "WordPress", exitOK},
+		{map[string]string{"wp-config.php": ""}, "note  WordPress: no connector answered", "PHP:", exitOK},
+	} {
+		dir := t.TempDir()
+		t.Chdir(dir)
+		writeFiles(t, dir, tc.files)
+		writeConfig(t, "site: http://127.0.0.1:20479\nsmtp: \"off\"\n")
+		code, out, errOut := runCLI(t, "doctor", "--url", echo.URL, "--plain")
+		if code != tc.wantStatus || !strings.Contains(out, tc.want) || strings.Contains(out, tc.not) {
+			t.Errorf("%v: doctor exit %d, want %d, %q and no %q\n%s%s", tc.files, code, tc.wantStatus, tc.want, tc.not, out, errOut)
+		}
+	}
+}
+
+// fakeNodeConnector is a stand-in @rhythmsh/echo with the parts the
+// doctor's canary uses: the state the real connector keeps on
+// globalThis, a fetch hook that asks Echo first and flush.
+var fakeNodeConnector = map[string]string{
+	"node_modules/@rhythmsh/echo/package.json": `{"name":"@rhythmsh/echo","type":"module","exports":{".":"./index.js","./register":"./register.js"}}`,
+	"node_modules/@rhythmsh/echo/index.js":     "export async function flush() {}\n",
+	"node_modules/@rhythmsh/echo/register.js": `globalThis[Symbol.for('rhythm.echo.state')] = { active: true, mode: 'seal' };
+const orig = globalThis.fetch;
+globalThis.fetch = async (url, init = {}) => {
+  const r = await orig(process.env.RHYTHM_ECHO_URL + '/v1/capture', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ v: 1, kind: 'http', phase: 'before', run: process.env.RHYTHM_ECHO_RUN,
+      source: { via: 'node', hook: 'fetch' }, http: { method: init.method || 'GET', url: String(url), body: String(init.body || '') } }),
+  });
+  const d = await r.json();
+  if (d.action !== 'fake') throw new Error('Echo did not fake it: ' + JSON.stringify(d));
+  return new Response(d.response?.body ?? '', { status: d.response?.status ?? 200 });
+};
+`,
+}
+
+func TestDoctorNodeCanary(t *testing.T) {
+	if _, err := exec.LookPath("node"); err != nil {
+		t.Skip("no node")
+	}
+	inbox := catcher.NewInbox(10)
+	echo := fixtureServer(t, 20466, catcher.NewServer(inbox, catcher.Config{Version: "test"}))
+	dir := t.TempDir()
+	t.Chdir(dir)
+	writeConfig(t, "smtp: \"off\"\n")
+	writeFiles(t, dir, map[string]string{"package.json": "{}"})
+	code, out, _ := runCLI(t, "doctor", "--url", echo.URL, "--plain")
+	if code != exitFindings || !strings.Contains(out, "FAIL  Node: @rhythmsh/echo isn't installed in this folder; add it: rhythm echo install node") {
+		t.Errorf("doctor without the connector: %d\n%s", code, out)
+	}
+	writeFiles(t, dir, fakeNodeConnector)
+	code, out, errOut := runCLI(t, "doctor", "--url", echo.URL, "--plain")
+	if code != exitOK || !strings.Contains(out, "ok    Node: the connector caught a fetch to Twilio and Echo answered for it") {
+		t.Errorf("doctor with the connector: %d\n%s%s", code, out, errOut)
+	}
+	if strings.Contains(out, "WordPress") {
+		t.Errorf("a Node project got a WordPress line:\n%s", out)
+	}
+}
+
+func TestInstallNodeAndNextNeedAProject(t *testing.T) {
+	t.Chdir(t.TempDir())
+	for _, stack := range []string{"node", "next"} {
+		code, out, errOut := runCLI(t, "install", stack)
+		if code != exitUsage || out != "" || !strings.Contains(errOut, "this folder has no package.json; run this in the") {
+			t.Errorf("install %s outside a project: %d %q %q", stack, code, out, errOut)
+		}
 	}
 }

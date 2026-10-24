@@ -161,7 +161,9 @@ Usage:
   rhythm echo replay <event> --to <url>  send a signed test webhook (Stripe, Standard Webhooks…)
   rhythm echo check <domain>             SPF, DKIM, DMARC and MX for the domain you send from
   rhythm echo headers <file.eml | ->     check a real received email's authentication
-  rhythm echo init [--force]             write .echo/config.yaml to edit (--force replaces it)
+  rhythm echo init [--stack s] [--force]
+                                         write .echo/config.yaml with an action for this stack
+                                         (wordpress, laravel, next, node or php; --force replaces it)
   rhythm echo ca [--pem]                 print the proxy's CA certificate path (--pem: the certificate)
   rhythm echo sendmail [-t] [-i] [-f from] [rcpt…]
                                          sendmail stand-in for sendmail_path; reads the message on stdin
