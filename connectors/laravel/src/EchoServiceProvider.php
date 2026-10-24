@@ -39,7 +39,10 @@ class EchoServiceProvider extends ServiceProvider
             // captures and nothing else.
             $token = ($c['write_token'] ?? '') ?: ($c['token'] ?? null);
 
-            return new EchoClient((string) $c['url'], $token, (float) ($c['timeout'] ?? 2.0));
+            return new EchoClient(
+                (string) $c['url'], $token, (float) ($c['timeout'] ?? 2.0),
+                cache: fn () => $app->bound('cache') ? $app->make('cache')->store() : null,
+            );
         });
         $this->app->singleton(Connector::class, fn ($app) => new Connector($app, $app->make(EchoClient::class), $app['config']['rhythm-echo']));
 

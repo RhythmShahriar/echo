@@ -5,6 +5,7 @@
 namespace Rhythm\Echo\Tests;
 
 use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -108,6 +109,31 @@ class ConformanceTest extends TestCase
         $this->assertSame(0, $this->delivered());
     }
 
+    // Under PHP-FPM each request is a new process: the cache, not the
+    // static, saves it a refused capture and a health call every time.
+    public function test_a_new_process_remembers_the_wire_from_the_cache(): void
+    {
+        $this->wire(1);
+        Mail::raw('one', fn ($m) => $m->to('a@example.test')->subject('One'));
+        (new ReflectionProperty(EchoClient::class, 'wire'))->setValue(null, []);
+        Mail::raw('two', fn ($m) => $m->to('a@example.test')->subject('Two'));
+
+        $this->assertSame([1, 1], array_column($this->captures('email'), 'v'));
+        $this->assertSame(1, $this->healthCalls());
+        $this->assertSame(1, Cache::get('rhythm-echo.wire.'.md5('http://127.0.0.1:'.self::PORT))[0]);
+    }
+
+    public function test_a_broken_cache_still_falls_back(): void
+    {
+        $this->app['config']->set('cache.default', 'missing');
+        $this->wire(1);
+        Mail::raw('one', fn ($m) => $m->to('a@example.test')->subject('One'));
+        Mail::raw('two', fn ($m) => $m->to('a@example.test')->subject('Two'));
+
+        $this->assertSame([1, 1], array_column($this->captures('email'), 'v'));
+        $this->assertSame(1, $this->healthCalls());
+    }
+
     public function test_the_newest_wire_is_tried_again_after_an_hour(): void
     {
         $this->wire(1);
@@ -119,6 +145,8 @@ class ConformanceTest extends TestCase
 
         $wire = new ReflectionProperty(EchoClient::class, 'wire');
         $wire->setValue(null, array_map(fn (array $w) => [$w[0], $w[1] - EchoClient::WIRE_RECHECK], $wire->getValue()));
+        // the cache entry expires with the hour too
+        Cache::flush();
         Mail::raw('three', fn ($m) => $m->to('a@example.test')->subject('Three'));
 
         $this->assertSame([1, 1, 2], array_column($this->captures('email'), 'v'));

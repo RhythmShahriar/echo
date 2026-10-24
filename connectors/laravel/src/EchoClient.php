@@ -4,8 +4,10 @@
 
 namespace Rhythm\Echo;
 
+use Closure;
 use GuzzleHttp\Client;
 use GuzzleHttp\RequestOptions;
+use Illuminate\Contracts\Cache\Repository;
 use Throwable;
 
 /**
@@ -28,7 +30,9 @@ class EchoClient
     /**
      * The wire version each Echo speaks, by URL, once one refused a newer
      * capture, with when that was learned. Kept for the process, so a queue
-     * worker asks about once an hour.
+     * worker asks about once an hour. It is also put in the app's cache:
+     * under PHP-FPM every request is a new process and would otherwise pay
+     * a refused capture and a health call before each real one.
      *
      * @var array<string, array{0: int, 1: int}>
      */
@@ -36,12 +40,14 @@ class EchoClient
 
     /**
      * @param  callable|null  $handler  a Guzzle handler, for tests
+     * @param  (Closure(): ?Repository)|null  $cache  the cache store the wire version is remembered in, resolved when first needed
      */
     public function __construct(
         private readonly string $url,
         private readonly ?string $token = null,
         float $timeout = 2.0,
         ?callable $handler = null,
+        private readonly ?Closure $cache = null,
     ) {
         $options = [
             'base_uri' => rtrim($url, '/').'/',
@@ -85,6 +91,7 @@ class EchoClient
                 throw $e;
             }
             self::$wire[$this->url] = [$older, time()];
+            $this->cached(fn (Repository $c) => $c->put($this->wireKey(), self::$wire[$this->url], self::WIRE_RECHECK));
             $decision = $this->call('POST', 'v1/capture', Wire::forVersion($capture, $older));
         }
 
@@ -115,6 +122,13 @@ class EchoClient
      */
     public function wire(): int
     {
+        if (! isset(self::$wire[$this->url])) {
+            $learned = $this->cached(fn (Repository $c) => $c->get($this->wireKey()));
+            if (is_array($learned) && is_int($learned[0] ?? null) && is_int($learned[1] ?? null)
+                && $learned[0] >= Wire::MIN_VERSION && $learned[0] < Wire::VERSION) {
+                self::$wire[$this->url] = [$learned[0], $learned[1]];
+            }
+        }
         [$version, $at] = self::$wire[$this->url] ?? [Wire::VERSION, 0];
         if ($version !== Wire::VERSION && time() - $at >= self::WIRE_RECHECK) {
             unset(self::$wire[$this->url]);
@@ -123,6 +137,30 @@ class EchoClient
         }
 
         return $version;
+    }
+
+    /** The cache key for this Echo's wire version: another Echo may be newer. */
+    private function wireKey(): string
+    {
+        return 'rhythm-echo.wire.'.md5($this->url);
+    }
+
+    /**
+     * Runs $fn on the cache store, or returns null without one. A broken
+     * cache (a database store whose table is missing, Redis down) must
+     * never stop a capture: the static above still works for the process.
+     *
+     * @param  Closure(Repository): mixed  $fn
+     */
+    private function cached(Closure $fn): mixed
+    {
+        try {
+            $store = $this->cache !== null ? ($this->cache)() : null;
+
+            return $store !== null ? $fn($store) : null;
+        } catch (Throwable) {
+            return null;
+        }
     }
 
     /**
