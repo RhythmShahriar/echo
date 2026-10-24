@@ -527,6 +527,9 @@ func cmdReport(s *session) int {
 // writes one JSON object per line instead: {"type": "message" or
 // "update", "message": {...}}.
 func cmdWatch(s *session) int {
+	if len(s.args) > 0 {
+		return s.fail(usageErr("watch takes no arguments; narrow it with --run, --to or --channel"))
+	}
 	h, err := s.echo.Health(s.ctx)
 	if err != nil {
 		return s.fail(err)
@@ -672,6 +675,9 @@ func (s *session) filter(since time.Time) client.Filter {
 }
 
 func cmdList(s *session) int {
+	if len(s.args) > 0 {
+		return s.fail(usageErr("ls takes no arguments; narrow it with --run, --to, --channel or --since (rhythm echo show <id> for one)"))
+	}
 	since := time.Time{}
 	if s.o.since > 0 {
 		since = time.Now().UTC().Add(-s.o.since)
@@ -708,6 +714,10 @@ func cmdShow(s *session) int {
 }
 
 func cmdClear(s *session) int {
+	// "clear <id>" would otherwise delete every message.
+	if len(s.args) > 0 {
+		return s.fail(usageErr("clear takes no arguments; narrow it with --run, --to or --channel"))
+	}
 	n, err := s.echo.Clear(s.ctx, s.filter(time.Time{}))
 	if err != nil {
 		return s.fail(err)

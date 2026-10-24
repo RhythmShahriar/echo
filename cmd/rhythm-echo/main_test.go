@@ -1977,6 +1977,10 @@ func TestLatestPrintsTheCodeOrLink(t *testing.T) {
 		{[]string{"latest", "--to", "a", "--action", "x", "--action", "y"}, "latest takes one --action"},
 		{[]string{"latest", "--to", "a", "--fail-on", "none"}, "--fail-on has no effect on latest"},
 		{[]string{"ls", "--code"}, "--code has no effect on ls"},
+		{[]string{"clear", "m-1"}, "clear takes no arguments; narrow it with --run, --to or --channel"},
+		{[]string{"ls", "m-1"}, "ls takes no arguments; narrow it with --run, --to, --channel or --since"},
+		{[]string{"watch", "x"}, "watch takes no arguments; narrow it with --run, --to or --channel"},
+		{[]string{"doctor", "x"}, "doctor takes no arguments; --config names another config"},
 		{[]string{"ls", "--channel", "email,sms"}, `--channel "email,sms": use one of`},
 	} {
 		code, out, errOut := runCLI(t, tc.args...)

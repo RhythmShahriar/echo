@@ -40,6 +40,9 @@ import (
 // go to .invalid addresses, or to Twilio's API only through a sealed
 // connector, which answers in Twilio's place.
 func cmdDoctor(s *session) int {
+	if len(s.args) > 0 {
+		return s.fail(usageErr("doctor takes no arguments; --config names another config"))
+	}
 	if err := s.needConfig(); err != nil {
 		return s.fail(err)
 	}
