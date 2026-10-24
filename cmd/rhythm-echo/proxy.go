@@ -15,8 +15,8 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
-	"slices"
 	"runtime"
+	"slices"
 	"strings"
 
 	"github.com/RhythmShahriar/echo/catcher"
