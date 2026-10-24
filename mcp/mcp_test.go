@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/json"
 	"flag"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -64,6 +65,8 @@ func listen(t *testing.T, addr string, h http.Handler) *httptest.Server {
 type fixture struct {
 	echo   *catcher.Server
 	broken atomic.Bool
+	vary   atomic.Bool  // each order is copied to its own audit address
+	reqs   atomic.Int32 // orders taken, for vary
 	server *Server
 }
 
@@ -80,11 +83,15 @@ func newFixture(t *testing.T) *fixture {
 		if f.broken.Load() {
 			to = "owner@shop.test"
 		}
+		var cc []string
+		if n := f.reqs.Add(1); f.vary.Load() {
+			cc = []string{fmt.Sprintf("audit-%d@shop.test", n)}
+		}
 		_, err := f.echo.Capture(wire.Capture{Version: wire.Version, Kind: "email", Run: r.Header.Get(wire.RunHeader),
 			Source: wire.Source{Via: "wordpress", Host: shopAddr},
 			Email: &wire.Email{From: "shop@shop.test", To: []string{to}, Subject: "Order W-1001 received",
 				Text:    "Thanks for your order. Your sign-in code is 482913.\nTrack it: http://" + shopAddr + "/track?k=" + resetKey + "&page=2",
-				Headers: map[string]string{"X-Shopify-Access-Token": shopifyToken, "X-Request-Id": "req-42"}}})
+				Headers: map[string]string{"X-Shopify-Access-Token": shopifyToken, "X-Request-Id": "req-42"}, CC: cc}})
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -485,7 +492,7 @@ func TestMain_(t *testing.T) {
 
 func TestReplayHook(t *testing.T) {
 	called := false
-	Replay = func(config.Config) runner.Replayer {
+	Replay = func(config.Config, string, string) runner.Replayer {
 		called = true
 		return func(context.Context, config.ReplayAction, string, string) error { return nil }
 	}
@@ -493,5 +500,91 @@ func TestReplayHook(t *testing.T) {
 	var out, errb strings.Builder
 	if code := Main([]string{"--url", "http://127.0.0.1:20503"}, strings.NewReader(""), &out, &errb); code != 0 || !called {
 		t.Errorf("Main didn't use the replay hook: %d %v %q", code, called, errb.String())
+	}
+}
+
+// TestCompareFollowsTheConfig: the compare tool applies the config's
+// checks: levels and each action's ignore:, as rhythm echo compare does.
+func TestCompareFollowsTheConfig(t *testing.T) {
+	f := newFixture(t)
+	f.vary.Store(true) // every order is copied to its own audit address
+	ss := start(t, f.server)
+	ss.call("initialize", map[string]any{"protocolVersion": "2025-06-18"})
+	if _, text, isErr := ss.tool("snapshot", map[string]any{"name": "good"}); isErr {
+		t.Fatal(text)
+	}
+	compare := func() (map[string]any, string) {
+		t.Helper()
+		res, text, isErr := ss.tool("compare", map[string]any{"snapshot": "good"})
+		if isErr {
+			t.Fatal(text)
+		}
+		counts, _ := res["counts"].(map[string]any)
+		return counts, text
+	}
+	if counts, text := compare(); counts["changed"] == 0.0 {
+		t.Errorf("a new Cc isn't a change: %s", text)
+	}
+	f.server.Config.Actions[0].Ignore = []string{"audit-*@shop.test"}
+	if counts, text := compare(); counts["changed"] != 0.0 {
+		t.Errorf("ignore: [audit-*@shop.test] still compares it: %s", text)
+	}
+	f.broken.Store(true)
+	if counts, text := compare(); counts["broke"] != 1.0 || counts["new"] != 1.0 {
+		t.Errorf("broken: %s", text)
+	}
+	f.server.Config.Checks = map[string]config.Level{"message/missing": "off", "message/new": "changed"}
+	if counts, text := compare(); counts["broke"] != 0.0 || counts["new"] != 0.0 || counts["changed"] != 1.0 {
+		t.Errorf("checks: message/missing off, message/new changed: %s", text)
+	}
+}
+
+// TestMainUsesTheConfigFolder: from a subfolder, or with --config from
+// anywhere, the server finds the project's config, keeps runs next to it
+// (proj/.echo/runs, where the CLI keeps them) and runs command actions in
+// the project folder.
+func TestMainUsesTheConfigFolder(t *testing.T) {
+	const echo = "127.0.0.1:21343"
+	listen(t, echo, catcher.NewServer(catcher.NewInbox(100), catcher.Config{}))
+	proj := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(proj, ".echo"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(proj, "sub"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	cfg := "listen: " + echo + "\nquiet: 50ms\ntimeout: 1s\nactions:\n  - name: Send\n    command: ./send.sh\n"
+	if err := os.WriteFile(filepath.Join(proj, ".echo", "config.yaml"), []byte(cfg), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(proj, "send.sh"), []byte("#!/bin/sh\necho x >> sent\n"), 0o755); err != nil { //nolint:gosec // a test script
+		t.Fatal(err)
+	}
+	in := `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18"}}` + "\n" +
+		`{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"run_action","arguments":{}}}` + "\n"
+	for _, c := range []struct {
+		wd   string
+		args []string
+	}{
+		{filepath.Join(proj, "sub"), nil},
+		{t.TempDir(), []string{"--config", filepath.Join(proj, ".echo", "config.yaml")}},
+	} {
+		t.Chdir(c.wd)
+		var out, errb strings.Builder
+		if code := Main(c.args, strings.NewReader(in), &out, &errb); code != 0 {
+			t.Fatalf("from %s: %d %s", c.wd, code, errb.String())
+		}
+		if strings.Contains(out.String(), "not found") || strings.Contains(out.String(), `"isError":true`) {
+			t.Errorf("from %s: %s", c.wd, out.String())
+		}
+		if _, err := os.Stat(filepath.Join(c.wd, ".echo")); err == nil {
+			t.Errorf("from %s: runs kept in the working folder", c.wd)
+		}
+	}
+	if b, err := os.ReadFile(filepath.Join(proj, "sent")); err != nil || strings.Count(string(b), "x") != 2 {
+		t.Errorf("./send.sh in the project: %q %v", b, err)
+	}
+	if runs, _ := os.ReadDir(filepath.Join(proj, ".echo", "runs")); len(runs) != 2 {
+		t.Errorf("runs next to the config: %d", len(runs))
 	}
 }

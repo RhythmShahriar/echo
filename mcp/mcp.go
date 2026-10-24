@@ -60,6 +60,7 @@ type Server struct {
 	Config  config.Config   // actions for run_action, snapshot and compare
 	Store   store.Store     // where snapshots and runs are kept (default .echo)
 	Replay  runner.Replayer // replay actions; nil reports them as unavailable
+	Dir     string          // the project folder actions run in; "" is the working folder
 	DNS     dns.Resolver    // check_domain's resolver; nil is the system's
 	Version string          // Echo's version, in serverInfo and stored runs
 	Now     func() time.Time

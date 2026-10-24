@@ -11,10 +11,12 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 
 	"github.com/RhythmShahriar/echo/client"
 	"github.com/RhythmShahriar/echo/config"
 	"github.com/RhythmShahriar/echo/runner"
+	"github.com/RhythmShahriar/echo/sendmail"
 	"github.com/RhythmShahriar/echo/store"
 )
 
@@ -26,11 +28,12 @@ Runs Echo's MCP server on stdin and stdout, for coding agents:
 
 Tools: list_messages, get_message, latest_code, run_action, snapshot,
 compare, check_domain. Results are masked. Start Echo first (rhythm echo up);
-the action tools use .echo/config.yaml in the folder the agent starts in.
+the action tools use the nearest .echo/config.yaml, in the folder the agent
+starts in or above it, and run in the folder that holds it.
 
   --url <url>      where Echo runs (default from the config, or RHYTHM_ECHO_URL)
   --token <t>      the token Echo was started with (RHYTHM_ECHO_TOKEN)
-  --config <file>  the config to read (default .echo/config.yaml)
+  --config <file>  the config to read (default the nearest .echo/config.yaml)
 `
 
 // Main runs the server until stdin closes, for rhythm echo mcp. It
@@ -54,26 +57,40 @@ func Main(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stderr, "rhythm echo mcp: unexpected argument %q\n\n%s", fs.Arg(0), Usage)
 		return 2
 	}
-	p := cmp.Or(*path, config.Path())
-	if *path != "" {
+	p := *path
+	if p != "" {
 		if _, err := os.Stat(p); err != nil {
 			fmt.Fprintf(stderr, "rhythm echo mcp: --config %s: %v\n", p, err)
 			return 2
 		}
+	} else {
+		var ue *sendmail.UntrustedError
+		found, err := sendmail.FindConfig(".")
+		switch {
+		case err == nil:
+			p = found
+		case errors.As(err, &ue):
+			fmt.Fprintf(stderr, "rhythm echo mcp: %v (someone else could have put it there); pass --config %s if you trust it\n", ue, ue.Path)
+		case !errors.Is(err, sendmail.ErrNoConfig):
+			fmt.Fprintln(stderr, "rhythm echo mcp:", err)
+			return 2
+		}
 	}
-	cfg, err := config.Load(p)
+	cfg, err := config.Load(cmp.Or(p, config.Path()))
 	if err != nil {
 		fmt.Fprintln(stderr, "rhythm echo mcp:", err)
 		return 2
 	}
+	root, dir := projectFolders(p)
 	s := &Server{
 		Echo:    client.New(cmp.Or(*url, os.Getenv("RHYTHM_ECHO_URL"), "http://"+cfg.Listen), cmp.Or(*token, os.Getenv("RHYTHM_ECHO_TOKEN"))),
 		Config:  cfg,
-		Store:   store.Store{Root: config.Dir},
+		Store:   store.Store{Root: root},
+		Dir:     dir,
 		Version: Version,
 	}
 	if Replay != nil {
-		s.Replay = Replay(cfg)
+		s.Replay = Replay(cfg, cmp.Or(dir, "."), p)
 	}
 	// No signal handling: an interrupt ends the process as usual. A
 	// client that is done closes stdin, which ends Serve.
@@ -84,6 +101,26 @@ func Main(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	return 0
 }
 
+// projectFolders returns where the server keeps snapshots and runs and
+// where actions run for the config at path, as the CLI does: the
+// config's own folder (proj/.echo) and the folder that holds .echo/
+// (proj). With no config file both are the defaults: ./.echo and the
+// working folder ("").
+func projectFolders(path string) (root, dir string) {
+	if path == "" {
+		return config.Dir, ""
+	}
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return config.Dir, ""
+	}
+	root = filepath.Dir(abs)
+	if filepath.Base(root) == config.Dir {
+		return root, filepath.Dir(root)
+	}
+	return root, root
+}
+
 // Version is reported in serverInfo and stored runs. The CLI sets it to
 // its own version before calling Main.
 var Version = "dev"
@@ -92,4 +129,4 @@ var Version = "dev"
 // It lives in the CLI (it signs events with the site's secrets), which
 // sets it before calling Main; without it replay actions report that
 // replay isn't available.
-var Replay func(config.Config) runner.Replayer
+var Replay func(cfg config.Config, dir, cfgPath string) runner.Replayer

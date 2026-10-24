@@ -16,7 +16,6 @@ import (
 	"time"
 
 	"github.com/RhythmShahriar/echo/client"
-	"github.com/RhythmShahriar/echo/compare"
 	"github.com/RhythmShahriar/echo/dns"
 	"github.com/RhythmShahriar/echo/model"
 	"github.com/RhythmShahriar/echo/runner"
@@ -376,7 +375,7 @@ func (s *Server) run(ctx context.Context, name string, only []string) (*model.Ru
 	}
 	s.actions.Lock()
 	defer s.actions.Unlock()
-	return runner.Run(ctx, runner.Options{Config: s.Config, Client: s.Echo, Version: s.Version, Name: name, Only: only, Replay: s.Replay})
+	return runner.Run(ctx, runner.Options{Config: s.Config, Client: s.Echo, Version: s.Version, Name: name, Only: only, Replay: s.Replay, Dir: s.Dir})
 }
 
 // runView is a run as the tools return it: actions with what they sent
@@ -538,7 +537,8 @@ func (s *Server) compare(ctx context.Context, snapshot string, only []string) (a
 	if err := store.SaveRun(dir, after); err != nil {
 		return nil, err
 	}
-	c := compare.Compare(before, after, snapDir, dir, s.Version)
+	// The config's checks: levels and ignore: apply, as in rhythm echo compare.
+	c := runner.CompareOptions(s.Config).Compare(before, after, snapDir, dir, s.Version)
 	c.Warnings = append(c.Warnings, after.Warnings...)
 	if err := store.SaveComparison(dir, c); err != nil {
 		return nil, err
