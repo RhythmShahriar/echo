@@ -225,9 +225,9 @@ export async function attachments(list: MailAttachment[] | undefined): Promise<A
       if (typeof a.content === 'string') body = Buffer.from(a.content, (a.encoding ?? 'utf8') as BufferEncoding);
       else if (a.content instanceof Uint8Array) body = Buffer.from(a.content);
       else if (a.content === undefined && /^data:/i.test(where)) body = dataURI(where);
-      else if (a.content === undefined && local) body = await fs.promises.readFile(where);
+      else if (a.content === undefined && local) Object.assign(att, await hashFile(where));
     } catch {
-      body = undefined; // unreadable here: Nodemailer reports it when it sends
+      // unreadable here: Nodemailer reports it when it sends
     }
     if (body) {
       att.size = body.length;
@@ -236,6 +236,20 @@ export async function attachments(list: MailAttachment[] | undefined): Promise<A
     out.push(att);
   }
   return out;
+}
+
+/**
+ * hashFile gives a local file's size and SHA-256 by streaming it, so a large
+ * attachment is not held in memory twice (here and in Nodemailer).
+ */
+async function hashFile(file: string): Promise<{ size: number; sha256: string }> {
+  const h = createHash('sha256');
+  let size = 0;
+  for await (const chunk of fs.createReadStream(file)) {
+    size += (chunk as Buffer).length;
+    h.update(chunk as Buffer);
+  }
+  return { size, sha256: h.digest('hex') };
 }
 
 /** dataURI decodes "data:<type>;base64,<data>" (or percent-encoded data). */

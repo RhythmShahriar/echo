@@ -83,6 +83,9 @@ describe('nodemailer', () => {
     const dir = mkdtempSync(join(tmpdir(), 'echo-att-'));
     const file = join(dir, 'report.csv');
     writeFileSync(file, 'a,b\n1,2\n');
+    const big = join(dir, 'big.zip');
+    const bigBody = Buffer.alloc(300 << 10, 7);
+    writeFileSync(big, bigBody);
     const sha = (b: string | Buffer) => createHash('sha256').update(b).digest('hex');
     const got = await attachments([
       { path: file },
@@ -90,6 +93,8 @@ describe('nodemailer', () => {
       { filename: 'b.bin', content: 'aGk=', encoding: 'base64' },
       { filename: 'logo.png', content: Buffer.from('png'), cid: 'logo@shop' },
       { filename: 'remote.pdf', path: 'https://files.example.test/remote.pdf' },
+      { path: big },
+      { path: join(dir, 'missing.pdf') },
     ]);
     rmSync(dir, { recursive: true, force: true });
     expect(got).toEqual([
@@ -97,6 +102,10 @@ describe('nodemailer', () => {
       { name: 'hi.txt', type: 'text/plain', size: 2, sha256: sha('hi') },
       { name: 'b.bin', type: 'application/octet-stream', size: 2, sha256: sha('hi') },
       { name: 'remote.pdf', type: 'application/pdf' },
+      // streamed in chunks: the hash still covers the whole file
+      { name: 'big.zip', type: 'application/zip', size: bigBody.length, sha256: sha(bigBody) },
+      // unreadable: name and type only, Nodemailer reports the error when it sends
+      { name: 'missing.pdf', type: 'application/pdf' },
     ]);
   });
 
