@@ -317,13 +317,22 @@ func PDF(htmlPath, pdfPath string) error {
 		return err
 	}
 	defer func() { _ = os.RemoveAll(profile) }()
+	// Chrome writes the PDF with the umask's permissions. It lists a
+	// client's recipients, so it prints into a private folder beside
+	// pdfPath and is moved into place as 0600, like every report (X7).
+	private, err := os.MkdirTemp(filepath.Dir(out), ".echo-pdf-")
+	if err != nil {
+		return err
+	}
+	defer func() { _ = os.RemoveAll(private) }()
+	printed := filepath.Join(private, "report.pdf")
 
 	args := []string{"--headless", "--disable-gpu", "--no-first-run", "--no-default-browser-check", "--disable-extensions",
 		"--disable-background-networking", "--disable-component-update", "--disable-sync", "--user-data-dir=" + profile,
 		// The first is today's flag, the second the older spelling;
 		// Chrome ignores the one it doesn't know.
 		"--no-pdf-header-footer", "--print-to-pdf-no-header",
-		"--print-to-pdf=" + out, (&url.URL{Scheme: "file", Path: filepath.ToSlash(src)}).String()}
+		"--print-to-pdf=" + printed, (&url.URL{Scheme: "file", Path: filepath.ToSlash(src)}).String()}
 	if os.Geteuid() == 0 {
 		// Chrome refuses to start as root (a CI container) with its sandbox
 		// on. The page has no script and loads nothing, so there is nothing
@@ -342,15 +351,19 @@ func PDF(htmlPath, pdfPath string) error {
 		return fmt.Errorf("%s could not print %s: %w", filepath.Base(bin), htmlPath, err)
 	}
 	head := make([]byte, 5)
-	f, err := os.Open(out) //nolint:gosec // the path we asked Chrome to write
+	f, err := os.Open(printed) //nolint:gosec // the path we asked Chrome to write
 	if err != nil {
 		return fmt.Errorf("%s did not write %s: %w", filepath.Base(bin), pdfPath, err)
 	}
-	defer func() { _ = f.Close() }()
-	if _, err := io.ReadFull(f, head); err != nil || string(head) != "%PDF-" {
+	_, err = io.ReadFull(f, head)
+	_ = f.Close()
+	if err != nil || string(head) != "%PDF-" {
 		return fmt.Errorf("%s wrote %s but it isn't a PDF", filepath.Base(bin), pdfPath)
 	}
-	return nil
+	if err := os.Chmod(printed, 0o600); err != nil {
+		return err
+	}
+	return os.Rename(printed, out)
 }
 
 // lastLine is the last non-empty line of s, the one that usually says why

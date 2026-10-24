@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -215,6 +216,13 @@ func TestPDF(t *testing.T) {
 	if err := os.WriteFile(src, buf.Bytes(), 0o600); err != nil {
 		t.Fatal(err)
 	}
+	// An older PDF anyone could read is replaced by a private one.
+	if err := os.WriteFile(dst, []byte("old"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(dst, 0o644); err != nil { //nolint:gosec // the test's own file, made readable on purpose
+		t.Fatal(err)
+	}
 	if err := PDF(src, dst); err != nil {
 		t.Fatal(err)
 	}
@@ -224,5 +232,14 @@ func TestPDF(t *testing.T) {
 	}
 	if !bytes.HasPrefix(got, []byte("%PDF")) {
 		t.Errorf("not a PDF: %q", got[:min(len(got), 16)])
+	}
+	// It lists a client's recipients: 0600 like the HTML (X7).
+	if fi, err := os.Stat(dst); err != nil {
+		t.Error(err)
+	} else if runtime.GOOS != "windows" && fi.Mode().Perm() != 0o600 {
+		t.Errorf("the PDF is %v, want 0600", fi.Mode().Perm())
+	}
+	if left, _ := filepath.Glob(filepath.Join(dir, ".echo-pdf-*")); len(left) > 0 {
+		t.Errorf("print folder left behind: %q", left)
 	}
 }
