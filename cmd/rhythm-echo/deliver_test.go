@@ -4,6 +4,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"crypto/hmac"
 	"crypto/sha256"
@@ -46,7 +47,29 @@ func TestReplayCommand(t *testing.T) {
 	echo := client.New(echoSrv.URL, "")
 	// A staging shop: verifies the Stripe signature and, like a payment
 	// plugin, emails the customer.
-	shop := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	shop := stripeShop(t, secret, echo, nil)
+	defer shop.Close()
+	t.Chdir(t.TempDir())
+	code, out, errOut := runCLI(t, "replay", "payment_intent.succeeded", "--to", shop.URL+"/webhook", "--url", echoSrv.URL, "--plain", "--wait", "2s")
+	if code != 0 || !strings.Contains(out, "answered 200 and sent 1 email") {
+		t.Fatalf("replay: %d\n%s\n%s", code, out, errOut)
+	}
+	// Live keys in reach stop it.
+	t.Setenv("STRIPE_SECRET_KEY", strings.Join([]string{"sk", "_live_", "abcdefghijklmnop1234"}, ""))
+	if code, _, errOut := runCLI(t, "replay", "payment_intent.succeeded", "--to", shop.URL, "--url", echoSrv.URL); code != exitUsage {
+		t.Errorf("live key: exit %d %s", code, errOut)
+	}
+	if code, out, _ := runCLI(t, "replay", "--list"); code != 0 || !strings.Contains(out, "payment_intent.succeeded") {
+		t.Errorf("--list:\n%s", out)
+	}
+}
+
+// stripeShop is a staging shop's webhook endpoint: it checks the Stripe
+// signature and, like a payment plugin, emails the customer through
+// Echo, tagged with the run. seen, when set, gets each body it accepts.
+func stripeShop(t *testing.T, secret string, echo *client.Client, seen chan<- string) *httptest.Server {
+	t.Helper()
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
 		sig := r.Header.Get("Stripe-Signature")
 		var ts, v1 string
@@ -65,23 +88,53 @@ func TestReplayCommand(t *testing.T) {
 			http.Error(w, "bad signature", 400)
 			return
 		}
+		if seen != nil {
+			seen <- string(body)
+		}
 		_, _ = echo.Capture(context.Background(), wire.Capture{Kind: "email", Run: r.Header.Get(wire.RunHeader), Source: wire.Source{Via: "test"},
 			Email: &wire.Email{To: []string{"buyer@example.com"}, Subject: "Payment received", Text: "Thanks"}})
 		w.WriteHeader(200)
 	}))
+}
+
+// TestRunReplayAction runs a replay action from .echo/config.yaml: the
+// replayer signs the event with the configured secret, applies set: in
+// a fixed order and fails the action when the site rejects it.
+func TestRunReplayAction(t *testing.T) {
+	secret := strings.Join([]string{"wh", "sec_", "CliRunReplaySecret0123456789"}, "")
+	t.Setenv("SHOP_STRIPE_SECRET", secret)
+	echoSrv := httptest.NewServer(catcher.NewServer(catcher.NewInbox(100), catcher.Config{Version: "test"}))
+	defer echoSrv.Close()
+	seen := make(chan string, 4)
+	shop := stripeShop(t, secret, client.New(echoSrv.URL, ""), seen)
 	defer shop.Close()
 	t.Chdir(t.TempDir())
-	code, out, errOut := runCLI(t, "replay", "payment_intent.succeeded", "--to", shop.URL+"/webhook", "--url", echoSrv.URL, "--plain", "--wait", "2s")
-	if code != 0 || !strings.Contains(out, "answered 200 and sent 1 email") {
-		t.Fatalf("replay: %d\n%s\n%s", code, out, errOut)
+	cfg := func(secretEnv string) string {
+		return "site: " + shop.URL + "\nquiet: 200ms\ntimeout: 3s\nactions:\n" +
+			"  - name: Paid\n    replay:\n      event: payment_intent.succeeded\n      to: /webhook\n" +
+			"      secret_env: " + secretEnv + "\n      set: {data.object.amount: \"1999\", data.object.currency: eur}\n"
 	}
-	// Live keys in reach stop it.
-	t.Setenv("STRIPE_SECRET_KEY", strings.Join([]string{"sk", "_live_", "abcdefghijklmnop1234"}, ""))
-	if code, _, errOut := runCLI(t, "replay", "payment_intent.succeeded", "--to", shop.URL, "--url", echoSrv.URL); code != exitUsage {
-		t.Errorf("live key: exit %d %s", code, errOut)
+	writeConfig(t, cfg("SHOP_STRIPE_SECRET"))
+	code, out, errOut := runCLI(t, "run", "--url", echoSrv.URL, "--plain")
+	if code != exitOK || !strings.Contains(out, "1 email") {
+		t.Fatalf("run with a replay action: %d\n%s\n%s", code, out, errOut)
 	}
-	if code, out, _ := runCLI(t, "replay", "--list"); code != 0 || !strings.Contains(out, "payment_intent.succeeded") {
-		t.Errorf("--list:\n%s", out)
+	var compact bytes.Buffer
+	_ = json.Compact(&compact, []byte(<-seen))
+	if body := compact.String(); !strings.Contains(body, `"amount":1999`) || !strings.Contains(body, `"currency":"eur"`) {
+		t.Errorf("set: was not applied:\n%s", body)
+	}
+
+	// The site rejects a wrong signature, so the only action failed.
+	t.Setenv("WRONG_SECRET", strings.Join([]string{"wh", "sec_", "NotTheShopsSecret0123456789"}, ""))
+	writeConfig(t, cfg("WRONG_SECRET"))
+	if code, out, errOut := runCLI(t, "run", "--url", echoSrv.URL, "--plain"); code != exitError || !strings.Contains(out+errOut, "the site answered 400") {
+		t.Errorf("rejected replay: %d\n%s\n%s", code, out, errOut)
+	}
+	// An event that doesn't exist fails the action too.
+	writeConfig(t, strings.Replace(cfg("SHOP_STRIPE_SECRET"), "payment_intent.succeeded", "no.such.event", 1))
+	if code, out, errOut := runCLI(t, "run", "--url", echoSrv.URL, "--plain"); code != exitError {
+		t.Errorf("unknown event: %d\n%s\n%s", code, out, errOut)
 	}
 }
 

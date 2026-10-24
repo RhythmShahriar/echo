@@ -10,6 +10,8 @@ import (
 	"flag"
 	"fmt"
 	"io/fs"
+	"net"
+	"net/http"
 	"net/http/httptest"
 	"os"
 	"os/exec"
@@ -21,10 +23,13 @@ import (
 	"time"
 
 	"github.com/RhythmShahriar/echo/catcher"
+	"github.com/RhythmShahriar/echo/client"
 	"github.com/RhythmShahriar/echo/config"
 	"github.com/RhythmShahriar/echo/model"
 	"github.com/RhythmShahriar/echo/report"
+	"github.com/RhythmShahriar/echo/sendmail"
 	"github.com/RhythmShahriar/echo/store"
+	"github.com/RhythmShahriar/echo/wire"
 )
 
 func init() {
@@ -659,5 +664,154 @@ func TestDoctorFlushRuns(t *testing.T) {
 	code, out, _ := runCLI(t, "doctor", "--url", srv.URL, "--plain")
 	if code != exitFindings || !strings.Contains(out, "ok    Flush: echo ok") || !strings.Contains(out, `FAIL  Flush: "exit 3"`) {
 		t.Errorf("exit %d\n%s", code, out)
+	}
+}
+
+// shopSite is a staging site whose /signup sends a welcome email through
+// Echo, tagged with the run the request carried, as a connector does.
+// With a placeholder left in, the email has an issue to find.
+func shopSite(t *testing.T, echoURL, text string) *httptest.Server {
+	t.Helper()
+	echo := client.New(echoURL, "")
+	shop := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/signup" {
+			http.NotFound(w, r)
+			return
+		}
+		_, _ = echo.Capture(r.Context(), wire.Capture{Kind: "email", Run: r.Header.Get(wire.RunHeader), Source: wire.Source{Via: "test"},
+			Email: &wire.Email{To: []string{"ann@shop.test"}, Subject: "Welcome", Text: text}})
+	}))
+	t.Cleanup(shop.Close)
+	return shop
+}
+
+func writeConfig(t *testing.T, cfg string) {
+	t.Helper()
+	if err := os.MkdirAll(config.Dir, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(config.Path(), []byte(cfg), 0o600); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestRunCommand(t *testing.T) {
+	t.Chdir(t.TempDir())
+	srv := httptest.NewServer(catcher.NewServer(catcher.NewInbox(100), catcher.Config{Version: "test"}))
+	defer srv.Close()
+	good := shopSite(t, srv.URL, "Hi Ann, welcome.")
+	cfg := func(site string) string {
+		return "site: " + site + "\nquiet: 200ms\ntimeout: 3s\nactions:\n" +
+			"  - name: Sign up\n    http: {method: POST, url: /signup, form: {email: ann@shop.test}}\n    expect: {email: 1}\n"
+	}
+	writeConfig(t, cfg(good.URL))
+	code, out, errOut := runCLI(t, "run", "--url", srv.URL, "--plain")
+	if code != exitOK || !strings.Contains(out, "Sign up") || !strings.Contains(out, "1 email") {
+		t.Fatalf("run: %d\n%s\n%s", code, out, errOut)
+	}
+	runs, _ := filepath.Glob(filepath.Join(config.Dir, "runs", "*", "run.json"))
+	if len(runs) != 1 {
+		t.Errorf("run saved %d run.json files, want 1", len(runs))
+	}
+	code, out, _ = runCLI(t, "run", "--url", srv.URL, "--json")
+	var res model.Run
+	if code != exitOK || json.Unmarshal([]byte(out), &res) != nil || len(res.Actions) != 1 || len(res.Actions[0].Messages) != 1 {
+		t.Errorf("run --json: %d\n%s", code, out)
+	}
+	md := filepath.Join("out", "run.md")
+	if code, _, errOut := runCLI(t, "run", "--url", srv.URL, "-o", md, "-q"); code != exitOK {
+		t.Errorf("run -o: %d %s", code, errOut)
+	} else if b, err := os.ReadFile(md); err != nil || !strings.Contains(string(b), "Sign up") {
+		t.Errorf("run -o wrote %q, %v", b, err)
+	}
+
+	// An unfilled placeholder is an error issue: --fail-on error exits 1,
+	// --fail-on none doesn't.
+	writeConfig(t, cfg(shopSite(t, srv.URL, "Hi {first_name}, welcome.").URL))
+	if code, out, _ := runCLI(t, "run", "--url", srv.URL, "--plain", "--fail-on", "error"); code != exitFindings ||
+		!strings.Contains(out, "Unfilled placeholder {first_name}") {
+		t.Errorf("run --fail-on error: %d\n%s", code, out)
+	}
+	if code, _, _ := runCLI(t, "run", "--url", srv.URL, "--plain", "--fail-on", "none"); code != exitOK {
+		t.Errorf("run --fail-on none: %d", code)
+	}
+
+	// A site listed under production: is refused, so nothing ran.
+	writeConfig(t, cfg(good.URL)+"production: ["+good.URL+"]\n")
+	if code, out, errOut := runCLI(t, "run", "--url", srv.URL, "--plain"); code != exitError || !strings.Contains(out+errOut, "listed under production") {
+		t.Errorf("production site: %d\n%s\n%s", code, out, errOut)
+	}
+
+	writeConfig(t, cfg(good.URL))
+	for _, args := range [][]string{{"run", "now"}, {"run", "--action", "Nope"}, {"run", "--fail-on", "broke"}} {
+		if code, _, errOut := runCLI(t, append(args, "--url", srv.URL)...); code != exitUsage {
+			t.Errorf("%v: exit %d %s", args, code, errOut)
+		}
+	}
+	if code, _, errOut := runCLI(t, "run", "--url", "http://127.0.0.1:1"); code != exitError || !strings.Contains(errOut, "rhythm echo:") {
+		t.Errorf("run without Echo: %d %s", code, errOut)
+	}
+}
+
+func TestClearCommand(t *testing.T) {
+	t.Chdir(t.TempDir())
+	srv := httptest.NewServer(catcher.NewServer(catcher.NewInbox(100), catcher.Config{Version: "test"}))
+	defer srv.Close()
+	echo := client.New(srv.URL, "")
+	for _, to := range []string{"ann@shop.test", "bob@shop.test"} {
+		if _, err := echo.Capture(context.Background(), wire.Capture{Kind: "email", Source: wire.Source{Via: "test"},
+			Email: &wire.Email{To: []string{to}, Subject: "Hi"}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if code, out, _ := runCLI(t, "clear", "--url", srv.URL, "--to", "ann@shop.test"); code != exitOK || out != "Deleted 1 message\n" {
+		t.Errorf("clear --to: %d %q", code, out)
+	}
+	if code, out, _ := runCLI(t, "clear", "--url", srv.URL); code != exitOK || out != "Deleted 1 message\n" {
+		t.Errorf("clear: %d %q", code, out)
+	}
+	if code, _, errOut := runCLI(t, "ls", "--url", srv.URL); code != exitOK || !strings.Contains(errOut, "No messages captured yet.") {
+		t.Errorf("ls after clear: %d %q", code, errOut)
+	}
+	if code, _, _ := runCLI(t, "clear", "--url", "http://127.0.0.1:1"); code != exitError {
+		t.Errorf("clear without Echo: %d", code)
+	}
+}
+
+func TestSendmailCommand(t *testing.T) {
+	s := catcher.NewServer(catcher.NewInbox(100), catcher.Config{Version: "test"})
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	sink := catcher.NewSMTP(s, ln.Addr().String())
+	go func() { _ = sink.Serve(ln) }()
+	defer func() { _ = sink.Close() }()
+	for _, k := range []string{sendmail.EnvURL, sendmail.EnvToken, sendmail.EnvForce, sendmail.EnvRun, "WP_ENVIRONMENT_TYPE", "APP_ENV", "VERCEL_ENV", "NODE_ENV"} {
+		t.Setenv(k, "")
+	}
+	t.Setenv(sendmail.EnvSMTP, ln.Addr().String())
+	t.Chdir(t.TempDir())
+
+	// What PHP's mail() runs: sendmail -t -i, the message on stdin.
+	var stdout, stderr bytes.Buffer
+	msg := "To: ann@shop.test\nSubject: Order shipped\n\nYour order is on its way.\n"
+	if code := run([]string{"sendmail", "-t", "-i"}, strings.NewReader(msg), &stdout, &stderr); code != 0 {
+		t.Fatalf("sendmail: %d %s", code, stderr.String())
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	ms := s.Inbox.Wait(ctx, catcher.Filter{}, 1, 100*time.Millisecond)
+	if len(ms) != 1 || ms[0].Subject != "Order shipped" || len(ms[0].To) != 1 || ms[0].To[0] != "ann@shop.test" {
+		t.Errorf("caught %+v", ms)
+	}
+	if stdout.Len() != 0 {
+		t.Errorf("sendmail writes nothing to stdout: %q", stdout.String())
+	}
+	// sendmail's own exit codes: 64 for a message with no recipients.
+	stderr.Reset()
+	if code := run([]string{"sendmail"}, strings.NewReader("Subject: x\n\nbody\n"), &stdout, &stderr); code != 64 ||
+		!strings.Contains(stderr.String(), "no recipients") {
+		t.Errorf("no recipients: %d %s", code, stderr.String())
 	}
 }
