@@ -333,7 +333,7 @@ func (c Config) Validate() error {
 			return fmt.Errorf("%sproduction: %q isn't a URL or host name", c.at("production", i), p)
 		}
 	}
-	seen := map[string]bool{}
+	ids := map[string]int{} // action ID to the index of the action that has it
 	for i, a := range c.Actions {
 		n := 0
 		if a.HTTP != nil {
@@ -351,8 +351,19 @@ func (c Config) Validate() error {
 			return fmt.Errorf("%sactions[%d]: needs a name", at, i)
 		case n != 1:
 			return fmt.Errorf("%saction %q: set exactly one of http, command or replay", at, a.Name)
-		case seen[a.Name]:
-			return fmt.Errorf("%saction %q is listed twice", at, a.Name)
+		case ActionID(a.Name) == actionPrefix:
+			return fmt.Errorf("%saction %q: needs a letter or digit from a to z or 0 to 9 in its name, so compare can tell it apart", at, a.Name)
+		}
+		if j, ok := ids[ActionID(a.Name)]; ok {
+			first := c.Actions[j].Name
+			if first == a.Name {
+				return fmt.Errorf("%saction %q is listed twice%s", at, a.Name, c.also("actions", j))
+			}
+			// Compare matches actions by ID, so two actions sharing one
+			// would swap messages between them.
+			return fmt.Errorf("%saction %q and action %q%s both get the ID %s; rename one", at, a.Name, first, c.also("actions", j), ActionID(a.Name))
+		}
+		switch {
 		case a.HTTP != nil && a.HTTP.URL == "":
 			return fmt.Errorf("%saction %q: http needs a url", at, a.Name)
 		case a.Replay != nil && (a.Replay.Event == "" || a.Replay.To == ""):
@@ -363,10 +374,9 @@ func (c Config) Validate() error {
 				return fmt.Errorf("%saction %q: ignore: %w", c.at("actions", i, "ignore", j), a.Name, err)
 			}
 		}
-		seen[a.Name] = true
+		ids[ActionID(a.Name)] = i
 	}
-	ids := slices.Sorted(maps.Keys(c.Checks))
-	for _, id := range ids {
+	for _, id := range slices.Sorted(maps.Keys(c.Checks)) {
 		if l := c.Checks[id]; !slices.Contains(Levels, l) {
 			return fmt.Errorf("%schecks: %s: %q isn't %s", c.at("checks", id), id, l, orList(Levels))
 		}
@@ -480,6 +490,26 @@ func index(root *yaml.Node) positions {
 
 // at returns "line N: " for the key at path, or "" when c didn't come
 // from a file.
+// also names the line of an earlier entry in a message about a later
+// one, as " (line 2)", or returns "".
+func (c Config) also(path ...any) string {
+	if n, ok := c.lines[key(path...)]; ok {
+		return fmt.Sprintf(" (line %d)", n)
+	}
+	return ""
+}
+
+// ActionID is the stable ID compare matches an action on across runs:
+// action: and the name in lower case, with every run of other characters
+// turned into a dash, so "Contact form" is action:contact-form.
+func ActionID(name string) string {
+	return actionPrefix + strings.Trim(nonWord.ReplaceAllString(strings.ToLower(name), "-"), "-")
+}
+
+const actionPrefix = "action:"
+
+var nonWord = regexp.MustCompile(`[^a-z0-9]+`)
+
 func (c Config) at(path ...any) string {
 	if n, ok := c.lines[key(path...)]; ok {
 		return fmt.Sprintf("line %d: ", n)

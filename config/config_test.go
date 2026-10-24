@@ -225,7 +225,7 @@ func TestErrorsNameTheLine(t *testing.T) {
 		"relay:\n  url: http://user:secret@x.test\n":                                              "line 2: relay: url wants smtp://",
 		"relay:\n  allow: [\"[a\"]\n":                                                             "line 2: relay: allow: \"[a\" isn't a valid pattern",
 		"mode: loud\n":                                                                            "line 1: mode",
-		"actions:\n  - name: a\n    command: x\n  - name: a\n    command: y\n":                    "line 4: action \"a\" is listed twice",
+		"actions:\n  - name: a\n    command: x\n  - name: a\n    command: y\n":                    "line 4: action \"a\" is listed twice (line 2)",
 	} {
 		_, err := Load(write(t, in))
 		if err == nil || !strings.Contains(err.Error(), want) {
@@ -255,5 +255,46 @@ func TestValidateWithoutAFile(t *testing.T) {
 	c.Checks = map[string]Level{"x": "loud"}
 	if err := c.Validate(); err == nil || strings.Contains(err.Error(), "line") {
 		t.Errorf("a config built in code has no lines: %v", err)
+	}
+}
+
+// TestActionIDsAreUniqueAndNotEmpty: compare matches actions by ID, so
+// two that share one, or one with none, would mix up their messages.
+func TestActionIDsAreUniqueAndNotEmpty(t *testing.T) {
+	for in, want := range map[string]string{
+		"actions:\n  - name: Contact Form\n    command: x\n  - name: contact-form\n    command: y\n":               `line 4: action "contact-form" and action "Contact Form" (line 2) both get the ID action:contact-form; rename one`,
+		"actions:\n  - name: a\n    command: x\n  - name: b\n    command: x\n  - name: \" A! \"\n    command: y\n": `line 6: action " A! " and action "a" (line 2) both get the ID action:a; rename one`,
+		"actions:\n  - name: \"!!!\"\n    command: x\n":                                                            `line 2: action "!!!": needs a letter or digit from a to z or 0 to 9 in its name, so compare can tell it apart`,
+		"actions:\n  - name: ok\n    command: x\n  - name: \"???\"\n    command: y\n":                              `line 4: action "???": needs a letter or digit`,
+		"actions:\n  - name: 注文\n    command: x\n":                                                                 `line 2: action "注文": needs a letter or digit`,
+	} {
+		_, err := Load(write(t, in))
+		if err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("%q:\n got %v\nwant %q", in, err, want)
+		}
+	}
+
+	c := Default()
+	c.Actions = []Action{{Name: "Contact Form", Command: "x"}, {Name: "contact form", Command: "y"}}
+	if err := c.Validate(); err == nil || err.Error() != `action "contact form" and action "Contact Form" both get the ID action:contact-form; rename one` {
+		t.Errorf("without a file: %v", err)
+	}
+
+	c.Actions = []Action{{Name: "Contact form", Command: "x"}, {Name: "Contact form 2", Command: "y"}, {Name: "Checkout", Command: "z"}}
+	if err := c.Validate(); err != nil {
+		t.Errorf("distinct names: %v", err)
+	}
+}
+
+func TestActionID(t *testing.T) {
+	for name, want := range map[string]string{
+		"Contact form":           "action:contact-form",
+		"  Nightly report!":      "action:nightly-report",
+		"WooCommerce: Order #12": "action:woocommerce-order-12",
+		"!!!":                    "action:",
+	} {
+		if got := ActionID(name); got != want {
+			t.Errorf("ActionID(%q) = %q, want %q", name, got, want)
+		}
 	}
 }

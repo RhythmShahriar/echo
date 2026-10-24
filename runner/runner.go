@@ -129,12 +129,9 @@ func Run(ctx context.Context, o Options) (*model.Run, error) {
 	return run, ctx.Err()
 }
 
-// ActionID is the stable ID compare matches actions on.
-func ActionID(name string) string {
-	return "action:" + strings.Trim(nonWord.ReplaceAllString(strings.ToLower(name), "-"), "-")
-}
-
-var nonWord = regexp.MustCompile(`[^a-z0-9]+`)
+// ActionID is the stable ID compare matches actions on. config.Validate
+// makes sure every action's is unique and not empty.
+func ActionID(name string) string { return config.ActionID(name) }
 
 func runAction(ctx context.Context, o Options, run *model.Run, a config.Action, fake *fakeData, opts check.Options) model.Action {
 	cfg := o.Config
