@@ -4,6 +4,7 @@
 package catcher
 
 import (
+	"fmt"
 	"slices"
 	"sync"
 	"testing"
@@ -63,5 +64,34 @@ func TestSiteHostWarnsOncePerHost(t *testing.T) {
 	}
 	if !slices.Equal(got, want) {
 		t.Errorf("warnings = %q", got)
+	}
+}
+
+// TestSiteHostWarningsAreBounded: a caller that reports a new host with
+// every capture gets warned about the first maxWarned, and the set of
+// hosts warned about stops growing.
+func TestSiteHostWarningsAreBounded(t *testing.T) {
+	n := 0
+	s := NewServer(NewInbox(10), Config{Warn: func(string) { n++ }})
+	for i := range maxWarned + 50 {
+		if got := s.siteHost(fmt.Sprintf("x%d.twilio.com", i), "x.twilio.com", false); got != "" {
+			t.Fatalf("a provider host was trusted: %q", got)
+		}
+	}
+	if n != maxWarned || s.warnedN.Load() != maxWarned {
+		t.Errorf("warned %d times, %d hosts kept; want %d", n, s.warnedN.Load(), maxWarned)
+	}
+}
+
+// TestSelfCallToARecognizedHost says what the host is: where a request
+// Echo recognizes as a provider's went, not a provider itself.
+func TestSelfCallToARecognizedHost(t *testing.T) {
+	var got string
+	s := NewServer(NewInbox(10), Config{Warn: func(msg string) { got = msg }})
+	if h := s.siteHost("shop.test", "shop.test", true); h != "" {
+		t.Fatalf("trusted %q", h)
+	}
+	if got != "connector reported site host shop.test, which is where a request Echo recognizes as a provider's went; ignoring" {
+		t.Errorf("warning %q", got)
 	}
 }

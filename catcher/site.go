@@ -59,12 +59,24 @@ func (s *Server) siteHost(site, host string, recognized bool) string {
 	case publicSuffix(site):
 		why = "a public suffix"
 	case recognized && strings.EqualFold(site, host):
-		why = "a provider"
+		why = "where a request Echo recognizes as a provider's went"
 	default:
 		return site
 	}
-	if _, seen := s.warned.LoadOrStore(site, true); !seen && s.cfg.Warn != nil {
-		s.cfg.Warn("connector reported site host " + site + ", which is " + why + "; ignoring")
+	// One warning per host, for at most maxWarned hosts: a caller that
+	// reports a new host with every capture mustn't grow the set forever.
+	if s.warnedN.Load() >= maxWarned {
+		return ""
+	}
+	if _, seen := s.warned.LoadOrStore(site, true); !seen {
+		s.warnedN.Add(1)
+		if s.cfg.Warn != nil {
+			s.cfg.Warn("connector reported site host " + site + ", which is " + why + "; ignoring")
+		}
 	}
 	return ""
 }
+
+// maxWarned is how many ignored site hosts the catcher warns about. Past
+// it the hosts are still ignored, without a word.
+const maxWarned = 1000

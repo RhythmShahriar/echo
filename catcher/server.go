@@ -19,6 +19,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unicode/utf8"
 
@@ -98,6 +99,7 @@ type Server struct {
 	mux     *http.ServeMux
 	handler http.Handler // mux behind Protect and the token check
 	warned  sync.Map     // site hosts already warned about
+	warnedN atomic.Int64 // how many: the set stops growing at maxWarned
 	pit     mailpitState // what the Mailpit routes keep beside the inbox
 }
 
