@@ -196,11 +196,12 @@ func TestDockerWordPress(t *testing.T) {
 		s := r.seal()
 		r.get(t, "schedule", map[string]string{"X-Echo-Run": "cronrun/schedule"})
 		r.wp(t, nil, "cron", "event", "run", "echo_fixture_cron")
-		// The environment beats the stored run.
+		// The stored run beats the environment: a flush for another action
+		// must not claim a job this one queued.
 		r.get(t, "schedule", map[string]string{"X-Echo-Run": "cronrun/schedule"})
 		r.wp(t, []string{"RHYTHM_ECHO_RUN=envrun/flush"}, "cron", "event", "run", "echo_fixture_cron")
 		msgs := s.Inbox.List(catcher.Filter{Channel: model.Email})
-		if len(msgs) != 2 || msgs[0].Run != "cronrun" || msgs[0].Action != "schedule" || msgs[1].Run != "envrun" || msgs[1].Action != "flush" {
+		if len(msgs) != 2 || msgs[0].Run != "cronrun" || msgs[0].Action != "schedule" || msgs[1].Run != "cronrun" || msgs[1].Action != "schedule" {
 			t.Fatalf("cron mail runs = %v", runs(msgs))
 		}
 	})

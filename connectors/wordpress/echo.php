@@ -117,6 +117,7 @@ final class Rhythm_Echo {
 		// Last, so a plugin that already answers a request (a mock, a cache) wins.
 		add_filter( 'pre_http_request', array( __CLASS__, 'pre_http_request' ), PHP_INT_MAX, 3 );
 		add_action( 'http_api_debug', array( __CLASS__, 'http_api_debug' ), 10, 5 );
+		add_action( 'http_api_curl', array( __CLASS__, 'http_api_curl' ), 10, 2 );
 
 		// Runs for WP-Cron events and Action Scheduler actions.
 		add_filter( 'schedule_event', array( __CLASS__, 'schedule_event' ), PHP_INT_MAX );
@@ -265,6 +266,26 @@ final class Rhythm_Echo {
 	}
 
 	/**
+	 * Requests the connector already captured and let through go direct,
+	 * not through Echo's proxy: otherwise they'd be captured twice, and
+	 * hosts only the site can resolve would fail at the proxy.
+	 *
+	 * @param resource|\CurlHandle $handle
+	 * @param array<string, mixed>  $args
+	 */
+	public static function http_api_curl( $handle, $args ): void {
+		if ( '' === self::config()['proxy'] || ! is_array( $args ) || ! isset( $args['_rhythm_echo'] ) ) {
+			return;
+		}
+		// phpcs:disable WordPress.WP.AlternativeFunctions.curl_curl_setopt
+		curl_setopt( $handle, CURLOPT_PROXY, '' );
+		if ( defined( 'CURLOPT_NOPROXY' ) ) {
+			curl_setopt( $handle, CURLOPT_NOPROXY, '*' );
+		}
+		// phpcs:enable
+	}
+
+	/**
 	 * The CA bundle for the WordPress HTTP API with Echo's CA added, so
 	 * requests that reach Echo's TLS-intercepting proxy verify. Core's
 	 * bundle (or whatever bundle the request already uses) is kept: the
@@ -301,8 +322,10 @@ final class Rhythm_Echo {
 		$candidates = array(
 			isset( $_SERVER['HTTP_X_ECHO_RUN'] ) ? (string) $_SERVER['HTTP_X_ECHO_RUN'] : '', // phpcs:ignore WordPress.Security.ValidatedSanitizedInput
 			isset( $_COOKIE['X-Echo-Run'] ) ? (string) $_COOKIE['X-Echo-Run'] : '', // phpcs:ignore WordPress.Security.ValidatedSanitizedInput
-			(string) getenv( 'RHYTHM_ECHO_RUN' ),
+			// A queued job's own run beats the environment's: a flush for
+			// action B must not claim jobs that action A queued.
 			(string) self::$context_run,
+			(string) getenv( 'RHYTHM_ECHO_RUN' ),
 		);
 		foreach ( $candidates as $v ) {
 			$v = self::clean_run( $v );
