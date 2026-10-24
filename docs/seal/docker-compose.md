@@ -21,10 +21,13 @@ Example: [examples/docker-compose.yml](examples/docker-compose.yml)
 ## Run it
 
 ```sh
-export RHYTHM_ECHO_BIN=$HOME/.local/bin/rhythm-echo   # a static Linux binary
 export RHYTHM_ECHO_TOKEN=$(openssl rand -hex 16)
 docker compose -f docs/seal/examples/docker-compose.yml up -d
 ```
+
+Echo runs from its image, `ghcr.io/rhythmshahriar/echo:1`. Set
+`RHYTHM_ECHO_IMAGE` to pin a release (`ghcr.io/rhythmshahriar/echo:1.2.3`)
+or to use an image built from a checkout.
 
 - The site is at http://127.0.0.1:8080.
 - Echo's inbox and API are at http://127.0.0.1:8025. Send the token as
@@ -32,14 +35,15 @@ docker compose -f docs/seal/examples/docker-compose.yml up -d
 
 ## How it fits together
 
-- **`echo`** runs `rhythm-echo up --seal --mitm` with:
+- **`echo`** runs `rhythm-echo up --seal --mitm` from Echo's image with:
   - the API on `:8025`
   - SMTP on `:1025`
   - the proxy on `:8026`
 
-  It listens on `0.0.0.0` inside its container, so it requires the token. The
-  CA, including its private key, is kept in the `echo-state` volume, so trust
-  survives restarts.
+  It listens on `0.0.0.0` inside its container, so it requires the token,
+  which it reads from `RHYTHM_ECHO_TOKEN`. The CA, including its private
+  key, is kept in the `echo-state` volume (mounted at
+  `/home/nonroot/.cache/rhythm/echo`), so trust survives restarts.
 - **`echo-ca`** is a one-shot job. It copies the CA *certificate* from
   `http://echo:8026/ca.pem` into the `echo-ca` volume, which the app mounts
   read-only at `/echo-ca/ca.pem`. The key is never shared.
