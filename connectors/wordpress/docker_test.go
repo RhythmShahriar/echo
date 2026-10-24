@@ -366,11 +366,21 @@ func TestDockerWordPress(t *testing.T) {
 		r.seal()
 		r.write(t, Settings{URL: r.echoURL})
 		defer r.install(t, Settings{})
+		// opcache may still hold the settings with the token for a while
+		// after write's sleep (as in install): wait until loopback gets in.
+		deadline := time.Now().Add(15 * time.Second)
+		for {
+			status, b := r.inside(t, PingRoute, "")
+			if status == http.StatusOK && strings.Contains(b, `"connector":"wordpress"`) {
+				break
+			}
+			if time.Now().After(deadline) {
+				t.Fatalf("from loopback: HTTP %d, want 200: %.300s", status, b)
+			}
+			time.Sleep(250 * time.Millisecond)
+		}
 		if status, b := r.do(t, http.MethodGet, r.wpURL+"/?rest_route=/"+PingRoute, nil); status != http.StatusForbidden {
 			t.Errorf("from the Docker gateway: HTTP %d, want 403: %.300s", status, b)
-		}
-		if status, b := r.inside(t, PingRoute, ""); status != http.StatusOK || !strings.Contains(b, `"connector":"wordpress"`) {
-			t.Errorf("from loopback: HTTP %d, want 200: %.300s", status, b)
 		}
 		for _, h := range []string{"X-Forwarded-For: 198.51.100.7", "Forwarded: for=198.51.100.7"} {
 			if status, b := r.inside(t, PingRoute, h); status != http.StatusForbidden {
