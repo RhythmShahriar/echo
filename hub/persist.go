@@ -34,8 +34,8 @@ type record struct {
 // at 256 KiB a field), so a longer line is damage, not data.
 const maxRecord = 64 << 20
 
-// migrate adds the messages of an old inbox.jsonl in store to in, each
-// marked with its site, and removes the file. The messages keep their
+// migrate adds the messages of an old inbox.jsonl in store to in (each
+// marked with its site) and removes the file. The messages keep their
 // IDs, times and runs. An inbox that already holds messages was migrated
 // before, so only the file goes then.
 func migrate(store string, in *catcher.Inbox) error {

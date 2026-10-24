@@ -286,7 +286,7 @@ func (f *inflight) add(ctx context.Context, id json.RawMessage) (context.Context
 }
 
 // register adds raw to the running requests when it is a request with an
-// ID, and returns the context it runs in and what removes it again.
+// ID. It returns the context it runs in and what removes it again.
 func (f *inflight) register(ctx context.Context, raw json.RawMessage) (context.Context, func()) {
 	var head struct {
 		ID json.RawMessage `json:"id"`

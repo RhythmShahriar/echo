@@ -8,7 +8,7 @@
 // background color when it initializes and waits up to five seconds for
 // an answer that a terminal recorder or some multiplexers never send. Go
 // initializes packages in the order of their import paths when nothing
-// else decides it, and this one depends on nothing that does, so it
+// else decides it. This one depends on nothing that does, so it
 // initializes first: At is the time the user ran the command, not the
 // time that wait ended.
 package started

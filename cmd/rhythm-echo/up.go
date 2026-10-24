@@ -271,7 +271,7 @@ func cmdUp(s *session) int {
 
 // openWarnings are the banner's warnings for the addresses up serves
 // without a token (--private-network): anything on the network can post
-// and read, and an observing proxy there forwards for anyone.
+// and read. An observing proxy there forwards for anyone.
 func openWarnings(open []string, cfg config.Config) []string {
 	if len(open) == 0 {
 		return nil

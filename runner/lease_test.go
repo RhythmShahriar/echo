@@ -254,7 +254,7 @@ func (c *renewingClient) RenewLease(_ context.Context, lease string) error {
 }
 
 // TestLongActionsRenewTheirLease: an action that outlasts the renewal
-// interval keeps its lease open, and renewal stops when it ends.
+// interval keeps its lease open; renewal stops when it ends.
 func TestLongActionsRenewTheirLease(t *testing.T) {
 	old := renewEvery
 	renewEvery = 20 * time.Millisecond

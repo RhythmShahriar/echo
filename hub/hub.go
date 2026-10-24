@@ -205,7 +205,7 @@ func (h *Hub) tokenSite(token string) string {
 	return who
 }
 
-// ServeHTTP serves the API to the read and write tokens, and Echo Inbox
+// ServeHTTP serves the API to the read and write tokens and Echo Inbox
 // to the read token: a browser opens /?token=<read token> once and keeps
 // it in a cookie (see browser).
 func (h *Hub) ServeHTTP(w http.ResponseWriter, r *http.Request) {

@@ -460,8 +460,8 @@ func hostCall(t *testing.T, method, addr, path, host, body string) (int, string)
 // (wildcard listen, --private-network, no token) answers a connector in
 // another container that names Echo by its Compose service ("echo:8025")
 // or by an IP address, for the API and Echo Inbox alike. A domain name
-// stays refused unless --hostname (or RHYTHM_ECHO_HOSTNAMES) lists it,
-// and a page's Origin is still refused.
+// stays refused unless --hostname (or RHYTHM_ECHO_HOSTNAMES) lists it.
+// A page's Origin is still refused.
 func TestUpPrivateNetworkAnswersToServiceNames(t *testing.T) {
 	upEnv(t)
 	t.Setenv("RHYTHM_ECHO_TOKEN", "")

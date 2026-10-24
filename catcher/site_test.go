@@ -68,8 +68,8 @@ func TestSiteHostWarnsOncePerHost(t *testing.T) {
 }
 
 // TestSiteHostWarningsAreBounded: a caller that reports a new host with
-// every capture gets warned about the first maxWarned, and the set of
-// hosts warned about stops growing.
+// every capture gets warned about the first maxWarned; the set of hosts
+// warned about stops growing.
 func TestSiteHostWarningsAreBounded(t *testing.T) {
 	n := 0
 	s := NewServer(NewInbox(10), Config{Warn: func(string) { n++ }})

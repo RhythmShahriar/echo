@@ -28,8 +28,8 @@ Runs Echo's MCP server on stdin and stdout, for coding agents:
 
 Tools: list_messages, get_message, latest_code, run_action, snapshot,
 compare, check_domain. Results are masked. Start Echo first (rhythm echo up);
-the action tools use the nearest .echo/config.yaml, in the folder the agent
-starts in or above it, and run in the folder that holds it.
+the action tools use the nearest .echo/config.yaml (in the folder the agent
+starts in or above it) and run in the folder that holds it.
 
   --url <url>      where Echo runs (default from the config, or RHYTHM_ECHO_URL)
   --token <t>      the token Echo was started with (RHYTHM_ECHO_TOKEN)

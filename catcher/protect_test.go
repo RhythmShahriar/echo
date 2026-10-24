@@ -115,7 +115,7 @@ func TestProtectOverRealHTTP(t *testing.T) {
 
 // TestHostAllowedPrivateNetwork: under --private-network a private peer
 // may name Echo by a service name or an IP address; a domain name only
-// when Hosts lists it, and a public peer gets nothing more than before.
+// when Hosts lists it. A public peer gets nothing more than before.
 func TestHostAllowedPrivateNetwork(t *testing.T) {
 	hosts := []string{"*.ddev.site", "echo.myapp.lndo.site"}
 	for _, c := range []struct {

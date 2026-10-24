@@ -258,7 +258,7 @@ type Inbox struct {
 
 // Relay sends a caught email on to a real inbox, only to Allow.
 type Relay struct {
-	URL   string   `yaml:"url,omitempty"`   // smtp://user:pass@host:587 (or smtps://); the --relay flag can give it instead
+	URL   string   `yaml:"url,omitempty"`   // smtp://user:pass@host:587 (or smtps://); RHYTHM_ECHO_RELAY can give it instead
 	Allow []string `yaml:"allow,omitempty"` // recipient globs, e.g. ["*@client-a.com"]
 }
 
