@@ -23,7 +23,8 @@ func site(t *testing.T) string {
 
 func TestInstallWritesPluginAndSettings(t *testing.T) {
 	dir := site(t)
-	s := Settings{URL: "http://host.docker.internal:8025", Token: `t'o\k`, Mode: "seal", Force: true}
+	s := Settings{URL: "http://host.docker.internal:8025", Token: `t'o\k`, Mode: "seal", Force: true,
+		Proxy: "http://127.0.0.1:8026", CA: "/etc/echo/ca.pem"}
 	if err := Install(dir, s); err != nil {
 		t.Fatal(err)
 	}
@@ -48,7 +49,8 @@ func TestInstallWritesPluginAndSettings(t *testing.T) {
 		if err := json.Unmarshal(out, &m); err != nil {
 			t.Fatalf("settings: %s", out)
 		}
-		if m["url"] != s.URL || m["token"] != s.Token || m["mode"] != "seal" || m["force"] != true {
+		if m["url"] != s.URL || m["token"] != s.Token || m["mode"] != "seal" || m["force"] != true ||
+			m["proxy"] != s.Proxy || m["ca"] != s.CA {
 			t.Errorf("settings = %v", m)
 		}
 	}

@@ -59,6 +59,14 @@ type Settings struct {
 	Token string // sent as X-Echo-Token; also guards the plugin's REST routes
 	Mode  string // seal or observe: only decides what happens when Echo can't be reached (seal fails closed)
 	Force bool   // run even when WordPress says this is production
+	// Proxy is Echo's HTTP(S) proxy as the site reaches it, e.g.
+	// http://127.0.0.1:8026. When set, the plugin points raw cURL at it
+	// (https_proxy, http_proxy, no_proxy for the site, Echo and loopback),
+	// catching SDKs that skip the WordPress HTTP API.
+	Proxy string
+	// CA is the path, on the site's machine, to Echo's CA certificate (PEM).
+	// It is added to the WordPress HTTP API's CA bundle, not replacing it.
+	CA string
 }
 
 // Plugin returns the mu-plugin's PHP source.
@@ -76,7 +84,7 @@ func SettingsPHP(s Settings) ([]byte, error) {
 	b.WriteString("<?php\n// Rhythm Echo connector settings, written by `rhythm echo install wordpress`.\n")
 	b.WriteString("// RHYTHM_ECHO_* constants and environment variables override these.\n")
 	b.WriteString("// " + marker + "\nreturn array(\n")
-	for _, kv := range [][2]string{{"url", s.URL}, {"token", s.Token}, {"mode", s.Mode}} {
+	for _, kv := range [][2]string{{"url", s.URL}, {"token", s.Token}, {"mode", s.Mode}, {"proxy", s.Proxy}, {"ca", s.CA}} {
 		if kv[1] != "" {
 			fmt.Fprintf(&b, "\t%s => %s,\n", phpString(kv[0]), phpString(kv[1]))
 		}

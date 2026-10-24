@@ -34,8 +34,13 @@
  *   "production" when WP_ENVIRONMENT_TYPE isn't set) it does nothing but
  *   show an admin notice, unless RHYTHM_ECHO_FORCE is set.
  *
+ * - Proxy (optional): with RHYTHM_ECHO_PROXY set, raw cURL in this
+ *   request (SDKs that skip the HTTP API) goes through Echo's proxy, and
+ *   RHYTHM_ECHO_CA (Echo's CA PEM) is added to the HTTP API's CA bundle.
+ *
  * Settings, first found wins: define() constants RHYTHM_ECHO_URL,
- * RHYTHM_ECHO_TOKEN, RHYTHM_ECHO_MODE, RHYTHM_ECHO_FORCE; the same names in
+ * RHYTHM_ECHO_TOKEN, RHYTHM_ECHO_MODE, RHYTHM_ECHO_FORCE, RHYTHM_ECHO_PROXY,
+ * RHYTHM_ECHO_CA; the same names in
  * the environment; mu-plugins/rhythm-echo/settings.php (written by the
  * installer, returns an array).
  *
@@ -62,7 +67,7 @@ final class Rhythm_Echo {
 	const CANARY_EMAIL = 'canary@echo.invalid';
 	const CANARY_URL   = 'https://canary.echo.invalid/';
 
-	/** @var array{url: string, token: string, mode: string, force: bool}|null */
+	/** @var array{url: string, token: string, mode: string, force: bool, proxy: string, ca: string}|null */
 	private static $config = null;
 
 	/** @var bool */
@@ -106,6 +111,9 @@ final class Rhythm_Echo {
 		self::$active = true;
 
 		add_filter( 'http_request_args', array( __CLASS__, 'http_request_args' ), PHP_INT_MAX, 2 );
+		if ( '' !== $cfg['proxy'] ) {
+			add_action( 'muplugins_loaded', array( __CLASS__, 'use_proxy' ), 0 );
+		}
 		// Last, so a plugin that already answers a request (a mock, a cache) wins.
 		add_filter( 'pre_http_request', array( __CLASS__, 'pre_http_request' ), PHP_INT_MAX, 3 );
 		add_action( 'http_api_debug', array( __CLASS__, 'http_api_debug' ), 10, 5 );
@@ -153,7 +161,7 @@ final class Rhythm_Echo {
 	// Settings.
 
 	/**
-	 * @return array{url: string, token: string, mode: string, force: bool}
+	 * @return array{url: string, token: string, mode: string, force: bool, proxy: string, ca: string}
 	 */
 	public static function config(): array {
 		if ( null !== self::$config ) {
@@ -174,6 +182,8 @@ final class Rhythm_Echo {
 			'token' => self::setting( 'RHYTHM_ECHO_TOKEN', $file, 'token' ),
 			'mode'  => 'observe' === $mode ? 'observe' : 'seal',
 			'force' => self::truthy( self::setting( 'RHYTHM_ECHO_FORCE', $file, 'force' ) ),
+			'proxy' => self::setting( 'RHYTHM_ECHO_PROXY', $file, 'proxy' ),
+			'ca'    => self::setting( 'RHYTHM_ECHO_CA', $file, 'ca' ),
 		);
 		return self::$config;
 	}
@@ -222,6 +232,62 @@ final class Rhythm_Echo {
 			'<div class="notice notice-warning"><p><strong>Rhythm Echo is installed but not running:</strong> %s Echo only runs on test sites. Set WP_ENVIRONMENT_TYPE to staging, development or local on a test copy, or remove <code>wp-content/mu-plugins/rhythm-echo.php</code> (run <code>rhythm echo uninstall wordpress</code>).</p></div>',
 			esc_html( $why )
 		);
+	}
+
+	// ---------------------------------------------------------------------
+	// Echo's proxy, for SDKs that skip the WordPress HTTP API.
+
+	/**
+	 * Points raw cURL (the Twilio and Stripe PHP SDKs, WP Mail SMTP's Gmail
+	 * mailer) at Echo's proxy for this request. libcurl reads these when a
+	 * handle has no CURLOPT_PROXY; PHP restores the environment when the
+	 * request ends. The site itself, Echo and loopback stay direct, and so
+	 * does this connector's own traffic (CURLOPT_PROXY '').
+	 */
+	public static function use_proxy(): void {
+		$proxy = self::config()['proxy'];
+		if ( '' === $proxy || ! function_exists( 'putenv' ) ) {
+			return;
+		}
+		$direct = array( 'localhost', '127.0.0.1', '::1' );
+		foreach ( array( home_url(), site_url(), self::config()['url'] ) as $u ) {
+			$h = wp_parse_url( $u, PHP_URL_HOST );
+			if ( is_string( $h ) && '' !== $h ) {
+				$direct[] = strtolower( $h );
+			}
+		}
+		$no_proxy = implode( ',', array_unique( $direct ) );
+		foreach ( array( 'https_proxy', 'http_proxy', 'HTTPS_PROXY', 'HTTP_PROXY' ) as $name ) {
+			putenv( $name . '=' . $proxy );
+		}
+		putenv( 'no_proxy=' . $no_proxy );
+		putenv( 'NO_PROXY=' . $no_proxy );
+	}
+
+	/**
+	 * The CA bundle for the WordPress HTTP API with Echo's CA added, so
+	 * requests that reach Echo's TLS-intercepting proxy verify. Core's
+	 * bundle (or whatever bundle the request already uses) is kept: the
+	 * combined file is written once to the temp directory, named by its
+	 * inputs, and reused.
+	 */
+	private static function ca_bundle( string $base ): string {
+		$ca = self::config()['ca'];
+		if ( '' === $ca || ! is_readable( $ca ) || ! is_readable( $base ) ) {
+			return $base;
+		}
+		$path = get_temp_dir() . 'rhythm-echo-ca-' . md5( $base . '|' . filemtime( $base ) . '|' . md5_file( $ca ) ) . '.pem';
+		if ( is_readable( $path ) ) {
+			return $path;
+		}
+		$pem = (string) file_get_contents( $base ) . "\n# Rhythm Echo CA (" . $ca . ")\n" . (string) file_get_contents( $ca ) . "\n"; // phpcs:ignore WordPress.WP.AlternativeFunctions
+		$tmp = $path . '.' . wp_generate_password( 8, false );
+		if ( false === file_put_contents( $tmp, $pem ) || ! rename( $tmp, $path ) ) { // phpcs:ignore WordPress.WP.AlternativeFunctions
+			@unlink( $tmp ); // phpcs:ignore WordPress.PHP.NoSilencedErrors
+			error_log( 'Rhythm Echo: could not write the combined CA bundle to ' . $path ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions
+			return $base;
+		}
+		return $path;
 	}
 
 	// ---------------------------------------------------------------------
@@ -378,7 +444,11 @@ final class Rhythm_Echo {
 			return $args;
 		}
 		$args['_rhythm_echo'] = 'r' . ( ++self::$seq );
-		$run                  = self::run();
+		if ( '' !== self::config()['ca'] ) {
+			$base                    = isset( $args['sslcertificates'] ) && is_string( $args['sslcertificates'] ) ? $args['sslcertificates'] : ABSPATH . WPINC . '/certificates/ca-bundle.crt';
+			$args['sslcertificates'] = self::ca_bundle( $base );
+		}
+		$run = self::run();
 		if ( '' !== $run && self::own_host( (string) $url ) && is_array( $args['headers'] ?? null ) && ! isset( $args['headers']['X-Echo-Run'] ) ) {
 			$args['headers']['X-Echo-Run'] = $run;
 		}
@@ -875,7 +945,7 @@ final class Rhythm_Echo {
 			do_action( 'wp_mail_failed', new WP_Error( 'wp_mail_failed', $e->getMessage(), $mail_data ) );
 			if ( null !== $d && isset( $d['id'] ) ) {
 				// Tell Echo the observed send failed.
-				self::send( self::capture( 'email', 'wp_mail_failed', array( 'phase' => 'after', 'id' => (string) $d['id'], 'error' => $e->getMessage(), 'email' => $capture['email'] ) ) );
+				self::send( self::capture( 'email', 'wp_mail_failed', array( 'phase' => 'after', 'id' => (string) $d['id'], 'error' => $e->getMessage() ) ) );
 			}
 			return false;
 		}
@@ -1432,7 +1502,9 @@ final class Rhythm_Echo {
 			'reason'      => self::$reason,
 			'environment' => self::environment(),
 			'mode'        => $cfg['mode'],
-			'layers'      => self::$active ? array_values( array_filter( array( self::$layer, 'pre_http_request' ) ) ) : array(),
+			'layers'      => self::$active ? array_values( array_filter( array( self::$layer, 'pre_http_request', '' !== $cfg['proxy'] ? 'proxy' : '' ) ) ) : array(),
+			'proxy'       => self::$active ? $cfg['proxy'] : '',
+			'ca'          => '' !== $cfg['ca'] && is_readable( $cfg['ca'] ),
 			'warnings'    => self::$warnings,
 			'site'        => home_url(),
 			'run'         => self::run(),

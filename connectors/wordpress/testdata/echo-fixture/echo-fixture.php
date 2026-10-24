@@ -200,6 +200,21 @@ add_action(
 			case 'as_enqueue':
 				$out['id'] = echo_fixture_as_enqueue();
 				break;
+			case 'cf7_fail':
+				// Observed mail whose SMTP server refuses the connection.
+				add_action( 'phpmailer_init', static function ( $phpmailer ) {
+					$phpmailer->Port = 1;
+				}, 20 );
+				$out['sent'] = echo_fixture_cf7();
+				break;
+			case 'ca':
+				$args          = apply_filters( 'http_request_args', array( 'sslcertificates' => ABSPATH . WPINC . '/certificates/ca-bundle.crt', 'headers' => array() ), 'https://api.example.com/' );
+				$bundle        = (string) $args['sslcertificates'];
+				$pem           = (string) file_get_contents( $bundle );
+				$out['bundle'] = $bundle;
+				$out['core']   = false !== strpos( $pem, (string) file_get_contents( ABSPATH . WPINC . '/certificates/ca-bundle.crt' ) );
+				$out['echo']   = false !== strpos( $pem, 'ECHO-TEST-CA' );
+				break;
 			case 'curl':
 				$out = echo_fixture_curl( (string) $_GET['url'], isset( $_GET['proxy'] ) ? (string) $_GET['proxy'] : '' );
 				break;

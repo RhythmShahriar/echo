@@ -20,6 +20,7 @@ import (
 	"math/rand/v2"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -41,6 +42,8 @@ type rig struct {
 	project string
 	compose string
 	wpURL   string
+	echoURL string // as the containers reach it
+	content string // the mounted wp-content
 
 	echo  atomic.Pointer[catcher.Server] // nil: Echo is down (503)
 	smtp  *catcher.Server                // observed mail lands here
@@ -165,6 +168,18 @@ func TestDockerWordPress(t *testing.T) {
 			t.Errorf("observed mail capture = %+v", m)
 		}
 		r.smtp.Inbox.Clear(catcher.Filter{})
+	})
+
+	t.Run("observe reports a failed send on the same message", func(t *testing.T) {
+		s := r.observe()
+		out := r.get(t, "cf7_fail", nil)
+		if out["sent"] != false {
+			t.Fatalf("send to a closed SMTP port: %v", out)
+		}
+		msgs := s.Inbox.List(catcher.Filter{})
+		if len(msgs) != 1 || msgs[0].Status != model.Failed || msgs[0].Error == "" {
+			t.Fatalf("failed observed mail = %+v", msgs)
+		}
 	})
 
 	t.Run("run from header beats cookie", func(t *testing.T) {
@@ -321,6 +336,67 @@ func TestDockerWordPress(t *testing.T) {
 		}
 		r.proxy.Unlock()
 	})
+
+	// With Proxy set, raw cURL (SDKs that skip the HTTP API) goes through
+	// Echo's proxy; without it, it goes direct and hits the 127.0.0.1 trap.
+	t.Run("proxy setting routes raw curl", func(t *testing.T) {
+		r.seal()
+		proxy := "http://host.docker.internal:" + os.Getenv("ECHO_TEST_PROXY_PORT")
+		ca := filepath.Join(r.content, "mu-plugins", "rhythm-echo", "test-ca.pem")
+		r.install(t, Settings{Proxy: proxy, CA: "/var/www/html/wp-content/mu-plugins/rhythm-echo/test-ca.pem"})
+		if err := os.WriteFile(ca, []byte("-----BEGIN CERTIFICATE-----\nECHO-TEST-CA\n-----END CERTIFICATE-----\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		defer r.install(t, Settings{})
+
+		seen := func(scenario string) string {
+			r.proxy.Lock()
+			r.proxy.lines = nil
+			r.proxy.Unlock()
+			out := r.get(t, scenario, nil)
+			r.proxy.Lock()
+			defer r.proxy.Unlock()
+			t.Logf("%s: proxy saw %q; curl %v", scenario, r.proxy.lines, out)
+			return strings.Join(r.proxy.lines, " | ")
+		}
+		if got := seen("curl&url=https://api.stripe.com/v1/charges"); got != "CONNECT api.stripe.com:443 HTTP/1.1" {
+			t.Errorf("with Proxy set, raw cURL to Stripe: proxy saw %q", got)
+		}
+		// The site itself stays direct.
+		if got := seen("curl&url=" + url.QueryEscape("http://localhost/")); got != "" {
+			t.Errorf("own host went through the proxy: %q", got)
+		}
+		// Echo's own traffic stays direct: captures still arrive.
+		s := r.seal()
+		r.get(t, "twilio", nil)
+		if n := len(s.Inbox.List(catcher.Filter{})); n != 1 {
+			t.Errorf("with Proxy set, Echo got %d captures, want 1", n)
+		}
+		ping := r.rest(t, "ping", nil)
+		if ping["proxy"] != proxy || ping["ca"] != true || !strings.Contains(fmt.Sprint(ping["layers"]), "proxy") {
+			t.Errorf("ping with proxy = %v", ping)
+		}
+		c := r.get(t, "ca", nil)
+		if c["core"] != true || c["echo"] != true || !strings.Contains(fmt.Sprint(c["bundle"]), "rhythm-echo-ca-") {
+			t.Errorf("CA bundle = %v", c)
+		}
+
+		r.install(t, Settings{})
+		if got := seen("curl&url=https://api.stripe.com/v1/charges"); got != "" {
+			t.Errorf("without Proxy, raw cURL still used the proxy: %q", got)
+		}
+	})
+}
+
+// install rewrites the connector's settings in the mounted mu-plugins.
+func (r *rig) install(t *testing.T, s Settings) {
+	t.Helper()
+	s.URL, s.Token = r.echoURL, token
+	if err := Install(r.content, s); err != nil {
+		t.Fatal(err)
+	}
+	// The image's opcache rechecks files every 2 seconds.
+	time.Sleep(2500 * time.Millisecond)
 }
 
 func runs(ms []model.Message) []string {
@@ -495,7 +571,8 @@ func start(t *testing.T) *rig {
 			t.Fatal(err)
 		}
 	}
-	if err := Install(content, Settings{URL: fmt.Sprintf("http://host.docker.internal:%d", echoPort), Token: token}); err != nil {
+	r.content, r.echoURL = content, fmt.Sprintf("http://host.docker.internal:%d", echoPort)
+	if err := Install(content, Settings{URL: r.echoURL, Token: token}); err != nil {
 		t.Fatal(err)
 	}
 	copyFile(t, "testdata/early-mailer.php", filepath.Join(content, "mu-plugins/early-mailer.php"))
