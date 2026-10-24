@@ -1765,12 +1765,13 @@ func TestQuietAndTimeoutFlags(t *testing.T) {
 	defer srv.Close()
 	shop := shopSite(t, srv.URL, "Hi Ann, welcome.")
 	action := "actions:\n  - name: Sign up\n    http: {method: POST, url: /signup, form: {email: ann@shop.test}}\n"
-	writeConfig(t, "site: "+shop.URL+"\nquiet: 3s\ntimeout: 10s\n"+action+"    expect: {email: 1}\n")
+	writeConfig(t, "site: "+shop.URL+"\nquiet: 30s\ntimeout: 1m\n"+action+"    expect: {email: 1}\n")
 
-	// The config's 3s quiet would hold the action for 3s.
+	// The config's 30s quiet would hold the action for 30s; half of that
+	// leaves a slow CI under -race plenty of room.
 	start := time.Now()
 	code, out, errOut := runCLI(t, "run", "--url", srv.URL, "--plain", "--quiet", "200ms")
-	if took := time.Since(start); code != exitOK || took > 2*time.Second || !strings.Contains(out, "1 email") {
+	if took := time.Since(start); code != exitOK || took > 15*time.Second || !strings.Contains(out, "1 email") {
 		t.Errorf("run --quiet 200ms: exit %d in %s\n%s%s", code, took, out, errOut)
 	}
 	// --quiet=<d> is the same; it doesn't hide the output as -q does.
@@ -1780,10 +1781,11 @@ func TestQuietAndTimeoutFlags(t *testing.T) {
 
 	// Two emails are expected and one comes: only the timeout ends it,
 	// and the runner counts the wait that ran out as the action failing.
-	writeConfig(t, "site: "+shop.URL+"\nquiet: 200ms\ntimeout: 10s\n"+action+"    expect: {email: 2}\n")
+	// The config's timeout is a minute.
+	writeConfig(t, "site: "+shop.URL+"\nquiet: 200ms\ntimeout: 1m\n"+action+"    expect: {email: 2}\n")
 	start = time.Now()
 	code, out, _ = runCLI(t, "run", "--url", srv.URL, "--plain", "--timeout", "600ms")
-	if took := time.Since(start); code != exitError || took > 4*time.Second || !strings.Contains(out, "timeout=600ms") {
+	if took := time.Since(start); code != exitError || took > 30*time.Second || !strings.Contains(out, "timeout=600ms") {
 		t.Errorf("run --timeout 600ms: exit %d in %s\n%s", code, took, out)
 	}
 	writeConfig(t, "site: "+shop.URL+"\nquiet: 200ms\ntimeout: 10s\n"+action+"    expect: {email: 1}\n")
