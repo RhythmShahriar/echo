@@ -18,7 +18,7 @@ import (
 )
 
 // fakeClock stands in for time.After: Wait's quiet timers fire only when
-// the test says so, and every timer Wait asks for is announced on asked.
+// the test says so. Every timer Wait asks for is announced on asked.
 type fakeClock struct {
 	mu     sync.Mutex
 	timers []chan time.Time
@@ -61,7 +61,7 @@ func TestWaitCatchesLateMessages(t *testing.T) {
 	go func() { done <- in.Wait(context.Background(), Filter{Run: "r1", Action: "checkout"}, 1, time.Second) }()
 
 	clk.waitAsked(t)
-	clk.fire(0) // quiet, but nothing arrived yet: keep waiting
+	clk.fire(0) // quiet with nothing arrived yet: keep waiting
 	clk.waitAsked(t)
 	in.Add(model.Message{Channel: model.Email, Subject: "receipt"})
 	clk.waitAsked(t)                              // the receipt starts a new quiet period

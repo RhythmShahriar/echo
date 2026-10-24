@@ -184,7 +184,8 @@ func (in *Inbox) attribute(m *model.Message) {
 	}
 }
 
-// Add stores m, filling its ID, time, run and issues, and returns it.
+// Add stores m after filling its ID, time, run and issues. It returns
+// the stored message.
 func (in *Inbox) Add(m model.Message) model.Message {
 	in.mu.Lock()
 	in.seq++

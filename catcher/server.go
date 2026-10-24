@@ -277,8 +277,8 @@ func (s *Server) http(c wire.Capture, run, action string, src model.Source) (wir
 	// Recognizers copy what they read from the raw request: the SMS text,
 	// the chat message and for unknown APIs the host and path as To.
 	s.maskFields(&m)
-	// The site may call itself (cron, loopback) while sealed, but only a
-	// host that can't be a provider's counts as the site.
+	// The site may call itself (cron, loopback) while sealed. Only a host
+	// that can't be a provider's counts as the site.
 	allowed := s.allowed(u.Hostname(), s.siteHost(src.Host, u.Hostname(), rec.Provider != ""))
 	d := wire.Decision{Mode: s.cfg.Mode}
 	switch {
