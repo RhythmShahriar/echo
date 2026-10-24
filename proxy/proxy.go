@@ -382,9 +382,10 @@ func (p *Proxy) connect(w http.ResponseWriter, r *http.Request) {
 	case blindPayment(host):
 		d, _ := p.opt.Server.Capture(wire.Capture{Version: wire.Version, Kind: "http", Phase: wire.Before, Run: run,
 			Source: source("connect"), HTTP: &wire.HTTP{Method: http.MethodConnect, URL: tunnelURL(target)}})
-		p.markBlocked(d.ID, errPaymentTunnel)
-		p.opt.Log.Warn("refused a tunnel", "host", host, "reason", errPaymentTunnel)
-		http.Error(w, "rhythm-echo: "+host+": "+errPaymentTunnel, http.StatusForbidden)
+		why := tunnelRefusal(host)
+		p.markBlocked(d.ID, why)
+		p.opt.Log.Warn("refused a tunnel", "host", host, "reason", why)
+		http.Error(w, "rhythm-echo: "+host+": "+why, http.StatusForbidden)
 	case pass || (!p.opt.MITM && !p.sealed()):
 		p.tunnel(w, r, target, "", run)
 	case p.opt.MITM:
@@ -610,9 +611,24 @@ func (p *Proxy) forward(w http.ResponseWriter, r *http.Request, u *url.URL, body
 
 const errPaymentTunnel = "payment APIs need --mitm so Echo can tell test from live keys"
 
+// tunnelRefusal says why a tunnel to a payment API was refused: a live
+// host (Braintree's, Square's) is refused with MITM too, so --mitm is no
+// fix there; a host that serves test and live keys (Stripe, Mollie) needs
+// --mitm for Echo to read the key.
+func tunnelRefusal(host string) string {
+	for _, g := range recognize.PaymentGateways() {
+		if g.IsLive(host) {
+			return "a live " + g.Name + " API is never reached from staging; use the " + g.Name + " sandbox"
+		}
+	}
+	return errPaymentTunnel
+}
+
 // blindPayment reports whether host is a payment API that a blind tunnel
 // could reach with live keys: one whose recognizer refuses a call it can't
-// see inside (Stripe, live PayPal; not PayPal's sandbox hosts).
+// see inside (Stripe, Mollie and Razorpay by key; the live hosts of
+// PayPal, Braintree, Square, Adyen and Authorize.net; not their sandbox
+// hosts).
 func blindPayment(host string) bool {
 	req := recognize.Request{Method: http.MethodPost, URL: &url.URL{Scheme: "https", Host: strings.ToLower(host), Path: "/"},
 		Headers: map[string]string{}}

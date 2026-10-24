@@ -30,7 +30,9 @@ import (
 //     reports them so the catcher can mark the message blocked.
 //
 // Connectors mask keys before reporting them but keep the first eight
-// characters ("sk_live_•••••"), which is all the mode check needs.
+// characters ("sk_live_•••••"), which is all the mode check needs. The
+// other gateways (Adyen, Braintree, Square, Authorize.net, Mollie,
+// Razorpay) follow the same rules in gateways.go.
 func init() {
 	register(stripe)
 	register(paypal)

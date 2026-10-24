@@ -533,33 +533,81 @@ func TestWriteFake(t *testing.T) {
 // TestPaymentTunnelsNeedMITM: a blind tunnel to a payment API could carry
 // live keys Echo can't see, so it's refused in every mode, allowlisted or
 // not. With MITM the host is intercepted instead, even when allowlisted.
+// A gateway's live host is refused as live; one host for test and live
+// keys asks for --mitm.
 func TestPaymentTunnelsNeedMITM(t *testing.T) {
+	why := map[string]string{
+		"api.stripe.com": "payment APIs need --mitm", "api.mollie.com": "payment APIs need --mitm", "api.razorpay.com": "payment APIs need --mitm",
+		"api-m.paypal.com": "a live PayPal API is never reached from staging; use the PayPal sandbox", "api.paypal.com": "a live PayPal API",
+		"api.braintreegateway.com": "a live Braintree API", "connect.squareup.com": "a live Square API",
+		"shop-Demo-checkout-live.adyenpayments.com": "a live Adyen API", "api.authorize.net": "a live Authorize.net API",
+	}
 	for _, s := range []setup{
 		{mode: catcher.Seal},
 		{mode: catcher.Observe},
-		{mode: catcher.Observe, allow: []string{"api.stripe.com", "api-m.paypal.com"}},
-		{mode: catcher.Seal, allow: []string{"*.stripe.com"}},
+		{mode: catcher.Observe, allow: []string{"api.stripe.com", "api-m.paypal.com", "api.braintreegateway.com"}},
+		{mode: catcher.Seal, allow: []string{"*.stripe.com", "*.squareup.com"}},
 	} {
 		h := newHarness(t, s)
-		for _, host := range []string{"api.stripe.com", "api-m.paypal.com", "api.paypal.com"} {
+		for host := range why {
 			req, _ := http.NewRequest(http.MethodPost, "https://"+host+"/v1/charges", strings.NewReader("amount=1000"))
 			_, err := goClient(t, h, h.bundle).Do(req) //nolint:bodyclose // fails before a body
 			if err == nil || !strings.Contains(err.Error(), "Forbidden") {
 				t.Errorf("%+v %s: err = %v, want the CONNECT refused", s, host, err)
 			}
 		}
-		ms := h.messages(t, 3)
+		ms := h.messages(t, len(why))
 		for _, m := range ms {
-			if m.Status != model.Blocked || !strings.Contains(m.Error, "payment APIs need --mitm") {
+			u, _ := url.Parse(m.URL)
+			if m.Status != model.Blocked || m.Channel != model.Payment || !strings.Contains(m.Error, why[u.Hostname()]) {
 				t.Errorf("%+v: message = %+v", s, m)
 			}
 		}
-		if len(ms) != 3 {
-			t.Errorf("%+v: %d messages, want 3", s, len(ms))
+		if len(ms) != len(why) {
+			t.Errorf("%+v: %d messages, want %d", s, len(ms), len(why))
 		}
 	}
 	if !blindPayment("API.Stripe.com") || blindPayment("api-m.sandbox.paypal.com") || blindPayment(twilioHost) {
 		t.Error("blindPayment: Stripe and live PayPal only")
+	}
+	for host, blind := range map[string]bool{
+		"api.braintreegateway.com": true, "api.sandbox.braintreegateway.com": false, "connect.squareupsandbox.com": false,
+		"checkout-test.adyen.com": false, "apitest.authorize.net": false, "api.mollie.com": true,
+	} {
+		if blindPayment(host) != blind {
+			t.Errorf("blindPayment(%s) = %v", host, !blind)
+		}
+	}
+}
+
+// TestBraintreeTunnelRefusedWhenObserving is the case a test could
+// otherwise charge a card through: observing, no MITM, a live Braintree
+// host. The CONNECT is answered 403 and recorded as blocked.
+func TestBraintreeTunnelRefusedWhenObserving(t *testing.T) {
+	h := newHarness(t, setup{mode: catcher.Observe})
+	req, _ := http.NewRequest(http.MethodPost, "https://api.braintreegateway.com/merchants/abc/transactions", strings.NewReader("<transaction/>"))
+	_, err := goClient(t, h, h.bundle).Do(req) //nolint:bodyclose // fails before a body
+	if err == nil || !strings.Contains(err.Error(), "Forbidden") {
+		t.Fatalf("err = %v, want the CONNECT refused with 403", err)
+	}
+	ms := h.messages(t, 1)
+	if len(ms) != 1 || ms[0].Provider != "braintree" || ms[0].Status != model.Blocked || ms[0].Method != http.MethodConnect {
+		t.Errorf("messages = %+v", ms)
+	}
+}
+
+// TestSandboxGatewayTunnelsPassWhenObserving: a sandbox host is a test,
+// so it's tunneled like any other host when observing.
+func TestSandboxGatewayTunnelsPassWhenObserving(t *testing.T) {
+	h := newHarness(t, setup{mode: catcher.Observe})
+	req, _ := http.NewRequest(http.MethodPost, "https://api.sandbox.braintreegateway.com/merchants/abc/transactions", strings.NewReader("<transaction/>"))
+	_, err := goClient(t, h, h.bundle).Do(req) //nolint:bodyclose // fails before a body
+	if err != nil && strings.Contains(err.Error(), "Forbidden") {
+		t.Fatalf("sandbox tunnel refused: %v", err)
+	}
+	ms := h.messages(t, 1)
+	if len(ms) != 1 || ms[0].Provider != "braintree" || ms[0].Status == model.Blocked {
+		t.Errorf("messages = %+v", ms)
 	}
 }
 
@@ -643,5 +691,26 @@ func TestShutdownStopsListenerAndTunnels(t *testing.T) {
 	}
 	if _, err := br.ReadByte(); err == nil {
 		t.Error("the tunnel is still open")
+	}
+}
+
+// TestLiveGatewayInterceptedWithMITM: with MITM a live gateway host is
+// intercepted and answered with the gateway's own error, observing and
+// allowlisted.
+func TestLiveGatewayInterceptedWithMITM(t *testing.T) {
+	h := newHarness(t, setup{mode: catcher.Observe, mitm: true, allow: []string{"connect.squareup.com"}})
+	req, _ := http.NewRequest(http.MethodPost, "https://connect.squareup.com/v2/payments", strings.NewReader(`{"amount_money":{"amount":100,"currency":"USD"}}`))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := goClient(t, h, h.echoCA).Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, _ := io.ReadAll(resp.Body)
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusForbidden || !strings.Contains(string(b), "AUTHENTICATION_ERROR") {
+		t.Fatalf("got %d %s", resp.StatusCode, b)
+	}
+	if ms := h.messages(t, 1); len(ms) != 1 || ms[0].Provider != "square" || ms[0].Status != model.Blocked || h.hits.Load() != 0 {
+		t.Errorf("messages = %+v, upstream hits %d", ms, h.hits.Load())
 	}
 }

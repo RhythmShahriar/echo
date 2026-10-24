@@ -66,11 +66,11 @@ func formReq(raw string, body string, headers ...string) Request {
 func join(parts ...string) string { return strings.Join(parts, "") }
 
 func allCases() []tcase {
-	return slices.Concat(coreCases, emailCases, smsCases, chatCases, analyticsCases, pushCases, paymentCases, crmCases, mailboxCases, declaredCases())
+	return slices.Concat(coreCases, emailCases, smsCases, chatCases, analyticsCases, pushCases, paymentCases, crmCases, mailboxCases, gatewayCases(), declaredCases())
 }
 
 func allNegatives() []negative {
-	return slices.Concat(coreNegatives, emailNegatives, smsNegatives, chatNegatives, analyticsNegatives, pushNegatives, paymentNegatives, crmNegatives, mailboxNegatives, declaredNegatives())
+	return slices.Concat(coreNegatives, emailNegatives, smsNegatives, chatNegatives, analyticsNegatives, pushNegatives, paymentNegatives, crmNegatives, mailboxNegatives, gatewayNegatives, declaredNegatives())
 }
 
 func TestRecognizers(t *testing.T) {
