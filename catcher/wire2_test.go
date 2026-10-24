@@ -144,8 +144,10 @@ func TestWireVersionRejected(t *testing.T) {
 	srv := httptest.NewServer(NewServer(NewInbox(10), Config{}))
 	defer srv.Close()
 	code, body := call(t, http.MethodPost, srv.URL+"/v1/capture", "", string(f.Capture))
-	want := "this connector speaks wire 3 and this Echo speaks wire 2 at most; run: rhythm update"
-	if code != http.StatusBadRequest || strings.TrimSpace(body) != want {
+	// The connectors and the conformance stand-in fall back on these
+	// words (client.ts, EchoClient.php, echo.php): keep them.
+	want := "this connector is newer than Echo; run: rhythm update (it speaks wire 3, this Echo wire 2 at most)"
+	if code != http.StatusBadRequest || strings.TrimSpace(body) != want || !strings.Contains(body, "newer than Echo") {
 		t.Errorf("v3: %d %q, want 400 %q", code, body, want)
 	}
 	code, body = call(t, http.MethodPost, srv.URL+"/v1/capture", "", `{"v":-1,"kind":"email","source":{"via":"node"},"email":{}}`)

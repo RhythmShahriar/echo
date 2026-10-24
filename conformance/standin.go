@@ -56,8 +56,9 @@ type Scenario struct {
 	Match func(wire.Capture) bool
 }
 
-// newer is what an Echo answers a capture from a newer wire version.
-const newer = "this connector is newer than Echo; run: rhythm update"
+// newer is what an Echo answers a capture from a newer wire version:
+// the catcher's own refusal.
+const newer = catcher.Newer
 
 // Server is the strict stand-in: Echo's real catcher behind a check of
 // every capture against the wire schema.

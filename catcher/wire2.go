@@ -25,13 +25,19 @@ const (
 	wireMax = 2
 )
 
+// Newer is how Echo refuses a capture from a newer wire version. The
+// connectors fall back to the version health names when a 400 answer
+// contains "newer than Echo", so the text must keep those words; details
+// may follow it.
+const Newer = "this connector is newer than Echo; run: rhythm update"
+
 // checkVersion refuses a capture whose wire version Echo doesn't speak.
 // A missing version (0) is read as 1: the first connectors left it out
 // and Echo's own SMTP sink and proxy don't set it.
 func checkVersion(v int) error {
 	switch {
 	case v > wireMax:
-		return fmt.Errorf("this connector speaks wire %d and this Echo speaks wire %d at most; run: rhythm update", v, wireMax)
+		return fmt.Errorf("%s (it speaks wire %d, this Echo wire %d at most)", Newer, v, wireMax)
 	case v < 0:
 		return fmt.Errorf("v: %d is not a wire version: send %d to %d", v, wireMin, wireMax)
 	}
