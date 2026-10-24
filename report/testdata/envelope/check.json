@@ -1,0 +1,35 @@
+{
+  "schema": "rhythm-echo/v1",
+  "kind": "check",
+  "tool": "rhythm-echo",
+  "version": "1.0.0",
+  "complete": true,
+  "summary": {
+    "broke": 0,
+    "new": 0,
+    "changed": 0,
+    "fixed": 0,
+    "errors": 0,
+    "warnings": 1,
+    "notices": 0,
+    "actions": 0,
+    "messages": 0,
+    "failed_actions": 0
+  },
+  "verdict": "findings",
+  "data": {
+    "domain": "shop.test",
+    "org_domain": "shop.test",
+    "mx": [
+      "mx.shop.test"
+    ],
+    "issues": [
+      {
+        "check": "dns/dmarc",
+        "level": "warning",
+        "title": "No DMARC record",
+        "key": "dns/dmarc|No DMARC record"
+      }
+    ]
+  }
+}

@@ -1,0 +1,33 @@
+{
+  "schema": "rhythm-echo/v1",
+  "kind": "doctor",
+  "tool": "rhythm-echo",
+  "version": "1.0.0",
+  "complete": true,
+  "summary": {
+    "broke": 0,
+    "new": 0,
+    "changed": 0,
+    "fixed": 0,
+    "errors": 0,
+    "warnings": 1,
+    "notices": 0,
+    "actions": 0,
+    "messages": 0,
+    "failed_actions": 0
+  },
+  "verdict": "findings",
+  "data": [
+    {
+      "name": "Echo",
+      "status": "ok",
+      "detail": "listening on 127.0.0.1:8025"
+    },
+    {
+      "name": "WordPress",
+      "status": "warning",
+      "detail": "the Echo plugin isn't active",
+      "fix": "wp plugin activate rhythm-echo"
+    }
+  ]
+}

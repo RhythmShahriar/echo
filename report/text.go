@@ -17,7 +17,9 @@ import (
 	"github.com/RhythmShahriar/echo/model"
 )
 
-// JSON writes the comparison, or the run, in the rhythm-echo/v1 schema.
+// JSON writes the comparison, or the run, bare in the rhythm-echo/v1
+// schema, as run.json and comparison.json store them. Output for people
+// and scripts goes through WriteJSON, which wraps it in the Envelope.
 func JSON(w io.Writer, r Result) error {
 	enc := json.NewEncoder(w)
 	enc.SetIndent("", "  ")
