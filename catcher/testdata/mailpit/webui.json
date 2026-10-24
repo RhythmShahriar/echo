@@ -1,0 +1,16 @@
+{
+  "Label": "",
+  "MessageRelay": {
+    "Enabled": false,
+    "SMTPServer": "",
+    "ReturnPath": "",
+    "AllowedRecipients": "",
+    "BlockedRecipients": "",
+    "OverrideFrom": "",
+    "PreserveMessageIDs": false
+  },
+  "SpamAssassin": false,
+  "ChaosEnabled": false,
+  "DuplicatesIgnored": false,
+  "HideDeleteAllButton": false
+}

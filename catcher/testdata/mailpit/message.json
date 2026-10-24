@@ -1,0 +1,43 @@
+{
+  "ID": "iAfZVVe2UQfNSG5BAjgYwa",
+  "MessageID": "12345.67890@localhost",
+  "From": {"Name": "John Doe", "Address": "john@example.com"},
+  "To": [{"Name": "Jane Smith", "Address": "jane@example.com"}],
+  "Cc": [{"Name": "", "Address": "audit@example.com"}],
+  "Bcc": [],
+  "ReplyTo": [{"Name": "Support", "Address": "support@example.com"}],
+  "ReturnPath": "bounces@example.com",
+  "Subject": "Message subject",
+  "ListUnsubscribe": {
+    "Header": "<mailto:unsubscribe@example.com>, <https://example.com/unsubscribe>",
+    "Links": ["mailto:unsubscribe@example.com", "https://example.com/unsubscribe"],
+    "Errors": "",
+    "HeaderPost": "List-Unsubscribe=One-Click"
+  },
+  "Date": "2024-04-01T10:11:12.345+11:00",
+  "Tags": [],
+  "Username": "",
+  "Text": "Plain text MIME part of the email",
+  "HTML": "<p>HTML MIME part (if exists)</p>",
+  "Size": 6144,
+  "Inline": [
+    {
+      "PartID": "1.2",
+      "FileName": "logo.png",
+      "ContentType": "image/png",
+      "ContentID": "logo@example.com",
+      "Size": 2048,
+      "Checksums": {"MD5": "d41d8cd98f00b204e9800998ecf8427e", "SHA1": "da39a3ee5e6b4b0d3255bfef95601890afd80709", "SHA256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"}
+    }
+  ],
+  "Attachments": [
+    {
+      "PartID": "2",
+      "FileName": "invoice.pdf",
+      "ContentType": "application/pdf",
+      "ContentID": "",
+      "Size": 4096,
+      "Checksums": {"MD5": "d41d8cd98f00b204e9800998ecf8427e", "SHA1": "da39a3ee5e6b4b0d3255bfef95601890afd80709", "SHA256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"}
+    }
+  ]
+}

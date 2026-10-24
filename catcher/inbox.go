@@ -43,10 +43,11 @@ type Inbox struct {
 	// found holds the codes and links read from each message before it
 	// was masked, by message ID. It lives in memory only, never with the
 	// messages, so nothing that stores or reports them sees it.
-	found map[string]found
-	seq   int
-	onAdd func(model.Message)
-	check func(model.Message) []model.Issue // fills Issues; nil leaves them alone
+	found   map[string]found
+	seq     int
+	deleted int // messages removed or dropped since the inbox was made, for Mailpit's info
+	onAdd   func(model.Message)
+	check   func(model.Message) []model.Issue // fills Issues; nil leaves them alone
 	// after is time.After. Tests swap it for a clock they move by hand, so
 	// Wait's quiet period doesn't depend on how fast the machine is.
 	after func(time.Duration) <-chan time.Time
@@ -517,6 +518,7 @@ func (in *Inbox) forget(e *entry) {
 		delete(in.index, e.m.ID)
 		delete(in.found, e.m.ID)
 	}
+	in.deleted++
 	in.write(opDelete, e)
 	in.record(EventDelete, e.m.ID)
 }

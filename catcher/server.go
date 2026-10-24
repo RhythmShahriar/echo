@@ -82,6 +82,7 @@ type Server struct {
 	mux     *http.ServeMux
 	handler http.Handler // mux behind Protect and the token check
 	warned  sync.Map     // site hosts already warned about
+	pit     mailpitState // what the Mailpit routes keep beside the inbox
 }
 
 // NewServer returns the API over inbox.
@@ -104,7 +105,7 @@ func NewServer(inbox *Inbox, cfg Config) *Server {
 	if cfg.Warn == nil {
 		cfg.Warn = func(msg string) { log.Print("echo: " + msg) }
 	}
-	s := &Server{Inbox: inbox, cfg: cfg, mux: http.NewServeMux()}
+	s := &Server{Inbox: inbox, cfg: cfg, mux: http.NewServeMux(), pit: mailpitState{started: time.Now(), read: map[string]bool{}}}
 	opts := check.Options{SiteHost: hostOnly(cfg.Site), AllowRecipients: cfg.AllowRecipients}
 	inbox.SetCheck(func(m model.Message) []model.Issue { return check.Message(m, opts) })
 	s.mux.HandleFunc("GET /v1/health", s.health)
@@ -227,6 +228,10 @@ func (s *Server) Capture(c wire.Capture) (wire.Decision, error) {
 		}
 		if c.Email == nil {
 			return wire.Decision{}, errors.New("an email capture needs email")
+		}
+		if c.Source.Via == "smtp" {
+			s.pit.smtpAccepted.Add(1)
+			s.pit.smtpBytes.Add(int64(len(c.Email.Raw)))
 		}
 		m, f := s.email(c.Email)
 		m.Run, m.Action, m.Source = run, action, src
