@@ -10,6 +10,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	iofs "io/fs"
 	"net"
 	"os"
 	"os/exec"
@@ -29,6 +30,8 @@ import (
 const installUsage = `usage: rhythm echo install <stack> [path] [flags]
   stacks: wordpress (wp), laravel, next (nextjs), node, generic (php)
   wordpress: [path] --url URL --token T --mode seal|observe --force --proxy URL --ca PATH
+             --plugin (Echo Staging Seal) --bin PATH --project DIR
+             --hub URL --site ID (the write token from RHYTHM_ECHO_WRITE_TOKEN)
              --wp-cli | --container NAME, --uninstall
   all: --url URL --token T --config FILE`
 
@@ -49,6 +52,11 @@ func cmdInstall(args []string, stdout, stderr io.Writer) int {
 	proxyURL := fs.String("proxy", "", "")
 	caPath := fs.String("ca", "", "")
 	configPath := fs.String("config", "", "")
+	plugin := fs.Bool("plugin", false, "")
+	hubURL := fs.String("hub", "", "")
+	siteID := fs.String("site", "", "")
+	bin := fs.String("bin", "", "")
+	project := fs.String("project", "", "")
 	pos, err := cli.ParseInterspersed(fs, args)
 	if errors.Is(err, flag.ErrHelp) {
 		fmt.Fprintln(stdout, installUsage)
@@ -93,7 +101,19 @@ func cmdInstall(args []string, stdout, stderr io.Writer) int {
 		if len(pos) > 1 {
 			target = pos[1]
 		}
-		s := wordpress.Settings{URL: echoURL, Token: tok, Mode: *mode, Force: *force, Proxy: *proxyURL, CA: *caPath}
+		s := wordpress.Settings{URL: echoURL, Token: tok, Mode: *mode, Force: *force, Proxy: *proxyURL, CA: *caPath,
+			SiteID: *siteID, Bin: *bin, Project: *project}
+		if err := hubSettings(&s, *hubURL, *url, *token); err != nil {
+			fmt.Fprintln(stderr, "rhythm echo:", err)
+			return exitUsage
+		}
+		if *plugin {
+			if *wpcli || *container != "" {
+				fmt.Fprintln(stderr, "rhythm echo: --plugin writes Echo Staging Seal into a WordPress on disk; leave --wp-cli and --container off")
+				return exitUsage
+			}
+			return installSeal(target, s, *uninstall, stdout, stderr)
+		}
 		return installWordPress(target, s, *wpcli, *container, *uninstall, stdout, stderr)
 	case "laravel":
 		fmt.Fprintf(stdout, `Laravel: add the package and point it at Echo.
@@ -323,6 +343,67 @@ func installWordPress(target string, s wordpress.Settings, wpcli bool, container
 	if container != "" && (strings.Contains(s.URL, "127.0.0.1") || strings.Contains(s.URL, "localhost")) {
 		fmt.Fprintln(stdout, "  In Docker, 127.0.0.1 and localhost are the container itself: reinstall with --url http://host.docker.internal:8025")
 	}
+	return exitOK
+}
+
+// siteIDPattern is what a hub accepts as a site's ID (hub.Sites).
+var siteIDPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$`)
+
+// hubSettings points s at an agency hub: --hub is its URL and --site the
+// site's ID there, and the site sends with its own write token, read from
+// RHYTHM_ECHO_WRITE_TOKEN so it doesn't show in ps. Without --hub only
+// --site is checked.
+func hubSettings(s *wordpress.Settings, hubURL, urlFlag, tokenFlag string) error {
+	if s.SiteID != "" && !siteIDPattern.MatchString(s.SiteID) {
+		return fmt.Errorf("--site %q: use letters, digits, dots, dashes and underscores", s.SiteID)
+	}
+	if hubURL == "" {
+		return nil
+	}
+	switch {
+	case urlFlag != "":
+		return errors.New("pick --hub or --url, not both: --hub is where the site reports")
+	case tokenFlag != "":
+		return errors.New("--hub sends the site's write token, not --token: set " + writeTokenEnv)
+	case s.SiteID == "":
+		return errors.New("--hub needs --site, the site's ID in the hub's sites.yaml")
+	case os.Getenv(writeTokenEnv) == "":
+		return errors.New("--hub needs the site's write token: set " + writeTokenEnv)
+	case !strings.HasPrefix(hubURL, "https://") && !strings.HasPrefix(hubURL, "http://"):
+		return fmt.Errorf("--hub %q: want the hub's URL, e.g. https://hub.agency.example:8025", hubURL)
+	}
+	s.URL, s.Token, s.WriteToken = hubURL, "", os.Getenv(writeTokenEnv)
+	return nil
+}
+
+// installSeal is install wordpress --plugin: Echo Staging Seal, the
+// WordPress.org plugin, written on disk with its settings.
+func installSeal(target string, s wordpress.Settings, uninstall bool, stdout, stderr io.Writer) int {
+	if _, err := wordpress.ContentDir(target); err != nil {
+		fmt.Fprintln(stderr, "rhythm echo:", err)
+		return exitUsage
+	}
+	if uninstall {
+		if err := wordpress.UninstallPlugin(target); err != nil {
+			if errors.Is(err, iofs.ErrNotExist) {
+				fmt.Fprintln(stdout, "Echo Staging Seal isn't installed there.")
+				return exitOK
+			}
+			fmt.Fprintln(stderr, "rhythm echo:", err)
+			return exitError
+		}
+		fmt.Fprintln(stdout, "Removed Echo Staging Seal. Deactivate it first next time: wp plugin deactivate "+wordpress.PluginSlug)
+		return exitOK
+	}
+	if err := wordpress.InstallPlugin(target, s); err != nil {
+		fmt.Fprintln(stderr, "rhythm echo:", err)
+		return exitError
+	}
+	fmt.Fprintf(stdout, "Installed Echo Staging Seal (wp-content/plugins/%s), reporting to %s.\n", wordpress.PluginSlug, s.URL)
+	if s.SiteID != "" {
+		fmt.Fprintf(stdout, "  It names itself %s in every capture.\n", s.SiteID)
+	}
+	fmt.Fprintf(stdout, "  Activate it: wp plugin activate %s (or in Plugins in wp-admin).\n", wordpress.PluginSlug)
 	return exitOK
 }
 

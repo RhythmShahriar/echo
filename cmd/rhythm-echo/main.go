@@ -250,6 +250,12 @@ Install (install <stack>):
       --wp-cli               wordpress: install through WP-CLI (wp eval-file)
       --container <name>     wordpress: install with WP-CLI inside this Docker container
       --uninstall            wordpress: remove the connector
+      --plugin               wordpress: install Echo Staging Seal, the WordPress.org plugin
+      --hub <url>            wordpress: report to an agency hub, with --site and the site's
+                             write token in RHYTHM_ECHO_WRITE_TOKEN
+      --site <id>            wordpress: the site's ID, named in every capture
+      --bin <path>           wordpress: the rhythm-echo the plugin's buttons run
+      --project <dir>        wordpress: the folder with .echo/config.yaml they run in
 
 Messages (watch, ls, clear):
       --channel <c>          only email, sms, whatsapp, webhook, chat, analytics, payment,
