@@ -9,10 +9,12 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io/fs"
 	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -148,6 +150,42 @@ func TestSnapshotCompareThroughTheCLI(t *testing.T) {
 	}
 	if code, out, _ := runCLI(t, "ls", "--url", srv.URL, "--plain"); code != 0 || !strings.Contains(out, "admin@shop.test") {
 		t.Errorf("ls:\n%s", out)
+	}
+	if html, _ := filepath.Glob(".echo/*/*/report.html"); len(html) < 2 {
+		t.Errorf("want a report.html for the snapshot and each compare, got %v", html)
+	}
+	assertPrivate(t, "result.json", ".echo/runs", ".echo/snapshots")
+}
+
+// assertPrivate fails for any file under paths that others can read:
+// reports and runs hold the captured messages themselves.
+func assertPrivate(t *testing.T, paths ...string) {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		return // no Unix modes
+	}
+	seen := 0
+	for _, root := range paths {
+		err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+			if err != nil || d.IsDir() {
+				return err
+			}
+			info, err := d.Info()
+			if err != nil {
+				return err
+			}
+			seen++
+			if mode := info.Mode().Perm(); mode != 0o600 {
+				t.Errorf("%s: mode %o, want 600", path, mode)
+			}
+			return nil
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	if seen == 0 {
+		t.Errorf("no files under %v", paths)
 	}
 }
 

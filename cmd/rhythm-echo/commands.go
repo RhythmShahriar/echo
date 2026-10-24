@@ -673,7 +673,8 @@ func cmdInit(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stderr, "rhythm echo: %s already exists (--force replaces it)\n", path)
 		return exitUsage
 	}
-	if err := os.MkdirAll(config.Dir, 0o750); err != nil {
+	// .echo/ will hold captured messages, so only its owner may open it.
+	if err := os.MkdirAll(config.Dir, 0o700); err != nil {
 		fmt.Fprintln(stderr, "rhythm echo:", err)
 		return exitError
 	}
@@ -700,8 +701,11 @@ func jsonOut(s *session, v any) int {
 	return exitOK
 }
 
+// writeFile writes a report atomically, readable only by its owner: a
+// report holds the captured messages themselves (recipients, bodies), so
+// it gets the same 0600 as run.json and a new folder gets 0700.
 func writeFile(path string, write func(io.Writer) error) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return err
 	}
 	tmp, err := os.CreateTemp(filepath.Dir(path), ".report-*")
@@ -713,10 +717,8 @@ func writeFile(path string, write func(io.Writer) error) error {
 		_ = tmp.Close()
 		return err
 	}
+	// CreateTemp made the file 0600, which the rename keeps.
 	if err := tmp.Close(); err != nil {
-		return err
-	}
-	if err := os.Chmod(tmp.Name(), 0o644); err != nil { //nolint:gosec // a report meant to be read
 		return err
 	}
 	return os.Rename(tmp.Name(), path)
