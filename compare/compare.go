@@ -36,6 +36,9 @@ func Compare(before, after *model.Run, beforeDir, afterDir, version string) *mod
 			for _, c := range Messages(nil, a.Messages) {
 				g.add(c, a.Label)
 			}
+			for _, c := range Issues(nil, a.Issues) {
+				g.add(c, a.Label)
+			}
 			continue
 		}
 		out.Actions++

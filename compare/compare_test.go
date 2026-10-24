@@ -232,3 +232,14 @@ func TestMovedZapierHook(t *testing.T) {
 		}
 	}
 }
+
+func TestNewActionIssues(t *testing.T) {
+	bad := model.Issue{Check: "content/placeholder", Level: model.Error, Title: "Unfilled placeholder {first_name}"}
+	bad.Identify()
+	after := run(model.Action{ID: "new", Label: "Sign-up", Messages: []model.Message{email("x@shop.com", "Hi {first_name}", "x")},
+		Issues: []model.Issue{bad}})
+	got := titles(Compare(run(), after, "", "", "test").Changes)
+	if !strings.Contains(got, "broke: Unfilled placeholder {first_name}") {
+		t.Errorf("a new action's problems must be reported:\n%s", got)
+	}
+}
