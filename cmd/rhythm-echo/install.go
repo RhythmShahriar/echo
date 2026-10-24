@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"strconv"
 	"strings"
 
 	"github.com/RhythmShahriar/echo/config"
@@ -137,6 +138,10 @@ Express/Fastify: app.use(echoMiddleware()) ties messages to the request that cau
 `, echoURL, tokenLine(tok))
 		return exitOK
 	case "generic", "php":
+		if err := checkSMTPAddr(smtpAddr); err != nil {
+			fmt.Fprintln(stderr, "rhythm echo:", err)
+			return exitUsage
+		}
 		smtpLogin := "any username and password"
 		if !loopback(smtpAddr) {
 			smtpLogin = "any username, Echo's token as the password"
@@ -167,17 +172,27 @@ internal Docker network or behind a firewall, with Echo as its only way out.
 
 // sendmailLines says how to point PHP's mail() at the shim. The shim
 // finds a sink on 127.0.0.1:1025 by itself. php-fpm runs sendmail_path
-// with a bare environment, so any other address goes in the command: PHP runs it through sh -c, which takes the VAR=value
-// prefix. Windows has no sh, so there the variable is set on its own.
+// with a bare environment, so any other address goes in the command:
+// PHP runs it through sh -c, which takes the VAR=value prefix. That
+// also means the binary's path is shell-quoted, or a space in it (a
+// macOS home folder) would split it. Windows has no sh, so there the
+// variable is set on its own and a path with a space gets a hint.
+// smtpAddr must have passed checkSMTPAddr.
 func sendmailLines(smtpAddr, bin, goos string, needsToken bool) string {
 	const pad = "                    "
 	var b strings.Builder
+	if goos != "windows" {
+		bin = shellQuote(bin)
+	}
 	switch {
-	case smtpAddr == sendmail.DefaultSMTP:
+	case smtpAddr == sendmail.DefaultSMTP || goos == "windows":
 		fmt.Fprintf(&b, "  Mail (PHP):       sendmail_path = \"%s sendmail -t -i\"   (php.ini or php-fpm pool)\n", bin)
-	case goos == "windows":
-		fmt.Fprintf(&b, "  Mail (PHP):       sendmail_path = \"%s sendmail -t -i\"   (php.ini or php-fpm pool)\n", bin)
-		fmt.Fprintf(&b, "%sand set %s=%s in the environment PHP runs in\n", pad, sendmail.EnvSMTP, smtpAddr)
+		if goos == "windows" && strings.ContainsAny(bin, " \t") {
+			fmt.Fprintf(&b, "%sthe path has a space: copy rhythm-echo to a folder without one\n", pad)
+		}
+		if smtpAddr != sendmail.DefaultSMTP {
+			fmt.Fprintf(&b, "%sand set %s=%s in the environment PHP runs in\n", pad, sendmail.EnvSMTP, smtpAddr)
+		}
 	default:
 		fmt.Fprintf(&b, "  Mail (PHP):       sendmail_path = \"%s=%s %s sendmail -t -i\"\n", sendmail.EnvSMTP, smtpAddr, bin)
 		fmt.Fprintf(&b, "%s(php.ini or php-fpm pool; Echo's SMTP sink isn't on %s)\n", pad, sendmail.DefaultSMTP)
@@ -187,6 +202,40 @@ func sendmailLines(smtpAddr, bin, goos string, needsToken bool) string {
 		fmt.Fprintf(&b, "%sthe sink asks for Echo's token: set %s in the same environment\n", pad, sendmail.EnvToken)
 	}
 	return b.String()
+}
+
+// smtpHostChars are the characters a host name or IP address may hold.
+// install prints the address into a command line, so anything else (a
+// ; or a space) is refused rather than handed to sh.
+var smtpHostChars = regexp.MustCompile(`^[A-Za-z0-9._:-]+$`)
+
+// checkSMTPAddr checks the config's smtp: is a host:port before install
+// prints it into a command PHP runs through sh -c.
+func checkSMTPAddr(addr string) error {
+	host, port, err := net.SplitHostPort(addr)
+	if err == nil && !smtpHostChars.MatchString(host) {
+		err = errors.New("the host holds characters a host name can't")
+	}
+	if n, perr := strconv.Atoi(port); err == nil && (perr != nil || n < 1 || n > 65535) {
+		err = errors.New("the port isn't a number from 1 to 65535")
+	}
+	if err != nil {
+		return cli.Usagef("smtp: %q in the config isn't a host:port such as 127.0.0.1:1025 (%v)", addr, err)
+	}
+	return nil
+}
+
+// shellSafe matches a word sh reads as it is.
+var shellSafe = regexp.MustCompile(`^[A-Za-z0-9_./:@%+=,-]+$`)
+
+// shellQuote quotes s for sh when it holds anything but the characters
+// a path is usually made of, so the line stays readable in the common
+// case. A ' inside is written as '\''.
+func shellQuote(s string) string {
+	if s != "" && shellSafe.MatchString(s) {
+		return s
+	}
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
 
 func installWordPress(target string, s wordpress.Settings, wpcli bool, container string, uninstall bool, stdout, stderr io.Writer) int {

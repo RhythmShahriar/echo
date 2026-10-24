@@ -69,6 +69,23 @@ func TestInstallInstructions(t *testing.T) {
 	}
 }
 
+func TestInstallGenericRefusesABadSMTPAddress(t *testing.T) {
+	t.Chdir(t.TempDir())
+	for _, smtp := range []string{"127.0.0.1:20465; rm -rf x", "127.0.0.1", "127.0.0.1:0", "127.0.0.1:99999", "$(id):1025"} {
+		cfg := filepath.Join(t.TempDir(), "echo.yaml")
+		_ = os.WriteFile(cfg, []byte("smtp: \""+smtp+"\"\n"), 0o600)
+		code, out, errOut := runCLI(t, "install", "generic", "--config", cfg)
+		if code != exitUsage || out != "" || !strings.Contains(errOut, "isn't a host:port such as 127.0.0.1:1025") {
+			t.Errorf("smtp: %q: %d %q\n%s", smtp, code, errOut, out)
+		}
+	}
+	for _, smtp := range []string{"127.0.0.1:20465", "[::1]:20465", "mail.staging.test:2525"} {
+		if err := checkSMTPAddr(smtp); err != nil {
+			t.Errorf("%s: %v", smtp, err)
+		}
+	}
+}
+
 func TestInstallUsageAndConfig(t *testing.T) {
 	t.Chdir(t.TempDir())
 	for _, args := range [][]string{
@@ -220,6 +237,14 @@ func TestInstallGenericNamesAnOtherSink(t *testing.T) {
 	win := sendmailLines("127.0.0.1:2525", `C:\echo\rhythm-echo.exe`, "windows", false)
 	if strings.Contains(win, "RHYTHM_ECHO_SMTP=127.0.0.1:2525 C:") || !strings.Contains(win, "set RHYTHM_ECHO_SMTP=127.0.0.1:2525 in the environment") {
 		t.Errorf("windows has no sh -c, so no prefix:\n%s", win)
+	}
+	if spaced := sendmailLines("127.0.0.1:2525", "/Users/a b/it's/rhythm-echo", "darwin", false); !strings.Contains(spaced,
+		`sendmail_path = "RHYTHM_ECHO_SMTP=127.0.0.1:2525 '/Users/a b/it'\''s/rhythm-echo' sendmail -t -i"`) {
+		t.Errorf("a path with a space or quote isn't shell-quoted:\n%s", spaced)
+	}
+	if spaced := sendmailLines("127.0.0.1:1025", `C:\Program Files\rhythm-echo.exe`, "windows", false); !strings.Contains(spaced, "copy rhythm-echo to a folder without one") ||
+		strings.Contains(spaced, "RHYTHM_ECHO_SMTP") {
+		t.Errorf("windows: a path with a space gets a hint:\n%s", spaced)
 	}
 	if remote := sendmailLines("10.0.0.5:1025", "/bin/rhythm-echo", "linux", true); !strings.Contains(remote, "set RHYTHM_ECHO_TOKEN") {
 		t.Errorf("a sink beyond loopback asks for the token:\n%s", remote)
