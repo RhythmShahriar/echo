@@ -101,18 +101,17 @@ func cmdCheck(s *session) int {
 		// finding, so --fail-on has no say in it.
 		issue := pr.issue()
 		rep.Issues = []model.Issue{issue}
-		if s.o.json {
-			_ = jsonOut(s, unreachableReport{Report: rep, Unreachable: true, Resolver: s.o.resolver})
+		if s.format == "json" {
+			if err := s.writeJSON(unreachableReport{Report: rep, Unreachable: true, Resolver: s.o.resolver}); err != nil {
+				return s.fail(err)
+			}
 			return exitError
 		}
 		fmt.Fprintf(s.stderr, "rhythm echo: %s (%s)\n  %s\n", issue.Title, issue.Detail, issue.Fix)
 		return exitError
 	}
-	if s.o.json {
-		return jsonOut(s, rep)
-	}
 	s.view.Step("Records", deliverySummary(rep))
-	return s.issues(domain, rep.Issues)
+	return s.issues(domain, rep.Issues, rep)
 }
 
 // dnsOptions are the DNS check settings from --resolver and
@@ -318,10 +317,7 @@ func cmdHeaders(s *session) int {
 		cancel()
 		issues = append(issues, rep.Issues...)
 	}
-	if s.o.json {
-		r.Issues = issues
-		return jsonOut(s, r)
-	}
+	r.Issues = issues
 	s.view.Header(version, args[0])
 	s.view.Step("From", r.From)
 	s.view.Step("Sent by", firstNonEmpty(providerLabel(r.Provider), "unknown service"))
@@ -335,25 +331,46 @@ func cmdHeaders(s *session) int {
 	if args[0] == "-" {
 		label = "the message"
 	}
-	return s.issues(label, issues)
+	return s.issues(label, issues, r)
 }
 
-// issues prints issues as a run would and picks the exit code.
-func (s *session) issues(title string, is []model.Issue) int {
+// issues prints issues as a run would and picks the exit code. A JSON
+// report is v, the command's own result, to stdout or -o.
+func (s *session) issues(title string, is []model.Issue, v any) int {
 	if err := s.checkFailOn(false); err != nil {
 		return s.fail(err)
 	}
 	run := &model.Run{Schema: model.Schema, Tool: "rhythm-echo", Version: version, Mode: "check", Started: time.Now(),
 		Actions: []model.Action{{ID: "check", Label: title, Issues: is}}}
 	res := report.Result{Run: run}
-	if s.format != "" && s.format != "json" {
+	switch s.format {
+	case "":
+		s.view.Summary(res, "")
+	case "json":
+		if err := s.writeJSON(v); err != nil {
+			return s.fail(err)
+		}
+	default:
 		return s.finish(res, "")
 	}
-	s.view.Summary(res, "")
-	if report.FailOn(res, s.o.failOn) {
+	if s.o.failOn != failOnNone && report.FailOn(res, s.o.failOn) {
 		return exitFindings
 	}
 	return exitOK
+}
+
+// writeJSON writes v as JSON to the -o file, or to stdout.
+func (s *session) writeJSON(v any) error {
+	if s.o.output == "" {
+		return report.JSONValue(s.stdout, v)
+	}
+	if err := writeFile(s.o.output, func(w io.Writer) error { return report.JSONValue(w, v) }); err != nil {
+		return err
+	}
+	if !s.o.quiet {
+		fmt.Fprintf(s.stderr, "Report written to %s\n", s.o.output)
+	}
+	return nil
 }
 
 // cmdReplay sends a signed test webhook to a staging site, with Echo
