@@ -45,6 +45,19 @@ describe('maskHeader', () => {
     expect(maskHeader('proxy-authorization', 'opaque')).toBe('•••••');
   });
 
+  it('decodes Basic without Buffer, as on the Edge runtime', () => {
+    const basic = `Basic ${b64('sk_test_abcdefghijkl:')}`;
+    const g = globalThis as { Buffer?: unknown };
+    const saved = g.Buffer;
+    delete g.Buffer;
+    try {
+      expect(maskHeader('authorization', basic)).toBe('Basic sk_test_•••••');
+      expect(maskHeader('authorization', 'Basic not*base64!')).toBe('Basic •••••');
+    } finally {
+      g.Buffer = saved;
+    }
+  });
+
   it('leaves an empty value empty', () => {
     expect(maskHeader('x-auth-token', '')).toBe('');
     expect(mask('')).toBe('');

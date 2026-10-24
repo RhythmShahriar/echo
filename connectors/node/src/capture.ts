@@ -72,11 +72,27 @@ export function maskHeader(name: string, v: string): string {
   const scheme = m[1]!;
   const cred = m[2]!;
   if (scheme.toLowerCase() === 'basic') {
-    const plain = Buffer.from(cred, 'base64').toString('utf8');
-    const colon = plain.indexOf(':');
-    return `${scheme} ${mask(colon >= 0 ? plain.slice(0, colon) : cred)}`;
+    const plain = base64Text(cred);
+    const colon = plain?.indexOf(':') ?? -1;
+    return `${scheme} ${mask(plain !== null && colon >= 0 ? plain.slice(0, colon) : cred)}`;
   }
   return `${scheme} ${mask(cred)}`;
+}
+
+/**
+ * base64Text decodes a Basic credential, or gives null when it is not
+ * base64. It uses atob and TextDecoder rather than Buffer, which the Edge
+ * runtime does not have; this file runs there under the fetch hook.
+ */
+function base64Text(v: string): string | null {
+  try {
+    const bin = atob(v);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return new TextDecoder('utf-8', { fatal: false }).decode(bytes);
+  } catch {
+    return null;
+  }
 }
 
 /** maskHeaders lowercases names and hides credentials before they leave the process. */
