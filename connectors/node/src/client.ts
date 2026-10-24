@@ -8,6 +8,14 @@
 import { state, warnOnce } from './state.js';
 import { downgrade, TOKEN_HEADER, WIRE_MIN_VERSION, WIRE_VERSION, type Capture, type Decision } from './wire.js';
 
+/**
+ * WIRE_RECHECK_MS is how long an older wire version is kept before the
+ * newest is tried again. A long-running server outlives an Echo upgrade
+ * and would otherwise keep dropping what the older wire lacks. WordPress
+ * re-checks hourly too.
+ */
+export const WIRE_RECHECK_MS = 60 * 60 * 1000;
+
 export async function send(c: Omit<Capture, 'v'>): Promise<Decision | null> {
   const s = state();
   const cfg = s.cfg;
@@ -24,6 +32,10 @@ export async function send(c: Omit<Capture, 'v'>): Promise<Decision | null> {
       // keep Next.js's fetch cache out of it if a patched fetch is underneath
       cache: 'no-store',
     });
+  if (s.wire !== undefined && Date.now() - (s.wireAt ?? 0) >= WIRE_RECHECK_MS) {
+    delete s.wire;
+    delete s.wireAt;
+  }
   try {
     let res = await post(s.wire ?? WIRE_VERSION);
     if (!res.ok) {
@@ -34,6 +46,7 @@ export async function send(c: Omit<Capture, 'v'>): Promise<Decision | null> {
         const older = await echoWire(f, headers, cfg.url, cfg.timeout);
         if (older !== null && older >= WIRE_MIN_VERSION && older < WIRE_VERSION) {
           s.wire = older;
+          s.wireAt = Date.now();
           warnOnce('wire', `Echo at ${cfg.url} speaks wire ${older}: sending that (rhythm update gets a newer Echo)`);
           res = await post(older);
           text = res.ok ? '' : (await res.text().catch(() => '')).trim().slice(0, 200);

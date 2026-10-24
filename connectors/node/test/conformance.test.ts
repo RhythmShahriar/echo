@@ -11,6 +11,7 @@ import type { AddressInfo } from 'node:net';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
+import { WIRE_RECHECK_MS } from '../src/client.js';
 import { register } from '../src/index.js';
 import { state } from '../src/state.js';
 import { downgrade, type Capture } from '../src/wire.js';
@@ -123,6 +124,35 @@ describe('an Echo that speaks wire 1', () => {
     expect(echo.invalid).toEqual([]);
     const warns = log.lines.filter((l) => l.includes('speaks wire 1'));
     expect(warns).toEqual([`[rhythm-echo] Echo at ${echo.url} speaks wire 1: sending that (rhythm update gets a newer Echo)`]);
+  });
+
+  it('tries the newest wire again after an hour, so an upgraded Echo gets it', async () => {
+    const s = state();
+    expect(s.wire).toBe(1);
+    echo.wire = 2;
+    try {
+      // Within the hour the older version stays.
+      await fetch(`${api.url}/kept`);
+      expect(echo.captures.at(-1)?.v).toBe(1);
+      s.wireAt = Date.now() - WIRE_RECHECK_MS;
+      await fetch(`${api.url}/upgraded`);
+      expect(echo.captures.at(-1)?.v).toBe(2);
+      expect(s.wire).toBeUndefined();
+    } finally {
+      echo.wire = 1;
+    }
+  });
+
+  it('falls back again when the hour is up and Echo is still older', async () => {
+    const s = state();
+    await fetch(`${api.url}/again`);
+    expect(s.wire).toBe(1);
+    s.wireAt = Date.now() - WIRE_RECHECK_MS;
+    const before = echo.captures.length;
+    expect((await fetch(`${api.url}/still`)).status).toBe(200);
+    expect(echo.captures.slice(before).map((c) => c.v)).toEqual([1]);
+    expect(s.wire).toBe(1);
+    expect(echo.invalid).toEqual([]);
   });
 
   it('asks again when pointed at another Echo', async () => {

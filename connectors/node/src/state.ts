@@ -39,6 +39,8 @@ export interface State {
   mode: string;
   /** The wire version Echo speaks, once it refused a newer one; unset means the newest. */
   wire?: number;
+  /** When wire was learned (Date.now()), so an upgraded Echo gets the newest version again. */
+  wireAt?: number;
   origFetch?: typeof fetch;
   patched: Set<string>;
   als?: ALS<Context>;
