@@ -221,7 +221,7 @@ func formatFromExt(path string) string {
 // tokenFlagWarning is printed when --token is given on the command line,
 // where any local user can read it with ps. The environment variable is
 // only visible to the same user (and root).
-const tokenFlagWarning = "rhythm echo: --token shows in ps to every user on this machine; set RHYTHM_ECHO_TOKEN instead"
+const tokenFlagWarning = "rhythm echo: --token shows in ps to every user on this machine; set RHYTHM_ECHO_TOKEN instead" //nolint:gosec // a message about tokens, not one
 
 // warnTokenFlag prints tokenFlagWarning when the token came from the flag.
 func warnTokenFlag(stderr io.Writer, token string, quiet bool) {
