@@ -4,11 +4,13 @@
 package check
 
 import (
+	"errors"
 	"regexp"
 	"slices"
 	"strings"
 	"testing"
 
+	"github.com/RhythmShahriar/echo/compat"
 	"github.com/RhythmShahriar/echo/model"
 )
 
@@ -71,6 +73,11 @@ var fixtures = map[string]ruleFixture{
 	})},
 	"content/secret":      {shop, hook(func(m *model.Message) { m.Body = `{"api_key":"ab•••••"}` }), hook(nil)},
 	"seal/real-recipient": {shop, mail(func(m *model.Message) { m.Status = model.Sent; m.To = []string{"jane@gmail.com"} }), mail(func(m *model.Message) { m.Status = model.Sent })},
+	"compat/html": {shop, mail(func(m *model.Message) { m.HTML = `<div style="display: grid">Your order</div>` }),
+		mail(func(m *model.Message) { m.HTML = `<table><tr><td style="color: #333">Your order</td></tr></table>` })},
+	"compat/spam": {shop, mail(func(m *model.Message) {
+		m.Headers = map[string]string{SpamHeader: SpamValue(compat.SpamResult{Score: 6.2, Threshold: 5, Spam: true, Rules: []string{"GTUBE"}}, nil)}
+	}), mail(nil)},
 }
 
 func checksOf(m model.Message, o Options) []string {
@@ -247,5 +254,29 @@ func TestChecksOverrideLevelsAndTurnRulesOff(t *testing.T) {
 	}
 	if levels["content/placeholder"] != model.Warning || levels["brand/rival"] != model.Error {
 		t.Errorf("levels: %v", levels)
+	}
+}
+
+func TestCompatIssues(t *testing.T) {
+	m := mail(func(m *model.Message) { m.HTML = "<p>a</p>\n<div style=\"display: grid\">b</div>" })
+	is := compatHTML.Run(m, shop)
+	if len(is) != 1 || !strings.HasPrefix(is[0].Title, "Email uses display: grid, which Outlook for Windows") ||
+		!strings.Contains(is[0].Detail, "line 2") || is[0].Fix == "" {
+		t.Errorf("html: %+v", is)
+	}
+	for _, c := range []struct {
+		value, title, detail string
+	}{
+		{SpamValue(compat.SpamResult{Score: 2.1, Threshold: 5, Rules: []string{"HTML_MESSAGE", "MISSING_DATE"}}, nil),
+			"SpamAssassin scores the email 2.1 of 5.0", "rules: HTML_MESSAGE, MISSING_DATE"},
+		{SpamValue(compat.SpamResult{Score: 15.2, Threshold: 5, Spam: true}, nil), "SpamAssassin calls the email spam (15.2 of 5.0)", "no rules hit"},
+		{SpamValue(compat.SpamResult{}, errors.New("spamassassin at 127.0.0.1:783: couldn't connect: refused; again")),
+			"SpamAssassin couldn't score the email", "spamassassin at 127.0.0.1:783: couldn't connect: refused, again"},
+	} {
+		m := mail(func(m *model.Message) { m.Headers = map[string]string{SpamHeader: c.value} })
+		is := compatSpam.Run(m, shop)
+		if len(is) != 1 || is[0].Title != c.title || is[0].Detail != c.detail {
+			t.Errorf("%s: %+v", c.value, is)
+		}
 	}
 }

@@ -81,6 +81,7 @@ func init() {
 		webhookJSON, webhookSignature,
 		secretInBody,
 		realRecipientRule,
+		compatHTML, compatSpam,
 	} {
 		Register(r)
 	}
