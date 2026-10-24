@@ -64,6 +64,11 @@ type Recognizer struct {
 	Fill func(r Request, m *model.Message)
 	// Fake is the sealed answer; nil gives a generic 200 {"ok":true}.
 	Fake func(r Request, m *model.Message) Fake
+	// Refuse, when set, reports that a sealed site must not get a
+	// success-shaped answer for r: a live-mode payment call. Fake then
+	// answers with the provider's own error, and the message should be
+	// counted as blocked rather than faked.
+	Refuse func(r Request) bool
 }
 
 // registry holds every recognizer, most specific first. Recognizers are
@@ -129,4 +134,9 @@ var generic = Recognizer{
 		}
 		m.To = []string{r.URL.Host + r.URL.Path}
 	},
+}
+
+// Refuses reports whether rec refuses r when sealed (see Recognizer.Refuse).
+func Refuses(rec Recognizer, r Request) bool {
+	return rec.Refuse != nil && rec.Refuse(r)
 }
