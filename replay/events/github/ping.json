@@ -1,0 +1,28 @@
+{
+  "zen": "Keep it logically awesome.",
+  "hook_id": 123456789,
+  "hook": {
+    "type": "Repository",
+    "id": 123456789,
+    "name": "web",
+    "active": true,
+    "events": [
+      "push"
+    ],
+    "config": {
+      "content_type": "json",
+      "insecure_ssl": "0",
+      "url": "https://staging.shop.example/hooks/github"
+    }
+  },
+  "repository": {
+    "id": 987654321,
+    "full_name": "example/shop",
+    "private": true
+  },
+  "sender": {
+    "login": "example-bot",
+    "id": 1000001,
+    "type": "User"
+  }
+}

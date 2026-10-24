@@ -1,0 +1,63 @@
+{
+  "id": "evt_test_1QCustFakeEvent06",
+  "object": "event",
+  "api_version": "2024-06-20",
+  "created": 1792400000,
+  "data": {
+    "object": {
+      "id": "sub_test_1QFakeSubscription01",
+      "object": "subscription",
+      "billing_cycle_anchor": 1792400000,
+      "cancel_at_period_end": true,
+      "canceled_at": null,
+      "collection_method": "charge_automatically",
+      "created": 1792400000,
+      "currency": "usd",
+      "current_period_end": 1794992000,
+      "current_period_start": 1792400000,
+      "customer": "cus_test_QFakeCustomer01",
+      "ended_at": null,
+      "items": {
+        "object": "list",
+        "data": [
+          {
+            "id": "si_test_QFakeItem01",
+            "object": "subscription_item",
+            "price": {
+              "id": "price_test_1QFakeMonthly",
+              "object": "price",
+              "currency": "usd",
+              "product": "prod_test_QFakePro",
+              "recurring": {
+                "interval": "month",
+                "interval_count": 1
+              },
+              "unit_amount": 1900,
+              "type": "recurring"
+            },
+            "quantity": 1
+          }
+        ],
+        "has_more": false,
+        "url": "/v1/subscription_items?subscription=sub_test_1QFakeSubscription01"
+      },
+      "latest_invoice": "in_test_1QFakeInvoice01",
+      "livemode": false,
+      "metadata": {
+        "plan": "pro",
+        "user_id": "42"
+      },
+      "status": "active"
+    },
+    "previous_attributes": {
+      "cancel_at_period_end": false
+    }
+  },
+  "livemode": false,
+  "pending_webhooks": 1,
+  "request": {
+    "id": "req_test_FakeRequest06",
+    "idempotency_key": "fake-idem-06"
+  },
+  "type": "customer.subscription.updated"
+}

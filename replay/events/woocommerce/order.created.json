@@ -1,0 +1,52 @@
+{
+  "id": 10234,
+  "parent_id": 0,
+  "status": "processing",
+  "currency": "USD",
+  "version": "9.3.3",
+  "prices_include_tax": false,
+  "date_created": "2026-10-20T16:10:00",
+  "discount_total": "0.00",
+  "shipping_total": "5.00",
+  "total": "49.99",
+  "total_tax": "0.00",
+  "customer_id": 42,
+  "order_key": "wc_order_FakeOrderKey01",
+  "billing": {
+    "first_name": "Jamie",
+    "last_name": "Doe",
+    "address_1": "1 Test Street",
+    "city": "Springfield",
+    "state": "IL",
+    "postcode": "12345",
+    "country": "US",
+    "email": "jamie@example.net",
+    "phone": "+15555550100"
+  },
+  "shipping": {
+    "first_name": "Jamie",
+    "last_name": "Doe",
+    "address_1": "1 Test Street",
+    "city": "Springfield",
+    "state": "IL",
+    "postcode": "12345",
+    "country": "US"
+  },
+  "payment_method": "stripe",
+  "payment_method_title": "Credit Card (Stripe)",
+  "transaction_id": "pi_test_3QFakePaymentIntent01",
+  "line_items": [
+    {
+      "id": 1,
+      "name": "Canvas Tote",
+      "product_id": 77,
+      "quantity": 1,
+      "subtotal": "44.99",
+      "total": "44.99",
+      "sku": "TOTE-1",
+      "price": 44.99
+    }
+  ],
+  "meta_data": [],
+  "set_paid": true
+}

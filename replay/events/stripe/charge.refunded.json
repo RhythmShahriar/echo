@@ -1,0 +1,62 @@
+{
+  "id": "evt_test_1QCharFakeEvent04",
+  "object": "event",
+  "api_version": "2024-06-20",
+  "created": 1792400000,
+  "data": {
+    "object": {
+      "id": "ch_test_3QFakeCharge01",
+      "object": "charge",
+      "amount": 4999,
+      "amount_captured": 4999,
+      "amount_refunded": 4999,
+      "billing_details": {
+        "email": "jamie@example.net",
+        "name": "Jamie Doe"
+      },
+      "captured": true,
+      "created": 1792396400,
+      "currency": "usd",
+      "customer": "cus_test_QFakeCustomer01",
+      "description": "Order #10234",
+      "livemode": false,
+      "metadata": {
+        "order_id": "10234",
+        "site": "staging"
+      },
+      "paid": true,
+      "payment_intent": "pi_test_3QFakePaymentIntent01",
+      "receipt_email": "jamie@example.net",
+      "refunded": true,
+      "refunds": {
+        "object": "list",
+        "data": [
+          {
+            "id": "re_test_3QFakeRefund01",
+            "object": "refund",
+            "amount": 4999,
+            "charge": "ch_test_3QFakeCharge01",
+            "created": 1792400000,
+            "currency": "usd",
+            "reason": "requested_by_customer",
+            "status": "succeeded"
+          }
+        ],
+        "has_more": false,
+        "url": "/v1/charges/ch_test_3QFakeCharge01/refunds"
+      },
+      "status": "succeeded"
+    },
+    "previous_attributes": {
+      "amount_refunded": 0,
+      "refunded": false
+    }
+  },
+  "livemode": false,
+  "pending_webhooks": 1,
+  "request": {
+    "id": "req_test_FakeRequest04",
+    "idempotency_key": "fake-idem-04"
+  },
+  "type": "charge.refunded"
+}

@@ -1,0 +1,42 @@
+{
+  "id": "evt_test_1QPaymFakeEvent02",
+  "object": "event",
+  "api_version": "2024-06-20",
+  "created": 1792400000,
+  "data": {
+    "object": {
+      "id": "pi_test_3QFakePaymentIntent01",
+      "object": "payment_intent",
+      "amount": 4999,
+      "amount_capturable": 0,
+      "amount_received": 4999,
+      "capture_method": "automatic_async",
+      "client_secret": null,
+      "confirmation_method": "automatic",
+      "created": 1792399995,
+      "currency": "usd",
+      "customer": "cus_test_QFakeCustomer01",
+      "description": "Order #10234",
+      "last_payment_error": null,
+      "latest_charge": "ch_test_3QFakeCharge01",
+      "livemode": false,
+      "metadata": {
+        "order_id": "10234",
+        "site": "staging"
+      },
+      "payment_method": "pm_test_1QFakeCardVisa",
+      "payment_method_types": [
+        "card"
+      ],
+      "receipt_email": "jamie@example.net",
+      "status": "succeeded"
+    }
+  },
+  "livemode": false,
+  "pending_webhooks": 1,
+  "request": {
+    "id": "req_test_FakeRequest02",
+    "idempotency_key": "fake-idem-02"
+  },
+  "type": "payment_intent.succeeded"
+}

@@ -1,0 +1,19 @@
+{
+  "id": "WH-FAKE-0000-0000-0000-000000000001",
+  "event_version": "1.0",
+  "create_time": "2026-10-20T16:14:07.000Z",
+  "resource_type": "capture",
+  "resource_version": "2.0",
+  "event_type": "PAYMENT.CAPTURE.COMPLETED",
+  "summary": "Payment completed for $ 49.99 USD",
+  "resource": {
+    "id": "FAKECAPTURE0000001",
+    "status": "COMPLETED",
+    "amount": {
+      "currency_code": "USD",
+      "value": "49.99"
+    },
+    "custom_id": "10234",
+    "final_capture": true
+  }
+}

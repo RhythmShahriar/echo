@@ -1,0 +1,43 @@
+{
+  "data": {
+    "backup_code_enabled": false,
+    "banned": false,
+    "created_at": 1792400000000,
+    "email_addresses": [
+      {
+        "email_address": "jamie@example.net",
+        "id": "idn_2FakeEmailIdentification01",
+        "object": "email_address",
+        "verification": {
+          "status": "verified",
+          "strategy": "email_code"
+        }
+      }
+    ],
+    "external_id": null,
+    "first_name": "Jamie",
+    "id": "user_2FakeClerkUser0000000000001",
+    "image_url": "https://img.clerk.com/fake",
+    "last_name": "Doe",
+    "last_sign_in_at": null,
+    "object": "user",
+    "password_enabled": true,
+    "primary_email_address_id": "idn_2FakeEmailIdentification01",
+    "public_metadata": {},
+    "private_metadata": {},
+    "unsafe_metadata": {},
+    "two_factor_enabled": false,
+    "updated_at": 1792400000000,
+    "username": null
+  },
+  "event_attributes": {
+    "http_request": {
+      "client_ip": "192.0.2.10",
+      "user_agent": "Mozilla/5.0 (fixture)"
+    }
+  },
+  "instance_id": "ins_2FakeClerkInstance000000001",
+  "object": "event",
+  "timestamp": 1792400000000,
+  "type": "user.created"
+}

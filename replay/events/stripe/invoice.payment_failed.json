@@ -1,0 +1,45 @@
+{
+  "id": "evt_test_1QInvoFakeEvent09",
+  "object": "event",
+  "api_version": "2024-06-20",
+  "created": 1792400000,
+  "data": {
+    "object": {
+      "id": "in_test_1QFakeInvoice01",
+      "object": "invoice",
+      "account_country": "US",
+      "amount_due": 1900,
+      "amount_paid": 0,
+      "amount_remaining": 1900,
+      "attempt_count": 2,
+      "attempted": true,
+      "billing_reason": "subscription_cycle",
+      "charge": "ch_test_3QFakeCharge02",
+      "collection_method": "charge_automatically",
+      "created": 1792400000,
+      "currency": "usd",
+      "customer": "cus_test_QFakeCustomer01",
+      "customer_email": "jamie@example.net",
+      "customer_name": "Jamie Doe",
+      "hosted_invoice_url": "https://invoice.stripe.com/i/acct_test_FakeAccount/test_FakeInvoiceLink",
+      "livemode": false,
+      "metadata": {},
+      "next_payment_attempt": 1792659200,
+      "number": "FAKE1234-0001",
+      "paid": false,
+      "period_end": 1792400000,
+      "period_start": 1789808000,
+      "status": "open",
+      "subscription": "sub_test_1QFakeSubscription01",
+      "subtotal": 1900,
+      "total": 1900
+    }
+  },
+  "livemode": false,
+  "pending_webhooks": 1,
+  "request": {
+    "id": "req_test_FakeRequest09",
+    "idempotency_key": "fake-idem-09"
+  },
+  "type": "invoice.payment_failed"
+}

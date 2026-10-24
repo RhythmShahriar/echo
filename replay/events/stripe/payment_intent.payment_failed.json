@@ -1,0 +1,48 @@
+{
+  "id": "evt_test_1QPaymFakeEvent03",
+  "object": "event",
+  "api_version": "2024-06-20",
+  "created": 1792400000,
+  "data": {
+    "object": {
+      "id": "pi_test_3QFakePaymentIntent01",
+      "object": "payment_intent",
+      "amount": 4999,
+      "amount_capturable": 0,
+      "amount_received": 0,
+      "capture_method": "automatic_async",
+      "client_secret": null,
+      "confirmation_method": "automatic",
+      "created": 1792399995,
+      "currency": "usd",
+      "customer": "cus_test_QFakeCustomer01",
+      "description": "Order #10234",
+      "last_payment_error": {
+        "code": "card_declined",
+        "decline_code": "insufficient_funds",
+        "doc_url": "https://stripe.com/docs/error-codes/card-declined",
+        "message": "Your card has insufficient funds.",
+        "type": "card_error"
+      },
+      "latest_charge": null,
+      "livemode": false,
+      "metadata": {
+        "order_id": "10234",
+        "site": "staging"
+      },
+      "payment_method": "pm_test_1QFakeCardVisa",
+      "payment_method_types": [
+        "card"
+      ],
+      "receipt_email": "jamie@example.net",
+      "status": "requires_payment_method"
+    }
+  },
+  "livemode": false,
+  "pending_webhooks": 1,
+  "request": {
+    "id": "req_test_FakeRequest03",
+    "idempotency_key": "fake-idem-03"
+  },
+  "type": "payment_intent.payment_failed"
+}
