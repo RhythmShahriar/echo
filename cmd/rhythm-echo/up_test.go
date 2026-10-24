@@ -692,6 +692,50 @@ func TestSetAddressesKeepsTheRestOfTheFile(t *testing.T) {
 	if got, _ := os.ReadFile(fresh); string(got) != "listen: 127.0.0.1:18026\n" {
 		t.Errorf("new file = %q", got)
 	}
+
+	// IPv6 addresses are quoted: unquoted, [::1] starts a YAML sequence.
+	if err := setAddresses(path, "[::1]:18025", "[::1]:11025"); err != nil {
+		t.Fatal(err)
+	}
+	if cfg, err := config.Load(path); err != nil || cfg.Listen != "[::1]:18025" || cfg.SMTP != "[::1]:11025" {
+		t.Errorf("IPv6: %+v %v", cfg, err)
+	}
+	if got, _ := os.ReadFile(path); !strings.Contains(string(got), `listen: "[::1]:18025"   # API`) {
+		t.Errorf("IPv6 line:\n%s", got)
+	}
+	if left, _ := filepath.Glob(filepath.Join(dir, ".echo", ".config.yaml.*")); len(left) > 0 {
+		t.Errorf("temporary files left: %v", left)
+	}
+}
+
+// TestSetAddressesKeepsAFileItCantFix: when the new text wouldn't load,
+// the user's file is left exactly as it was.
+func TestSetAddressesKeepsAFileItCantFix(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	orig := "mode: seal\nunknown_key: 1\n" // already broken: KnownFields refuses it
+	if err := os.WriteFile(path, []byte(orig), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := setAddresses(path, "127.0.0.1:18025", ""); err == nil || !strings.Contains(err.Error(), "left as it was") {
+		t.Errorf("err = %v", err)
+	}
+	if got, _ := os.ReadFile(path); string(got) != orig {
+		t.Errorf("file changed: %q", got)
+	}
+	if left, _ := filepath.Glob(filepath.Join(filepath.Dir(path), ".config.yaml.*")); len(left) > 0 {
+		t.Errorf("temporary files left: %v", left)
+	}
+}
+
+func TestYAMLScalar(t *testing.T) {
+	for in, want := range map[string]string{
+		"127.0.0.1:8025": "127.0.0.1:8025", "localhost:8025": "localhost:8025", "off": "off",
+		"[::1]:8025": `"[::1]:8025"`, "0.0.0.0: x": `"0.0.0.0: x"`, "a #b": `"a #b"`,
+	} {
+		if got := yamlScalar(in); got != want {
+			t.Errorf("yamlScalar(%q) = %s, want %s", in, got, want)
+		}
+	}
 }
 
 func TestUpMovesAsideWhenAsked(t *testing.T) {

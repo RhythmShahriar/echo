@@ -280,24 +280,64 @@ func fromHTTP(addr string) string {
 // file at path, creating it when there's none. Only those lines change: a
 // key that's set gets the new value with its comment kept, a key that's
 // commented out or missing is added. Everything else stays as it was.
+// The new text goes to a temporary file first and replaces path only when
+// Echo reads it back with the new addresses, so a failure leaves the
+// user's file as it was.
 func setAddresses(path, listen, smtp string) error {
 	data, err := os.ReadFile(path) //nolint:gosec // the user's own project config
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
 	text := string(data)
-	text = setKey(text, "listen", listen)
+	text = setKey(text, "listen", yamlScalar(listen))
 	if smtp != "" {
-		text = setKey(text, "smtp", smtp)
+		text = setKey(text, "smtp", yamlScalar(smtp))
 	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil { //nolint:gosec // the user's own --config path
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0o750); err != nil { //nolint:gosec // the user's own --config path
 		return err
 	}
-	if err := os.WriteFile(path, []byte(text), 0o600); err != nil { //nolint:gosec // the user's own --config path
+	tmp, err := os.CreateTemp(dir, "."+filepath.Base(path)+".*")
+	if err != nil {
 		return err
 	}
-	_, err = config.Load(path) // never leave a file Echo can't read
-	return err
+	// Gone after the rename; this cleans up on failure.
+	defer func() { _ = os.Remove(tmp.Name()) }() //nolint:gosec // our temporary file beside the config
+	if _, err := tmp.WriteString(text); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	// Keep the file's own permissions.
+	if fi, err := os.Stat(path); err == nil { //nolint:gosec // the user's own --config path
+		if err := os.Chmod(tmp.Name(), fi.Mode().Perm()); err != nil { //nolint:gosec // our temporary file beside it
+			return err
+		}
+	}
+	cfg, err := config.Load(tmp.Name())
+	if err != nil {
+		return fmt.Errorf("%s would not load with the new addresses, so it was left as it was: %w", path, err)
+	}
+	if cfg.Listen != listen || smtp != "" && cfg.SMTP != smtp {
+		return fmt.Errorf("%s would not read back listen %s and smtp %s, so it was left as it was", path, listen, smtp)
+	}
+	return os.Rename(tmp.Name(), path) //nolint:gosec // the user's own --config path
+}
+
+// plainScalar is a value YAML reads back as the same string unquoted.
+// Anything else ("[::1]:8025" would start a flow sequence) is quoted.
+var plainScalar = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._/-]*(:[A-Za-z0-9._/-]+)*$`)
+
+// yamlScalar returns v as a YAML scalar that reads back as v.
+func yamlScalar(v string) string {
+	if plainScalar.MatchString(v) {
+		return v
+	}
+	// A Go quoted string is a valid YAML double-quoted scalar for the
+	// escapes strconv.Quote emits (\", \\, \n, \t, \xNN, \uNNNN).
+	return strconv.Quote(v)
 }
 
 // setKey sets a top-level "key: value" line in a YAML document.
