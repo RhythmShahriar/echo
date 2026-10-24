@@ -407,19 +407,46 @@ func (s Store) list(kind string) ([]string, error) {
 }
 
 // Prune keeps the newest keep runs and deletes older ones. Snapshots are
-// never pruned.
+// never pruned. A folder without run.json or comparison.json is a run
+// another process may still be writing, so it is left alone until it is
+// pruneGrace old (by its modification time), which clears out runs that
+// crashed without deleting one still going.
 func (s Store) Prune(keep int) error {
 	runs, err := s.list(Runs)
 	if err != nil {
 		return err
 	}
-	for len(runs) > keep {
-		if err := os.RemoveAll(filepath.Join(s.Root, Runs, runs[0])); err != nil {
+	for _, n := range runs[:max(len(runs)-keep, 0)] {
+		dir := filepath.Join(s.Root, Runs, n)
+		if !finished(dir) && !older(dir, pruneGrace) {
+			continue
+		}
+		if err := os.RemoveAll(dir); err != nil {
 			return err
 		}
-		runs = runs[1:]
 	}
 	return nil
+}
+
+// pruneGrace is how long Prune leaves an unfinished run folder alone. A
+// run takes a minute per action at most, so an hour is well past any
+// that is still going.
+const pruneGrace = time.Hour
+
+// finished reports whether dir holds a written run or comparison.
+func finished(dir string) bool {
+	for _, f := range []string{"run.json", "comparison.json"} {
+		if _, err := os.Stat(filepath.Join(dir, f)); err == nil {
+			return true
+		}
+	}
+	return false
+}
+
+// older reports whether dir was last modified more than d ago.
+func older(dir string, d time.Duration) bool {
+	fi, err := os.Stat(dir)
+	return err == nil && time.Since(fi.ModTime()) > d
 }
 
 // ExcludeFromGit adds the store's snapshots and runs to the repository's

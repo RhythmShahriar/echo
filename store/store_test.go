@@ -89,6 +89,36 @@ func TestPruneKeepsNewest(t *testing.T) {
 	}
 }
 
+// A run folder another process is still writing (no run.json yet) must
+// survive a prune, however small keep is; one left behind by a crash
+// goes once it is old.
+func TestPruneLeavesUnfinishedRuns(t *testing.T) {
+	s := Store{Root: t.TempDir()}
+	start := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	writing, err := s.NewDir(Runs, Stamp(start))
+	if err != nil {
+		t.Fatal(err)
+	}
+	crashed, err := s.NewDir(Runs, Stamp(start.Add(time.Minute)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	old := time.Now().Add(-2 * pruneGrace)
+	if err := os.Chtimes(crashed, old, old); err != nil {
+		t.Fatal(err)
+	}
+	finished := saveRun(t, s, start.Add(2*time.Minute))
+	saveRun(t, s, start.Add(3*time.Minute))
+	if err := s.Prune(1); err != nil {
+		t.Fatal(err)
+	}
+	for dir, want := range map[string]bool{writing: true, crashed: false, finished: false} {
+		if _, err := os.Stat(dir); (err == nil) != want {
+			t.Errorf("%s kept: %v, want %v", filepath.Base(dir), err == nil, want)
+		}
+	}
+}
+
 func TestExcludeFromGit(t *testing.T) {
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("no git")
