@@ -298,7 +298,7 @@ func (h *Hub) read(w http.ResponseWriter, r *http.Request) {
 
 // tokenCookie keeps the read token for a browser that opened Echo Inbox
 // with ?token= once.
-const tokenCookie = "echo_hub_token"
+const tokenCookie = "echo_hub_token" //nolint:gosec // a cookie's name, not a token
 
 // inboxUI reports whether r is for Echo Inbox: its page, its files and
 // the routes the page reads.
@@ -322,7 +322,7 @@ func (h *Hub) browser(w http.ResponseWriter, r *http.Request) bool {
 		http.Error(w, "Echo Inbox needs the hub's read token: open /?token=<read token>", http.StatusUnauthorized)
 		return true
 	}
-	http.SetCookie(w, &http.Cookie{Name: tokenCookie, Value: q.Get("token"), Path: "/", HttpOnly: true,
+	http.SetCookie(w, &http.Cookie{Name: tokenCookie, Value: q.Get("token"), Path: "/", HttpOnly: true, //nolint:gosec // Secure is set under TLS: a plain-HTTP hub on loopback would never get it back
 		SameSite: http.SameSiteStrictMode, Secure: r.TLS != nil})
 	q.Del("token")
 	back := url.URL{Path: r.URL.Path, RawQuery: q.Encode()}
