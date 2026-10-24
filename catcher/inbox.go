@@ -466,10 +466,10 @@ func (in *Inbox) attribute(m *model.Message) {
 // late finds the closed action an untagged message belongs to although it
 // arrived during a later one: a queued mail sent after the action's quiet
 // period was over. It needs the time the message was written (its Date
-// header). That time must fall before every open action began and
-// after the closed action began; otherwise the message is attributed by
-// arrival as usual. Only the last closed action of each open run is a
-// candidate. Only one may fit. Called with in.mu held.
+// header). That time must fall at least lateSkew before every open
+// action began and after the closed action began; otherwise the message
+// is attributed by arrival as usual. Only the last closed action of each
+// open run is a candidate. Only one may fit. Called with in.mu held.
 func (in *Inbox) late(m model.Message) (scope, bool) {
 	if len(in.scopes) == 0 {
 		return scope{}, false
@@ -480,10 +480,10 @@ func (in *Inbox) late(m model.Message) (scope, bool) {
 	}
 	// A Date header counts whole seconds: the message was written at some
 	// point in [sent, sent+1s). It's late only if all of that second is
-	// before the open action began.
+	// before the open action began, by more than the clocks may differ.
 	end := sent.Add(time.Second)
 	for _, sc := range in.scopes {
-		if end.After(sc.begun) {
+		if end.Add(lateSkew).After(sc.begun) {
 			return scope{}, false
 		}
 	}
@@ -499,6 +499,14 @@ func (in *Inbox) late(m model.Message) (scope, bool) {
 	}
 	return found[0], true
 }
+
+// lateSkew is how far the site's clock may run behind Echo's before mail
+// is credited late to the wrong action. The Date header is the site's
+// clock and begin is Echo's: a site a little behind (a remote staging
+// host, a VM that drifted) dates mail sent during an action from just
+// before it began. Mail dated within lateSkew of an action's start goes
+// to that action, as if it had no date.
+const lateSkew = 2 * time.Second
 
 // Add stores m after filling its ID, time, run and issues. It returns
 // the stored message.

@@ -40,7 +40,10 @@ func TestLateMailGoesToItsAction(t *testing.T) {
 		lateFor     string
 	}{
 		{"dated during action 1", func(c *clock) string { return c.date(-8 * time.Second) }, "r1", "", model.Late, "a1"},
-		{"dated after action 1 ended, before action 2", func(c *clock) string { return c.date(-3 * time.Second) }, "r1", "", model.Late, "a1"},
+		{"dated as action 1 ended", func(c *clock) string { return c.date(-5 * time.Second) }, "r1", "", model.Late, "a1"},
+		// The site's clock may run up to lateSkew behind Echo's: mail
+		// dated just before action 2 began may have been sent during it.
+		{"dated within the skew allowance of action 2", func(c *clock) string { return c.date(-3 * time.Second) }, "r1", "a2", "", ""},
 		// The second action 2 began in still counts as action 2: a Date
 		// header can't tell earlier in that second from later.
 		{"dated the second action 2 began", func(c *clock) string { return c.date(-1500 * time.Millisecond) }, "r1", "a2", "", ""},
