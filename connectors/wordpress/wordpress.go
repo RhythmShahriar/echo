@@ -10,7 +10,7 @@
 // The plugin lives at wp-content/mu-plugins/rhythm-echo.php; its settings,
 // when any are given, at wp-content/mu-plugins/rhythm-echo/settings.php.
 // mu-plugins only loads top-level files, so the settings file is never run
-// as a plugin, and it is PHP, so the web server never serves the token.
+// as a plugin and it is PHP, so the web server never serves the token.
 //
 // The same connector also ships as a regular plugin, Echo Staging Seal
 // (plugin/echo-staging-seal), for WordPress.org: it adds an admin bar
@@ -80,7 +80,7 @@ const (
 // someone else's rhythm-echo.php.
 const marker = "rhythm-echo-connector"
 
-// Settings configure the connector. Empty fields are left out, and the
+// Settings configure the connector. Empty fields are left out and the
 // plugin then falls back to RHYTHM_ECHO_* constants and environment
 // variables (which also override the file), then to its defaults: Echo at
 // http://127.0.0.1:8025, sealed.
@@ -139,7 +139,7 @@ func SettingsPHP(s Settings) ([]byte, error) {
 }
 
 // Files returns what to write, keyed by path relative to wp-content: the
-// plugin, and the settings file unless s is empty. For `docker cp` and
+// plugin and the settings file unless s is empty. For `docker cp` and
 // similar.
 func Files(s Settings) (map[string][]byte, error) {
 	out := map[string][]byte{PluginPath: Plugin()}
@@ -440,7 +440,7 @@ func InstallPlugin(dir string, s Settings) error {
 	return nil
 }
 
-// UninstallPlugin removes Echo Staging Seal from the WordPress at dir, and
+// UninstallPlugin removes Echo Staging Seal from the WordPress at dir and
 // the settings file unless the mu-plugin still uses it. Deactivate it first
 // (wp plugin deactivate) so WordPress doesn't report it missing. It reports
 // fs.ErrNotExist when there was nothing to remove.

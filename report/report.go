@@ -18,7 +18,7 @@ import (
 	"github.com/RhythmShahriar/echo/model"
 )
 
-// Result is what a command produced: a run, and a comparison when it was
+// Result is what a command produced: a run and a comparison when it was
 // compared with a snapshot.
 type Result struct {
 	Run        *model.Run
@@ -35,7 +35,7 @@ var Levels = []model.Level{model.Error, model.Warning, model.Notice}
 var classInfo = map[string]struct{ Label, Glyph, Blurb string }{
 	model.Broke:   {"BROKE", "✗", "sent in the snapshot, missing or failing now"},
 	model.New:     {"NEW", "▲", "messages or problems that weren't there before"},
-	model.Changed: {"CHANGED", "■", "the same message, but different; check it's intended"},
+	model.Changed: {"CHANGED", "■", "the same message but different; check it's intended"},
 	model.Fixed:   {"FIXED", "✓", "problems from the snapshot that are gone"},
 }
 

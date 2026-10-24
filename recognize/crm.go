@@ -13,7 +13,7 @@ import (
 )
 
 // CRMs and automation hooks: forms and orders pushed to HubSpot,
-// Mailchimp, Klaviyo or ActiveCampaign, and catch hooks on Zapier, Make
+// Mailchimp, Klaviyo or ActiveCampaign and catch hooks on Zapier, Make
 // and n8n. They're all webhooks to the user; recognizing them names the
 // destination and the event so compare can say "the Zapier hook stopped
 // firing".
@@ -159,7 +159,7 @@ var mailchimp = Recognizer{
 }
 
 // klaviyo: a.klaviyo.com. /api/events (server-side "Placed Order"),
-// /api/profiles, /client/subscriptions from forms, and the legacy
+// /api/profiles, /client/subscriptions from forms and the legacy
 // /api/track and /api/identify, which answer "1".
 var klaviyo = Recognizer{
 	Provider: "klaviyo",

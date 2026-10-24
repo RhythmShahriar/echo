@@ -4,7 +4,7 @@
 
 /**
  * Plugin Name: Testbed Shop
- * Description: A WooCommerce stand-in. Checkout (POST /wp-json/testbed-shop/v1/checkout with name, email, phone) stores an order and sends what a shop sends: the receipt (deferred to WP-Cron, as WooCommerce defers transactional email), a Twilio SMS, a Slack alert, a GA4 purchase event, a Meta Conversions API event, and an order.created webhook queued in an Action Scheduler stand-in. WP-CLI: `wp testbed-queue run` delivers queued webhooks; `wp testbed-shop webhook <id>` queues an order.updated webhook; `wp testbed-shop resend-receipt <id>` resends a receipt.
+ * Description: A WooCommerce stand-in. Checkout (POST /wp-json/testbed-shop/v1/checkout with name, email, phone) stores an order and sends what a shop sends: the receipt (deferred to WP-Cron, as WooCommerce defers transactional email), a Twilio SMS, a Slack alert, a GA4 purchase event, a Meta Conversions API event and an order.created webhook queued in an Action Scheduler stand-in. WP-CLI: `wp testbed-queue run` delivers queued webhooks; `wp testbed-shop webhook <id>` queues an order.updated webhook; `wp testbed-shop resend-receipt <id>` resends a receipt.
  * Version: 2.0.0
  *
  * Broken states (testbed/scenarios.yaml):

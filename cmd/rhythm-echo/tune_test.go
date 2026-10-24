@@ -55,7 +55,7 @@ func TestRulesAndChecksReachRun(t *testing.T) {
 }
 
 // TestCompareTunesAndAccepts: compare counts changes with the config's
-// checks: and ignore:, and --accept takes a change out by its key.
+// checks: and ignore: and --accept takes a change out by its key.
 func TestCompareTunesAndAccepts(t *testing.T) {
 	t.Chdir(t.TempDir())
 	srv := httptest.NewServer(catcher.NewServer(catcher.NewInbox(1000), catcher.Config{Version: "test"}))
@@ -92,7 +92,7 @@ func TestCompareTunesAndAccepts(t *testing.T) {
 }
 
 // TestRunnerOptionsFromFlags: --parallel, --quiet and --timeout reach the
-// runner, and the run is signed when Echo verifies signed runs.
+// runner and the run is signed when Echo verifies signed runs.
 func TestRunnerOptionsFromFlags(t *testing.T) {
 	t.Chdir(t.TempDir())
 	t.Setenv("RHYTHM_ECHO_TOKEN", "echo-token-1")

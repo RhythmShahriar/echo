@@ -64,7 +64,7 @@ type CA struct {
 	prevKey *ecdsa.PrivateKey
 	now     func() time.Time
 
-	leafKey *ecdsa.PrivateKey // one key for every leaf: signing is the slow part, not keygen, but this keeps it cheap
+	leafKey *ecdsa.PrivateKey // one key for every leaf, so a new leaf costs a signature and no keygen
 
 	mu    sync.Mutex
 	order *list.List // most recently used first; values are *leafEntry

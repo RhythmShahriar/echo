@@ -84,7 +84,7 @@ var askFreePorts = func(s *session, question string) bool {
 	return err == nil && ok
 }
 
-// wsaeaddrinuse is Windows' WSAEADDRINUSE. A bind there fails with it,
+// wsaeaddrinuse is Windows' WSAEADDRINUSE. A bind there fails with it
 // and syscall.EADDRINUSE on Windows is a different, made-up number that
 // never matches.
 const wsaeaddrinuse = syscall.Errno(10048)

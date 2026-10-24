@@ -29,7 +29,7 @@ type ProtectOptions struct {
 }
 
 // Protect guards a loopback API against web pages open in the developer's
-// browser. Without a token Echo trusts anything that reaches it, and
+// browser. Without a token Echo trusts anything that reaches it and
 // browsers can reach 127.0.0.1 too:
 //
 //   - a page can send a "simple" text/plain, form or multipart POST

@@ -4,10 +4,10 @@ The Next.js and Node connector for [Echo](https://github.com/RhythmShahriar/echo
 
 The connector reports every outbound request and email to a running Echo (`rhythm echo up`). Echo then decides what happens to it:
 
-- **Sealed** (Echo's default): nothing leaves. Echo answers each request with a realistic, provider-shaped response, and emails are recorded instead of sent.
+- **Sealed** (Echo's default): nothing leaves. Echo answers each request with a realistic, provider-shaped response and emails are recorded instead of sent.
 - **Observe**: everything is recorded and sent for real.
 
-It has no runtime dependencies, does nothing in production, and works on Vercel preview deployments.
+It has no runtime dependencies, does nothing in production and works on Vercel preview deployments.
 
 ```sh
 npm install --save-dev @rhythmsh/echo   # or a regular dependency if previews build without dev deps
@@ -37,7 +37,7 @@ export default withEcho({
 - **Node.js:** hooks `fetch`, `http`/`https` and Nodemailer.
 - **Edge:** hooks `fetch`.
 
-Next.js bundles server dependencies, and the connector can't reach a bundled copy of Nodemailer. `withEcho` adds `nodemailer` to `serverExternalPackages` so the app uses the copy in `node_modules`, which is the one that gets patched. It changes nothing else. On Next.js 14, add `nodemailer` to `experimental.serverComponentsExternalPackages` yourself.
+Next.js bundles server dependencies and the connector can't reach a bundled copy of Nodemailer. `withEcho` adds `nodemailer` to `serverExternalPackages` so the app uses the copy in `node_modules`, which is the one that gets patched. It changes nothing else. On Next.js 14, add `nodemailer` to `experimental.serverComponentsExternalPackages` yourself.
 
 ## Express, Fastify and other Node servers
 
@@ -68,7 +68,7 @@ For other frameworks, wrap the handler with `withEchoRun(req, () => handle(req))
 node --import @rhythmsh/echo/register scripts/send-digest.js
 ```
 
-When Echo's action runner starts a command, it sets `RHYTHM_ECHO_RUN`, and captures carry that run. A worker that handles queued jobs can pass the run along itself, for example `withEchoRun(job.data.echoRun, () => process(job))`.
+When Echo's action runner starts a command, it sets `RHYTHM_ECHO_RUN` and captures carry that run. A worker that handles queued jobs can pass the run along itself, for example `withEchoRun(job.data.echoRun, () => process(job))`.
 
 In serverless functions and short scripts, `await flush()` (exported by both entry points) before exiting. It waits for the response reports that are still being sent to Echo.
 
@@ -170,8 +170,8 @@ If Echo can't be reached while the site is sealed, outbound requests fail as net
 
 | Hook | Runtimes | Covers |
 |---|---|---|
-| `fetch` | Node, Edge | Resend, Postmark 5, Slack and Discord webhooks, GA4 and Meta CAPI over fetch, and any `fetch` call. Bodies can be strings, `URLSearchParams`, `FormData`, `Blob`, `ArrayBuffer`, streams or a `Request`. Streams are teed, so the request still gets the whole body. |
-| `http` / `https` | Node | axios (Twilio, SendGrid), got, needle, `http.get`, and older SDKs. Requests are held until the body is written. An allowed request then goes out through its own agent unchanged. A faked one is answered through Node's own HTTP parser. |
+| `fetch` | Node, Edge | Resend, Postmark 5, Slack and Discord webhooks, GA4 and Meta CAPI over fetch and any `fetch` call. Bodies can be strings, `URLSearchParams`, `FormData`, `Blob`, `ArrayBuffer`, streams or a `Request`. Streams are teed, so the request still gets the whole body. |
+| `http` / `https` | Node | axios (Twilio, SendGrid), got, needle, `http.get` and older SDKs. Requests are held until the body is written. An allowed request then goes out through its own agent unchanged. A faked one is answered through Node's own HTTP parser. |
 | Nodemailer | Node | `sendMail` on every transport, in Nodemailer's ESM and CJS builds. When sealed, it resolves with a fake `info` (`messageId`, `accepted`) without connecting. Attachments are listed in `email.attachments` with name, type, size and SHA-256, never their content. Inline images (`cid`) are left out. A stream or a remote URL gets a name and type only. |
 
 The connector never captures requests to Echo itself or to loopback. Calls to the site's own host are captured and reported with `source.host`. Echo lets them through and records them as sent. The site's host comes only from configuration (`RHYTHM_ECHO_SITE`, `VERCEL_URL`, `VERCEL_BRANCH_URL`, `NEXT_PUBLIC_SITE_URL` or the `site` option), never from the incoming request's `Host` or `X-Forwarded-Host`, which a visitor can set to a provider's host. With none configured, every outbound call is treated as a call to someone else.
@@ -229,7 +229,7 @@ NODE_USE_ENV_PROXY=1 HTTPS_PROXY=http://127.0.0.1:8026 NODE_EXTRA_CA_CERTS="$(rh
 | macOS | `~/Library/Caches/rhythm/echo/ca/ca.pem` |
 | Windows | `%LocalAppData%\rhythm\echo\ca\ca.pem` |
 
-`NODE_USE_ENV_PROXY` covers `fetch` from Node 22.21 and 24.0, and `http`/`https` from Node 22.21 and 24.5.
+`NODE_USE_ENV_PROXY` covers `fetch` from Node 22.21 and 24.0 and `http`/`https` from Node 22.21 and 24.5.
 
 ## Development
 

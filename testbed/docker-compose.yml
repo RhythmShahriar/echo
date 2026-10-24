@@ -21,7 +21,7 @@ name: echo-testbed
 networks:
   sealed:
     internal: true # no gateway: nothing here reaches the internet
-  egress: {} # the gate's side: published ports, and the route to the host
+  egress: {} # the gate's side: published ports and the route to the host
 
 x-echo-env: &echo-env
   RHYTHM_ECHO_URL: http://gate:18860
@@ -168,7 +168,7 @@ services:
       - ./crm:/crm:ro
       - ./state:/state:ro
 
-  # Stands in for the real mail server in observe mode, and is the
+  # Stands in for the real mail server in observe mode and is the
   # benchmark's Mailpit column (see bench/mailpit.go).
   mailpit:
     image: axllent/mailpit:v1.29.2

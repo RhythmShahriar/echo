@@ -2,9 +2,9 @@
 
 # Echo benchmark
 
-The testbed (`testbed/`) is a WordPress shop, a Laravel app, a Next.js app and a plain-PHP page with 20 scenarios in which a site stops saying what it should. Each scenario has a good state and a broken state, switched by `testbed/toggle.sh`. For every scenario the benchmark sets the good state, runs the scenario's action with `rhythm-echo snapshot --action`, breaks the scenario, runs it again with `rhythm-echo compare --action`, and checks the comparison for the change listed in `testbed/scenarios.yaml`.
+The testbed (`testbed/`) is a WordPress shop, a Laravel app, a Next.js app and a plain-PHP page with 20 scenarios in which a site stops saying what it should. Each scenario has a good state and a broken state, switched by `testbed/toggle.sh`. For every scenario the benchmark sets the good state, runs the scenario's action with `rhythm-echo snapshot --action`, breaks the scenario, runs it again with `rhythm-echo compare --action` and checks the comparison for the change listed in `testbed/scenarios.yaml`.
 
-We wrote both Echo and the testbed, so read this as a regression suite with a scoreboard, not an independent review: every scenario is something we built Echo to catch. Each one is still a real failure mode, in a real WordPress, Laravel or Next.js, and it passes only when Echo reports the expected change through its normal commands.
+We wrote both Echo and the testbed, so read this as a regression suite with a scoreboard, not an independent review: every scenario is something we built Echo to catch. Each one is still a real failure mode, in a real WordPress, Laravel or Next.js and it passes only when Echo reports the expected change through its normal commands.
 
 **Echo caught 20 of 20 scenarios.**
 
@@ -37,7 +37,7 @@ Run on 2026-10-24 with rhythm-echo dev (linux/amd64); the run took 4m42s.
 
 ## How the other tools are judged
 
-- **Mailpit** (`axllent/mailpit:v1.29.2`) is the usual staging mail catcher: it receives mail over SMTP and shows it in an inbox. It has no notion of a baseline, so it can't report a change; the question here is whether a person reading the Mailpit inbox would have seen the problem. For each state, the benchmark delivers into the testbed's Mailpit, over SMTP, the emails Echo captured that the site would have handed to an SMTP server (mail sent through a provider's API, such as Resend's, never reaches an SMTP catcher), then reads them back through Mailpit's API. It counts as **caught** when the broken-state inbox visibly shows the problem (the scenario's `mailpit` text is in a message's From, To, Subject or body, and wasn't in the good state's). A message that is no longer sent is a **miss**: the inbox just has one email fewer. SMS, chat, webhooks, analytics and DNS are **can't see**.
+- **Mailpit** (`axllent/mailpit:v1.29.2`) is the usual staging mail catcher: it receives mail over SMTP and shows it in an inbox. It has no notion of a baseline, so it can't report a change; the question here is whether a person reading the Mailpit inbox would have seen the problem. For each state, the benchmark delivers into the testbed's Mailpit, over SMTP, the emails Echo captured that the site would have handed to an SMTP server (mail sent through a provider's API, such as Resend's, never reaches an SMTP catcher), then reads them back through Mailpit's API. It counts as **caught** when the broken-state inbox visibly shows the problem (the scenario's `mailpit` text is in a message's From, To, Subject or body and wasn't in the good state's). A message that is no longer sent is a **miss**: the inbox just has one email fewer. SMS, chat, webhooks, analytics and DNS are **can't see**.
 - **MessagePit** is not run: it has no published Docker image (`docker search messagepit` finds none) or release binary we could run without building it, so its column says "not run" rather than guessing.
 
 ## Details
@@ -70,7 +70,7 @@ Mailpit: the inbox has 0 emails instead of 1; Mailpit keeps no baseline, so noth
 
 **s07 The Next.js welcome email (Resend) now throws** (next, action “Next.js signup”, seal mode, 14 s). Broken state: the API key's variable was renamed, so the Resend call throws before it's made; the route logs it and still answers 200 (next/app/api/signup/route.ts).
 Echo: BROKE message/missing: Resend email to the test submitter is no longer sent (sent → not sent).
-Mailpit: 1 email in the inbox, and the problem isn't visible there.
+Mailpit: 1 email in the inbox and the problem isn't visible there.
 
 **s08 The receipt is never sent because cron is off** (wordpress, action “Checkout”, seal mode, 14 s). Broken state: the server's crontab line fails (wp: not found), so WP-Cron never runs the deferred receipt (bin/cron, Echo's flush).
 Echo: BROKE message/missing: Email to the test submitter is no longer sent (sent → not sent).
@@ -116,7 +116,7 @@ Mailpit: Mailpit only receives email; webhooks never reach it.
 
 **s17 The From domain changes and breaks DMARC alignment** (wordpress, action “Contact form”, seal mode, 14 s). Broken state: the autoresponder is sent from the newsletter domain, which SendGrid was never set up for (wp/plugins/testbed-forms, dns/zone.yaml).
 Echo: BROKE dns/dmarc: Mail from the sending service fails DMARC alignment. Also reported: NEW email/from-domain: Email is sent from another domain (beanleaf-news.example.net); NEW dns/dkim: No DKIM key found for the sending service; CHANGED message/from: Email to the test submitter: sender changed (hello@shop.example.com → hello@beanleaf-news.example.net).
-Mailpit: 2 emails in the inbox, and the problem isn't visible there.
+Mailpit: 2 emails in the inbox and the problem isn't visible there.
 
 **s18 SPF needs more than 10 DNS lookups** (wordpress, action “Contact form”, seal mode, 14 s). Broken state: marketing added HubSpot, Brevo and Amazon SES to the SPF record: 11 includes (dns/zone.yaml).
 Echo: BROKE dns/spf: SPF needs more than 10 DNS lookups.

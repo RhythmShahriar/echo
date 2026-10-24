@@ -43,7 +43,7 @@ func fromDomains(r *model.Run) []string {
 }
 
 // checkDomains runs `rhythm-echo check` on each domain against the fixture
-// DNS, with what's known of the sending service, and returns every issue
+// DNS, with what's known of the sending service and returns every issue
 // it reported, labeled with its domain.
 func checkDomains(ctx context.Context, e *Echo, timeout time.Duration, dir, state string, d *DNS, domains []string) ([]model.Issue, error) {
 	var all []model.Issue

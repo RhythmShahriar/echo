@@ -6,7 +6,7 @@
 //
 // Broken state (testbed/scenarios.yaml):
 // - s16: the CRM's endpoint errors (HTTP 500) after its own update. The shop
-//   keeps retrying, and WooCommerce disables a webhook after five failures.
+//   keeps retrying and WooCommerce disables a webhook after five failures.
 
 $path = (string) parse_url( (string) $_SERVER['REQUEST_URI'], PHP_URL_PATH );
 header( 'Content-Type: application/json' );

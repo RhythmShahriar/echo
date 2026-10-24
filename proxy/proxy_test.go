@@ -290,7 +290,7 @@ func TestPlainHTTP(t *testing.T) {
 }
 
 // TestAllowedLivePaymentRefused: an allowlisted payment host is still
-// refused, and not forwarded, when the call is in live mode.
+// refused and not forwarded, when the call is in live mode.
 func TestAllowedLivePaymentRefused(t *testing.T) {
 	for _, mode := range []string{catcher.Seal, catcher.Observe} {
 		t.Run(mode, func(t *testing.T) {
@@ -400,7 +400,7 @@ func TestAllowedHosts(t *testing.T) {
 		for host, want := range map[string]bool{
 			"127.0.0.1": true, "::1": true, "10.1.2.3": true, "192.168.1.5": true, "172.20.0.4": true, "fd12::1": true,
 			"localhost": true, "shop.localhost": true, "wordpress": true, "db": true, "api.stripe.com": true,
-			"169.254.169.254": mode == catcher.Observe, "fd00:ec2::254": mode == catcher.Observe, "169.254.1.1": mode == catcher.Observe, // the glob, but link-local is faked while sealed
+			"169.254.169.254": mode == catcher.Observe, "fd00:ec2::254": mode == catcher.Observe, "169.254.1.1": mode == catcher.Observe, // allowed by the glob; link-local is faked while sealed
 			"169.254.170.2": mode == catcher.Observe, "169.254.170.23": mode == catcher.Observe,
 			"api": false, "mixed": false, "meta": false, "linklocal": false, "unknown": false, "fe80::1": false,
 			"api.twilio.com": false, "8.8.8.8": false, "stripe.com.evil.test": false, "hooks.slack.com": false,
@@ -527,7 +527,7 @@ func TestSealedSingleLabelAndPrivateHosts(t *testing.T) {
 
 // TestSealedFakesEveryMetadataEndpoint: with "*" allowed everywhere, the
 // ECS and EKS credential endpoints, Alibaba's metadata address and the
-// usual 169.254.169.254 are faked while sealed, never dialed, and each is
+// usual 169.254.169.254 are faked while sealed, never dialed and each is
 // recorded as faked from the start rather than sent and then faked.
 func TestSealedFakesEveryMetadataEndpoint(t *testing.T) {
 	var dialed []string
@@ -576,7 +576,7 @@ func TestSealedFakesEveryMetadataEndpoint(t *testing.T) {
 	}
 }
 
-// TestMetadataByName: a glob such as "*" lets any name through, but
+// TestMetadataByName: a glob such as "*" lets any name through but
 // never the clouds' own names for the metadata endpoint while sealed.
 func TestMetadataByName(t *testing.T) {
 	for _, mode := range []string{catcher.Seal, catcher.Observe} {

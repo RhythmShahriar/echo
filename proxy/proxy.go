@@ -231,11 +231,11 @@ func (p *Proxy) startInner() {
 	})
 }
 
-// ServeHTTP handles CONNECT, absolute-form requests, and GET /ca.pem so
+// ServeHTTP handles CONNECT, absolute-form requests and GET /ca.pem so
 // containers can fetch the CA from the proxy itself.
 func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodGet && !r.URL.IsAbs() && r.URL.Path == "/ca.pem" && p.opt.CA != nil {
-		// Public by design: it's a certificate, and containers fetch it
+		// Public by design: it's a certificate and containers fetch it
 		// before they have anything else.
 		w.Header().Set("Content-Type", "application/x-pem-file")
 		_, _ = w.Write(p.opt.CA.PEM)
@@ -283,7 +283,7 @@ func (p *Proxy) authorized(r *http.Request) bool {
 }
 
 // allowed reports whether host goes through unchanged: loopback and
-// private (RFC 1918, ULA) addresses, localhost, the Allow globs, and
+// private (RFC 1918, ULA) addresses, localhost, the Allow globs and
 // single-label names (Docker services, the site calling itself) whose
 // every address is loopback or private. Such a name is resolved here, once:
 // a resolv.conf search domain can turn "api" into a public host. The
@@ -403,7 +403,7 @@ func (p *Proxy) dial(ctx context.Context, network, addr string) (net.Conn, error
 
 // connect handles CONNECT host:port: a blind tunnel for allowed hosts (and
 // for everything when observing without MITM), interception when MITM is
-// on, and a refusal when sealed without MITM. Payment APIs are never
+// on and a refusal when sealed without MITM. Payment APIs are never
 // tunneled blind, in any mode: they're intercepted with MITM, refused
 // without it.
 func (p *Proxy) connect(w http.ResponseWriter, r *http.Request) {

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 // Package compare diffs two runs: for each action that's in both, it
-// matches the messages sent before and after, and reports the ones that
+// matches the messages sent before and after and reports the ones that
 // stopped (BROKE), appeared (NEW), changed (who they go to, the subject,
 // the text, the fields of a payload, how many times) or problems that went
 // away (FIXED). What an action new since the snapshot sends is NEW. The
@@ -143,7 +143,7 @@ func messages(before, after []model.Message, covered map[string]bool) (out []mod
 			for _, m := range lost {
 				out = append(out, model.Change{Class: model.Broke, Check: "message/missing", Channel: m.Channel,
 					Title:  fmt.Sprintf("%s is no longer sent", check.Capitalize(label(m.Message, multi))),
-					Fix:    "Something in the change stopped this message: check the plugin or code that sends it, and its settings.",
+					Fix:    "Something in the change stopped this message: check the plugin or code that sends it and its settings.",
 					Before: "sent", After: "not sent"})
 			}
 		}
@@ -234,7 +234,7 @@ func label(m model.Message, multi bool) string {
 const truncatedMark = "…(truncated)"
 
 // truncated reports whether a message's payload was cut, so its fields
-// can't be compared: a cut body is usually no longer valid JSON, and
+// can't be compared: a cut body is usually no longer valid JSON and
 // would read as every field lost.
 func truncated(m model.Message) bool { return strings.HasSuffix(m.Body, truncatedMark) }
 
@@ -410,7 +410,7 @@ func roles(s string) string {
 }
 
 // template makes a subject comparable: numbers and test data vary per
-// run, and case doesn't matter. It's a key; show display instead.
+// run and case doesn't matter. It's a key; show display instead.
 func template(s string) string { return strings.ToLower(display(s)) }
 
 // display is a subject as sent, with what varies per run (numbers, test

@@ -4,14 +4,14 @@
 //go:build docker
 
 // The connector inside a real WordPress: wordpress:php8.2-apache and
-// MariaDB in Docker, the mu-plugin installed with Install, and Echo's
+// MariaDB in Docker, the mu-plugin installed with Install and Echo's
 // catcher running in this test process on the host. Run with:
 //
 //	GOWORK=off go test -tags docker -run Docker -v ./connectors/wordpress/
 //
 // ECHO_TEST_PORTS=LOW-HIGH moves the host ports it uses (18900-18999).
 //
-// Nothing leaves the machine: the fixture plugin only calls fake hosts,
+// Nothing leaves the machine: the fixture plugin only calls fake hosts
 // and the containers resolve the real provider hosts to 127.0.0.1, so a
 // connector bug fails a test instead of reaching Twilio or Slack.
 package wordpress

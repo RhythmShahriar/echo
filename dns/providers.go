@@ -6,7 +6,7 @@ package dns
 import "strings"
 
 // Provider describes a sending service's DNS footprint: the SPF include
-// it asks customers to publish, its default DKIM selectors, and the
+// it asks customers to publish, its default DKIM selectors and the
 // domains its mail carries (DKIM d=, Return-Path, Received hosts).
 type Provider struct {
 	Name      string   `json:"name"`  // key used in Sender.Provider

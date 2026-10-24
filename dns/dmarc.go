@@ -47,7 +47,7 @@ func (c *checker) dmarc() {
 	switch len(recs) {
 	case 0:
 		c.issue("dmarc", model.Error, "No DMARC record",
-			"Neither _dmarc."+d+" nor the organizational domain publishes a DMARC policy. Gmail, Yahoo and Microsoft require one from bulk senders, and without it spoofed mail from "+d+" is judged on SPF and DKIM alone.",
+			"Neither _dmarc."+d+" nor the organizational domain publishes a DMARC policy. Gmail, Yahoo and Microsoft require one from bulk senders. Without it spoofed mail from "+d+" is judged on SPF and DKIM alone.",
 			`Publish a TXT record at _dmarc.`+d+` such as "v=DMARC1; p=none; rua=mailto:dmarc@`+org+`", read the reports, then raise p to quarantine.`)
 		return
 	case 1:
@@ -168,7 +168,7 @@ func (c *checker) dmarcReports(m *DMARC) {
 			continue
 		}
 		c.issue("dmarc", model.Warning, "DMARC report address hasn't authorized reports",
-			"rua points at "+addr+", outside "+c.rep.OrgDomain+", but "+name+" has no v=DMARC1 record, so receivers won't send it reports.",
+			"rua points at "+addr+", outside "+c.rep.OrgDomain+". "+name+" has no v=DMARC1 record, so receivers won't send it reports.",
 			`Ask the report service to publish TXT "v=DMARC1" at `+name+`, or use an address at `+c.rep.OrgDomain+`.`)
 	}
 }
@@ -198,12 +198,12 @@ func (c *checker) dmarcAlignment(m *DMARC) {
 	switch {
 	case !dkimOK && !spfOK && (dkimR || spfR):
 		c.issue("dmarc", model.Error, "DMARC strict alignment fails for the sending service",
-			"Mail from "+who+" aligns only in relaxed mode, but the policy asks for strict (s). "+detail,
+			"Mail from "+who+" aligns only in relaxed mode but the policy asks for strict (s). "+detail,
 			"Sign with d="+from+" and send with a Return-Path at "+from+" exactly, or set adkim=r and aspf=r in the TXT record at "+m.Name+".")
 	case !dkimOK && !spfOK:
 		c.issue("dmarc", model.Error, "Mail from the sending service fails DMARC alignment",
 			"Neither the DKIM signature nor the Return-Path of mail from "+who+" uses "+from+", so DMARC fails even when SPF and DKIM pass. "+detail,
-			"Set up domain authentication in "+who+": publish its DKIM records under "+from+" so it signs with d="+from+", and a custom Return-Path (bounce) subdomain.")
+			"Set up domain authentication in "+who+": publish its DKIM records under "+from+" so it signs with d="+from+" and a custom Return-Path (bounce) subdomain.")
 	case !dkimOK && spfOK:
 		c.issue("dmarc", model.Notice, "DMARC passes on SPF alone",
 			"Mail from "+who+" aligns through its Return-Path only; forwarding breaks SPF, so forwarded mail will fail DMARC. "+detail,

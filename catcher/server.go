@@ -419,7 +419,7 @@ func (s *Server) http(c wire.Capture, run, action string, src model.Source) (wir
 		d.Action, d.Response = wire.Fake, &wire.Response{Status: f.Status, Headers: f.Headers, Body: f.Body}
 	case s.cfg.Mode != Observe && Metadata(u.Hostname()):
 		// Cloud credentials: never reached while sealed, even by a glob
-		// such as "*", and recorded as faked from the start.
+		// such as "*" and recorded as faked from the start.
 		m.Status = model.Faked
 		m.Response = &model.Response{Status: http.StatusNotFound}
 		d.Action, d.Response = wire.Fake, &wire.Response{Status: http.StatusNotFound}

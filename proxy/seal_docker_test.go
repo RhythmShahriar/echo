@@ -23,7 +23,7 @@ import (
 
 // TestComposeSeal brings up docs/seal/examples/docker-compose.yml (with a
 // small app) and checks the seal: the app can't reach the internet, can
-// reach Echo, its requests and mail are captured, and the proxy wants
+// reach Echo, its requests and mail are captured and the proxy wants
 // the token. Echo is played by testdata/echostub until the CLI exists.
 func TestComposeSeal(t *testing.T) {
 	needDocker(t, "nginx:1.27-alpine")

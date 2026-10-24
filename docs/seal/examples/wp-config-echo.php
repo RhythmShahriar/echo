@@ -8,7 +8,7 @@
  * Paste above "That's all, stop editing!" in wp-config.php on a staging
  * site. With the Echo mu-plugin installed, wp_remote_* calls are already
  * captured by its pre_http_request hook; these constants are the
- * fallback when it isn't, and php-fpm-echo.conf covers SDKs that call
+ * fallback when it isn't and php-fpm-echo.conf covers SDKs that call
  * cURL directly.
  *
  * WordPress never proxies requests to localhost or to the site's own host

@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\Mail;
 
 /**
  * Spike, kept as a regression test: how MessageSending cancellation works
- * in the installed Laravel, and why the transport is the primary path.
+ * in the installed Laravel and why the transport is the primary path.
  */
 class MessageSendingTest extends TestCase
 {

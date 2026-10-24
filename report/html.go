@@ -34,7 +34,7 @@ const (
 	emailAllowed = "default-src 'none'; img-src data: https: http:; style-src 'unsafe-inline'"
 )
 
-// reportCSP is the report's own policy: nothing remote, inline styles, and
+// reportCSP is the report's own policy: nothing remote, inline styles and
 // only the one inline script, by hash. An email preview is a srcdoc iframe,
 // which inherits this policy and adds emailBlocked on top. Policies only
 // ever narrow, so the page has to allow remote images for the button to be

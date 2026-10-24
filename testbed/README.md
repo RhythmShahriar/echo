@@ -2,7 +2,7 @@
 
 Twenty ways a site stops saying what it should, in one Docker Compose stack, for Echo's end-to-end tests and its public benchmark ([docs/benchmark.md](../docs/benchmark.md)).
 
-Each scenario breaks one thing a site sends, the way a plugin update, a deploy, a migration or a DNS change would: an email that's no longer sent, a merge tag left in a receipt, an SMS that now costs three parts, a webhook that lost a field, a From domain that fails DMARC. Every scenario has a **good** and a **broken** state, and `toggle.sh` switches between them right away, without a rebuild or restart.
+Each scenario breaks one thing a site sends, the way a plugin update, a deploy, a migration or a DNS change would: an email that's no longer sent, a merge tag left in a receipt, an SMS that now costs three parts, a webhook that lost a field, a From domain that fails DMARC. Every scenario has a **good** and a **broken** state and `toggle.sh` switches between them right away, without a rebuild or restart.
 
 ## Start
 
@@ -16,11 +16,11 @@ make -C testbed up      # a few minutes the first time (Laravel and Next.js are 
 | Laravel | http://localhost:18851/ | A stock Laravel app with `rhythmsh/echo-laravel` from this checkout: `POST /orders` queues a Mailable and calls Twilio with the Http client. |
 | Next.js | http://localhost:18852/ | The Node connector's fixture app with `@rhythmsh/echo` packed from this checkout: `POST /api/signup` (Resend-style fetch, Twilio fetch, Nodemailer) and an Edge route (`GET /api/edge`, Slack). |
 | Plain PHP | http://localhost:18853/ | A legacy order page: `POST /order.php` sends with `mail()`, through `sendmail_path` = `rhythm-echo sendmail` (the static Linux binary built from this checkout). |
-| Mailpit | http://localhost:18854/ | The shop's "real" mail server in observe mode, and the benchmark's Mailpit column. |
+| Mailpit | http://localhost:18854/ | The shop's "real" mail server in observe mode and the benchmark's Mailpit column. |
 
 The shop's CRM (`crm/index.php`) receives the order webhooks. It is only reachable from inside the stack.
 
-Ports are bound to 127.0.0.1. `make up` builds Echo from this checkout into `runtime/` (Go is needed), installs Echo's WordPress connector into `wp/mu-plugins` with `rhythm-echo install wordpress`, builds the Laravel and Next.js apps in Docker (`laravel/build.sh`, `next/build.sh`, reusing the connectors' own end-to-end fixtures), and seeds a fresh WordPress. The database lives in tmpfs and `make down` deletes the WordPress volume, so every run starts from the same state. The built apps stay in `runtime/`; delete it to rebuild from scratch.
+Ports are bound to 127.0.0.1. `make up` builds Echo from this checkout into `runtime/` (Go is needed), installs Echo's WordPress connector into `wp/mu-plugins` with `rhythm-echo install wordpress`, builds the Laravel and Next.js apps in Docker (`laravel/build.sh`, `next/build.sh`, reusing the connectors' own end-to-end fixtures) and seeds a fresh WordPress. The database lives in tmpfs and `make down` deletes the WordPress volume, so every run starts from the same state. The built apps stay in `runtime/`; delete it to rebuild from scratch.
 
 Accounts (local test accounts only): WordPress `admin` / `admin`.
 
@@ -31,9 +31,9 @@ The sites run on a Docker network with `internal: true`: Docker gives it no gate
 - the way in: it publishes the sites and Mailpit on 127.0.0.1:18850-18855, passing `X-Echo-Run` through
 - the way to Echo: it forwards ports 18860 (API), 18861 (SMTP) and 18862 (proxy) to the Echo on the host, at `host.docker.internal`
 
-Echo runs on the host, not in the stack: the benchmark starts its own (`rhythm-echo up` on 0.0.0.0:18860-18862 with `--mitm` and the testbed's token, `echo-testbed-token`), or start one with `make echo` (`make echo OBSERVE=1` for observe mode). It needs the token because it listens beyond loopback. Its proxy CA lives in `runtime/cache` (`XDG_CACHE_HOME`), and WordPress trusts the certificate (`runtime/ca.pem`, never the key).
+Echo runs on the host, not in the stack: the benchmark starts its own (`rhythm-echo up` on 0.0.0.0:18860-18862 with `--mitm` and the testbed's token, `echo-testbed-token`), or start one with `make echo` (`make echo OBSERVE=1` for observe mode). It needs the token because it listens beyond loopback. Its proxy CA lives in `runtime/cache` (`XDG_CACHE_HOME`) and WordPress trusts the certificate (`runtime/ca.pem`, never the key).
 
-So this is also the hard seal from [docs/seal/docker-compose.md](../docs/seal/docker-compose.md), with Echo outside the stack. In observe mode, what Echo lets through still can't leave: mail goes to Mailpit, the CRM is local, and anything else fails.
+So this is also the hard seal from [docs/seal/docker-compose.md](../docs/seal/docker-compose.md), with Echo outside the stack. In observe mode, what Echo lets through still can't leave: mail goes to Mailpit, the CRM is local and anything else fails.
 
 ## Make targets
 
@@ -60,11 +60,11 @@ testbed/toggle.sh all good
 testbed/toggle.sh status
 ```
 
-A scenario is broken while `testbed/state/<id>` exists. Every container mounts `state/` read-only, and the fixtures check it on every request, job and command: `testbed_broken('s05')` in WordPress, `file_exists('/state/s05')` in Laravel, plain PHP and the CRM, `existsSync('/state/s07')` in Next.js. `bin/cron` and the benchmark's fixture DNS server check it too.
+A scenario is broken while `testbed/state/<id>` exists. Every container mounts `state/` read-only and the fixtures check it on every request, job and command: `testbed_broken('s05')` in WordPress, `file_exists('/state/s05')` in Laravel, plain PHP and the CRM, `existsSync('/state/s07')` in Next.js. `bin/cron` and the benchmark's fixture DNS server check it too.
 
 ## Scenarios
 
-[`scenarios.yaml`](scenarios.yaml) is the manifest. For each scenario it gives the stack, the Echo action that shows it (from [`.echo/config.yaml`](.echo/config.yaml)), the expected change (class, check, title), and where the broken state is implemented.
+[`scenarios.yaml`](scenarios.yaml) is the manifest. For each scenario it gives the stack, the Echo action that shows it (from [`.echo/config.yaml`](.echo/config.yaml)), the expected change (class, check, title) and where the broken state is implemented.
 
 | ID | Area | Broken state | Expected |
 |---|---|---|---|
@@ -93,11 +93,11 @@ Messages link to and come from `shop.example.com`: the testbed plays the live sh
 
 ### Deliverability: the fixture DNS
 
-s17 and s18 follow the advice compare gives for a new sender: they run `rhythm-echo check <From domain> --resolver 127.0.0.1:18870 --provider sendgrid --return-path em1234.shop.example.com` in both states and diff the issues. The benchmark serves [`dns/zone.yaml`](dns/zone.yaml) on 127.0.0.1:18870 (UDP and TCP). It answers only for the names in that file, never forwards, and switches records with the scenario's state.
+s17 and s18 follow the advice compare gives for a new sender: they run `rhythm-echo check <From domain> --resolver 127.0.0.1:18870 --provider sendgrid --return-path em1234.shop.example.com` in both states and diff the issues. The benchmark serves [`dns/zone.yaml`](dns/zone.yaml) on 127.0.0.1:18870 (UDP and TCP). It answers only for the names in that file, never forwards and switches records with the scenario's state.
 
 ### Observe mode
 
-s16 and s19 run Echo in observe mode, so the request or email really goes out. Their actions only reach the testbed's CRM (through the gate) and Mailpit, and `TestManifest` checks that no other action is run in observe mode.
+s16 and s19 run Echo in observe mode, so the request or email really goes out. Their actions only reach the testbed's CRM (through the gate) and Mailpit and `TestManifest` checks that no other action is run in observe mode.
 
 ## Benchmark
 
@@ -110,7 +110,7 @@ make -C testbed down
 
 For each scenario, the harness in [`bench/`](bench/) does the following, in `testbed/bench/work/<id>/`:
 
-1. runs the manifest's `reset` commands (drain what an earlier broken flush left queued), sets the good state, and starts Echo in the scenario's mode
+1. runs the manifest's `reset` commands (drain what an earlier broken flush left queued), sets the good state and starts Echo in the scenario's mode
 2. runs `rhythm-echo snapshot --config testbed/.echo/config.yaml --action "<action>" --name good --json -o good.json`
 3. breaks the scenario
 4. runs `rhythm-echo compare --config … --action "<action>" --snapshot good --json -o compare.json`
@@ -138,13 +138,13 @@ The bench package has the `testbed` build tag, so a plain `go test ./...` never 
 go test -tags testbed -v ./testbed/bench/
 ```
 
-- `TestManifest`: every scenario's action exists, observe mode is only used for actions that stay inside the testbed, and `toggle.sh` knows every ID.
+- `TestManifest`: every scenario's action exists, observe mode is only used for actions that stay inside the testbed and `toggle.sh` knows every ID.
 - `TestFixtureDNS`: the fixture DNS serves the zone, follows CNAMEs, splits long TXT records and switches s18's record.
-- `TestGoodStateIsClean` (needs the testbed up): builds Echo, runs every action with every scenario good, and checks that each sent something, sealed, with nothing above a notice. So a caught scenario is caught because of its broken state alone.
+- `TestGoodStateIsClean` (needs the testbed up): builds Echo, runs every action with every scenario good and checks that each sent something, sealed, with nothing above a notice. So a caught scenario is caught because of its broken state alone.
 
 ## Adding a scenario
 
-1. Implement the broken state behind `testbed_broken('sNN')` (or `/state/sNN`), next to the code it breaks, and say what it does in the file's header.
+1. Implement the broken state behind `testbed_broken('sNN')` (or `/state/sNN`), next to the code it breaks and say what it does in the file's header.
 2. If no action shows it, add one to `.echo/config.yaml`.
 3. Add it to `scenarios.yaml` with a precise `expect` (and `mailpit` when the problem is visible in an email).
 4. Check both states by hand (`make echo`, then `rhythm-echo run --action …`) and that the good state stays clean (`TestGoodStateIsClean`).

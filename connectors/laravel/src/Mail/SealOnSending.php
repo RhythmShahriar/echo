@@ -13,7 +13,7 @@ use Rhythm\Echo\Wire;
  * Fallback for apps whose mail manager couldn't be wrapped (they bind
  * their own): report each message from MessageSending and return false
  * to cancel it when Echo keeps it. Laravel stops sending when a
- * MessageSending listener returns false, but an earlier listener that
+ * MessageSending listener returns false but an earlier listener that
  * returns anything non-null ends the dispatch first, so the transport
  * wrapper is the primary path.
  */

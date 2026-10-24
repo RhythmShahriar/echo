@@ -19,7 +19,7 @@ which process tried.
 
 ## Set up
 
-1. Create Echo's user, and run Echo as that user, on loopback:
+1. Create Echo's user and run Echo as that user, on loopback:
 
    ```sh
    sudo useradd --system --create-home --home-dir /var/lib/rhythm-echo rhythm-echo
@@ -43,7 +43,7 @@ which process tried.
    ```sh
    sudo -u www-data curl -m 5 https://example.com        # refused
    sudo -u www-data curl -m 5 -x http://127.0.0.1:8026 \
-     --cacert "$(rhythm echo ca)" https://example.com     # through Echo: recorded, and faked while sealed
+     --cacert "$(rhythm echo ca)" https://example.com     # through Echo: recorded and faked while sealed
    ```
 
 Unseal with `sudo nft delete table inet echo_seal`, or
@@ -72,8 +72,8 @@ Unseal with `sudo nft delete table inet echo_seal`, or
 
 `go test -run Firewall ./proxy` loads both files in a throwaway network
 namespace (`unshare -rn`, no root needed). It sends test connections to a
-dummy interface, so nothing leaves the machine, and checks that:
-- the internet is refused for anyone but the Echo user, and allowed for the
+dummy interface, so nothing leaves the machine and checks that:
+- the internet is refused for anyone but the Echo user and allowed for the
   Echo user
 - private networks are allowed
 - loopback is untouched

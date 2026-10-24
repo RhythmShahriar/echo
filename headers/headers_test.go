@@ -44,7 +44,7 @@ func has(r Result, title string) *model.Issue {
 	return nil
 }
 
-// Every fixture: who sent it, what Sender feeds dns.Check, and the exact
+// Every fixture: who sent it, what Sender feeds dns.Check and the exact
 // issues (so a clean message is the negative case for every check).
 func TestProviders(t *testing.T) {
 	cases := []struct {
@@ -234,7 +234,7 @@ func TestCommentsAndQuotes(t *testing.T) {
 }
 
 // The inferred sender plugs into dns.Check: php-mail's relay IP must be in
-// SPF, and with no DKIM the check names the alignment failure.
+// SPF and with no DKIM the check names the alignment failure.
 func TestSenderFeedsDNSCheck(t *testing.T) {
 	r := Analyze(load(t, "phpmail.eml"))
 	z := &dns.Zone{TXT: map[string][]string{

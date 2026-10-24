@@ -4,7 +4,7 @@
 
 /**
  * Plugin Name: Testbed
- * Description: Shared helpers for the Echo testbed's fixture plugins: which scenarios are broken (testbed/state/<id>, switched by testbed/toggle.sh), the shop's public address, and the "real" mail server (Mailpit) used in observe mode.
+ * Description: Shared helpers for the Echo testbed's fixture plugins: which scenarios are broken (testbed/state/<id>, switched by testbed/toggle.sh), the shop's public address and the "real" mail server (Mailpit) used in observe mode.
  */
 
 defined( 'ABSPATH' ) || exit;

@@ -11,7 +11,7 @@ import (
 
 // TestFirewallRecipes loads docs/seal/examples' nftables and iptables
 // rules in a throwaway network namespace (testdata/firewall-test.sh) and
-// checks who can get out. It needs unshare, nft and iptables, and
+// checks who can get out. It needs unshare, nft and iptables and
 // unprivileged user namespaces; otherwise it skips.
 func TestFirewallRecipes(t *testing.T) {
 	for _, bin := range []string{"unshare", "nft", "iptables", "ip", "python3"} {

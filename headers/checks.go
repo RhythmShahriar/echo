@@ -12,7 +12,7 @@ import (
 	"github.com/RhythmShahriar/echo/model"
 )
 
-const fixOriginal = "Save the message from the recipient's mailbox (in Gmail: Show original, then Download original), not from the sent folder, and run the check on that file."
+const fixOriginal = "Save the message from the recipient's mailbox (in Gmail: Show original, then Download original), rather than from the sent folder, then run the check on that file."
 
 func (r *Result) checkAuth() {
 	a := r.Auth
@@ -70,14 +70,14 @@ func (r *Result) checkAuth() {
 		d := a.prop("dkim", "header.d")
 		r.issue("dkim", model.Error, "DKIM signature failed",
 			src+" reports dkim="+a.DKIM+" for d="+orUnknown(d)+": the key is missing or the message was changed after signing (a footer added by a plugin or a mailing list).",
-			"Check the key at "+orUnknown(a.prop("dkim", "header.s"))+"._domainkey."+orUnknown(d)+" with `rhythm echo check`, and that nothing modifies mail after the service signs it.")
+			"Check the key at "+orUnknown(a.prop("dkim", "header.s"))+"._domainkey."+orUnknown(d)+" with `rhythm echo check` and that nothing modifies mail after the service signs it.")
 	}
 }
 
 func (r *Result) checkSignatures() {
 	if len(r.Signatures) == 0 {
 		r.issue("dkim", model.Error, "Message is not DKIM-signed",
-			"There's no DKIM-Signature header. Without one DMARC can pass only on SPF, which breaks when mail is forwarded, and Gmail and Yahoo require DKIM from bulk senders.",
+			"There's no DKIM-Signature header. Without one DMARC can pass only on SPF, which breaks when mail is forwarded. Gmail and Yahoo require DKIM from bulk senders.",
 			"Send through a service that signs mail (or enable DKIM signing on the server) and publish its key under "+orUnknown(r.FromDomain)+".")
 		return
 	}
@@ -147,7 +147,7 @@ func (r *Result) checkHeaders(h mail.Header) {
 	}
 	if r.MessageID == "" {
 		r.issue("headers", model.Warning, "Message has no Message-ID",
-			"Receivers score messages without a Message-ID as spam, and Gmail may reject them.",
+			"Receivers score messages without a Message-ID as spam and Gmail may reject them.",
 			"Send through a mailer that sets Message-ID (any SMTP service or library does).")
 	}
 	if h.Get("Date") == "" {
@@ -175,7 +175,7 @@ func (r *Result) checkHeaders(h mail.Header) {
 		r.Sender.Provider == "mailchimp" || h.Get("X-Campaign") != "" || h.Get("X-Campaignid") != ""
 	if unsub == "" && bulk {
 		r.issue("unsubscribe", model.Notice, "Bulk mail has no List-Unsubscribe header",
-			"The message looks like bulk mail (Precedence, List-Id or a campaign header), but has no List-Unsubscribe; Gmail and Yahoo require one-click unsubscribe from bulk senders.",
+			"The message looks like bulk mail (Precedence, List-Id or a campaign header) but has no List-Unsubscribe; Gmail and Yahoo require one-click unsubscribe from bulk senders.",
 			"Add List-Unsubscribe: <https://…/unsubscribe?id=…>, <mailto:…> and List-Unsubscribe-Post: List-Unsubscribe=One-Click.")
 	}
 	if strings.Contains(strings.ToLower(unsub), "https://") && !strings.EqualFold(strings.TrimSpace(h.Get("List-Unsubscribe-Post")), "List-Unsubscribe=One-Click") {

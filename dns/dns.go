@@ -55,7 +55,7 @@ type Options struct {
 	HTTP     *http.Client // non-nil: also fetch the MTA-STS policy file over HTTPS
 }
 
-// Report is what Check found: the parsed records as facts, and the issues.
+// Report is what Check found: the parsed records as facts and the issues.
 type Report struct {
 	Domain    string    `json:"domain"`
 	OrgDomain string    `json:"org_domain"`
@@ -116,7 +116,7 @@ type checker struct {
 }
 
 // unreachable replaces whatever the checks found with one error that
-// points at the resolver: every record "failed" for the same reason, and
+// points at the resolver: every record "failed" for the same reason and
 // the domain's own nameservers were never asked.
 func (c *checker) unreachable(r Resolver, first error) {
 	addr := serverOf(r, first)

@@ -2,11 +2,11 @@
 // SPDX-License-Identifier: MIT
 
 // Package codes finds what an end-to-end test needs from a message it
-// just caused: the one-time code in a login or checkout email or SMS, and
+// just caused: the one-time code in a login or checkout email or SMS and
 // the links that sign someone in, verify an address, reset a password or
 // unsubscribe.
 //
-// Echo runs it on every message as it's captured, before masking, and
+// Echo runs it on every message as it's captured, before masking and
 // keeps the result in memory beside the inbox only: it's served by GET
 // /v1/messages/latest and never stored with the message, in a run or in
 // a report.

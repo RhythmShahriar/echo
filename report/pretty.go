@@ -119,7 +119,7 @@ func (p *Pretty) Log(msg string) {
 }
 
 // Message prints one captured message as a line: time, channel, where it
-// went, what it said, and what Echo did with it.
+// went, what it said and what Echo did with it.
 func (p *Pretty) Message(m model.Message) {
 	to := strings.Join(m.To, ", ")
 	if to == "" {

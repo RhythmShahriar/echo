@@ -96,7 +96,7 @@ func inboxLine(st inboxStore, n int) string {
 }
 
 // days writes d in days when it is whole days (14d), as keep_for: is
-// usually given, and as config.Short does otherwise.
+// usually given and as config.Short does otherwise.
 func days(d time.Duration) string {
 	if d >= 24*time.Hour && d%(24*time.Hour) == 0 {
 		return strconv.Itoa(int(d/(24*time.Hour))) + "d"
@@ -214,7 +214,7 @@ func releaseRoute(s *session, inbox *catcher.Inbox, token string, login *web.Log
 }
 
 // spamScorer asks spamd to score each new email (up --spamassassin) in
-// the background, never holding up the SMTP sink or a connector, and
+// the background, never holding up the SMTP sink or a connector and
 // keeps the verdict on the message for the compat/spam check.
 type spamScorer struct {
 	addr  string

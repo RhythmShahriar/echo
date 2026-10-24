@@ -5,7 +5,7 @@
 namespace Rhythm\Echo;
 
 /**
- * Constants of Echo's capture protocol (wire/wire.go in the Echo repo, and
+ * Constants of Echo's capture protocol (wire/wire.go in the Echo repo and
  * its JSON Schema wire/schema.json). Keep them in step with it: the test
  * suite checks every capture against the schema.
  */

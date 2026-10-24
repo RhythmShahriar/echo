@@ -14,7 +14,7 @@
 #   mode      seal (default) or observe: how the benchmark's Echo runs.
 #             Observe sends for real, so only scenarios whose action reaches
 #             nothing but the testbed's own CRM and Mailpit use it.
-#   toggle    what the broken state changes, and where it's implemented
+#   toggle    what the broken state changes and where it's implemented
 #   dns       also run `rhythm-echo check` on the From domains of the emails
 #             sent, against the fixture DNS (dns/zone.yaml), with what's
 #             known of the sending service (--provider, --return-path)

@@ -28,7 +28,7 @@ import (
 // DNSAddr is where the fixture DNS server listens (UDP and TCP).
 const DNSAddr = "127.0.0.1:18870"
 
-// Zone is testbed/dns/zone.yaml: name → type → values, and per-scenario
+// Zone is testbed/dns/zone.yaml: name → type → values and per-scenario
 // replacements used while that scenario is broken.
 type Zone struct {
 	Records map[string]map[string][]string            `yaml:"records"`

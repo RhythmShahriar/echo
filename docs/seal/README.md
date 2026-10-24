@@ -42,7 +42,7 @@ that CA:
 - Containers can fetch it from the proxy at `http://echo:8026/ca.pem`. It's
   a certificate, not a secret; the private key never leaves Echo.
 
-Hosts on Echo's allowlist, and loopback and private addresses, are tunnelled
+Hosts on Echo's allowlist and loopback and private addresses, are tunnelled
 untouched, so they present their real certificates. Clients that replace
 their trust store (rather than adding to it) need a **bundle**: the system
 CAs plus Echo's.
@@ -76,7 +76,7 @@ Stripe's PHP SDK uses its own `data/ca-certificates.crt`. For those, either:
 | HTTPS, no `--mitm` | Refused (403), recorded as blocked | Tunnelled; the host is recorded |
 | Loopback, private ranges, single-label names, `--allow` | Tunnelled or forwarded, with the host recorded | same |
 
-Interception speaks HTTP/1.1 only. The proxy offers just `http/1.1` in ALPN,
+Interception speaks HTTP/1.1 only. The proxy offers just `http/1.1` in ALPN
 and clients fall back to it.
 
 The proxy is never an open relay:

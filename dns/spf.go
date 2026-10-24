@@ -12,7 +12,7 @@ import (
 	"github.com/RhythmShahriar/echo/model"
 )
 
-// RFC 7208 limits: terms that cost a DNS query, and queries that may
+// RFC 7208 limits: terms that cost a DNS query and queries that may
 // come back empty, before receivers give up with permerror.
 const (
 	maxLookups = 10
@@ -31,7 +31,7 @@ type SPF struct {
 }
 
 // spfWalk evaluates a record tree without a client IP: it counts lookups,
-// collects includes and authorized networks, and notes problems.
+// collects includes and authorized networks and notes problems.
 type spfWalk struct {
 	c        *checker
 	lookups  int
@@ -136,7 +136,7 @@ func (c *checker) spfSender(d string, w *spfWalk) {
 		}
 		if len(recs) == 0 {
 			c.issue("spf", model.Warning, "Bounce domain has no SPF record",
-				"Mail is sent with Return-Path domain "+rp+", which SPF checks, but it publishes no v=spf1 record.",
+				"Mail is sent with Return-Path domain "+rp+". SPF checks that domain, which publishes no v=spf1 record.",
 				"Publish the TXT record your sending service gives for "+rp+` (typically "v=spf1 `+c.suggestInclude()+`~all").`)
 			return
 		}
@@ -183,7 +183,7 @@ func (c *checker) spfSender(d string, w *spfWalk) {
 		return
 	}
 	c.issue("spf", model.Error, "SPF does not authorize the sending service",
-		"Mail is sent through "+who+", but the SPF record at "+target+" doesn't include it, so SPF fails for that mail.", fix)
+		"Mail is sent through "+who+" but the SPF record at "+target+" doesn't include it, so SPF fails for that mail.", fix)
 }
 
 func (c *checker) senderIP(host string) net.IP {

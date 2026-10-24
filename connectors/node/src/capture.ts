@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
 // SPDX-License-Identifier: MIT
 
-// Shared pieces of the fetch and http hooks: what to leave alone, masking,
+// Shared pieces of the fetch and http hooks: what to leave alone, masking
 // and a guess at which package made the call.
 
 import type { Config } from './config.js';

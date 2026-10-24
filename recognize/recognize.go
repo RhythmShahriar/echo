@@ -3,7 +3,7 @@
 
 // Package recognize turns an outbound HTTP request into a message: it
 // works out the channel (SMS, chat, webhook…), the provider and the
-// recipients and content, and says what a sealed staging site should be
+// recipients and content and says what a sealed staging site should be
 // answered with. Connectors only report raw requests; everything
 // provider-specific lives here, with a fixture test per recognizer.
 package recognize
@@ -88,7 +88,7 @@ type Recognizer struct {
 	// Refuse, when set, reports that r must never reach the provider nor
 	// get a success-shaped answer: a live-mode payment call. It applies in
 	// every mode, even to allowlisted hosts. Fake then answers with the
-	// provider's own error, and the message is counted as blocked.
+	// provider's own error and the message is counted as blocked.
 	Refuse func(r Request) bool
 	// SecretURL, when set, says the URL itself is the credential (catch
 	// hooks): its last path segment is masked wherever it's stored.

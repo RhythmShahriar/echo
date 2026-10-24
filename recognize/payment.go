@@ -25,7 +25,7 @@ import (
 //     can't read at all: Echo refuses with the provider's own error shape,
 //     so the SDK throws and the site records a failed payment. A staging
 //     copy of production holding live keys must never see "paid" for an
-//     order nobody paid for, and must never charge a real card: these
+//     order nobody paid for and must never charge a real card: these
 //     are refused in observe mode and for allowlisted hosts too. Refuse
 //     reports them so the catcher can mark the message blocked.
 //
@@ -74,7 +74,7 @@ func stripeMode(r Request) string {
 var stripeID = regexp.MustCompile(`^[a-z]+_[A-Za-z0-9_]*[A-Z0-9][A-Za-z0-9_]*$`)
 
 // stripeCall splits /v1/payment_intents/pi_x/confirm into the resource
-// ("payment_intents"), whether an ID was given, and what's done ("confirm").
+// ("payment_intents"), whether an ID was given and what's done ("confirm").
 func stripeCall(r Request) (resource string, withID bool, action string) {
 	s := segments(r)
 	if len(s) > 0 && s[0] == "v1" {

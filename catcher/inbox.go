@@ -320,7 +320,7 @@ func (e *BusyError) Error() string {
 }
 
 // BeginScope opens an action as Begin does, waiting while other actions
-// keep it from opening: an exclusive action waits until none is open, and
+// keep it from opening: an exclusive action waits until none is open and
 // any action waits while an exclusive one is open or waiting (so a stream
 // of overlapping shared actions can't keep it out forever). When ctx ends
 // first it returns a *BusyError. Begin itself never waits.

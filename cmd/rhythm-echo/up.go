@@ -301,7 +301,7 @@ func upRoutes(srv *catcher.Server, inbox *catcher.Inbox, ui *web.UI, mode string
 
 // upHandler serves routes, all behind the token when one is set. With a
 // login, Echo Inbox's routes are also open to a signed-in viewer, read
-// only (web.Login.Guard), and a session route (the relay's release) is
+// only (web.Login.Guard) and a session route (the relay's release) is
 // handed the request to check the sign-in itself. Without a token they need the login then, while
 // the API stays as open as before: connectors on this machine post to it.
 // That is why cmdUp allows a login without a token on loopback only

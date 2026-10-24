@@ -3,7 +3,7 @@
 #
 # Only the user Echo runs as may open connections to the internet. Every
 # other process (php-fpm, Apache, Node, cron) can reach loopback, private
-# networks and DNS, and must go through Echo's proxy (127.0.0.1:8026) and
+# networks and DNS and must go through Echo's proxy (127.0.0.1:8026) and
 # SMTP sink (127.0.0.1:1025) for anything else. Anything else is refused
 # at once, so a leak fails loudly instead of hanging.
 #

@@ -15,7 +15,7 @@ use Illuminate\Queue\SerializesModels;
 // sends it.
 //
 // Broken state (testbed/scenarios.yaml):
-// - s06: a refactor renamed the view to emails.order-confirmation, but the
+// - s06: a refactor renamed the view to emails.order-confirmation but the
 //   template was never moved. The job throws in the worker ("View not
 //   found") and the email is never sent.
 class OrderConfirmation extends Mailable implements ShouldQueue

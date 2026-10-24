@@ -150,7 +150,7 @@ const fullEmail = "From: John Doe <john@example.com>\r\nTo: Jane Smith <jane@exa
 	"--mix\r\nContent-Type: application/pdf\r\nContent-Disposition: attachment; filename=\"invoice.pdf\"\r\n" +
 	"Content-Transfer-Encoding: base64\r\n\r\nJVBERi0xLjQK\r\n--mix--\r\n"
 
-// shapeExtras are the keys Echo answers that Mailpit's shapes lack, and
+// shapeExtras are the keys Echo answers that Mailpit's shapes lack and
 // shapeMissing the Mailpit keys Echo leaves out.
 var (
 	shapeExtras  = []string{"count", "Headers"}

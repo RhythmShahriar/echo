@@ -41,7 +41,7 @@ func testbedDir(t *testing.T) (string, *Manifest) {
 
 // TestManifest checks that every scenario names an action that exists in
 // the testbed's Echo config, that observe-mode scenarios only use actions
-// that stay inside the testbed, and that toggle.sh knows every scenario.
+// that stay inside the testbed and that toggle.sh knows every scenario.
 func TestManifest(t *testing.T) {
 	dir, m := testbedDir(t)
 	cfg, err := config.Load(filepath.Join(dir, ".echo", "config.yaml"))
@@ -115,7 +115,7 @@ func TestFixtureDNS(t *testing.T) {
 }
 
 // TestGoodStateIsClean runs every action in the testbed's Echo config with
-// every scenario good, through the CLI as a user would, and checks that
+// every scenario good, through the CLI as a user would and checks that
 // each sent what it should and nothing is above a notice: a caught
 // scenario is caught because of its broken state alone.
 func TestGoodStateIsClean(t *testing.T) {

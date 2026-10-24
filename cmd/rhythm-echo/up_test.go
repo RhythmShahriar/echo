@@ -232,7 +232,7 @@ func (b *syncBuffer) String() string {
 	return b.b.String()
 }
 
-// startUp runs cmdUp with args until the returned stop is called, and
+// startUp runs cmdUp with args until the returned stop is called and
 // waits until the API answers.
 func startUp(t *testing.T, args ...string) (out, errOut *syncBuffer, stop func() int) {
 	t.Helper()

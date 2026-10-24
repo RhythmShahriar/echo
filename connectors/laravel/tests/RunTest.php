@@ -102,7 +102,7 @@ class RunTest extends TestCase
         $this->withHeader('X-Echo-Run', 'r4/checkout')->get('/queue')->assertOk();
         $this->assertSame([], $this->captures(), 'nothing is sent until the worker runs');
 
-        // The worker is another process: no request, an empty Context,
+        // The worker is another process: no request, an empty Context
         // and Echo's runner set the env for the flush command.
         Context::flush();
         putenv('RHYTHM_ECHO_RUN=r9/flush');

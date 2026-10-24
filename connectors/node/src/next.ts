@@ -62,9 +62,9 @@ type NextConfigInput = NextConfig | ((...args: unknown[]) => NextConfig | Promis
 
 /**
  * withEcho wraps next.config so Nodemailer stays an external package.
- * Next.js bundles server dependencies by default, and a bundled copy of
+ * Next.js bundles server dependencies by default and a bundled copy of
  * Nodemailer is out of the connector's reach; an external one is the copy
- * in node_modules, which register() patches. It changes nothing else, and is
+ * in node_modules, which register() patches. It changes nothing else and is
  * harmless in production.
  *
  *   // next.config.mjs

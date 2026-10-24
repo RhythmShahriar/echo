@@ -83,7 +83,7 @@ var paymentNegatives = []negative{
 
 // TestPaymentsRefuseLiveMode pins the payments decision: test mode gets a
 // plausible success, live mode (or an unreadable key) an error the SDK
-// throws on, and Refuses says so for the catcher.
+// throws on and Refuses says so for the catcher.
 func TestPaymentsRefuseLiveMode(t *testing.T) {
 	for _, c := range []struct {
 		r      Request

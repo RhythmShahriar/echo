@@ -84,7 +84,7 @@ var (
 // URL masks the credential parts of a URL (or of a URL-like string such as
 // "api.telegram.org/bot<token>/sendMessage"): a Telegram bot token, a
 // /key/<x> path segment and the values of query keys key, k, code, otp,
-// reset, token, sig, signature, hash, auth, ticket, magic and apikey, and
+// reset, token, sig, signature, hash, auth, ticket, magic and apikey and
 // of keys ending in signature, credential, secret, _token or _key (or
 // -token, -key). Other query values (?page=2) are kept.
 func URL(s string) string {

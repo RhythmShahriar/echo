@@ -1,6 +1,6 @@
 # rhythmsh/echo-laravel
 
-The Laravel connector for [Rhythm Echo](https://github.com/RhythmShahriar/echo). Echo captures everything a staging site **sends**, such as email, SMS, webhooks, Slack alerts and analytics calls, and checks it.
+The Laravel connector for [Rhythm Echo](https://github.com/RhythmShahriar/echo). Echo captures everything a staging site **sends**, such as email, SMS, webhooks, Slack alerts and analytics calls and checks it.
 
 - **Seal** (the default): nothing leaves the site. Echo answers in place of the real service, with realistic fake responses shaped like the provider's.
 - **Observe**: everything is recorded, then sent for real.
@@ -8,7 +8,7 @@ The Laravel connector for [Rhythm Echo](https://github.com/RhythmShahriar/echo).
 Laravel 11, 12 and 13 on PHP 8.2+.
 
 ```sh
-composer require rhythmsh/echo-laravel        # not --dev: staging deploys skip dev packages, and it is inert in production
+composer require rhythmsh/echo-laravel        # not --dev: staging deploys skip dev packages and it is inert in production
 rhythm-echo up                               # Echo on 127.0.0.1:8025
 php artisan echo:status
 ```
@@ -29,7 +29,7 @@ Everything can be set from the environment. If you want the file, run `php artis
 | `force` | `RHYTHM_ECHO_FORCE` | `false` | Run even when `APP_ENV=production`. Only for a production-like box that isn't production. |
 | `mode` | `RHYTHM_ECHO_MODE` | `seal` | What to assume when Echo can't be reached. `seal` fails closed and `observe` lets traffic through. When Echo answers, its own mode decides. |
 | `timeout` | `RHYTHM_ECHO_TIMEOUT` | `2` | Seconds to wait for Echo. |
-| `guzzle` | `RHYTHM_ECHO_GUZZLE` | `true` | Also covers Guzzle clients built by the container, and the Vonage client. See below. |
+| `guzzle` | `RHYTHM_ECHO_GUZZLE` | `true` | Also covers Guzzle clients built by the container and the Vonage client. See below. |
 
 **Production guard.** When `app()->environment('production')`, the connector does nothing unless `force` is set. `php artisan echo:status` says why it's off.
 
@@ -42,7 +42,7 @@ Everything can be set from the environment. If you want the file, run `php artis
 | Path | How | Covered |
 |---|---|---|
 | Mail: Mailables, `Mail::raw`, mail notifications, queued mail, every mailer, `Mail::build`, failover and round-robin | Every mailer's transport is wrapped (`EchoTransport`), so the capture happens under the Mailer, on the finished message | yes |
-| `Http::` facade, including `Http::pool`, and packages built on it (such as the Slack Web API notification channel) | `Http::globalMiddleware` | yes |
+| `Http::` facade, including `Http::pool` and packages built on it (such as the Slack Web API notification channel) | `Http::globalMiddleware` | yes |
 | Guzzle clients the container builds (type-hinted `GuzzleHttp\Client`, such as the Slack webhook notification channel) | the container's `GuzzleHttp\Client` binding gets the same middleware | yes, when `guzzle` is on |
 | Vonage SMS notifications | `vonage.http_client` points at the container's Guzzle client, unless you set your own | yes, when `guzzle` is on |
 | `new GuzzleHttp\Client()`, raw cURL, SDKs with their own HTTP stack (the Twilio and Stripe PHP SDKs, AWS SDK) | not hooked | **no**: use Echo's proxy, see below |
@@ -50,15 +50,15 @@ Everything can be set from the environment. If you want the file, run `php artis
 **Captures.** An email capture carries from, to, cc, bcc, reply-to, subject, text, HTML, headers and the full MIME, with the mailer name in `source.plugin`. The MIME is left out above 2 MiB: then `email.attachments` lists each attached file's name, type, size and SHA-256 (never its content) so Echo still knows what was attached. Inline images are left out. An HTTP capture carries the method, URL, headers and the first 256 KiB of the body, with the calling package in `source.plugin` when one can be found. Credential headers are masked before anything leaves the app: any header whose name contains `token`, `secret`, `key`, `auth`, `signature`, `session`, `password`, `cookie` or `credential` (any case), so `X-Auth-Token` becomes `•••••` while `X-Request-Id` is kept. `Authorization` keeps only its scheme (`Bearer •••••`). A Stripe key keeps its mode prefix (`Bearer sk_test_•••••`), which holds no secret and tells Echo whether it may fake the call. Echo redacts secrets in bodies.
 
 **HTTP decisions.** Echo answers each request before it's sent:
-- `fake`: the app gets Echo's response, and nothing is sent.
+- `fake`: the app gets Echo's response and nothing is sent.
 - `block`: the request fails with Laravel's `ConnectionException`, as if the network were down.
 - `allow`: the request is sent and the response is reported afterwards. Echo always allows the site's own host (the host of `APP_URL`, never the request's `Host` header), loopback and the hosts in its allowlist.
 
-**Mail decisions.** Sealed, Echo keeps the message and the app sees a normal send. Observed, the real transport sends it, and the connector then reports the outcome against the same message: sent, or failed with the transport's error (a dead SMTP server, a rejected API key). The exception still reaches the app as usual.
+**Mail decisions.** Sealed, Echo keeps the message and the app sees a normal send. Observed, the real transport sends it and the connector then reports the outcome against the same message: sent, or failed with the transport's error (a dead SMTP server, a rejected API key). The exception still reaches the app as usual.
 
 **Echo unreachable.** With `mode` set to `seal`, mail fails with a `TransportException` and HTTP calls fail with a `ConnectionException`. Nothing leaves. The `array` and `log` mailers keep working, because they never leave the machine. With `mode` set to `observe`, traffic goes out normally.
 
-**No `Http::preventStrayRequests()`.** The seal doesn't use it, and you don't need to call it on staging. It throws on every request that isn't faked, including the site's own host and the hosts you allow. Echo already decides per host and answers sealed requests with provider-shaped fakes, which is what keeps code paths like webhook retry counters working.
+**No `Http::preventStrayRequests()`.** The seal doesn't use it and you don't need to call it on staging. It throws on every request that isn't faked, including the site's own host and the hosts you allow. Echo already decides per host and answers sealed requests with provider-shaped fakes, which is what keeps code paths like webhook retry counters working.
 
 **Why the transport and not only `MessageSending`?** A `MessageSending` listener that returns `false` does cancel the send. But Laravel dispatches that event with `until()`, which stops at the first listener that returns anything other than `null`. One other listener returning `true` would let the mail out. The transport wrapper can't be skipped like that. The `MessageSending` listener is only a fallback for apps that bind their own mail manager.
 
@@ -101,7 +101,7 @@ Queued mail and jobs are sent when the worker runs them. For staging checks, eit
 
 ## Commands
 
-- `php artisan echo:status [--json]`: whether the connector is active (and why not), Echo's URL and mode, and a ping of `/v1/health`. It exits non-zero when the connector is off or Echo can't be reached.
+- `php artisan echo:status [--json]`: whether the connector is active (and why not), Echo's URL and mode and a ping of `/v1/health`. It exits non-zero when the connector is off or Echo can't be reached.
 - `php artisan echo:canary [--json]`: sends one mail to `canary@echo.invalid` and one `POST https://canary.echo.invalid/` through the normal paths (the default mailer and the `Http` facade). `rhythm echo doctor` checks that both arrive. The `.invalid` addresses can't be delivered even when the site is unsealed.
 
 ## Development

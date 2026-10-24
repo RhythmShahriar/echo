@@ -13,7 +13,7 @@
  *
  * rhythm-echo-connector (Echo looks for this marker before it removes the file)
  *
- * How it hooks in, and why:
+ * How it hooks in and why:
  *
  * - Email: this file defines wp_mail(). mu-plugins load before plugins, so
  *   it wins over SMTP plugins that replace wp_mail() too (FluentSMTP, Post
@@ -41,7 +41,7 @@
  *   show an admin notice, unless RHYTHM_ECHO_FORCE is set.
  *
  * - Proxy (optional): with RHYTHM_ECHO_PROXY set, raw cURL in this
- *   request (SDKs that skip the HTTP API) goes through Echo's proxy, and
+ *   request (SDKs that skip the HTTP API) goes through Echo's proxy and
  *   RHYTHM_ECHO_CA (Echo's CA PEM) is added to the HTTP API's CA bundle.
  *
  * - Streamed downloads (stream => true: plugin and theme updates,
@@ -289,7 +289,7 @@ final class Rhythm_Echo {
 			return;
 		}
 		$why = ( false === getenv( 'WP_ENVIRONMENT_TYPE' ) && ! defined( 'WP_ENVIRONMENT_TYPE' ) )
-			? 'WP_ENVIRONMENT_TYPE is not set, and WordPress treats that as production.'
+			? 'WP_ENVIRONMENT_TYPE is not set and WordPress treats that as production.'
 			: 'WP_ENVIRONMENT_TYPE is production.';
 		printf(
 			'<div class="notice notice-warning"><p><strong>Rhythm Echo is installed but not running:</strong> %s Echo only runs on test sites. Set WP_ENVIRONMENT_TYPE to staging, development or local on a test copy, or remove <code>wp-content/mu-plugins/rhythm-echo.php</code> (run <code>rhythm echo install wordpress --uninstall</code>).</p></div>',
@@ -304,7 +304,7 @@ final class Rhythm_Echo {
 	 * Points raw cURL (the Twilio and Stripe PHP SDKs, WP Mail SMTP's Gmail
 	 * mailer) at Echo's proxy for this request. libcurl reads these when a
 	 * handle has no CURLOPT_PROXY; PHP restores the environment when the
-	 * request ends. The site itself, Echo and loopback stay direct, and so
+	 * request ends. The site itself, Echo and loopback stay direct and so
 	 * does this connector's own traffic (CURLOPT_PROXY '').
 	 */
 	public static function use_proxy(): void {
@@ -329,7 +329,7 @@ final class Rhythm_Echo {
 
 	/**
 	 * Requests the connector already captured and let through go direct,
-	 * not through Echo's proxy: otherwise they'd be captured twice, and
+	 * not through Echo's proxy: otherwise they'd be captured twice and
 	 * hosts only the site can resolve would fail at the proxy.
 	 *
 	 * @param resource|object $handle a CurlHandle on PHP 8 (PHPStan checks as 7.4, which has no such class)
@@ -352,7 +352,7 @@ final class Rhythm_Echo {
 	 * requests that reach Echo's TLS-intercepting proxy verify. Core's
 	 * bundle (or whatever bundle the request already uses) is kept: the
 	 * combined file is written once to the temp directory, named by its
-	 * inputs, and reused.
+	 * inputs and reused.
 	 */
 	private static function ca_bundle( string $base ): string {
 		$ca = self::config()['ca'];
@@ -645,7 +645,7 @@ final class Rhythm_Echo {
 	// HTTP.
 
 	/**
-	 * Tags each request so its after phase can find its capture, and passes
+	 * Tags each request so its after phase can find its capture and passes
 	 * the run on to the site's own loopback requests (async runners).
 	 *
 	 * @param array<string, mixed> $args
@@ -756,7 +756,7 @@ final class Rhythm_Echo {
 	}
 
 	/**
-	 * The site itself (cron and loopback calls), Echo, and non-HTTP URLs are
+	 * The site itself (cron and loopback calls), Echo and non-HTTP URLs are
 	 * never reported.
 	 */
 	private static function skip_url( string $url ): bool {
@@ -1848,7 +1848,7 @@ final class Rhythm_Echo {
 
 	/**
 	 * What `rhythm echo doctor` needs to know: whether the connector runs, which
-	 * email layer it uses, and whether this site can reach Echo.
+	 * email layer it uses and whether this site can reach Echo.
 	 *
 	 * @return array<string, mixed>
 	 */

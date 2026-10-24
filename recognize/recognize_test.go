@@ -16,7 +16,7 @@ import (
 	"github.com/RhythmShahriar/echo/model"
 )
 
-// tcase is a request a recognizer must claim, what it must fill in, and
+// tcase is a request a recognizer must claim, what it must fill in and
 // the status its sealed fake must have.
 type tcase struct {
 	name     string
@@ -101,7 +101,7 @@ func TestRecognizersDontOverreach(t *testing.T) {
 
 // TestFakesAreWellFormed checks every sealed answer is something the
 // provider's SDK would parse: the right status, a body that parses as its
-// content type says, and a body wherever the SDK reads one.
+// content type says and a body wherever the SDK reads one.
 func TestFakesAreWellFormed(t *testing.T) {
 	for _, c := range allCases() {
 		t.Run(c.provider+"/"+c.name, func(t *testing.T) {

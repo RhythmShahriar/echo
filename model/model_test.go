@@ -73,7 +73,7 @@ func TestComparisonCount(t *testing.T) {
 	}
 }
 
-// TestV1RunLoadsUnchanged: a run.json written by v1.0.0 still loads, and
+// TestV1RunLoadsUnchanged: a run.json written by v1.0.0 still loads and
 // writing it back gives the same bytes, so the new optional fields don't
 // change the rhythm-echo/v1 schema.
 func TestV1RunLoadsUnchanged(t *testing.T) {

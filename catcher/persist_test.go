@@ -273,7 +273,7 @@ func TestPersistedInboxSkipsFilesAnUnfinishedCompactionLeft(t *testing.T) {
 	in := openInbox(t, InboxOptions{Dir: dir})
 	old := in.Add(model.Message{Channel: model.Email, Subject: "replaced"})
 	closeInbox(t, in)
-	// A compaction that wrote 000002 but stopped before removing 000001,
+	// A compaction that wrote 000002 but stopped before removing 000001
 	// and one that never finished its temporary file.
 	kept := `{"op":"add","m":{"id":"kept1","channel":"email","subject":"kept","status":"","source":{"via":""},"at":"2026-10-01T12:00:00Z"}}`
 	if err := os.WriteFile(filepath.Join(dir, "000002.jsonl"), []byte("{\"op\":\"snapshot\"}\n"+kept+"\n"), 0o600); err != nil {

@@ -188,7 +188,7 @@ func TestFixtures(cs []Custom) []FixtureResult {
 	return out
 }
 
-// WriteFixtures prints TestFixtures' results and a summary line, and
+// WriteFixtures prints TestFixtures' results and a summary line and
 // reports whether every fixture passed.
 func WriteFixtures(w io.Writer, cs []Custom) (bool, error) {
 	rs := TestFixtures(cs)

@@ -8,7 +8,7 @@
 //
 // The page is static and embedded (HTML, CSS and plain JavaScript, no
 // CDN), so it costs the same whatever the inbox holds. It reads the inbox
-// through a small JSON API under /ui/, one page of 50 summaries at a time,
+// through a small JSON API under /ui/, one page of 50 summaries at a time
 // and listens for changes on a server-sent event stream. report.HTML
 // stays the format for files. A Login (login.go) lets viewers without
 // Echo's token sign in to read it.

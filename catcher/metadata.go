@@ -18,7 +18,7 @@ var metadataNames = map[string]bool{
 var (
 	// linkLocal is 169.254.0.0/16: AWS, GCP and Azure answer on
 	// 169.254.169.254, ECS task credentials on 169.254.170.2, EKS Pod
-	// Identity on 169.254.170.23, and nothing a site sends belongs there.
+	// Identity on 169.254.170.23 and nothing a site sends belongs there.
 	linkLocal = &net.IPNet{IP: net.IPv4(169, 254, 0, 0).To4(), Mask: net.CIDRMask(16, 32)}
 	// otherMetadata are metadata endpoints outside it: Alibaba Cloud's and
 	// AWS's IPv6 one (a private ULA address).

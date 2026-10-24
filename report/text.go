@@ -171,7 +171,7 @@ func notes(b *strings.Builder, ns []string) {
 	b.WriteString("\n</details>\n\n")
 }
 
-// cell makes text safe for a Markdown table cell: one line, no controls,
+// cell makes text safe for a Markdown table cell: one line, no controls
 // and nothing that starts a column, code span, link or HTML tag.
 func cell(s string) string {
 	return Safe(cellEscaper.Replace(s))

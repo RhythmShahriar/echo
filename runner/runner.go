@@ -413,7 +413,7 @@ func doHTTP(ctx context.Context, o Options, a config.Action, runValue string, fa
 }
 
 // shownURL is a target URL as errors show it: an action's URL may carry
-// a key from ${env:...} in its query, and an action's error goes to the
+// a key from ${env:...} in its query and an action's error goes to the
 // terminal, run.json and the HTML report, which are shared and exported.
 func shownURL(u string) string { return mask.URL(secrets.Redact(u)) }
 

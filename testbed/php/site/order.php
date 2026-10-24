@@ -5,7 +5,7 @@
 // Takes a wholesale order and emails the confirmation with mail().
 //
 // Broken state (testbed/scenarios.yaml):
-// - s11: the receipt template was updated to print the order total, but the
+// - s11: the receipt template was updated to print the order total but the
 //   page never sets $total: PHP prints a warning into the email.
 
 $broken = static function ( string $id ): bool {

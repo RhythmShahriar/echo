@@ -12,7 +12,7 @@ use Throwable;
 
 /**
  * The connector's state: whether it runs, where Echo is, which run the
- * current work belongs to, and the envelope every capture shares.
+ * current work belongs to and the envelope every capture shares.
  */
 class Connector
 {

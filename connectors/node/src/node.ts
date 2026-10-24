@@ -35,7 +35,7 @@ let workUnit: { getStore(): WorkUnitStore | undefined } | null | undefined;
 /**
  * nextNodeContext reads the current request's headers from Next.js's own
  * request store instead of calling headers(): headers() during a static
- * prerender would turn the page dynamic, and reading the store has no such
+ * prerender would turn the page dynamic and reading the store has no such
  * side effect. Returns undefined outside a request, or null when this Next.js
  * version has no such store (the caller then falls back to headers()).
  */

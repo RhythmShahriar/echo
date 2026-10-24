@@ -33,7 +33,7 @@ var (
 func (c *checker) dkim() {
 	d := c.rep.Domain
 	s := c.o.Sender
-	// Which selectors, at which domain, and how sure we are they should exist.
+	// Which selectors, at which domain and how sure we are they should exist.
 	type probe struct {
 		sel, domain string
 	}
@@ -77,7 +77,7 @@ func (c *checker) dkim() {
 		case certain:
 			p := probes[0]
 			c.issue("dkim", model.Error, "DKIM key not found for the sending selector",
-				fmt.Sprintf("Mail is signed with selector %q (d=%s), but %s._domainkey.%s has no DKIM record, so DKIM fails at every receiver.", p.sel, p.domain, p.sel, p.domain),
+				fmt.Sprintf("Mail is signed with selector %q (d=%s) but %s._domainkey.%s has no DKIM record, so DKIM fails at every receiver.", p.sel, p.domain, p.sel, p.domain),
 				fmt.Sprintf("Publish the TXT (or CNAME) record your sending service gives for %s._domainkey.%s.", p.sel, p.domain))
 		case provider.Name != "" && len(provider.Selectors) > 0:
 			names := make([]string, 0, len(probes))
@@ -113,7 +113,7 @@ func (c *checker) dkim() {
 				"Generate a 2048-bit key in your sending service and publish it at "+k.Name+" (or a new selector).")
 		case k.KeyType == "rsa" && k.Bits < 2048:
 			c.issue("dkim", model.Notice, "DKIM key is 1024 bits",
-				k.Name+" holds a 1024-bit RSA key. It still works, but 2048 bits is the current recommendation.",
+				k.Name+" holds a 1024-bit RSA key. It still works but 2048 bits is the current recommendation.",
 				"Rotate to a 2048-bit key under a new selector, then retire "+k.Selector+".")
 		}
 	}

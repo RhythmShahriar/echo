@@ -22,7 +22,7 @@ func scoreboard(m *Manifest, r *Run) string {
 	w("The testbed (`testbed/`) is a WordPress shop, a Laravel app, a Next.js app and a plain-PHP page with %d scenarios in which a site ", len(m.Scenarios))
 	w("stops saying what it should. Each scenario has a good state and a broken state, switched by `testbed/toggle.sh`. For every scenario the benchmark ")
 	w("sets the good state, runs the scenario's action with `rhythm-echo snapshot --action`, breaks the scenario, runs it again with ")
-	w("`rhythm-echo compare --action`, and checks the comparison for the change listed in `testbed/scenarios.yaml`.\n\n")
+	w("`rhythm-echo compare --action` and checks the comparison for the change listed in `testbed/scenarios.yaml`.\n\n")
 	w("We wrote both Echo and the testbed, so read this as a regression suite with a scoreboard, not an independent review: ")
 	w("every scenario is something we built Echo to catch. Each one is still a real failure mode, in a real WordPress, Laravel or Next.js, ")
 	w("and it passes only when Echo reports the expected change through its normal commands.\n\n")
@@ -71,7 +71,7 @@ func scoreboard(m *Manifest, r *Run) string {
 	w("It has no notion of a baseline, so it can't report a change; the question here is whether a person reading the Mailpit inbox would have seen the problem. ")
 	w("For each state, the benchmark delivers into the testbed's Mailpit, over SMTP, the emails Echo captured that the site would have handed to an SMTP server ")
 	w("(mail sent through a provider's API, such as Resend's, never reaches an SMTP catcher), then reads them back through Mailpit's API. ")
-	w("It counts as **caught** when the broken-state inbox visibly shows the problem (the scenario's `mailpit` text is in a message's From, To, Subject or body, and wasn't in the good state's). ")
+	w("It counts as **caught** when the broken-state inbox visibly shows the problem (the scenario's `mailpit` text is in a message's From, To, Subject or body and wasn't in the good state's). ")
 	w("A message that is no longer sent is a **miss**: the inbox just has one email fewer. SMS, chat, webhooks, analytics and DNS are **can't see**.")
 	if r.Mailpit != nil {
 		w(" Not run this time: %s.", r.Mailpit)

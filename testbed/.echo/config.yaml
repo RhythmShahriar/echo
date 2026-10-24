@@ -19,7 +19,7 @@ mitm: true # decrypt HTTPS in the proxy; WordPress trusts runtime/ca.pem
 
 # Run after every action, so deferred mail and queued webhooks go out now:
 # WP-Cron (the server's crontab, bin/cron), the shop's Action Scheduler
-# stand-in, and Laravel's queue.
+# stand-in and Laravel's queue.
 flush:
   - '"${TESTBED:-.}/bin/cron"'
   - '"${TESTBED:-.}/bin/wp" testbed-queue run --quiet'

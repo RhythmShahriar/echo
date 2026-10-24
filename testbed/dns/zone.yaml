@@ -3,7 +3,7 @@
 
 # The fixture DNS the benchmark serves on 127.0.0.1:18870 (bench/dns.go) for
 # the deliverability scenarios: `rhythm-echo check <domain> --resolver
-# 127.0.0.1:18870` resolves only these names, and never the real ones.
+# 127.0.0.1:18870` resolves only these names and never the real ones.
 #
 # records: name -> type -> values. Types: A, TXT, MX ("<pref> <host>") and
 # CNAME (followed for other types, as a recursive resolver would). TXT

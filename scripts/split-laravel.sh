@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: MIT
 
 # Publishes connectors/laravel to its own repository, which Packagist reads
-# as rhythmsh/echo-laravel: the subtree's history goes to master, and the
+# as rhythmsh/echo-laravel: the subtree's history goes to master and the
 # given version tag (e.g. v1.0.0) is created there too.
 # Usage: scripts/split-laravel.sh v1.0.0
 set -eu

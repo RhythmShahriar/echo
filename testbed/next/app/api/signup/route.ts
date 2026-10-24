@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 // A Node route handler that sends what a signup sends: a welcome email
-// through Resend's API, a verification code by Twilio SMS, and an account
+// through Resend's API, a verification code by Twilio SMS and an account
 // summary through Nodemailer (SMTP).
 //
 // Broken state (testbed/scenarios.yaml):

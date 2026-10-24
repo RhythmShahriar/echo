@@ -114,7 +114,7 @@ func TestPrivateNetworkFlag(t *testing.T) {
 	}
 }
 
-// TestUpLoginFlag: --login works as RHYTHM_ECHO_LOGIN does, and its
+// TestUpLoginFlag: --login works as RHYTHM_ECHO_LOGIN does and its
 // errors name the flag.
 func TestUpLoginFlag(t *testing.T) {
 	upEnv(t)
@@ -173,7 +173,7 @@ func TestUpFreePortsMovesWithoutAsking(t *testing.T) {
 	}
 }
 
-// TestUpKeepsTheInbox: --store keeps what Echo catches across restarts,
+// TestUpKeepsTheInbox: --store keeps what Echo catches across restarts
 // and health says so along with the real SMTP and proxy addresses.
 func TestUpKeepsTheInbox(t *testing.T) {
 	upEnv(t)

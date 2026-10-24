@@ -350,7 +350,7 @@ func installWordPress(target string, s wordpress.Settings, wpcli bool, container
 var siteIDPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$`)
 
 // hubSettings points s at an agency hub: --hub is its URL and --site the
-// site's ID there, and the site sends with its own write token, read from
+// site's ID there and the site sends with its own write token, read from
 // RHYTHM_ECHO_WRITE_TOKEN so it doesn't show in ps. Without --hub only
 // --site is checked.
 func hubSettings(s *wordpress.Settings, hubURL, urlFlag, tokenFlag string) error {

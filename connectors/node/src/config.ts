@@ -128,7 +128,7 @@ const nonProduction = new Set(['development', 'test', 'staging', 'preview', 'loc
 /**
  * guard decides whether the connector may run here. A connector that is
  * active and cannot reach Echo blocks every outbound request, so a
- * production deploy that still has the package installed must stay inert,
+ * production deploy that still has the package installed must stay inert
  * and when in doubt the guard says production.
  *
  * - VERCEL_ENV=production: off. VERCEL_ENV is the only reliable signal on

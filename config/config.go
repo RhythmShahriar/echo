@@ -528,9 +528,9 @@ func (c Config) quiet(q time.Duration) error {
 	return nil
 }
 
-// Short writes a duration the way a config would: 1m, not 1m0s, and 1h,
-// not 1h0m0s. Messages about waits use it so a value reads the same
-// wherever it's reported.
+// Short writes a duration the way a config would: 1m rather than 1m0s
+// and 1h rather than 1h0m0s. Messages about waits use it so a value reads
+// the same wherever it's reported.
 func Short(d time.Duration) string {
 	s := d.String()
 	if strings.HasSuffix(s, "m0s") {

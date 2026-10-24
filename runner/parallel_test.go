@@ -304,8 +304,8 @@ func TestTagged(t *testing.T) {
 
 // Today's client and catcher keep one open action for everybody, so
 // parallel actions would hand one action's untagged mail to the next.
-// Without leases Parallel runs one by one and says why, and every
-// message stays with the action that caused it.
+// Without leases Parallel runs one by one and says why. Every message
+// stays with the action that caused it.
 func TestParallelWithoutLeasesRunsOneByOne(t *testing.T) {
 	s, log, echo := echoWithLog(t)
 	if (Options{Client: echo}).leases() {

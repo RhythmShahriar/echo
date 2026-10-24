@@ -178,7 +178,7 @@ describe('Echo unreachable', () => {
   });
   afterAll(() => api.close());
 
-  it('fails closed when sealed, and says so once', async () => {
+  it('fails closed when sealed and says so once', async () => {
     await expect(fetch(`${api.url}/1`)).rejects.toThrow('blocked by Echo');
     await expect(fetch(`${api.url}/2`)).rejects.toThrow('blocked by Echo');
     const err = await new Promise<NodeJS.ErrnoException>((resolve) => {

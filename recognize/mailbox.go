@@ -143,7 +143,7 @@ var gmail = Recognizer{
 	},
 }
 
-// gmailRaw returns the RFC 5322 message a Gmail send carries, or nil,
+// gmailRaw returns the RFC 5322 message a Gmail send carries, or nil
 // and the base64 it was decoded from ("" when it came as is).
 func gmailRaw(r Request) ([]byte, string) {
 	mt, params, _ := mime.ParseMediaType(r.Header("content-type"))

@@ -4,7 +4,7 @@
 // The Nodemailer hook. Node only.
 //
 // It patches sendMail on the transporter class (Mailer.prototype) rather
-// than the createTransport export: ESM exports can't be reassigned, and
+// than the createTransport export: ESM exports can't be reassigned and
 // transporters created before register() are covered too. The class is
 // found through a throwaway JSON transport, so no internal file paths are
 // assumed. Nodemailer 7+ ships ESM and CJS builds with separate classes;

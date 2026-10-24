@@ -21,7 +21,7 @@ import (
 
 // The testbed's Echo settings. The token is a fixed, local-only value: the
 // sites send it (wp/mu-plugins/rhythm-echo/settings.php, compose's
-// RHYTHM_ECHO_TOKEN), and Echo needs one because it listens beyond loopback
+// RHYTHM_ECHO_TOKEN) and Echo needs one because it listens beyond loopback
 // so the containers can reach it.
 const (
 	echoAPI   = "http://127.0.0.1:18860"
@@ -43,7 +43,7 @@ type Echo struct {
 
 // env is what every Echo command gets: the testbed's CA folder (so the
 // proxy's CA is the one WordPress trusts), the API and token, the Stripe
-// secret for replay actions, and TESTBED for the config's commands.
+// secret for replay actions and TESTBED for the config's commands.
 func (e *Echo) env() []string {
 	return append(os.Environ(),
 		"XDG_CACHE_HOME="+filepath.Join(e.Testbed, "runtime", "cache"),
@@ -55,7 +55,7 @@ func (e *Echo) env() []string {
 func (e *Echo) Config() string { return filepath.Join(e.Testbed, ".echo", "config.yaml") }
 
 // Start runs Echo in mode (seal or observe), restarting it if it runs in
-// the other mode, and waits until it answers.
+// the other mode and waits until it answers.
 func (e *Echo) Start(ctx context.Context, mode string) error {
 	if e.cmd != nil && e.Mode == mode {
 		return nil

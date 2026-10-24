@@ -28,7 +28,7 @@ const (
 // The Mailpit column answers: would a team that uses Mailpit as its
 // staging mail server have seen this problem? Mailpit catches mail sent
 // over SMTP and shows it in an inbox; it doesn't capture API mailers, SMS,
-// webhooks or analytics, and it keeps no baseline to compare with.
+// webhooks or analytics and it keeps no baseline to compare with.
 //
 // For each state the benchmark delivers, over SMTP into the testbed's
 // Mailpit, the emails Echo captured that the site would have handed to an
@@ -37,7 +37,7 @@ const (
 // scenario counts as caught when the inbox itself shows the problem: the
 // manifest's `mailpit` text appears in a broken-state message (its From,
 // To, Subject or body) and not in the good state's. A lost message is a
-// miss: the inbox has one email fewer, and nothing in Mailpit says one is
+// miss: the inbox has one email fewer and nothing in Mailpit says one is
 // missing.
 
 // mailpitReady reports whether Mailpit answers.
@@ -67,7 +67,7 @@ func smtpMail(m model.Message) bool {
 	return m.Channel == model.Email && m.Provider == ""
 }
 
-// deliverToMailpit sends the run's SMTP mail into Mailpit tagged with tag,
+// deliverToMailpit sends the run's SMTP mail into Mailpit tagged with tag
 // and returns how many it sent.
 func deliverToMailpit(r *model.Run, tag string) (int, error) {
 	n := 0
@@ -233,7 +233,7 @@ func judgeMailpit(ctx context.Context, s Scenario, good, broken *model.Run, stam
 	if len(bi) < len(gi) {
 		return Result{Outcome: Missed, Detail: fmt.Sprintf("the inbox has %s instead of %d; Mailpit keeps no baseline, so nothing says one is missing", emails(len(bi)), len(gi))}
 	}
-	return Result{Outcome: Missed, Detail: fmt.Sprintf("%s in the inbox, and the problem isn't visible there", emails(len(bi)))}
+	return Result{Outcome: Missed, Detail: fmt.Sprintf("%s in the inbox and the problem isn't visible there", emails(len(bi)))}
 }
 
 func emails(n int) string {

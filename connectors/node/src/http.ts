@@ -6,8 +6,8 @@
 //
 // http.request is synchronous and the caller writes the body afterwards, so
 // the decision can't be made up front. The hook lets Node build a real
-// ClientRequest, but hands it an agent that holds the request back: the
-// body is buffered as usual (Node keeps it until a socket arrives), and once
+// ClientRequest but hands it an agent that holds the request back: the
+// body is buffered as usual (Node keeps it until a socket arrives) and once
 // the caller has ended the request the capture goes to Echo. Then:
 //   allow  the real agent gets the request, exactly as if nothing happened
 //   fake   the request gets an in-memory socket that answers with Echo's

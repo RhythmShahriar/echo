@@ -9,7 +9,7 @@
 #
 # A scenario is broken while state/<id> exists. Every container mounts
 # state/ read-only and the fixtures check it on every request, job and
-# command (bin/cron checks it too, and the benchmark's fixture DNS server on
+# command (bin/cron checks it too and the benchmark's fixture DNS server on
 # every query), so a switch takes effect immediately, with no rebuild or
 # restart.
 set -eu

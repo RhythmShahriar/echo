@@ -6,7 +6,7 @@
 // Command bench runs Echo's public benchmark against the testbed: for each
 // scenario in testbed/scenarios.yaml it sets the good state, runs the
 // scenario's action with `rhythm-echo snapshot`, breaks the scenario, runs
-// it again with `rhythm-echo compare`, and checks the comparison against
+// it again with `rhythm-echo compare` and checks the comparison against
 // the scenario's expectation. Deliverability scenarios also run
 // `rhythm-echo check` on the From domains against a fixture DNS server.
 // Mailpit, the usual staging mail catcher, is judged on the same states.
@@ -205,7 +205,7 @@ func (r *Run) caught() int {
 }
 
 // benchScenario runs one scenario: reset, good → snapshot, broken →
-// compare (plus the DNS checks), and returns Echo's result with the good
+// compare (plus the DNS checks) and returns Echo's result with the good
 // and broken runs, for Mailpit.
 func benchScenario(ctx context.Context, o options, e *Echo, dir string, m *Manifest, s Scenario, wd string) (Result, *model.Run, *model.Run) {
 	fail := func(format string, a ...any) (Result, *model.Run, *model.Run) {

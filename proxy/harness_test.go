@@ -25,7 +25,7 @@ import (
 // The fake "api.twilio.com": an httptest TLS server with a certificate
 // for that name from a throwaway "public" CA. Nothing in these tests
 // resolves or reaches the real host: the proxy's dialer maps the name to
-// the local server, and every client is guarded against direct lookups.
+// the local server and every client is guarded against direct lookups.
 const (
 	twilioHost = "api.twilio.com"
 	twilioPath = "/2010-04-01/Accounts/AC123/Messages.json"

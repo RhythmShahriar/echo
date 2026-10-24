@@ -83,7 +83,7 @@ func TestTrackerStaysInSandbox(t *testing.T) {
 }
 
 // TestBlockingPolicyInOwnHead covers an email that brings its own
-// doctype and head. The policy is put before them, and a browser only
+// doctype and head. The policy is put before them. A browser only
 // honors a CSP meta inside head: parsed the way a browser does, the meta
 // must land in the one head ahead of the email's own tags. The page-level
 // policy allows remote images (see reportCSP), so this meta is all that

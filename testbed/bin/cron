@@ -1,6 +1,6 @@
 #!/bin/sh
 # The shop server's crontab line: runs WordPress's due events (the shop
-# defers its receipt emails to WP-Cron, and DISABLE_WP_CRON is set, so
+# defers its receipt emails to WP-Cron and DISABLE_WP_CRON is set, so
 # nothing else runs them). Echo runs it after every action (flush: in
 # .echo/config.yaml).
 #

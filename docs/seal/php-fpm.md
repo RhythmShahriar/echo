@@ -20,16 +20,16 @@ sendmail_path = "/usr/local/bin/rhythm-echo sendmail -t -i"
 
 `rhythm-echo sendmail` reads the message on stdin like sendmail and hands it
 to Echo's SMTP sink (`RHYTHM_ECHO_SMTP`, default `127.0.0.1:1025`). Without
-`RHYTHM_ECHO_SMTP`, but with `RHYTHM_ECHO_URL`, it posts to the capture API
+`RHYTHM_ECHO_SMTP` but with `RHYTHM_ECHO_URL`, it posts to the capture API
 instead. It understands:
-- `-t`: recipients from To, Cc and Bcc. Bcc is removed from the message, and
+- `-t`: recipients from To, Cc and Bcc. Bcc is removed from the message and
   Echo records it as Bcc.
 - `-i` and `-oi`: a line with a single dot doesn't end the message.
 - `-f` and `-r`: the envelope sender.
 - `-F`: the full name.
 
 It ignores MTA-only options (`-o*`, `-B`, `-N`, `-v`…) and adds `Date` and
-`Message-ID` when they're missing. It refuses to run, and `mail()` returns
+`Message-ID` when they're missing. It refuses to run and `mail()` returns
 false, when `WP_ENVIRONMENT_TYPE`, `APP_ENV`, `VERCEL_ENV` or `NODE_ENV` says
 `production`. Set `RHYTHM_ECHO_FORCE=1` to override.
 
@@ -118,5 +118,5 @@ cat wp-includes/certificates/ca-bundle.crt "$(rhythm echo ca)" > /etc/rhythm-ech
 ```
 
 Not yet tested here: the `WP_PROXY_*` constants and echo-ca.php against a
-running WordPress (both pass `php -l`), and the php-fpm pool file in a real
+running WordPress (both pass `php -l`) and the php-fpm pool file in a real
 php-fpm.

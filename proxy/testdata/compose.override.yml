@@ -1,6 +1,6 @@
 # Test override for docs/seal/examples/docker-compose.yml: a tiny app
 # (nginx on Alpine, which has busybox wget and sendmail) instead of
-# WordPress, and no database.
+# WordPress and no database.
 services:
   app:
     image: nginx:1.27-alpine

@@ -379,7 +379,7 @@ runs:
         esac
         [ "$MODE" = stop ] || cmd+=(${config[@]+"${config[@]}"})
         # stderr goes to a file for the summary, then to the step log.
-        # stdout names recipients, phone numbers and the text of messages,
+        # stdout names recipients, phone numbers and the text of messages
         # and anyone can read a public repository's step log, so it goes to
         # the log only with summary-details: true; otherwise the masked
         # summary is printed there below.

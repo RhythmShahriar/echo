@@ -10,7 +10,7 @@
 # creates a stock Laravel app in fixtures/app the first time (composer
 # create-project in Docker) with this package from a path repository,
 # serves it in a php:8.3-cli container on the host network, hits one route
-# with an X-Echo-Run header, flushes the queue the way Echo does, and checks
+# with an X-Echo-Run header, flushes the queue the way Echo does and checks
 # what arrived.
 #
 #   connectors/laravel/fixtures/e2e.sh          # or: make -C connectors/laravel e2e

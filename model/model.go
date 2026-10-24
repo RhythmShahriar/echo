@@ -225,7 +225,7 @@ func (r *Run) Action(id string) *Action {
 const (
 	Broke   = "broke"   // a message that was sent before isn't any more, or now fails
 	New     = "new"     // a message or a problem that wasn't there before
-	Changed = "changed" // the same message, but different: recipient, subject, payload
+	Changed = "changed" // the same message but different: recipient, subject, payload
 	Fixed   = "fixed"   // a problem from the snapshot is gone
 )
 

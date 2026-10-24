@@ -39,7 +39,7 @@ func (c *checker) mx() {
 	}
 	if len(mxs) == 0 {
 		c.issue("mx", model.Warning, "No MX record",
-			d+" has no MX record, so replies and bounces to it can't be delivered, and some receivers reject mail whose From domain can't receive mail.",
+			d+" has no MX record, so replies and bounces to it can't be delivered. Some receivers also reject mail whose From domain can't receive mail.",
 			"Publish an MX record at "+d+" pointing at the mailbox provider that receives its mail.")
 		return
 	}
@@ -104,7 +104,7 @@ func (c *checker) mtaSTS() {
 }
 
 // mtaSTSPolicy fetches https://mta-sts.<domain>/.well-known/mta-sts.txt.
-// The host is always the domain's own policy host, and redirects aren't
+// The host is always the domain's own policy host and redirects aren't
 // followed (RFC 8461 3.3), so this can't be steered elsewhere.
 func (c *checker) mtaSTSPolicy(m *MTASTS) {
 	d := c.rep.Domain
@@ -144,7 +144,7 @@ func (c *checker) mtaSTSPolicy(m *MTASTS) {
 	if m.Mode == "testing" {
 		c.issue("mta-sts", model.Notice, "MTA-STS is in testing mode",
 			"Senders report TLS failures but still deliver over plain text.",
-			"Change mode: testing to mode: enforce in "+u+" once TLS-RPT reports are clean, and update the id in _mta-sts."+d+".")
+			"Change mode: testing to mode: enforce in "+u+" once TLS-RPT reports are clean and update the id in _mta-sts."+d+".")
 	}
 	if m.Mode == "none" {
 		return
@@ -246,7 +246,7 @@ func (c *checker) bimi() {
 	c.rep.BIMI = recs[0]
 	if !enforced {
 		c.issue("bimi", model.Notice, "BIMI needs DMARC enforcement",
-			"default._bimi."+d+" exists, but inboxes only show the logo when DMARC is p=quarantine or p=reject at pct=100.",
+			"default._bimi."+d+" exists but inboxes only show the logo when DMARC is p=quarantine or p=reject at pct=100.",
 			"Raise the DMARC policy at _dmarc."+d+" to quarantine or reject.")
 	}
 }
