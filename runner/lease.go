@@ -70,7 +70,56 @@ func begin(ctx context.Context, c beginner, run, action string, exclusive bool, 
 	if err != nil {
 		return func() {}
 	}
-	return func() { _ = l.EndLease(context.WithoutCancel(ctx), lease) }
+	stop := keepRenewing(ctx, c, lease)
+	return func() {
+		stop()
+		_ = l.EndLease(context.WithoutCancel(ctx), lease)
+	}
+}
+
+// renewer is the lease renewal of a client for an Echo with the
+// lease-ttl capability: Echo closes an action whose lease isn't renewed
+// or ended within its TTL (10 minutes by default), which an action's
+// command or flush can outlast.
+type renewer interface {
+	RenewLease(ctx context.Context, lease string) error
+}
+
+// renewEvery is how often begin's action renews its lease: well inside
+// Echo's 10-minute default TTL.
+var renewEvery = 3 * time.Minute
+
+// keepRenewing renews lease every renewEvery until the returned stop is
+// called, when the client can. An Echo without renewal (a 404) is not
+// asked again.
+func keepRenewing(ctx context.Context, c beginner, lease string) (stop func()) {
+	r, ok := c.(renewer)
+	if !ok || lease == "" {
+		return func() {}
+	}
+	done := make(chan struct{})
+	finished := make(chan struct{})
+	go func() {
+		defer close(finished)
+		t := time.NewTicker(renewEvery)
+		defer t.Stop()
+		for {
+			select {
+			case <-done:
+				return
+			case <-ctx.Done():
+				return
+			case <-t.C:
+				if err := r.RenewLease(ctx, lease); client.IsNotFound(err) {
+					return
+				}
+			}
+		}
+	}()
+	return func() {
+		close(done)
+		<-finished
+	}
 }
 
 // errNoExclusive stands for "no exclusive lease was asked for", so begin

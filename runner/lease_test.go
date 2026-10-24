@@ -91,7 +91,7 @@ func TestFailedLeaseEndsNothing(t *testing.T) {
 // interface.
 func TestClientLeaseMethodsMatch(t *testing.T) {
 	c := reflect.TypeFor[*client.Client]()
-	for _, it := range []reflect.Type{reflect.TypeFor[leaser](), reflect.TypeFor[exclusiver](), reflect.TypeFor[beginner]()} {
+	for _, it := range []reflect.Type{reflect.TypeFor[leaser](), reflect.TypeFor[exclusiver](), reflect.TypeFor[beginner](), reflect.TypeFor[renewer]()} {
 		for i := range it.NumMethod() {
 			if _, ok := c.MethodByName(it.Method(i).Name); ok && !c.Implements(it) {
 				t.Errorf("client.Client has %s but not the runner's %s interface; match runner/lease.go to it", it.Method(i).Name, it.Name())
@@ -220,5 +220,59 @@ func TestConcurrentRunsKeepTheirMail(t *testing.T) {
 		if leases && !slices.Equal(r.Warnings, []string{"2 messages could not be tied to an action because another run was open"}) {
 			t.Errorf("run %s warnings: %q", r.ID, r.Warnings)
 		}
+	}
+}
+
+// renewingClient counts the renewals of its one lease.
+type renewingClient struct {
+	mu      sync.Mutex
+	renewed int
+	ended   bool
+}
+
+func (c *renewingClient) Begin(context.Context, string, string) error { return nil }
+func (c *renewingClient) End(context.Context) error                   { return nil }
+func (c *renewingClient) BeginLease(context.Context, string, string) (string, error) {
+	return "lease-1", nil
+}
+
+func (c *renewingClient) EndLease(context.Context, string) error {
+	c.mu.Lock()
+	c.ended = true
+	c.mu.Unlock()
+	return nil
+}
+
+func (c *renewingClient) RenewLease(_ context.Context, lease string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.ended || lease != "lease-1" {
+		return errors.New("renewed a lease that isn't open")
+	}
+	c.renewed++
+	return nil
+}
+
+// TestLongActionsRenewTheirLease: an action that outlasts the renewal
+// interval keeps its lease open, and renewal stops when it ends.
+func TestLongActionsRenewTheirLease(t *testing.T) {
+	old := renewEvery
+	renewEvery = 20 * time.Millisecond
+	t.Cleanup(func() { renewEvery = old })
+	c := &renewingClient{}
+	end := begin(context.Background(), c, "r1", "action:long", false, time.Second)
+	time.Sleep(110 * time.Millisecond)
+	end()
+	c.mu.Lock()
+	n := c.renewed
+	c.mu.Unlock()
+	if n < 2 {
+		t.Errorf("renewed %d times in 110ms at 20ms", n)
+	}
+	time.Sleep(50 * time.Millisecond)
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.renewed != n {
+		t.Errorf("renewed after the action ended: %d, then %d", n, c.renewed)
 	}
 }
