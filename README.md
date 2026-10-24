@@ -7,7 +7,7 @@
 
 <p align="center">
   <b>Is your site still saying what it should?</b><br>
-  Echo captures every email, SMS, webhook and API call your site sends, seals staging so nothing reaches real people, and shows what each form, order or sign-up sends before and after a change. Built for PHP &amp; WordPress, with Laravel and Next.js connectors.
+  Echo captures every email, SMS, webhook and API call your site sends, seals staging so nothing reaches real people and shows what each form, order or sign-up sends before and after a change. Built for PHP &amp; WordPress, with Laravel and Next.js connectors.
 </p>
 
 <p align="center">
@@ -30,7 +30,7 @@
 <br>
 
 <p align="center">
-  <img alt="An Echo comparison after a plugin update: the shop owner's notification email is no longer sent, an SMS now has an unfilled placeholder, and a webhook lost a field" src="docs/assets/compare.svg" width="720">
+  <img alt="An Echo comparison after a plugin update: the shop owner's notification email is no longer sent, an SMS now has an unfilled placeholder and a webhook lost a field" src="docs/assets/compare.svg" width="720">
 </p>
 
 <br>
@@ -53,6 +53,8 @@ go install github.com/RhythmShahriar/echo/cmd/rhythm-echo@latest
 
 Every download is checked against the release checksums, which are [signed with cosign](https://github.com/RhythmShahriar/rhythm/wiki/Verifying-Releases).
 
+`rhythm echo` and `rhythm-echo` are the same command: the `rhythm` CLI runs the `rhythm-echo` binary for you. Use either; the examples here use `rhythm echo`.
+
 ## Seal a site
 
 Start Echo, then connect the site. Nothing the site sends leaves the machine; Echo answers in each service's place, so the site carries on as if the email went out and the SMS was delivered.
@@ -66,7 +68,7 @@ rhythm echo watch                                # see each message as it's sent
 
 | Stack | Connector | Catches |
 |---|---|---|
-| **WordPress** | one mu-plugin, written by `install` | every `wp_mail()` (beats FluentSMTP, Post SMTP), every `wp_remote_*()` call (SMS plugins, Woo webhooks, Slack, GA4, Meta CAPI, API mailers), and raw cURL SDKs through Echo's proxy |
+| **WordPress** | one mu-plugin, written by `install` | every `wp_mail()` (beats FluentSMTP, Post SMTP), every `wp_remote_*()` call (SMS plugins, Woo webhooks, Slack, GA4, Meta CAPI, API mailers) and raw cURL SDKs through Echo's proxy |
 | **Laravel** | `composer require rhythmsh/echo-laravel` | every mailer and transport, the `Http` client, Vonage and Slack notifications, queued jobs (the action follows them) |
 | **Next.js · Node** | `npm i -D @rhythmsh/echo` + `instrumentation.ts` | `fetch` (Node and Edge), `http`/`https` (axios, SDKs), Nodemailer; built for Vercel previews too |
 | **Anything** | SMTP, `sendmail_path`, `HTTPS_PROXY` | mail and outbound HTTPS from any language, through Echo's SMTP sink and MITM proxy |
@@ -75,7 +77,26 @@ Connectors switch themselves off in production. For a seal that can't be bypasse
 
 ## Check a change
 
-List the actions that make your site send things in `.echo/config.yaml` (`rhythm echo init` writes examples): HTTP requests, WP-CLI or artisan commands, or signed webhook replays. Forms and multi-step journeys are driven by [Soundcheck](https://github.com/RhythmShahriar/soundcheck) with `--echo`.
+List the actions that make your site send things in `.echo/config.yaml` (`rhythm echo init` writes a first one for WordPress, Laravel, Next.js, Node or PHP): HTTP requests, WP-CLI or artisan commands, or signed webhook replays. Forms and multi-step journeys are driven by [Soundcheck](https://github.com/RhythmShahriar/soundcheck) with `--echo`.
+
+```yaml
+# .echo/config.yaml: ask WordPress for a password reset, which sends one email
+site: https://staging.shop.test
+actions:
+  - name: Lost password
+    http:
+      method: POST
+      url: /wp-login.php?action=lostpassword
+      form: {user_login: admin}
+    expect: {email: 1}
+```
+
+Each action counts as done when nothing new arrives for `quiet` (default 2s), or after `timeout` (default 30s). Echo caps `quiet` at 30s and `timeout` at 60s: a longer value acts as the cap. For one run, `--quiet 500ms` and `--timeout 10s` on snapshot, compare and run override them (within the same caps; a value outside them is refused).
+
+Commands find `.echo/config.yaml` in the folder you're in or one above it, so they work from any subfolder: flush and command actions run in the project's folder. Snapshot, compare, run and doctor name the config they use. The search stops at the repository root (below your home folder outside a repository) and skips a folder above that isn't yours or that anyone can write to (such as `/tmp`), since a config there could run someone else's commands. Snapshots and runs are kept next to the config; `--config` points at another one (its snapshots come with it) and `--store <dir>` keeps them elsewhere.
+
+> [!WARNING]
+> **`.echo/config.yaml` is code.** A `command` action or a `flush` entry runs in your shell on every `snapshot`, `compare` and `run`. `${env:NAME}` puts an environment variable into an `http` action, which sends it to the URL the action names. Read a config from a repository you didn't write before you run Echo in it, as you would a Makefile.
 
 ```sh
 rhythm echo snapshot --name before-update        # what each action sends now
@@ -87,7 +108,7 @@ rhythm echo compare --open                       # what changed, in a report
 |---|---|
 | **BROKE** | a message sent in the snapshot is missing now, fails, or has a new error (an unfilled `{first_name}`, a PHP warning in the email) |
 | **NEW** | a message or a problem that wasn't there before |
-| **CHANGED** | the same message, but different: recipient, subject, text, sender, fields of a payload |
+| **CHANGED** | the same message but different: recipient, subject, text, sender, fields of a payload |
 | **FIXED** | a problem from the snapshot is gone |
 
 | You want to… | Run |
@@ -95,7 +116,11 @@ rhythm echo compare --open                       # what changed, in a report
 | Check the contact form still emails the office | `rhythm soundcheck compare staging.shop.test --echo` |
 | Replay a Stripe payment and see the order email | `rhythm echo replay payment_intent.succeeded --to /?wc-api=wc_stripe` |
 | Check SPF, DKIM and DMARC for the sender you use | `rhythm echo check shop.com --from-mail received.eml` |
-| Fail CI when a message stops being sent | `rhythm echo compare --fail-on broke` |
+| Fail CI when a message stops being sent | `rhythm echo compare` (exits 1 on BROKE by default; `--fail-on new` is stricter) |
+| Compare in CI with a baseline from another job | `rhythm echo snapshot --export base.tgz` there, `rhythm echo compare --against base.tgz` here |
+| Get the login code or magic link just sent, in a test | `code=$(rhythm echo latest --to ann@shop.test --code)` (`--link --kind magic` for the link; looks back 1m and waits up to `--wait`, default 10s, then exits 1). A test that signs the same user in again should pass `--run` or a short `--since 5s`, or run `rhythm echo clear --to ann@shop.test` first, or it may get the previous code |
+| Stream what the site sends into a script | `rhythm echo watch --json` (one JSON object per line) |
+| Read any result in a script | `--json` on any command: one shape, with `kind`, `summary`, `verdict` and `data` |
 
 ## What it catches
 
@@ -118,7 +143,7 @@ Unfilled placeholders (`{first_name}`, `*|FNAME|*`, `[your-name]`), PHP warnings
 <td valign="top">
 
 ### 🔒 Staging that talks to real people
-Sealed by default: email, SMS, WhatsApp, webhooks, analytics and push are answered by Echo. Live-mode payment calls get the provider's own refusal, so a test can never charge a card. In observe mode, any real recipient outside your allowlist is flagged.
+Sealed by default: email, SMS, WhatsApp, webhooks, analytics and push are answered by Echo. Live-mode Stripe and PayPal calls get the provider's own refusal, so a test can't charge a card through either, even in observe mode. Other payment gateways are sealed like any other service, so in observe mode or on an allowlisted host they go through. In observe mode, any real recipient outside your allowlist is flagged.
 
 </td>
 <td valign="top">
@@ -178,7 +203,7 @@ The connectors have their own tests: `make -C connectors/laravel check` (Docker)
 Echo is built to help people **test their own sites safely**.
 
 - **Use it only on sites you own or are authorized to test.** Replays and actions send real requests to the site you point them at.
-- **Captured messages contain personal data.** They stay on your machine (or CI runner); credentials are masked, content isn't. Treat `.echo/` like a database dump, and use test data on staging.
+- **Captured messages contain personal data.** They stay on your machine (or CI runner); credentials are masked, content isn't. Treat `.echo/` like a database dump and use test data on staging.
 - **Observe mode really sends.** Seal is the default for a reason; use observe only where real delivery is safe.
 - **No warranty.** Echo is provided "as is", as set out in the [license](LICENSE). A connector can miss a message sent in a way it doesn't hook; use a hard seal where a leak would matter.
 

@@ -4,7 +4,9 @@
 package main
 
 import (
+	"cmp"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -13,6 +15,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/RhythmShahriar/echo/client"
@@ -79,30 +82,179 @@ func cmdCheck(s *session) int {
 			sender.SMTPHost = *host
 		}
 	}
-	ctx, cancel := context.WithTimeout(s.ctx, 60*time.Second)
+	if err := s.checkFailOn(false); err != nil {
+		return s.fail(err)
+	}
+	ctx, cancel := context.WithTimeout(s.ctx, dnsBudget)
 	defer cancel()
 	s.view.Header(version, domain)
 	if sender != nil && sender.Provider != "" {
 		s.view.Step("Sender", providerLabel(sender.Provider))
 	}
-	rep := dns.Check(ctx, domain, s.dnsOptions(sender))
-	if s.o.json {
-		return jsonOut(s, rep)
+	opts, pr := s.dnsOptions(sender)
+	rep := dns.Check(ctx, domain, opts)
+	if s.ctx.Err() != nil {
+		return s.fail(s.ctx.Err())
+	}
+	if pr.unreachable() {
+		// Nothing was looked up, so the warnings each record gives
+		// would only hide the one cause. This is "couldn't run", not a
+		// finding, so --fail-on has no say in it.
+		issue := pr.issue()
+		rep.Issues = []model.Issue{issue}
+		if s.format == "json" {
+			if err := s.writeJSON(kindCheck, unreachableReport{Report: rep, Unreachable: true, Resolver: s.o.resolver}); err != nil {
+				return s.fail(err)
+			}
+			return exitError
+		}
+		fmt.Fprintf(s.stderr, "rhythm echo: %s (%s)\n  %s\n", issue.Title, issue.Detail, issue.Fix)
+		return exitError
 	}
 	s.view.Step("Records", deliverySummary(rep))
-	return s.issues(domain, rep.Issues)
+	return s.issues(kindCheck, domain, rep.Issues, rep)
 }
 
-// dnsOptions are the DNS check settings from --resolver and --mta-sts-fetch.
-func (s *session) dnsOptions(sender *dns.Sender) dns.Options {
+// dnsOptions are the DNS check settings from --resolver and
+// --mta-sts-fetch. Lookups go through the returned probe, which limits
+// each one and tells whether the resolver answered at all.
+func (s *session) dnsOptions(sender *dns.Sender) (dns.Options, *probe) {
 	opts := dns.Options{Sender: sender}
 	if s.o.mtaSTSFetch {
 		opts.HTTP = &http.Client{Timeout: 10 * time.Second}
 	}
+	r := dns.System
 	if s.o.resolver != "" {
-		opts.Resolver = customResolver(s.o.resolver)
+		r = customResolver(s.o.resolver)
 	}
-	return opts
+	pr := &probe{r: r, addr: s.o.resolver}
+	opts.Resolver = pr
+	return opts, pr
+}
+
+// Variables, not constants, so a test can wait on a dead resolver for
+// less than the real budget.
+var (
+	// dnsQuery is how long one lookup may take. Go's default (5 s, two
+	// tries per server) let a dead resolver hold check for a minute.
+	dnsQuery = 3 * time.Second
+	// dnsBudget caps a whole check: a dead resolver ends it in this
+	// long, whatever the number of lookups.
+	dnsBudget = 15 * time.Second
+)
+
+// unreachableReport is check --json when no lookup got an answer.
+type unreachableReport struct {
+	dns.Report
+	Unreachable bool   `json:"unreachable"`
+	Resolver    string `json:"resolver,omitempty"`
+}
+
+// probe is a Resolver that gives each lookup at most dnsQuery and counts
+// the ones the server answered. An answer includes "no such name" and a
+// server error: the resolver is there, the domain's records are not.
+type probe struct {
+	r    dns.Resolver
+	addr string // --resolver, or "" for the system's
+
+	mu              sync.Mutex
+	asked, answered int
+	last            error // the last lookup that got no answer
+}
+
+func (p *probe) LookupTXT(ctx context.Context, name string) ([]string, error) {
+	ctx, cancel := context.WithTimeout(ctx, dnsQuery)
+	defer cancel()
+	v, err := p.r.LookupTXT(ctx, name)
+	return v, p.note(err)
+}
+
+func (p *probe) LookupMX(ctx context.Context, name string) ([]*net.MX, error) {
+	ctx, cancel := context.WithTimeout(ctx, dnsQuery)
+	defer cancel()
+	v, err := p.r.LookupMX(ctx, name)
+	return v, p.note(err)
+}
+
+func (p *probe) LookupHost(ctx context.Context, host string) ([]string, error) {
+	ctx, cancel := context.WithTimeout(ctx, dnsQuery)
+	defer cancel()
+	v, err := p.r.LookupHost(ctx, host)
+	return v, p.note(err)
+}
+
+func (p *probe) LookupCNAME(ctx context.Context, host string) (string, error) {
+	ctx, cancel := context.WithTimeout(ctx, dnsQuery)
+	defer cancel()
+	v, err := p.r.LookupCNAME(ctx, host)
+	return v, p.note(err)
+}
+
+func (p *probe) note(err error) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.asked++
+	if answered(err) {
+		p.answered++
+	} else {
+		p.last = err
+	}
+	return err
+}
+
+// answered reports whether a lookup's result came from a DNS server.
+// Go reports a timeout, a refused port and a dial error the same way as
+// a reply, in a *net.DNSError, so the replies are picked out: no error,
+// no such name, or the server's own error code.
+func answered(err error) bool {
+	var de *net.DNSError
+	switch {
+	case err == nil || dns.NotFound(err):
+		return true
+	case !errors.As(err, &de) || de.IsTimeout:
+		return false
+	}
+	return de.Err == "server misbehaving"
+}
+
+// unreachable reports whether every lookup went unanswered.
+func (p *probe) unreachable() bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.asked > 0 && p.answered == 0
+}
+
+// issue is the one error check reports when the resolver never answered.
+// The fix points at the resolver: the domain was never asked about.
+func (p *probe) issue() model.Issue {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	i := model.Issue{Check: "dns/resolver", Level: model.Error, Title: "Could not reach the system resolver",
+		Fix: "Check this machine's DNS settings and network connection, or pass --resolver host:port to ask another DNS server."}
+	if p.addr != "" {
+		i.Title = "Could not reach the resolver " + p.addr
+		i.Fix = "Check that a DNS server is running at " + p.addr + " and answers queries from this machine, or leave out --resolver to use the system's."
+	}
+	if p.last != nil {
+		i.Detail = lookupCause(p.last)
+	}
+	i.Identify()
+	return i
+}
+
+// lookupCause is the part of a lookup error that says what went wrong.
+// Go names the system's server ("on 127.0.0.53:53") even when a custom
+// Dial asked another, so that part would point at the wrong machine.
+func lookupCause(err error) string {
+	var de *net.DNSError
+	if errors.As(err, &de) {
+		msg := de.Err
+		if i := strings.LastIndex(msg, ": "); i >= 0 {
+			msg = msg[i+2:]
+		}
+		return msg
+	}
+	return err.Error()
 }
 
 // deliverySummary says which mail records were found and which weren't
@@ -162,15 +314,13 @@ func cmdHeaders(s *session) int {
 	r := headers.Analyze(raw)
 	issues := r.Issues
 	if *withDNS && r.FromDomain != "" {
-		ctx, cancel := context.WithTimeout(s.ctx, 60*time.Second)
-		rep := dns.Check(ctx, r.FromDomain, s.dnsOptions(&r.Sender))
+		ctx, cancel := context.WithTimeout(s.ctx, dnsBudget)
+		opts, _ := s.dnsOptions(&r.Sender)
+		rep := dns.Check(ctx, r.FromDomain, opts)
 		cancel()
 		issues = append(issues, rep.Issues...)
 	}
-	if s.o.json {
-		r.Issues = issues
-		return jsonOut(s, r)
-	}
+	r.Issues = issues
 	s.view.Header(version, args[0])
 	s.view.Step("From", r.From)
 	s.view.Step("Sent by", firstNonEmpty(providerLabel(r.Provider), "unknown service"))
@@ -184,25 +334,47 @@ func cmdHeaders(s *session) int {
 	if args[0] == "-" {
 		label = "the message"
 	}
-	return s.issues(label, issues)
+	return s.issues(kindHeaders, label, issues, r)
 }
 
-// issues prints issues as a run would and picks the exit code.
-func (s *session) issues(title string, is []model.Issue) int {
+// issues prints issues as a run would and picks the exit code. A JSON
+// report is v, the command's own result, in an envelope of kind, to
+// stdout or -o.
+func (s *session) issues(kind jsonKind, title string, is []model.Issue, v any) int {
 	if err := s.checkFailOn(false); err != nil {
 		return s.fail(err)
 	}
 	run := &model.Run{Schema: model.Schema, Tool: "rhythm-echo", Version: version, Mode: "check", Started: time.Now(),
 		Actions: []model.Action{{ID: "check", Label: title, Issues: is}}}
 	res := report.Result{Run: run}
-	if s.format != "" && s.format != "json" {
+	switch s.format {
+	case "":
+		s.view.Summary(res, "")
+	case "json":
+		if err := s.writeJSON(kind, v); err != nil {
+			return s.fail(err)
+		}
+	default:
 		return s.finish(res, "")
 	}
-	s.view.Summary(res, "")
-	if report.FailOn(res, s.o.failOn) {
+	if s.o.failOn != failOnNone && report.FailOn(res, s.o.failOn) {
 		return exitFindings
 	}
 	return exitOK
+}
+
+// writeJSON writes v in an envelope of kind to the -o file, or to stdout.
+func (s *session) writeJSON(kind jsonKind, v any) error {
+	if s.o.output == "" {
+		return writeEnvelope(s.stdout, kind, v)
+	}
+	if err := writeFile(s.o.output, func(w io.Writer) error { return writeEnvelope(w, kind, v) }); err != nil {
+		return err
+	}
+	if !s.o.quiet {
+		fmt.Fprintf(s.stderr, "Report written to %s\n", s.o.output)
+	}
+	return nil
 }
 
 // cmdReplay sends a signed test webhook to a staging site, with Echo
@@ -242,7 +414,7 @@ func cmdReplay(s *session) int {
 		}
 		headersMap[strings.TrimSpace(name)] = strings.TrimSpace(value)
 	}
-	opts := replay.Options{SecretEnv: *secretEnv, Staging: s.cfg.Staging, Scan: scanConfigs()}
+	opts := replay.Options{SecretEnv: *secretEnv, Staging: s.cfg.Staging, Scan: scanConfigs(s.projectDir(), s.cfgPath)}
 	if err := replay.SecretReady(ev, opts); err != nil {
 		return s.fail(err) // a usage error, before the header
 	}
@@ -264,7 +436,10 @@ func cmdReplay(s *session) int {
 		s.view.Message(m)
 	}
 	if s.o.json {
-		return jsonOut(s, map[string]any{"replay": res, "messages": msgs})
+		if code := jsonOut(s, kindReplay, replayData{Replay: res, Messages: msgs}); code != exitOK || res.OK() {
+			return code
+		}
+		return exitFindings
 	}
 	if !s.o.quiet {
 		fmt.Fprintf(s.stdout, "\n  The site answered %d and sent %s in response.\n\n", res.Status, report.Tally(&model.Run{Actions: []model.Action{{Messages: msgs}}}))
@@ -285,7 +460,7 @@ func loadEvent(name, scheme, typ string) (replay.Event, error) {
 }
 
 // replayer runs replay actions from .echo/config.yaml.
-func replayer(cfg config.Config) runner.Replayer {
+func replayer(cfg config.Config, dir, cfgPath string) runner.Replayer {
 	return func(ctx context.Context, a config.ReplayAction, to, run string) error {
 		ev, err := loadEvent(a.Event, "", "")
 		if err != nil {
@@ -301,7 +476,7 @@ func replayer(cfg config.Config) runner.Replayer {
 		}
 		r, act, _ := strings.Cut(run, "/")
 		res, err := replay.Send(ctx, ev, replay.Target{URL: to}, replay.Options{SecretEnv: a.Secret, Staging: cfg.Staging,
-			Scan: scanConfigs(), Run: r, Action: act})
+			Scan: scanConfigs(dir, cfgPath), Run: r, Action: act})
 		if err != nil {
 			return err
 		}
@@ -313,11 +488,20 @@ func replayer(cfg config.Config) runner.Replayer {
 }
 
 // scanConfigs reads config files in reach (.env, wp-config.php) so replay
-// can refuse to run where live payment keys are configured.
-func scanConfigs() map[string]string {
+// can refuse to run where live payment keys are configured: those in the
+// working folder, in the project folder dir when Echo's config was found
+// above it and in Echo's config itself.
+func scanConfigs(dir, cfgPath string) map[string]string {
 	out := map[string]string{}
-	for _, f := range []string{".env", "wp-config.php", "../wp-config.php", config.Path()} {
-		if b, err := os.ReadFile(f); err == nil { //nolint:gosec // fixed local names
+	files := []string{".env", "wp-config.php", "../wp-config.php", cmp.Or(cfgPath, config.Path())}
+	if dir != "." {
+		files = append(files, filepath.Join(dir, ".env"), filepath.Join(dir, "wp-config.php"), filepath.Join(dir, "..", "wp-config.php"))
+	}
+	for _, f := range files {
+		if _, seen := out[f]; seen {
+			continue
+		}
+		if b, err := os.ReadFile(f); err == nil { //nolint:gosec // fixed names in the project
 			out[f] = string(b)
 		}
 	}
@@ -331,7 +515,11 @@ func resolveTarget(site, to string) string {
 	return strings.TrimRight(site, "/") + "/" + strings.TrimLeft(to, "/")
 }
 
+// customResolver asks the DNS server at addr (port 53 when it has none).
 func customResolver(addr string) dns.Resolver {
+	if _, _, err := net.SplitHostPort(addr); err != nil {
+		addr = net.JoinHostPort(strings.Trim(addr, "[]"), "53")
+	}
 	return &net.Resolver{PreferGo: true, Dial: func(ctx context.Context, network, _ string) (net.Conn, error) {
 		var d net.Dialer
 		return d.DialContext(ctx, network, addr)

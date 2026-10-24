@@ -15,11 +15,14 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
+	"strconv"
 	"strings"
 
 	"github.com/RhythmShahriar/echo/config"
 	"github.com/RhythmShahriar/echo/connectors/wordpress"
 	"github.com/RhythmShahriar/echo/proxy"
+	"github.com/RhythmShahriar/echo/sendmail"
 	"github.com/RhythmShahriar/rhythm/kit/cli"
 )
 
@@ -53,7 +56,7 @@ func cmdInstall(args []string, stdout, stderr io.Writer) int {
 	}
 	if err != nil || len(pos) == 0 {
 		if err != nil {
-			fmt.Fprintln(stderr, "rhythm echo:", err)
+			fmt.Fprintln(stderr, "rhythm echo:", ownFlagError(err, fs))
 		}
 		fmt.Fprintln(stderr, installUsage)
 		return exitUsage
@@ -63,12 +66,18 @@ func cmdInstall(args []string, stdout, stderr io.Writer) int {
 		return exitUsage
 	}
 	// The addresses Echo runs on come from .echo/config.yaml when there is one.
-	cfg, err := config.Load(cmp.Or(*configPath, config.Path()))
+	path := *configPath
+	if path == "" {
+		path, _ = findConfig(".") // none: the defaults
+	}
+	cfg, err := loadConfig(path)
 	if err != nil {
 		fmt.Fprintln(stderr, "rhythm echo:", err)
 		return exitUsage
 	}
 	echoURL := cmp.Or(*url, os.Getenv("RHYTHM_ECHO_URL"), "http://"+cfg.Listen)
+	// install has no -q: what it prints is the result.
+	warnTokenFlag(stderr, *token, false)
 	tok := cmp.Or(*token, os.Getenv("RHYTHM_ECHO_TOKEN"))
 	proxyAddr := cfg.Proxy
 	if proxyAddr == "" || proxyAddr == "off" {
@@ -109,6 +118,9 @@ HTTPS_PROXY=http://%s and trust: %s
 	case "next", "nextjs":
 		return installNext(cmp.Or(second(pos), "."), echoURL, tok, stdout, stderr)
 	case "node":
+		if !hasPackageJSON(cmp.Or(second(pos), "."), "Node", stderr) {
+			return exitUsage
+		}
 		fmt.Fprintf(stdout, `Node: add the package and load it before your app.
 
   npm install --save-dev @rhythmsh/echo   # or a regular dependency if staging installs without dev deps
@@ -118,13 +130,17 @@ Environment, on staging or your machine only:
 
   RHYTHM_ECHO_URL=%s%s
 
-The connector is off on VERCEL_ENV=production, and on NODE_ENV=production unless
+The connector is off on VERCEL_ENV=production and on NODE_ENV=production unless
 RHYTHM_ECHO_URL is set: setting it there turns the connector on.
 
 Express/Fastify: app.use(echoMiddleware()) ties messages to the request that caused them.
 `, echoURL, tokenLine(tok))
 		return exitOK
 	case "generic", "php":
+		if err := checkSMTPAddr(smtpAddr); err != nil {
+			fmt.Fprintln(stderr, "rhythm echo:", err)
+			return exitUsage
+		}
 		smtpLogin := "any username and password"
 		if !loopback(smtpAddr) {
 			smtpLogin = "any username, Echo's token as the password"
@@ -136,8 +152,7 @@ Express/Fastify: app.use(echoMiddleware()) ties messages to the request that cau
 		fmt.Fprintf(stdout, `Any stack: point mail and outbound HTTPS at Echo.
 
   Mail (SMTP):      host %s, port %s, %s
-  Mail (PHP):       sendmail_path = "%s sendmail -t -i"   (php.ini or php-fpm pool)
-  HTTP(S):          rhythm echo up --proxy %s --mitm
+%s  HTTP(S):          rhythm echo up --proxy %s --mitm
                     HTTPS_PROXY=http://%s  https_proxy=http://%s
                     and trust Echo's CA: %s
                     (curl, PHP cURL, Python requests and Go honor these; Node needs
@@ -147,11 +162,80 @@ Express/Fastify: app.use(echoMiddleware()) ties messages to the request that cau
 
 For a seal that can't be bypassed, see docs/seal in the Echo repository: the app on an
 internal Docker network or behind a firewall, with Echo as its only way out.
-`, smtpHost, smtpPort, smtpLogin, binaryPath(), proxyAddr, proxyAddr, proxyAddr, caHint())
+`, smtpHost, smtpPort, smtpLogin, sendmailLines(smtpAddr, binaryPath(), runtime.GOOS, !loopback(smtpAddr)), proxyAddr, proxyAddr, proxyAddr, caHint())
 		return exitOK
 	}
 	fmt.Fprintf(stderr, "rhythm echo: install: unknown stack %q (wordpress, laravel, next, node, generic)\n", pos[0])
 	return exitUsage
+}
+
+// sendmailLines says how to point PHP's mail() at the shim. The shim
+// finds a sink on 127.0.0.1:1025 by itself. php-fpm runs sendmail_path
+// with a bare environment, so any other address goes in the command:
+// PHP runs it through sh -c, which takes the VAR=value prefix. That
+// also means the binary's path is shell-quoted, or a space in it (a
+// macOS home folder) would split it. Windows has no sh, so there the
+// variable is set on its own and a path with a space gets a hint.
+// smtpAddr must have passed checkSMTPAddr.
+func sendmailLines(smtpAddr, bin, goos string, needsToken bool) string {
+	const pad = "                    "
+	var b strings.Builder
+	if goos != "windows" {
+		bin = shellQuote(bin)
+	}
+	switch {
+	case smtpAddr == sendmail.DefaultSMTP || goos == "windows":
+		fmt.Fprintf(&b, "  Mail (PHP):       sendmail_path = \"%s sendmail -t -i\"   (php.ini or php-fpm pool)\n", bin)
+		if goos == "windows" && strings.ContainsAny(bin, " \t") {
+			fmt.Fprintf(&b, "%sthe path has a space: copy rhythm-echo to a folder without one\n", pad)
+		}
+		if smtpAddr != sendmail.DefaultSMTP {
+			fmt.Fprintf(&b, "%sand set %s=%s in the environment PHP runs in\n", pad, sendmail.EnvSMTP, smtpAddr)
+		}
+	default:
+		fmt.Fprintf(&b, "  Mail (PHP):       sendmail_path = \"%s=%s %s sendmail -t -i\"\n", sendmail.EnvSMTP, smtpAddr, bin)
+		fmt.Fprintf(&b, "%s(php.ini or php-fpm pool; Echo's SMTP sink isn't on %s)\n", pad, sendmail.DefaultSMTP)
+		fmt.Fprintf(&b, "  Mail (scripts):   %s=%s in the environment of cron jobs and scripts\n", sendmail.EnvSMTP, smtpAddr)
+	}
+	if needsToken {
+		fmt.Fprintf(&b, "%sthe sink asks for Echo's token: set %s in the same environment\n", pad, sendmail.EnvToken)
+	}
+	return b.String()
+}
+
+// smtpHostChars are the characters a host name or IP address may hold.
+// install prints the address into a command line, so anything else (a
+// ; or a space) is refused rather than handed to sh.
+var smtpHostChars = regexp.MustCompile(`^[A-Za-z0-9._:-]+$`)
+
+// checkSMTPAddr checks the config's smtp: is a host:port before install
+// prints it into a command PHP runs through sh -c.
+func checkSMTPAddr(addr string) error {
+	host, port, err := net.SplitHostPort(addr)
+	if err == nil && !smtpHostChars.MatchString(host) {
+		err = errors.New("the host holds characters a host name can't")
+	}
+	if n, perr := strconv.Atoi(port); err == nil && (perr != nil || n < 1 || n > 65535) {
+		err = errors.New("the port isn't a number from 1 to 65535")
+	}
+	if err != nil {
+		return cli.Usagef("smtp: %q in the config isn't a host:port such as 127.0.0.1:1025 (%v)", addr, err)
+	}
+	return nil
+}
+
+// shellSafe matches a word sh reads as it is.
+var shellSafe = regexp.MustCompile(`^[A-Za-z0-9_./:@%+=,-]+$`)
+
+// shellQuote quotes s for sh when it holds anything but the characters
+// a path is usually made of, so the line stays readable in the common
+// case. A single quote inside ends the quoting, is escaped with a
+// backslash and the quoting starts again.
+func shellQuote(s string) string {
+	if s != "" && shellSafe.MatchString(s) {
+		return s
+	}
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
 
 func installWordPress(target string, s wordpress.Settings, wpcli bool, container string, uninstall bool, stdout, stderr io.Writer) int {
@@ -222,7 +306,7 @@ func installWordPress(target string, s wordpress.Settings, wpcli bool, container
 		fmt.Fprintf(stdout, "  wp-config.php sets WP_ENVIRONMENT_TYPE to %s, so the connector runs.\n", env)
 	default:
 		fmt.Fprint(stdout, `  It runs only where WP_ENVIRONMENT_TYPE is local, development or staging. WordPress
-  treats an unset WP_ENVIRONMENT_TYPE as production, and there the connector does
+  treats an unset WP_ENVIRONMENT_TYPE as production and there the connector does
   nothing. On staging, add this to wp-config.php, above "That's all, stop editing!":
 
     define( 'WP_ENVIRONMENT_TYPE', 'staging' );
@@ -260,11 +344,10 @@ func wpEnvironment(target string, remote bool) string {
 	return ""
 }
 
-// installNext adds instrumentation.ts when the project has none, and says
+// installNext adds instrumentation.ts when the project has none and says
 // how to wrap next.config (the project's own file, so it's not edited).
 func installNext(dir, url, token string, stdout, stderr io.Writer) int {
-	if _, err := os.Stat(filepath.Join(dir, "package.json")); err != nil { //nolint:gosec // the user's own project folder
-		fmt.Fprintf(stderr, "rhythm echo: %s has no package.json; run this in the Next.js project\n", dir)
+	if !hasPackageJSON(dir, "Next.js", stderr) {
 		return exitUsage
 	}
 	inst := ""
@@ -304,10 +387,21 @@ Environment (.env.local, or the Preview environment on Vercel):
 
   RHYTHM_ECHO_URL=%s%s
 
-Then: rhythm echo up, and rhythm echo watch while you use the app.
+Then: rhythm echo up and rhythm echo watch while you use the app.
 `, url, tokenLine(token))
 	_, _ = stdout.Write(b.Bytes())
 	return exitOK
+}
+
+// hasPackageJSON reports whether dir is a Node project and says so when
+// it isn't: the package goes into that project's package.json, so
+// install next and install node both stop outside one.
+func hasPackageJSON(dir, label string, stderr io.Writer) bool {
+	if _, err := os.Stat(filepath.Join(dir, "package.json")); err != nil { //nolint:gosec // the user's own project folder
+		fmt.Fprintf(stderr, "rhythm echo: %s has no package.json; run this in the %s project, or name its folder\n", displayDir(dir), label)
+		return false
+	}
+	return true
 }
 
 // importsEcho reports whether a source file already loads the connector.

@@ -16,7 +16,6 @@ import (
 	"github.com/charmbracelet/huh"
 
 	"github.com/RhythmShahriar/echo/client"
-	"github.com/RhythmShahriar/echo/config"
 	"github.com/RhythmShahriar/echo/report"
 	"github.com/RhythmShahriar/echo/store"
 )
@@ -33,11 +32,11 @@ type pickState struct {
 
 func loadPickState() pickState {
 	var ps pickState
-	_, err := os.Stat(config.Path())
-	ps.hasConfig = err == nil
-	cfg, err := config.Load(config.Path())
+	path, _ := findConfig(".")
+	ps.hasConfig = path != ""
+	cfg, err := loadConfig(path)
 	ps.hasActions = err == nil && len(cfg.Actions) > 0
-	st := store.Store{Root: config.Dir}
+	st := store.Store{Root: storeRoot("", path)}
 	if dir, err := st.Snapshot(""); err == nil {
 		if r, err := store.LoadRun(dir); err == nil {
 			ps.snapshot = fmt.Sprintf("%q, %s", r.Name, report.Ago(r.Started))

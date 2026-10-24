@@ -4,10 +4,12 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"io"
 	"net"
 	"net/http"
@@ -15,15 +17,18 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/RhythmShahriar/echo/catcher"
 	"github.com/RhythmShahriar/echo/client"
+	"github.com/RhythmShahriar/echo/model"
 	"github.com/RhythmShahriar/echo/wire"
 )
 
 func TestHeadersCommand(t *testing.T) {
+	// PHP mail() fails DMARC, an error, which --fail-on's default fails on.
 	code, out, errOut := runCLI(t, "headers", "../../headers/testdata/phpmail.eml", "--plain")
-	if code != 0 || !strings.Contains(out, "PHP") {
+	if code != exitFindings || !strings.Contains(out, "PHP") {
 		t.Fatalf("headers: %d\n%s\n%s", code, out, errOut)
 	}
 	code, out, _ = runCLI(t, "headers", "../../headers/testdata/sendgrid.eml", "--json")
@@ -43,7 +48,29 @@ func TestReplayCommand(t *testing.T) {
 	echo := client.New(echoSrv.URL, "")
 	// A staging shop: verifies the Stripe signature and, like a payment
 	// plugin, emails the customer.
-	shop := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	shop := stripeShop(t, secret, echo, nil)
+	defer shop.Close()
+	t.Chdir(t.TempDir())
+	code, out, errOut := runCLI(t, "replay", "payment_intent.succeeded", "--to", shop.URL+"/webhook", "--url", echoSrv.URL, "--plain", "--wait", "2s")
+	if code != 0 || !strings.Contains(out, "answered 200 and sent 1 email") {
+		t.Fatalf("replay: %d\n%s\n%s", code, out, errOut)
+	}
+	// Live keys in reach stop it.
+	t.Setenv("STRIPE_SECRET_KEY", strings.Join([]string{"sk", "_live_", "abcdefghijklmnop1234"}, ""))
+	if code, _, errOut := runCLI(t, "replay", "payment_intent.succeeded", "--to", shop.URL, "--url", echoSrv.URL); code != exitUsage {
+		t.Errorf("live key: exit %d %s", code, errOut)
+	}
+	if code, out, _ := runCLI(t, "replay", "--list"); code != 0 || !strings.Contains(out, "payment_intent.succeeded") {
+		t.Errorf("--list:\n%s", out)
+	}
+}
+
+// stripeShop is a staging shop's webhook endpoint: it checks the Stripe
+// signature and, like a payment plugin, emails the customer through
+// Echo, tagged with the run. seen, when set, gets each body it accepts.
+func stripeShop(t *testing.T, secret string, echo *client.Client, seen chan<- string) *httptest.Server {
+	t.Helper()
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
 		sig := r.Header.Get("Stripe-Signature")
 		var ts, v1 string
@@ -62,23 +89,53 @@ func TestReplayCommand(t *testing.T) {
 			http.Error(w, "bad signature", 400)
 			return
 		}
+		if seen != nil {
+			seen <- string(body)
+		}
 		_, _ = echo.Capture(context.Background(), wire.Capture{Kind: "email", Run: r.Header.Get(wire.RunHeader), Source: wire.Source{Via: "test"},
 			Email: &wire.Email{To: []string{"buyer@example.com"}, Subject: "Payment received", Text: "Thanks"}})
 		w.WriteHeader(200)
 	}))
+}
+
+// TestRunReplayAction runs a replay action from .echo/config.yaml: the
+// replayer signs the event with the configured secret, applies set: in
+// a fixed order and fails the action when the site rejects it.
+func TestRunReplayAction(t *testing.T) {
+	secret := strings.Join([]string{"wh", "sec_", "CliRunReplaySecret0123456789"}, "")
+	t.Setenv("SHOP_STRIPE_SECRET", secret)
+	echoSrv := httptest.NewServer(catcher.NewServer(catcher.NewInbox(100), catcher.Config{Version: "test"}))
+	defer echoSrv.Close()
+	seen := make(chan string, 4)
+	shop := stripeShop(t, secret, client.New(echoSrv.URL, ""), seen)
 	defer shop.Close()
 	t.Chdir(t.TempDir())
-	code, out, errOut := runCLI(t, "replay", "payment_intent.succeeded", "--to", shop.URL+"/webhook", "--url", echoSrv.URL, "--plain", "--wait", "2s")
-	if code != 0 || !strings.Contains(out, "answered 200 and sent 1 email") {
-		t.Fatalf("replay: %d\n%s\n%s", code, out, errOut)
+	cfg := func(secretEnv string) string {
+		return "site: " + shop.URL + "\nquiet: 200ms\ntimeout: 3s\nactions:\n" +
+			"  - name: Paid\n    replay:\n      event: payment_intent.succeeded\n      to: /webhook\n" +
+			"      secret_env: " + secretEnv + "\n      set: {data.object.amount: \"1999\", data.object.currency: eur}\n"
 	}
-	// Live keys in reach stop it.
-	t.Setenv("STRIPE_SECRET_KEY", strings.Join([]string{"sk", "_live_", "abcdefghijklmnop1234"}, ""))
-	if code, _, errOut := runCLI(t, "replay", "payment_intent.succeeded", "--to", shop.URL, "--url", echoSrv.URL); code != exitUsage {
-		t.Errorf("live key: exit %d %s", code, errOut)
+	writeConfig(t, cfg("SHOP_STRIPE_SECRET"))
+	code, out, errOut := runCLI(t, "run", "--url", echoSrv.URL, "--plain")
+	if code != exitOK || !strings.Contains(out, "1 email") {
+		t.Fatalf("run with a replay action: %d\n%s\n%s", code, out, errOut)
 	}
-	if code, out, _ := runCLI(t, "replay", "--list"); code != 0 || !strings.Contains(out, "payment_intent.succeeded") {
-		t.Errorf("--list:\n%s", out)
+	var compact bytes.Buffer
+	_ = json.Compact(&compact, []byte(<-seen))
+	if body := compact.String(); !strings.Contains(body, `"amount":1999`) || !strings.Contains(body, `"currency":"eur"`) {
+		t.Errorf("set: was not applied:\n%s", body)
+	}
+
+	// The site rejects a wrong signature, so the only action failed.
+	t.Setenv("WRONG_SECRET", strings.Join([]string{"wh", "sec_", "NotTheShopsSecret0123456789"}, ""))
+	writeConfig(t, cfg("WRONG_SECRET"))
+	if code, out, errOut := runCLI(t, "run", "--url", echoSrv.URL, "--plain"); code != exitError || !strings.Contains(out+errOut, "the site answered 400") {
+		t.Errorf("rejected replay: %d\n%s\n%s", code, out, errOut)
+	}
+	// An event that doesn't exist fails the action too.
+	writeConfig(t, strings.Replace(cfg("SHOP_STRIPE_SECRET"), "payment_intent.succeeded", "no.such.event", 1))
+	if code, out, errOut := runCLI(t, "run", "--url", echoSrv.URL, "--plain"); code != exitError {
+		t.Errorf("unknown event: %d\n%s\n%s", code, out, errOut)
 	}
 }
 
@@ -118,7 +175,7 @@ func TestCheckAndHeadersOptions(t *testing.T) {
 		t.Errorf("unknown provider: %d %q", code, errOut)
 	}
 	addr, n := nxdomain(t)
-	code, out, errOut := runCLI(t, "check", "shop.test", "--provider", "ses", "--resolver", addr, "--plain")
+	code, out, errOut := runCLI(t, "check", "shop.test", "--provider", "ses", "--resolver", addr, "--plain", "--fail-on", "none")
 	if code != 0 || !strings.Contains(out, "Sender: Amazon SES") || !strings.Contains(out, "Records: no mail records found") || n.Load() == 0 {
 		t.Errorf("check: %d, %d queries\n%s\n%s", code, n.Load(), out, errOut)
 	}
@@ -126,11 +183,148 @@ func TestCheckAndHeadersOptions(t *testing.T) {
 		t.Errorf("issue lines still carry the records summary:\n%s", out)
 	}
 	before := n.Load()
-	code, out, errOut = runCLI(t, "headers", "../../headers/testdata/sendgrid.eml", "--check", "--resolver", addr, "--plain")
+	code, out, errOut = runCLI(t, "headers", "../../headers/testdata/sendgrid.eml", "--check", "--resolver", addr, "--plain", "--fail-on", "NONE")
 	if code != 0 || n.Load() == before {
 		t.Errorf("headers --check ignored --resolver: %d, %d queries\n%s\n%s", code, n.Load()-before, out, errOut)
 	}
 	if !strings.Contains(out, "Sent by: SendGrid") {
 		t.Errorf("headers:\n%s", out)
+	}
+}
+
+// blackHole is a DNS server on loopback that reads every query and never
+// answers, like a firewalled or crashed resolver.
+func blackHole(t *testing.T) string {
+	t.Helper()
+	pc, err := net.ListenPacket("udp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = pc.Close() })
+	go func() {
+		buf := make([]byte, 1500)
+		for {
+			if _, _, err := pc.ReadFrom(buf); err != nil {
+				return
+			}
+		}
+	}()
+	return pc.LocalAddr().String()
+}
+
+// closedPort is a loopback UDP port nothing listens on: queries to it
+// are refused at once.
+func closedPort(t *testing.T) string {
+	t.Helper()
+	pc, err := net.ListenPacket("udp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	addr := pc.LocalAddr().String()
+	_ = pc.Close()
+	return addr
+}
+
+func TestCheckUnreachableResolverExitsThree(t *testing.T) {
+	// The real budget is what the help promises; the run below waits
+	// on a shorter one so a loaded runner has room to spare.
+	if dnsBudget > 15*time.Second || dnsQuery > dnsBudget {
+		t.Errorf("a dead resolver may hold check for %s (lookups %s), want at most 15s", dnsBudget, dnsQuery)
+	}
+	query, budget := dnsQuery, dnsBudget
+	dnsQuery, dnsBudget = 300*time.Millisecond, 2*time.Second
+	t.Cleanup(func() { dnsQuery, dnsBudget = query, budget })
+	addr := blackHole(t)
+	start := time.Now()
+	// --fail-on none must not turn "nothing was checked" into a pass.
+	code, out, errOut := runCLI(t, "check", "shop.test", "--resolver", addr, "--fail-on", "none", "--plain")
+	took := time.Since(start)
+	if code != exitError {
+		t.Errorf("black hole: exit %d, want %d\n%s\n%s", code, exitError, out, errOut)
+	}
+	if took >= 8*time.Second {
+		t.Errorf("black hole took %s with a %s budget, want under 8s", took, dnsBudget)
+	}
+	want := "rhythm echo: Could not reach the resolver " + addr
+	if !strings.Contains(errOut, want) || strings.Count(errOut, "rhythm echo:") != 1 || strings.Contains(errOut, "127.0.0.53") {
+		t.Errorf("want one error naming %s:\n%s", addr, errOut)
+	}
+	if strings.Contains(out, "lookup failed") || strings.Contains(out, "Records:") {
+		t.Errorf("per-record warnings hide the cause:\n%s", out)
+	}
+}
+
+func TestCheckRefusedResolverJSON(t *testing.T) {
+	addr := closedPort(t)
+	code, out, errOut := runCLI(t, "check", "shop.test", "--resolver", addr, "--json")
+	if code != exitError {
+		t.Fatalf("refused: exit %d\n%s\n%s", code, out, errOut)
+	}
+	var rep struct {
+		Unreachable bool          `json:"unreachable"`
+		Resolver    string        `json:"resolver"`
+		Issues      []model.Issue `json:"issues"`
+	}
+	if env := decodeEnvelope(t, []byte(out), kindCheck, &rep); env.Complete || env.Verdict != verdictError {
+		t.Errorf("an unanswered check is complete %v, verdict %q; want false and error", env.Complete, env.Verdict)
+	}
+	if !rep.Unreachable || rep.Resolver != addr || len(rep.Issues) != 1 || rep.Issues[0].Check != "dns/resolver" ||
+		!strings.Contains(rep.Issues[0].Fix, "at "+addr) {
+		t.Errorf("json: %+v", rep)
+	}
+	// A bad --fail-on is still the user's mistake, not the resolver's.
+	if code, _, _ := runCLI(t, "check", "shop.test", "--resolver", addr, "--fail-on", "broke"); code != exitUsage {
+		t.Errorf("bad --fail-on: exit %d", code)
+	}
+}
+
+func TestAnsweredLookups(t *testing.T) {
+	for _, tc := range []struct {
+		err  error
+		want bool
+	}{
+		{nil, true},
+		{&net.DNSError{Err: "no such host", IsNotFound: true}, true},
+		{&net.DNSError{Err: "server misbehaving", IsTemporary: true}, true},
+		{&net.DNSError{Err: "i/o timeout", IsTimeout: true}, false},
+		{&net.DNSError{Err: "read udp 127.0.0.1:1->127.0.0.1:2: read: connection refused", IsTemporary: true}, false},
+		{context.DeadlineExceeded, false},
+	} {
+		if got := answered(tc.err); got != tc.want {
+			t.Errorf("answered(%v) = %v", tc.err, got)
+		}
+	}
+	if got := lookupCause(&net.DNSError{Err: "dial udp 127.0.0.1:2: i/o timeout", Server: "127.0.0.53:53"}); got != "i/o timeout" {
+		t.Errorf("lookupCause: %q", got)
+	}
+}
+
+func TestDeliverabilityAndReplayJSON(t *testing.T) {
+	var hdr struct {
+		Provider string `json:"provider"`
+	}
+	code, out, _ := runCLI(t, "headers", "../../headers/testdata/sendgrid.eml", "--json")
+	if decodeEnvelope(t, []byte(out), kindHeaders, &hdr); code != 0 || hdr.Provider != "SendGrid" {
+		t.Errorf("headers --json: %d %+v", code, hdr)
+	}
+	addr, _ := nxdomain(t)
+	var rep struct {
+		Domain string `json:"domain"`
+	}
+	code, out, _ = runCLI(t, "check", "shop.test", "--resolver", addr, "--json", "--fail-on", "none")
+	if env := decodeEnvelope(t, []byte(out), kindCheck, &rep); code != 0 || rep.Domain != "shop.test" || env.Verdict != verdictFindings || !env.Complete {
+		t.Errorf("check --json: %d %+v %+v", code, env, rep)
+	}
+
+	secret := strings.Join([]string{"wh", "sec_", "CliTestSigningSecret0123456789"}, "")
+	t.Setenv("ECHO_STRIPE_WEBHOOK_SECRET", secret)
+	echoSrv := fixtureServer(t, 20469, catcher.NewServer(catcher.NewInbox(100), catcher.Config{Version: "test"}))
+	shop := stripeShop(t, secret, client.New(echoSrv.URL, ""), nil)
+	defer shop.Close()
+	t.Chdir(t.TempDir())
+	var data replayData
+	code, out, errOut := runCLI(t, "replay", "payment_intent.succeeded", "--to", shop.URL+"/webhook", "--url", echoSrv.URL, "--json", "--wait", "2s")
+	if env := decodeEnvelope(t, []byte(out), kindReplay, &data); code != 0 || env.Summary.Messages != 1 || data.Replay.Status != 200 || len(data.Messages) != 1 {
+		t.Errorf("replay --json: %d %+v %+v\n%s", code, env.Summary, data, errOut)
 	}
 }

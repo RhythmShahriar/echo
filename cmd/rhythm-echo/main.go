@@ -1,7 +1,21 @@
 // Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
 // SPDX-License-Identifier: MIT
 
-// rhythm-echo is the Echo binary, normally run as `rhythm echo`.
+// Command rhythm-echo captures every email, SMS, webhook and API call a
+// site sends, seals staging so none of it reaches real people and
+// compares what each action sends before and after a change. It is
+// normally run as `rhythm echo`; the rhythm CLI runs this binary.
+//
+// Usage:
+//
+//	rhythm-echo <command> [flags]
+//
+// The commands are up (the catcher), install, doctor, watch, ls, show,
+// clear, snapshot, compare, run, report, snapshots, replay, latest,
+// check, headers, init, ca and sendmail; `rhythm-echo help` lists their
+// flags and exit codes. Every command exits 0 when done, 1 for findings,
+// 2 for a usage error and 3 when it couldn't run, as Tuner and Soundcheck
+// do; sendmail uses sendmail's own codes instead.
 package main
 
 import (
@@ -19,10 +33,10 @@ var version = "dev"
 // Exit codes, as in Tuner and Soundcheck. Every command returns one of
 // these; the help text lists them under "Exit codes".
 const (
-	exitOK       = 0   // done, and nothing at or above --fail-on
-	exitFindings = 1   // --fail-on hit, a doctor check failed, or the site rejected a replay
+	exitOK       = 0   // done and nothing at or above --fail-on
+	exitFindings = 1   // --fail-on hit, an action failed, a doctor check failed, or the site rejected a replay
 	exitUsage    = 2   // wrong command line, or .echo/config.yaml asks for what isn't there
-	exitError    = 3   // couldn't run: Echo not reachable, a file or network error
+	exitError    = 3   // couldn't run: Echo not reachable, every action failed, no DNS answer, a file or network error
 	exitCanceled = 130 // interrupted
 )
 
@@ -39,67 +53,105 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	}
 	switch args[0] {
 	case "-h", "--help", "help":
+		if len(args) > 1 {
+			return help(args[1], stdin, stdout, stderr)
+		}
 		usage(stdout)
 		return exitOK
 	case "-v", "--version", "version":
 		fmt.Fprintln(stdout, "rhythm-echo", version)
 		return exitOK
-	case "up", "start":
-		return command(cmdUp, args[1:], stdout, stderr)
-	case "snapshot", "snap":
-		return command(cmdSnapshot, args[1:], stdout, stderr)
-	case "compare", "cmp":
-		return command(cmdCompare, args[1:], stdout, stderr)
+	}
+	c, ok := lookup(args[0])
+	if !ok {
+		return unknownCommand(args[0], stderr)
+	}
+	switch c.name {
+	case "up":
+		return command(c, cmdUp, args[1:], stdout, stderr)
+	case "snapshot":
+		return command(c, cmdSnapshot, args[1:], stdout, stderr)
+	case "compare":
+		return command(c, cmdCompare, args[1:], stdout, stderr)
 	case "run":
-		return command(cmdRun, args[1:], stdout, stderr)
+		return command(c, cmdRun, args[1:], stdout, stderr)
 	case "report":
-		return command(cmdReport, args[1:], stdout, stderr)
-	case "watch", "tail":
-		return command(cmdWatch, args[1:], stdout, stderr)
-	case "ls", "list":
-		return command(cmdList, args[1:], stdout, stderr)
+		return command(c, cmdReport, args[1:], stdout, stderr)
+	case "watch":
+		return command(c, cmdWatch, args[1:], stdout, stderr)
+	case "ls":
+		return command(c, cmdList, args[1:], stdout, stderr)
 	case "show":
-		return command(cmdShow, args[1:], stdout, stderr)
+		return command(c, cmdShow, args[1:], stdout, stderr)
 	case "clear":
-		return command(cmdClear, args[1:], stdout, stderr)
+		return command(c, cmdClear, args[1:], stdout, stderr)
+	case "doctor":
+		return command(c, cmdDoctor, args[1:], stdout, stderr)
+	case "check":
+		return command(c, cmdCheck, args[1:], stdout, stderr)
+	case "headers":
+		return command(c, cmdHeaders, args[1:], stdout, stderr)
+	case "replay":
+		return command(c, cmdReplay, args[1:], stdout, stderr)
 	case "snapshots":
-		return cmdSnapshots(args[1:], stdout, stderr)
+		return command(c, cmdSnapshots, args[1:], stdout, stderr)
+	case "latest":
+		return command(c, cmdLatest, args[1:], stdout, stderr)
 	case "init":
 		return cmdInit(args[1:], stdout, stderr)
 	case "install":
 		return cmdInstall(args[1:], stdout, stderr)
-	case "doctor":
-		return command(cmdDoctor, args[1:], stdout, stderr)
-	case "check":
-		return command(cmdCheck, args[1:], stdout, stderr)
-	case "headers":
-		return command(cmdHeaders, args[1:], stdout, stderr)
-	case "replay":
-		return command(cmdReplay, args[1:], stdout, stderr)
 	case "ca":
 		return cmdCA(args[1:], stdout, stderr)
 	case "sendmail":
 		return cmdSendmail(args[1:], stdin, stderr)
-	case "update":
-		return cmdUpdate(args[1:], stdout, stderr)
 	}
-	fmt.Fprintf(stderr, "rhythm echo: unknown command %q\n\n", args[0])
-	usage(stderr)
+	return cmdUpdate(args[1:], stdout, stderr)
+}
+
+// help prints one command's help: rhythm echo help compare.
+func help(name string, stdin io.Reader, stdout, stderr io.Writer) int {
+	c, ok := lookup(name)
+	if !ok {
+		return unknownCommand(name, stderr)
+	}
+	if c.own {
+		if c.name == "sendmail" {
+			fmt.Fprintf(stdout, "rhythm echo sendmail: %s\n\nUsage:\n  rhythm echo %s\n", c.about, c.use)
+			return exitOK
+		}
+		return run([]string{c.name, "--help"}, stdin, stdout, stderr)
+	}
+	commandHelp(stdout, c)
+	return exitOK
+}
+
+// unknownCommand names the command meant, when one is close, rather
+// than print the whole help.
+func unknownCommand(name string, stderr io.Writer) int {
+	msg := fmt.Sprintf("rhythm echo: unknown command %q", name)
+	if s := suggestCommand(name); s != "" {
+		msg += "; did you mean " + s + "?"
+	}
+	fmt.Fprintln(stderr, msg)
+	fmt.Fprintln(stderr, "rhythm echo help lists every command.")
 	return exitUsage
 }
 
 func usage(w io.Writer) {
 	fmt.Fprintln(w, kit.Banner("rhythm echo", version))
 	fmt.Fprint(w, `Is your site still saying what it should? Capture every email, SMS, webhook
-and API call a site sends, seal staging so nothing reaches real people, and
+and API call a site sends, seal staging so nothing reaches real people and
 compare what each action sends before and after a change.
+
+rhythm echo and rhythm-echo are the same command: the rhythm CLI runs this binary.
 
 Usage:
   rhythm echo                            pick what to do (on a terminal)
   rhythm echo up [flags]                 start the catcher (API :8025, SMTP :1025)
   rhythm echo install <stack> [path]     connect a site: wordpress, laravel, next, node, generic
   rhythm echo doctor                     check that every capture layer works
-  rhythm echo watch                      show messages as they arrive
+  rhythm echo watch                      show messages as they arrive (--json: one per line)
   rhythm echo ls                         list captured messages (--json for all fields)
   rhythm echo show <id>                  one message, as JSON
   rhythm echo clear                      delete captured messages
@@ -109,14 +161,17 @@ Usage:
   rhythm echo report [run | snapshot]    show the last result again (--open, -o)
   rhythm echo snapshots [delete <name>]  list snapshots, or delete one
   rhythm echo replay <event> --to <url>  send a signed test webhook (Stripe, Standard Webhooks…)
+  rhythm echo latest --to <address> [--code | --link]
+                                         print the one-time code or link just sent to someone
   rhythm echo check <domain>             SPF, DKIM, DMARC and MX for the domain you send from
   rhythm echo headers <file.eml | ->     check a real received email's authentication
-  rhythm echo init [--force]             write .echo/config.yaml to edit (--force replaces it)
+  rhythm echo init [--stack s] [--force]
+                                         write .echo/config.yaml with an action for this stack
+                                         (wordpress, laravel, next, node or php; --force replaces it)
   rhythm echo ca [--pem]                 print the proxy's CA certificate path (--pem: the certificate)
   rhythm echo sendmail [-t] [-i] [-f from] [rcpt…]
                                          sendmail stand-in for sendmail_path; reads the message on stdin
-  rhythm echo update                     nothing to refresh; kept for rhythm update
-  rhythm echo help | version
+  rhythm echo help [command] | version   this help, one command's, or the version
 
 Catcher (up):
       --seal                 nothing leaves; Echo answers for every service (default)
@@ -126,13 +181,14 @@ Catcher (up):
       --proxy <addr>         also run an HTTP(S) proxy, e.g. 127.0.0.1:8026
       --mitm                 decrypt HTTPS in the proxy (trust the CA: rhythm echo ca)
       --allow <hosts>        hosts reachable even when sealed, e.g. api.stripe.com
-      --token <t>            require this token (RHYTHM_ECHO_TOKEN). Needed when the API,
-                             SMTP sink or proxy listens beyond loopback; the SMTP sink
-                             then asks for it as the password
+      --token <t>            require this token. Needed when the API, SMTP sink or proxy
+                             listens beyond loopback; the SMTP sink then asks for it as
+                             the password. Prefer RHYTHM_ECHO_TOKEN: other users can
+                             read a flag in ps
 
 Install (install <stack>):
       --url <url>            Echo's API as the site reaches it (default from .echo/config.yaml)
-      --token <t>            the token Echo was started with
+      --token <t>            the token Echo was started with (prefer RHYTHM_ECHO_TOKEN)
       --mode <m>             wordpress: seal or observe, what to do when Echo is down
       --force                wordpress: run even where WordPress says production
       --proxy <url>          wordpress: send raw cURL through Echo's proxy
@@ -146,6 +202,7 @@ Messages (watch, ls, clear):
                              push or http
       --run <id>             only messages from this run
       --to <address>         only messages to this recipient
+      --since <d>            ls, watch: messages from this long ago on, e.g. 10m
 
 Output:
       --json --md --junit --html   report format
@@ -155,16 +212,30 @@ Output:
       --plain                no color, boxes or glyphs (screen readers, logs)
       --no-color             no color
   -v, --verbose              show every message
-      --fail-on <level>      exit 1 on changes at or above broke, new or changed;
-                             for run, snapshot, check and headers: issues at or
-                             above error, warning or notice
+      --fail-on <level>      exit 1 at or above this level. compare: changes at broke
+                             (the default), new or changed. run, snapshot, check and
+                             headers: issues at error (the default), warning or
+                             notice. run, snapshot and compare also exit 1 when an
+                             action fails; none turns both off
 
 Actions (snapshot, compare, run):
-      --config <file>        settings (default .echo/config.yaml)
+      --config <file>        settings (default the nearest .echo/config.yaml, here or above)
+      --store <dir>          where snapshots and runs are kept (default the config's
+                             folder); report and snapshots read --config and --store too
       --url <url>            where Echo runs (default http://127.0.0.1:8025; RHYTHM_ECHO_URL)
       --action <name>        run only this action (repeatable)
       --name <name>          snapshot: its name (default the date and time)
+      --force                snapshot: save it even when every action failed
       --snapshot <name>      compare: which snapshot (default the latest)
+      --quiet <d>            how long nothing must arrive before an action is done
+                             (overrides quiet:, at most 30s); -q alone: results only
+      --timeout <d>          longest wait per action (overrides timeout:, at most 1m)
+      --against <path>       compare: with this run instead (a run folder, its run.json or
+                             a .tgz from snapshot --export)
+      --export <file.tgz>    snapshot: write one (--name, default the latest) to a .tgz;
+                             - writes it to stdout
+      --import <file.tgz>    snapshot: add one from --export and make it the latest
+                             (--name renames it, --force replaces one of that name)
 
 Replay (inbound webhooks, sent only to staging and local addresses, with Echo sealed):
       --to <url>             where to send (absolute, or relative to site:)
@@ -176,6 +247,21 @@ Replay (inbound webhooks, sent only to staging and local addresses, with Echo se
       --type <t>             for JSON files: the event type (default the payload's "type")
       --list                 list the built-in events
       --wait <d>             how long to collect what the site sends back (default 5s)
+
+Latest (latest --to <address>; prints only the code or link, for scripts and tests):
+      --to <address>         whose message: an email address or a phone number
+      --channel <c,c>        only these channels, e.g. email,sms
+      --action <name>        only messages from this action of a run
+      --run <id>             only messages from this run
+      --since <d>            only messages from this long ago on (default 1m unless --run)
+      --wait <d>             how long to wait for a message (default 10s, at most 1m)
+      --code                 print the one-time code (the default, else the first link)
+      --link                 print the first link instead (magic, verify, reset, login or
+                             unsubscribe)
+      --kind <k>             with --link: only this kind of link, e.g. magic or reset
+  Exits 1 when nothing arrives in time, or it has no code or link. A test that signs
+  the same user in again should pass --run or a short --since, or clear --to first:
+  Echo answers the newest match at once, which may be the previous one.
 
 Deliverability (check, headers; never sends anything):
       --from-mail <file.eml> learn the real sender from a received email
@@ -191,17 +277,25 @@ Deliverability (check, headers; never sends anything):
 
 Exit codes (as in Tuner and Soundcheck):
   0    ok
-  1    findings: --fail-on hit, a doctor check failed, or the site rejected a replay
+  1    findings: --fail-on hit, an action failed, a doctor check failed, or the site
+       rejected a replay
   2    usage error: a wrong command line, or .echo/config.yaml asks for what isn't there
-  3    couldn't run: Echo not reachable, a file or network error
+  3    couldn't run: Echo not reachable, every action failed, the DNS resolver never
+       answered, a file or network error
   130  interrupted
   sendmail exits with sendmail's codes instead (sysexits: 64 usage, 69 Echo unreachable…)
+
+Each command takes only the flags it reads; rhythm echo <command> --help lists them.
+--json writes one shape for every command: schema, kind, summary, verdict and data
+(watch --json streams one message per line instead).
 
 Examples:
   rhythm echo up                                   # seal this machine's staging sites
   rhythm echo install wordpress /var/www/staging   # add the WordPress connector
   rhythm echo snapshot --name before-update
   rhythm echo compare --fail-on broke
+  code=$(rhythm echo latest --to ann@shop.test --code)
+                                                   # the login code just sent, in a test
   rhythm soundcheck snapshot staging.shop.test --echo --level inspect,click,submit
                                                    # forms and flows, with what they send
 `)
