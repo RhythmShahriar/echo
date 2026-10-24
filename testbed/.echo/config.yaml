@@ -1,0 +1,73 @@
+# Echo settings for the testbed: what `rhythm-echo up`, `snapshot` and
+# `compare` use when run from testbed/ (or with --config testbed/.echo/config.yaml).
+# The benchmark runs each scenario's actions with --action.
+#
+# Commands use ${TESTBED:-.}: the benchmark sets TESTBED to this folder; by
+# hand, run Echo's commands from testbed/.
+
+# The testbed plays the live shop: messages should link to and come from
+# shop.example.com. Actions use the local URLs the sites answer on.
+site: https://shop.example.com
+mode: seal
+listen: 0.0.0.0:18860 # the sites reach Echo through the gate (host.docker.internal); needs --token
+smtp: 0.0.0.0:18861
+proxy: 0.0.0.0:18862 # raw cURL in WordPress (the SMS add-on's Twilio client)
+mitm: true # decrypt HTTPS in the proxy; WordPress trusts runtime/ca.pem
+
+# Run after every action, so deferred mail and queued webhooks go out now:
+# WP-Cron (the server's crontab, bin/cron), the shop's Action Scheduler
+# stand-in, and Laravel's queue.
+flush:
+  - '"${TESTBED:-.}/bin/cron"'
+  - '"${TESTBED:-.}/bin/wp" testbed-queue run --quiet'
+  - '"${TESTBED:-.}/bin/artisan" queue:work --stop-when-empty --tries=1 --quiet'
+quiet: 1s
+timeout: 30s
+
+actions:
+  - name: Contact form
+    http:
+      method: POST
+      url: http://localhost:18850/?rest_route=/testbed-forms/v1/contact
+      form: {name: "${fake:name}", email: "${fake:email}", message: "Do you ship to Ireland?"}
+    expect: {email: 2}
+
+  - name: Checkout
+    http:
+      method: POST
+      url: http://localhost:18850/?rest_route=/testbed-shop/v1/checkout
+      form: {name: "${fake:name}", email: "${fake:email}", phone: "${fake:phone}"}
+
+  - name: Order webhook to the CRM
+    command: '"${TESTBED:-.}/bin/wp" testbed-shop webhook 1000 --quiet'
+
+  - name: Resend the receipt for order 1000
+    command: '"${TESTBED:-.}/bin/wp" testbed-shop resend-receipt 1000 --quiet'
+
+  - name: Stripe payment succeeded
+    replay:
+      event: payment_intent.succeeded
+      to: http://localhost:18850/?rest_route=/testbed-stripe/v1/webhook
+      secret_env: TESTBED_STRIPE_SECRET
+
+  - name: Laravel subscription order
+    http:
+      method: POST
+      url: http://localhost:18851/orders
+      form: {email: "${fake:email}", phone: "${fake:phone}"}
+
+  - name: Next.js signup
+    http:
+      method: POST
+      url: http://localhost:18852/api/signup
+      form: {name: "${fake:name}", email: "${fake:email}", phone: "${fake:phone}"}
+
+  - name: Next.js signup alert (Edge)
+    http:
+      url: http://localhost:18852/api/edge
+
+  - name: Wholesale order (plain PHP)
+    http:
+      method: POST
+      url: http://localhost:18853/order.php
+      form: {name: "${fake:name}", email: "${fake:email}", company: "Corner Café"}

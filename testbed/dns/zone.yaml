@@ -1,0 +1,79 @@
+# The fixture DNS the benchmark serves on 127.0.0.1:18870 (bench/dns.go) for
+# the deliverability scenarios: `rhythm-echo check <domain> --resolver
+# 127.0.0.1:18870` resolves only these names, and never the real ones.
+#
+# records: name -> type -> values. Types: A, TXT, MX ("<pref> <host>") and
+# CNAME (followed for other types, as a recursive resolver would). TXT
+# values longer than 255 bytes are split into strings on the wire.
+# broken.<id>: records that replace those names' records while state/<id>
+# exists (switched by toggle.sh, read on every query).
+#
+# The keys are 2048-bit RSA public keys made for this file; all addresses
+# are documentation ranges (RFC 5737).
+
+records:
+  # The shop's domain: Google Workspace for staff, SendGrid (with domain
+  # authentication and a custom Return-Path, em1234) for the site's mail.
+  shop.example.com:
+    TXT:
+      - "v=spf1 include:sendgrid.net include:_spf.google.com include:mailgun.org include:spf.protection.outlook.com include:servers.mcsv.net include:_spf.salesforce.com include:mail.zendesk.com include:spf.mandrillapp.com -all"
+    MX: ["10 mx1.shop.example.com"]
+  mx1.shop.example.com:
+    A: ["192.0.2.25"]
+  _dmarc.shop.example.com:
+    TXT: ["v=DMARC1; p=reject; rua=mailto:dmarc@shop.example.com; adkim=r; aspf=r"]
+  s1._domainkey.shop.example.com:
+    CNAME: ["s1.domainkey.u1234567.wl123.sendgrid.net"]
+  s2._domainkey.shop.example.com:
+    CNAME: ["s2.domainkey.u1234567.wl123.sendgrid.net"]
+  s1.domainkey.u1234567.wl123.sendgrid.net:
+    TXT: ["v=DKIM1; k=rsa; p=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAgtXS+6WBs+e6Sznz+A9FE4PXx11jXV69u+0wedcB4wwlCb830SilISxhFcsrwhbPL8AiXFzh2yxkK19tCfTNL64r76Of+AMhtgKgnrD4RnpDVGgXzzGjDVi3wk/sBmKKzvWfq1fMQEmSEdt3VuJ05ioPAU8CPIEicWpTtlzWnqAO2YAP8vN5y+8mZIgyRNn2EureP6HBeEcQI19/7l9PFAs4a8XN84Y0NRWrJh8H/vegAmjr4SF4JCqtKscPXO73WDni1tCG3BH8zuoHHhs5HN/0E/oUO27GKHiFIEMm1EqIwJFz38nXqOqYx74x02igrnsmRBrAvZxgCi4XHwMyGwIDAQAB"]
+  s2.domainkey.u1234567.wl123.sendgrid.net:
+    TXT: ["v=DKIM1; k=rsa; p=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAtwNkV5Bxtatxja6lPhOpE4R9horRjQrLle9YsZ4DuSEdd8rAr+itLm7nroOZFQODsJtapVMhziGvItuVrzwcYb3AE3hz0fHtbcAZVvwIHXiRfyhhHnFHc3805j1flmpt39gaI92Z/JVvY4rHkds+Ra8kCZGUzr2uHsd6npOwSIIMxKLLYpjQr9toactu5fo32NDGfTzuMVP1nb7ucKvi+TGF1zqS2+cuJgHEa2xUmddAkVl710xnajeVVRozgWbtRI06BBq8Yf8uziP4DmZhocwJxoV8/HBf+UzndRO5iST4egAQsS5rdHWtIC/etMePNjfSbj3c/FDfM32MscwqkQIDAQAB"]
+  em1234.shop.example.com:
+    TXT: ["v=spf1 include:sendgrid.net ~all"]
+
+  # The marketing team's newsletter domain: Google Workspace only. SendGrid
+  # was never set up for it.
+  beanleaf-news.example.net:
+    TXT: ["v=spf1 include:_spf.google.com ~all"]
+    MX: ["1 mx1.beanleaf-news.example.net"]
+  mx1.beanleaf-news.example.net:
+    A: ["192.0.2.26"]
+  _dmarc.beanleaf-news.example.net:
+    TXT: ["v=DMARC1; p=quarantine; rua=mailto:dmarc@beanleaf-news.example.net"]
+  google._domainkey.beanleaf-news.example.net:
+    TXT: ["v=DKIM1; k=rsa; p=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAtwNkV5Bxtatxja6lPhOpE4R9horRjQrLle9YsZ4DuSEdd8rAr+itLm7nroOZFQODsJtapVMhziGvItuVrzwcYb3AE3hz0fHtbcAZVvwIHXiRfyhhHnFHc3805j1flmpt39gaI92Z/JVvY4rHkds+Ra8kCZGUzr2uHsd6npOwSIIMxKLLYpjQr9toactu5fo32NDGfTzuMVP1nb7ucKvi+TGF1zqS2+cuJgHEa2xUmddAkVl710xnajeVVRozgWbtRI06BBq8Yf8uziP4DmZhocwJxoV8/HBf+UzndRO5iST4egAQsS5rdHWtIC/etMePNjfSbj3c/FDfM32MscwqkQIDAQAB"]
+
+  # The senders' own SPF records, simplified to one range each.
+  sendgrid.net:
+    TXT: ["v=spf1 ip4:167.89.0.0/17 ip4:208.117.48.0/20 ~all"]
+  _spf.google.com:
+    TXT: ["v=spf1 ip4:209.85.128.0/17 ~all"]
+  mailgun.org:
+    TXT: ["v=spf1 ip4:69.72.32.0/20 ~all"]
+  spf.protection.outlook.com:
+    TXT: ["v=spf1 ip4:40.92.0.0/15 -all"]
+  servers.mcsv.net:
+    TXT: ["v=spf1 ip4:205.201.128.0/20 ?all"]
+  _spf.salesforce.com:
+    TXT: ["v=spf1 ip4:13.110.208.0/21 ~all"]
+  mail.zendesk.com:
+    TXT: ["v=spf1 ip4:192.161.144.0/20 ~all"]
+  spf.mandrillapp.com:
+    TXT: ["v=spf1 ip4:198.2.128.0/18 ?all"]
+  _spf.hubspotemail.net:
+    TXT: ["v=spf1 ip4:3.93.157.0/24 ~all"]
+  spf.brevo.com:
+    TXT: ["v=spf1 ip4:185.41.28.0/22 ~all"]
+  amazonses.com:
+    TXT: ["v=spf1 ip4:54.240.0.0/18 ~all"]
+
+broken:
+  # s18: marketing added HubSpot, Brevo and Amazon SES to the shop's SPF
+  # record: 11 includes, over SPF's limit of 10 DNS lookups.
+  s18:
+    shop.example.com:
+      TXT:
+        - "v=spf1 include:sendgrid.net include:_spf.google.com include:mailgun.org include:spf.protection.outlook.com include:servers.mcsv.net include:_spf.salesforce.com include:mail.zendesk.com include:spf.mandrillapp.com include:_spf.hubspotemail.net include:spf.brevo.com include:amazonses.com -all"
+      MX: ["10 mx1.shop.example.com"]

@@ -1,0 +1,261 @@
+# Echo testbed scenarios: the benchmark's manifest.
+#
+# Each scenario breaks one thing a site sends. Switch it with
+# ./toggle.sh <id> good|broken (it creates or removes state/<id>).
+#
+# Fields:
+#   area      lost, content, integrations, deliverability, staging or inbound
+#   stack     wordpress, laravel, next or php (the site, see sites:)
+#   action    the action in .echo/config.yaml the benchmark runs (--action)
+#   channel   what breaks: email, sms, chat, webhook, analytics or dns
+#   mode      seal (default) or observe: how the benchmark's Echo runs.
+#             Observe sends for real, so only scenarios whose action reaches
+#             nothing but the testbed's own CRM and Mailpit use it.
+#   toggle    what the broken state changes, and where it's implemented
+#   dns       also run `rhythm-echo check` on the From domains of the emails
+#             sent, against the fixture DNS (dns/zone.yaml), with what's
+#             known of the sending service (--provider, --return-path)
+#   expect    one or more matchers; the scenario is caught when the
+#             comparison has a change with that class whose check starts
+#             with `check` and whose title contains `title` (case-insensitive)
+#   mailpit   for the Mailpit column: text that shows the problem to a
+#             person reading the broken-state inbox (see bench/mailpit.go)
+#   known_issue  an Echo bug that keeps the scenario from being caught, as
+#             reported; shown in the scoreboard while it misses
+
+sites:
+  wordpress: http://localhost:18850
+  laravel: http://localhost:18851
+  next: http://localhost:18852
+  php: http://localhost:18853
+
+# Run before each scenario, outside any action: drains queues a broken
+# flush left behind and re-enables the order webhook.
+reset:
+  - bin/cron
+  - bin/wp testbed-queue run --quiet
+  - bin/artisan queue:work --stop-when-empty --tries=1 --quiet
+  - bin/wp testbed-shop reset-webhook --quiet
+
+scenarios:
+  # Lost messages.
+  - id: s01
+    name: The contact form stops emailing the shop owner
+    area: lost
+    stack: wordpress
+    action: Contact form
+    channel: email
+    toggle: "the 2.0 update reset “Notify the site owner” to off (wp/plugins/testbed-forms)"
+    expect:
+      - {class: broke, check: message/missing, title: "owner@shop.example.com is no longer sent"}
+
+  - id: s02
+    name: The contact form's autoresponder is lost
+    area: lost
+    stack: wordpress
+    action: Contact form
+    channel: email
+    toggle: "the same update switched the autoresponder off (wp/plugins/testbed-forms)"
+    expect:
+      - {class: broke, check: message/missing, title: "to the test submitter is no longer sent"}
+
+  - id: s03
+    name: The owner's order SMS is gone after a plugin update
+    area: lost
+    stack: wordpress
+    action: Checkout
+    channel: sms
+    toggle: "SMS add-on 3.0 listens on a hook the shop never fires; its Twilio client is raw cURL, caught through Echo's proxy (wp/plugins/testbed-shop-sms)"
+    expect:
+      - {class: broke, check: message/missing, title: "Twilio SMS to +447700900123 is no longer sent"}
+
+  - id: s04
+    name: The new-order Slack alert is removed
+    area: lost
+    stack: wordpress
+    action: Checkout
+    channel: chat
+    toggle: "the Slack alert was dropped from the 2.0 settings (wp/plugins/testbed-shop)"
+    expect:
+      - {class: broke, check: message/missing, title: "Slack message is no longer sent"}
+
+  - id: s05
+    name: The GA4 purchase event is missing
+    area: lost
+    stack: wordpress
+    action: Checkout
+    channel: analytics
+    toggle: "the Measurement Protocol purchase call is no longer made (wp/plugins/testbed-shop)"
+    expect:
+      - {class: broke, check: message/missing, title: "GA4 event \"purchase\" is no longer sent"}
+
+  - id: s06
+    name: Laravel's queued order email is stuck (the job throws)
+    area: lost
+    stack: laravel
+    action: Laravel subscription order
+    channel: email
+    toggle: "the Mailable names a view that doesn't exist, so the queued job fails in the worker (laravel/overlay/app/Mail/OrderConfirmation.php)"
+    expect:
+      - {class: broke, check: message/missing, title: "email to the test submitter is no longer sent"}
+
+  - id: s07
+    name: The Next.js welcome email (Resend) now throws
+    area: lost
+    stack: next
+    action: Next.js signup
+    channel: email
+    toggle: "the API key's variable was renamed, so the Resend call throws before it's made; the route logs it and still answers 200 (next/app/api/signup/route.ts)"
+    expect:
+      - {class: broke, check: message/missing, title: "Resend email to the test submitter is no longer sent"}
+    known_issue: >-
+      compare matches emails on channel and recipient only (compare/compare.go, identity), so the Resend welcome
+      and the Nodemailer account email to the same address count as one message. When the welcome is lost, Echo
+      reports CHANGED "Resend email to the test submitter is sent fewer times" and diffs the welcome against the
+      account email (subject, sender, text, "payload lost fields") instead of BROKE message/missing for the welcome.
+
+  - id: s08
+    name: The receipt is never sent because cron is off
+    area: lost
+    stack: wordpress
+    action: Checkout
+    channel: email
+    toggle: "the server's crontab line fails (wp: not found), so WP-Cron never runs the deferred receipt (bin/cron, Echo's flush)"
+    expect:
+      - {class: broke, check: message/missing, title: "email to the test submitter is no longer sent"}
+
+  # Wrong content.
+  - id: s09
+    name: The owner's notification goes to the wrong address
+    area: content
+    stack: wordpress
+    action: Contact form
+    channel: email
+    toggle: "a migration overwrote the admin email with the old agency's address (wp/plugins/testbed-forms)"
+    expect:
+      - {class: new, check: message/new, title: "webmaster@old-agency.example.net is now sent"}
+      - {class: broke, check: message/missing, title: "owner@shop.example.com is no longer sent"}
+    mailpit: webmaster@old-agency.example.net
+
+  - id: s10
+    name: A merge tag is left unreplaced in the receipt
+    area: content
+    stack: wordpress
+    action: Checkout
+    channel: email
+    toggle: "the 2.0 receipt template uses {customer_first_name}, a tag the mailer doesn't know (wp/plugins/testbed-shop)"
+    expect:
+      - {class: broke, check: content/placeholder, title: "{customer_first_name}"}
+    mailpit: "{customer_first_name}"
+
+  - id: s11
+    name: A PHP warning is printed into the order email (plain PHP)
+    area: content
+    stack: php
+    action: Wholesale order (plain PHP)
+    channel: email
+    toggle: "the new receipt template prints $total, which the page never sets, with display_errors on (php/site/templates/receipt-2.php)"
+    expect:
+      - {class: broke, check: content/php-error, title: "PHP error printed in email"}
+    mailpit: "Warning: Undefined variable"
+
+  - id: s12
+    name: The receipt links to the staging site
+    area: content
+    stack: wordpress
+    action: Checkout
+    channel: email
+    toggle: "the order link is built from a URL copied from staging (wp/plugins/testbed-shop)"
+    expect:
+      - {class: new, check: content/dev-link, title: "staging.shop.test"}
+    mailpit: staging.shop.test
+
+  - id: s13
+    name: The order SMS is now 3 segments
+    area: content
+    stack: wordpress
+    action: Checkout
+    channel: sms
+    toggle: "the SMS gained a greeting with emoji and curly quotes: UCS-2, 3 parts (wp/plugins/testbed-shop)"
+    expect:
+      - {class: new, check: sms/parts, title: "more than one part"}
+
+  - id: s14
+    name: A field is removed from the order webhook payload
+    area: content
+    stack: wordpress
+    action: Checkout
+    channel: webhook
+    toggle: "order.created no longer carries billing.email (wp/plugins/testbed-shop)"
+    expect:
+      - {class: changed, check: message/fields-lost, title: "payload lost fields"}
+
+  # Integrations.
+  - id: s15
+    name: The Zapier hook URL changed
+    area: integrations
+    stack: wordpress
+    action: Contact form
+    channel: webhook
+    toggle: "the lead goes to a test Zap's catch hook instead of the live one (wp/plugins/testbed-forms)"
+    expect:
+      - {class: broke, check: message/missing, title: "hooks.zapier.com is no longer sent"}
+
+  - id: s16
+    name: The order webhook to the CRM fails (and WooCommerce disables it after five failures)
+    area: integrations
+    stack: wordpress
+    action: Order webhook to the CRM
+    channel: webhook
+    mode: observe
+    toggle: "the CRM's endpoint answers 500 (crm/index.php); the shop counts failures and disables the webhook after five, as WooCommerce does"
+    expect:
+      - {class: broke, check: message/failing, title: "now fails"}
+      - {class: broke, check: send/failed, title: "fails (HTTP 500)"}
+
+  # Deliverability.
+  - id: s17
+    name: The From domain changes and breaks DMARC alignment
+    area: deliverability
+    stack: wordpress
+    action: Contact form
+    channel: email
+    dns: {provider: sendgrid, return_path: em1234.shop.example.com}
+    toggle: "the autoresponder is sent from the newsletter domain, which SendGrid was never set up for (wp/plugins/testbed-forms, dns/zone.yaml)"
+    expect:
+      - {class: broke, check: dns/dmarc, title: "fails DMARC alignment"}
+
+  - id: s18
+    name: SPF needs more than 10 DNS lookups
+    area: deliverability
+    stack: wordpress
+    action: Contact form
+    channel: dns
+    dns: {provider: sendgrid, return_path: em1234.shop.example.com}
+    toggle: "marketing added HubSpot, Brevo and Amazon SES to the SPF record: 11 includes (dns/zone.yaml)"
+    expect:
+      - {class: broke, check: dns/spf, title: "more than 10 DNS lookups"}
+
+  # Staging safety.
+  - id: s19
+    name: A staging refresh brings a real customer address
+    area: staging
+    stack: wordpress
+    action: Resend the receipt for order 1000
+    channel: email
+    mode: observe
+    toggle: "the staging database was refreshed from production, so order 1000's customer is a real address (wp/plugins/testbed-shop)"
+    expect:
+      - {class: new, check: seal/real-recipient, title: "really sent to an address outside the allowlist"}
+    mailpit: jamie.rivera@gmail.com
+
+  # Inbound.
+  - id: s20
+    name: A Stripe payment no longer triggers the payment email
+    area: inbound
+    stack: wordpress
+    action: Stripe payment succeeded
+    channel: email
+    toggle: "gateway 9.0 handles charge.succeeded instead of payment_intent.succeeded; Stripe still gets its 200 (wp/plugins/testbed-stripe)"
+    expect:
+      - {class: broke, check: message/missing, title: "email to jamie@example.net is no longer sent"}
