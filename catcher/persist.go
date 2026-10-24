@@ -27,8 +27,10 @@ const DefaultKeep = 10000
 // InboxOptions configures OpenInbox.
 type InboxOptions struct {
 	// Dir is the folder the inbox is kept in, created owner-only (0700)
-	// when missing. Messages are masked before they're stored yet still
-	// name real people and sites.
+	// when missing and made owner-only when it isn't. Messages are masked
+	// before they're stored yet still name real people and sites. The
+	// folder must be Echo's alone: one that holds other files is refused
+	// (see claim).
 	Dir string
 	// Keep is the most messages kept; default DefaultKeep.
 	Keep int
@@ -87,8 +89,8 @@ func OpenInbox(o InboxOptions) (*Inbox, error) {
 	if o.Dir == "" {
 		return nil, errors.New("open inbox: no folder given")
 	}
-	if err := os.MkdirAll(o.Dir, 0o700); err != nil {
-		return nil, fmt.Errorf("open inbox: %w", err)
+	if err := claim(o.Dir); err != nil {
+		return nil, err
 	}
 	in := NewInbox(cmp.Or(o.Keep, DefaultKeep))
 	in.maxBytes = cmp.Or(o.MaxBytes, DefaultMaxBytes)
@@ -301,6 +303,58 @@ func (j *journal) append(l line) int64 {
 		j.err = fmt.Errorf("inbox: %w", err)
 	}
 	return int64(n)
+}
+
+// marker names the file that marks a folder as an Echo inbox. Echo
+// removes journal files it no longer needs, so it only does that in a
+// folder it made its own: a --store pointed at a shared folder must not
+// cost its owner a file that happens to look like a journal.
+const marker = ".echo-inbox"
+
+// claim makes dir an inbox folder: created owner-only when missing,
+// tightened to owner-only when others may read it (messages are masked
+// yet still name people) and marked as Echo's. A folder that holds other
+// files and no marker is refused. One holding only journal files is an
+// inbox from before the marker: it's marked and kept.
+func claim(dir string) error {
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return fmt.Errorf("open inbox: %w", err)
+	}
+	fi, err := os.Stat(dir)
+	if err != nil {
+		return fmt.Errorf("open inbox: %w", err)
+	}
+	if fi.Mode().Perm()&0o077 != 0 {
+		if err := os.Chmod(dir, 0o700); err != nil { //nolint:gosec // a folder needs x to be entered; 0700 is owner-only
+			return fmt.Errorf("open inbox: make %s owner-only: %w", dir, err)
+		}
+	}
+	mark := filepath.Join(dir, marker)
+	if _, err := os.Stat(mark); err == nil {
+		return nil
+	}
+	ents, err := os.ReadDir(dir)
+	if err != nil {
+		return fmt.Errorf("open inbox: %w", err)
+	}
+	for _, e := range ents {
+		if !journalFile(e.Name()) {
+			return fmt.Errorf("open inbox: %s holds files that aren't Echo's, such as %s; give the inbox a folder of its own", dir, e.Name())
+		}
+	}
+	err = os.WriteFile(mark, []byte("This folder holds an Echo inbox. Echo removes the journal files in it that it no longer needs.\n"), 0o600)
+	if err != nil {
+		return fmt.Errorf("open inbox: %w", err)
+	}
+	return nil
+}
+
+// journalFile reports whether name is one Echo writes in an inbox folder:
+// a journal file or a compaction in progress.
+func journalFile(name string) bool {
+	base, ok := strings.CutSuffix(strings.TrimSuffix(name, ".tmp"), ".jsonl")
+	n, err := strconv.Atoi(base)
+	return ok && err == nil && n > 0
 }
 
 func segmentName(n int) string { return fmt.Sprintf("%06d.jsonl", n) }

@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -288,7 +289,7 @@ func TestPersistedInboxSkipsFilesAnUnfinishedCompactionLeft(t *testing.T) {
 	for _, e := range ents {
 		names = append(names, e.Name())
 	}
-	if !slices.Equal(names, []string{"000002.jsonl"}) {
+	if !slices.Equal(names, []string{marker, "000002.jsonl"}) {
 		t.Fatalf("files left: %v", names)
 	}
 }
@@ -325,4 +326,57 @@ func TestPersistedInboxReopensTenThousandQuickly(t *testing.T) {
 		t.Fatalf("reopening took %v", took)
 	}
 	t.Logf("reopened %d messages in %v", DefaultKeep, took)
+}
+
+func TestInboxFolderMustBeEchos(t *testing.T) {
+	dir := t.TempDir()
+	notes := filepath.Join(dir, "000001.jsonl.tmp.notes")
+	for _, f := range []string{notes, filepath.Join(dir, "000007.jsonl")} {
+		if err := os.WriteFile(f, []byte("someone else's\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := OpenInbox(InboxOptions{Dir: dir}); err == nil || !strings.Contains(err.Error(), "a folder of its own") {
+		t.Fatalf("a shared folder opened: %v", err)
+	}
+	for _, f := range []string{notes, filepath.Join(dir, "000007.jsonl"), filepath.Join(dir, marker)} {
+		if _, err := os.Stat(f); (err == nil) != (f != filepath.Join(dir, marker)) {
+			t.Errorf("%s: %v", filepath.Base(f), err)
+		}
+	}
+}
+
+func TestInboxFromBeforeTheMarkerOpens(t *testing.T) {
+	dir := t.TempDir()
+	in := openInbox(t, InboxOptions{Dir: dir})
+	m := in.Add(model.Message{Channel: model.Email, Subject: "kept"})
+	closeInbox(t, in)
+	if err := os.Remove(filepath.Join(dir, marker)); err != nil {
+		t.Fatal(err)
+	}
+	in = openInbox(t, InboxOptions{Dir: dir})
+	if _, ok := in.Get(m.ID); !ok {
+		t.Error("the message is gone")
+	}
+	if _, err := os.Stat(filepath.Join(dir, marker)); err != nil {
+		t.Errorf("not marked: %v", err)
+	}
+}
+
+func TestInboxFolderIsMadeOwnerOnly(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows folders have no Unix mode")
+	}
+	dir := filepath.Join(t.TempDir(), "inbox")
+	if err := os.Mkdir(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(dir, 0o755); err != nil { // past the umask
+		t.Fatal(err)
+	}
+	openInbox(t, InboxOptions{Dir: dir})
+	fi, err := os.Stat(dir)
+	if err != nil || fi.Mode().Perm() != 0o700 {
+		t.Errorf("mode %v, %v; want 0700", fi.Mode().Perm(), err)
+	}
 }
