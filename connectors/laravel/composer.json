@@ -1,0 +1,74 @@
+{
+    "name": "rhythm/echo-laravel",
+    "description": "Rhythm Echo connector for Laravel: capture and seal the mail and HTTP calls a staging site sends.",
+    "keywords": [
+        "laravel",
+        "staging",
+        "email",
+        "webhooks",
+        "testing",
+        "mail-catcher",
+        "rhythm",
+        "echo"
+    ],
+    "homepage": "https://github.com/RhythmShahriar/echo",
+    "license": "MIT",
+    "type": "library",
+    "authors": [
+        {
+            "name": "Rhythm Shahriar",
+            "email": "me@rythm.sh"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/RhythmShahriar/echo/issues",
+        "source": "https://github.com/RhythmShahriar/echo-laravel"
+    },
+    "require": {
+        "php": "^8.2",
+        "guzzlehttp/guzzle": "^7.8",
+        "illuminate/console": "^11.0|^12.0|^13.0",
+        "illuminate/contracts": "^11.0|^12.0|^13.0",
+        "illuminate/http": "^11.0|^12.0|^13.0",
+        "illuminate/log": "^11.0|^12.0|^13.0",
+        "illuminate/mail": "^11.0|^12.0|^13.0",
+        "illuminate/support": "^11.0|^12.0|^13.0",
+        "symfony/mailer": "^7.0|^8.0"
+    },
+    "require-dev": {
+        "larastan/larastan": "^3.0",
+        "laravel/slack-notification-channel": "^3.4",
+        "laravel/vonage-notification-channel": "^3.3",
+        "orchestra/testbench": "^9.0|^10.0|^11.0",
+        "phpunit/phpunit": "^11.0|^12.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "Rhythm\\Echo\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Rhythm\\Echo\\Tests\\": "tests/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Rhythm\\Echo\\EchoServiceProvider"
+            ]
+        }
+    },
+    "scripts": {
+        "test": "phpunit",
+        "analyse": "phpstan analyse --memory-limit=1G"
+    },
+    "config": {
+        "sort-packages": true,
+        "platform": {
+            "php": "8.3.0"
+        }
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}

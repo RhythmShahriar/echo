@@ -1,0 +1,18 @@
+includes:
+    - vendor/larastan/larastan/extension.neon
+
+parameters:
+    level: 6
+    paths:
+        - src
+        - config
+        - tests
+    excludePaths:
+        - tests/Fixtures/echo-server.php
+    tmpDir: .phpstan
+    ignoreErrors:
+        # The package's own config file is a config file: Larastan only
+        # recognises the app's config directory.
+        -
+            identifier: larastan.noEnvCallsOutsideOfConfig
+            path: config/rhythm-echo.php

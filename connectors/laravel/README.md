@@ -1,0 +1,104 @@
+# rhythm/echo-laravel
+
+The Laravel connector for [Rhythm Echo](https://github.com/RhythmShahriar/echo). Echo captures everything a staging site **sends**, such as email, SMS, webhooks, Slack alerts and analytics calls, and checks it.
+
+- **Seal** (the default): nothing leaves the site. Echo answers in place of the real service, with realistic fake responses shaped like the provider's.
+- **Observe**: everything is recorded, then sent for real.
+
+Laravel 11, 12 and 13 on PHP 8.2+.
+
+```sh
+composer require rhythm/echo-laravel        # inert in production, so staging can install it with --no-dev
+rhythm-echo up                               # Echo on 127.0.0.1:8025
+php artisan echo:status
+```
+
+The service provider is auto-discovered. With nothing configured, the connector runs in every environment except `production` and `testing`.
+
+## Configuration
+
+Everything can be set from the environment. If you want the file, run `php artisan vendor:publish --tag=rhythm-echo` to publish `config/rhythm-echo.php`.
+
+| Key | Env | Default | |
+|---|---|---|---|
+| `enabled` | `RHYTHM_ECHO_ENABLED` | unset | Unset means on, except in `production` and `testing`. Set it to `true` to capture in your test suite. |
+| `url` | `RHYTHM_ECHO_URL` | `http://127.0.0.1:8025` | Where Echo listens. |
+| `token` | `RHYTHM_ECHO_TOKEN` | none | Sent as `X-Echo-Token` when Echo listens beyond loopback. |
+| `force` | `RHYTHM_ECHO_FORCE` | `false` | Run even when `APP_ENV=production`. Only for a production-like box that isn't production. |
+| `mode` | `RHYTHM_ECHO_MODE` | `seal` | What to assume when Echo can't be reached. `seal` fails closed and `observe` lets traffic through. When Echo answers, its own mode decides. |
+| `timeout` | `RHYTHM_ECHO_TIMEOUT` | `2` | Seconds to wait for Echo. |
+| `guzzle` | `RHYTHM_ECHO_GUZZLE` | `true` | Also covers Guzzle clients built by the container, and the Vonage client. See below. |
+
+**Production guard.** When `app()->environment('production')`, the connector does nothing unless `force` is set. `php artisan echo:status` says why it's off.
+
+**Testing.** The app's own test suite keeps its `Mail::fake()` and `Http::fake()` untouched, because `testing` is off by default.
+
+## What it covers
+
+| Path | How | Covered |
+|---|---|---|
+| Mail: Mailables, `Mail::raw`, mail notifications, queued mail, every mailer, `Mail::build`, failover and round-robin | Every mailer's transport is wrapped (`EchoTransport`), so the capture happens under the Mailer, on the finished message | yes |
+| `Http::` facade, including `Http::pool`, and packages built on it (such as the Slack Web API notification channel) | `Http::globalMiddleware` | yes |
+| Guzzle clients the container builds (type-hinted `GuzzleHttp\Client`, such as the Slack webhook notification channel) | the container's `GuzzleHttp\Client` binding gets the same middleware | yes, when `guzzle` is on |
+| Vonage SMS notifications | `vonage.http_client` points at the container's Guzzle client, unless you set your own | yes, when `guzzle` is on |
+| `new GuzzleHttp\Client()`, raw cURL, SDKs with their own HTTP stack (the Twilio and Stripe PHP SDKs, AWS SDK) | not hooked | **no**: use Echo's proxy, see below |
+
+**Captures.** An email capture carries from, to, cc, bcc, reply-to, subject, text, HTML, headers and the full MIME, with the mailer name in `source.plugin`. An HTTP capture carries the method, URL, headers and the first 256 KiB of the body, with the calling package in `source.plugin` when one can be found. Credential headers (`Authorization`, `Cookie`, `X-Api-Key` and others) are masked before anything leaves the app. Echo redacts secrets in bodies.
+
+**HTTP decisions.** Echo answers each request before it's sent:
+- `fake`: the app gets Echo's response, and nothing is sent.
+- `block`: the request fails with Laravel's `ConnectionException`, as if the network were down.
+- `allow`: the request is sent, and the response is reported afterwards. Echo always allows the site's own host, loopback, and the hosts in its allowlist.
+
+**Echo unreachable.** With `mode` set to `seal`, mail fails with a `TransportException` and HTTP calls fail with a `ConnectionException`. Nothing leaves. The `array` and `log` mailers keep working, because they never leave the machine. With `mode` set to `observe`, traffic goes out normally.
+
+**Why not `Http::preventStrayRequests()`?** It throws on every request that isn't faked, including the site's own host and the hosts you allow. Echo already decides per host and answers sealed requests with provider-shaped fakes, which is what keeps code paths like webhook retry counters working. So the connector doesn't call it.
+
+**Why the transport and not only `MessageSending`?** A `MessageSending` listener that returns `false` does cancel the send. But Laravel dispatches that event with `until()`, which stops at the first listener that returns anything other than `null`. One other listener returning `true` would let the mail out. The transport wrapper can't be skipped like that. The `MessageSending` listener is only a fallback for apps that bind their own mail manager.
+
+### Clients the connector can't see
+
+For SDKs and raw clients, route them through Echo's HTTP proxy:
+
+```sh
+HTTPS_PROXY=http://127.0.0.1:8026 HTTP_PROXY=http://127.0.0.1:8026 php artisan queue:work
+```
+
+Then trust Echo's CA certificate in PHP's `openssl.cafile` or `curl.cainfo`. The connector's own calls to Echo always bypass the proxy.
+
+As a fallback that needs no package at all, point the mailer at Echo's SMTP sink: `MAIL_MAILER=smtp MAIL_HOST=127.0.0.1 MAIL_PORT=1025`. Run `php artisan config:clear` after changing it.
+
+## Runs and actions
+
+Echo ties every message to the action that caused it, such as "Contact form on /contact/". Soundcheck and `rhythm echo run` tag each request with `X-Echo-Run: <run>/<action>`, as a header or a cookie. The connector finds the run in this order:
+
+1. the `X-Echo-Run` header on the incoming request
+2. the `X-Echo-Run` cookie
+3. the [Context](https://laravel.com/docs/context) a queued job carried over from that request
+4. the `RHYTHM_ECHO_RUN` environment variable, which Echo sets on the artisan commands it runs
+
+A global middleware stores the run as a *hidden* Context value, so it never appears in log lines. Laravel serialises Context into every job queued during the request and restores it in the worker. Queued mail, queued notifications and jobs therefore keep the run without any change to your code.
+
+## Queues
+
+Queued mail and jobs are sent when the worker runs them. For staging checks, either:
+
+- set `QUEUE_CONNECTION=sync`, so everything is sent during the request, or
+- leave the queue on and let Echo flush it after each action with `php artisan queue:work --stop-when-empty`. This is the Laravel flush command Echo runs.
+
+## Commands
+
+- `php artisan echo:status [--json]`: whether the connector is active (and why not), Echo's URL and mode, and a ping of `/v1/health`. It exits non-zero when the connector is off or Echo can't be reached.
+- `php artisan echo:canary [--json]`: sends one mail to `canary@echo.invalid` and one `POST https://canary.echo.invalid/` through the normal paths (the default mailer and the `Http` facade). `rhythm echo doctor` checks that both arrive. The `.invalid` addresses can't be delivered even when the site is unsealed.
+
+## Development
+
+```sh
+make install   # composer:2 in Docker
+make check     # php -l, Larastan level 6, PHPUnit + Testbench (fake Echo on PHP's built-in server)
+make e2e       # a fresh Laravel app against Echo's real catcher (needs Go, Docker, jq)
+```
+
+## License
+
+MIT
