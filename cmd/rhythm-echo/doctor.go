@@ -18,6 +18,7 @@ import (
 	"os/exec"
 	"regexp"
 	"runtime"
+	"slices"
 	"strings"
 	"time"
 
@@ -27,6 +28,7 @@ import (
 	"github.com/RhythmShahriar/echo/config"
 	"github.com/RhythmShahriar/echo/connectors/wordpress"
 	"github.com/RhythmShahriar/echo/model"
+	"github.com/RhythmShahriar/echo/recognize"
 	"github.com/RhythmShahriar/echo/sendmail"
 	"github.com/RhythmShahriar/echo/wire"
 	"github.com/RhythmShahriar/rhythm/kit/ui"
@@ -61,6 +63,9 @@ func cmdDoctor(s *session) int {
 		return d.end()
 	}
 	d.pass("Echo", fmt.Sprintf("%s mode at %s, %d providers recognized", h.Mode, s.echo.URL, len(h.Providers)))
+	if line := paymentsLine(h.Providers); line != "" {
+		d.note("Payments", line)
+	}
 	d.run = "doctor-" + time.Now().UTC().Format("150405")
 	smtpAddr, proxyAddr, reported := s.captureAddrs()
 
@@ -646,4 +651,20 @@ func lastLine(s string) string {
 		s = s[:200] + "…"
 	}
 	return s
+}
+
+// paymentsLine names the payment gateways whose live calls the running
+// Echo refuses in every mode: those of recognize.PaymentGateways that its
+// health lists. "" when it lists none.
+func paymentsLine(providers []string) string {
+	var names []string
+	for _, g := range recognize.PaymentGateways() {
+		if slices.Contains(providers, g.Provider) {
+			names = append(names, g.Name)
+		}
+	}
+	if len(names) == 0 {
+		return ""
+	}
+	return "live calls refused for " + andList(names) + ", even in observe mode"
 }

@@ -146,8 +146,15 @@ func TestDoctorChecksEchoAndSMTP(t *testing.T) {
 		t.Errorf("doctor without Echo: %d\n%s", code, out)
 	}
 	_ = os.WriteFile(config.Path(), []byte("smtp: \"off\"\n"), 0o600)
-	if code, out, _ := runCLI(t, "doctor", "--url", api.URL, "--plain"); code != 0 || !strings.Contains(out, "1 check passed, 0 failed.") {
+	if code, out, _ := runCLI(t, "doctor", "--url", api.URL, "--plain"); code != 0 || !strings.Contains(out, "1 check passed, 0 failed.") ||
+		!strings.Contains(out, "note  Payments: live calls refused for Stripe, PayPal, Adyen, Braintree, Square, Authorize.net, Mollie and Razorpay, even in observe mode") {
 		t.Errorf("doctor, one check: %d\n%s", code, out)
+	}
+	if got := paymentsLine([]string{"sendgrid", "stripe"}); got != "live calls refused for Stripe, even in observe mode" {
+		t.Errorf("an Echo that knows only Stripe: %q", got)
+	}
+	if got := paymentsLine([]string{"sendgrid"}); got != "" {
+		t.Errorf("an Echo without gateways: %q", got)
 	}
 }
 
