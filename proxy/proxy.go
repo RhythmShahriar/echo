@@ -352,7 +352,7 @@ var errMetadata = errors.New("refused: the name resolves to a cloud metadata end
 // sealedDial wraps the default dialer. While sealed it resolves a name
 // itself and refuses it when any address is a metadata endpoint, then
 // dials the checked addresses so a second lookup can't answer otherwise.
-// A glob such as "*" lets any name through allowed, and any name (an
+// A glob such as "*" lets any name through allowed. Any name (an
 // attacker's own among them) can point at 169.254.169.254.
 func (p *Proxy) sealedDial(dial func(ctx context.Context, network, addr string) (net.Conn, error)) func(ctx context.Context, network, addr string) (net.Conn, error) {
 	return func(ctx context.Context, network, addr string) (net.Conn, error) {

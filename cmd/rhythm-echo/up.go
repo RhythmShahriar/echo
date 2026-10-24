@@ -513,8 +513,8 @@ func lookupIPs(host string) ([]net.IP, error) {
 var containerIface = regexp.MustCompile(`^(docker\d*|br-[0-9a-f]+|veth.+|cni\d*|podman\d*|cali.+|flannel.+|cilium.+)$`)
 
 // sharedSpace is the carrier-grade NAT range (RFC 6598). It is not
-// RFC 1918 but is never routed on the internet, and some runtimes and
-// overlay networks hand it to container bridges.
+// RFC 1918 but is never routed on the internet. Some runtimes and overlay
+// networks hand it to container bridges.
 var sharedSpace = &net.IPNet{IP: net.IPv4(100, 64, 0, 0).To4(), Mask: net.CIDRMask(10, 32)}
 
 // privateOnly returns nil when addr can be reached only from loopback,
