@@ -34,6 +34,8 @@ import (
 )
 
 // Replayer sends a signed webhook for a replay action (package replay).
+// run is the unsigned "<run>/<action>"; the replayer signs X-Echo-Run
+// with Echo's token itself (replay.Options.Token).
 type Replayer func(ctx context.Context, a config.ReplayAction, to, run string) error
 
 type Options struct {
@@ -166,7 +168,10 @@ func runAction(ctx context.Context, o Options, run *model.Run, a config.Action, 
 		act.Error = err.Error()
 		return act, nil
 	}
-	runValue := client.RunValue(runID, act.ID)
+	// HTTP requests and commands carry the run signed with Echo's token,
+	// so a connector can trust it. The replayer gets it unsigned, since it
+	// takes the run and action apart.
+	runValue := signRun(o.Client.Token, runID, act.ID)
 	end := begin(ctx, o.Client, runID, act.ID)
 	defer end()
 
@@ -180,7 +185,7 @@ func runAction(ctx context.Context, o Options, run *model.Run, a config.Action, 
 		if o.Replay == nil {
 			err = fmt.Errorf("replay isn't available in this build")
 		} else {
-			err = o.Replay(ctx, *a.Replay, resolve(cfg.Site, a.Replay.To), runValue)
+			err = o.Replay(ctx, *a.Replay, resolve(cfg.Site, a.Replay.To), client.RunValue(runID, act.ID))
 		}
 	}
 	if err != nil {
@@ -340,11 +345,12 @@ func doHTTP(ctx context.Context, o Options, a config.Action, runValue string, fa
 	return nil
 }
 
-// command runs cmd in the shell (see Shell) with RHYTHM_ECHO_RUN set, so
-// connectors in CLI processes (wp-cli, artisan, scripts) tag what they
-// send.
+// command runs cmd in the shell (see Shell) with RHYTHM_ECHO_RUN set to
+// runValue, signed like the header, so connectors in CLI processes
+// (wp-cli, artisan, scripts) tag what they send and a script may pass it
+// on to the site as X-Echo-Run.
 func command(ctx context.Context, cmd, runValue string, env map[string]string) error {
-	vars := []string{"RHYTHM_ECHO_RUN=" + runValue}
+	vars := []string{runEnv + "=" + runValue}
 	for k, v := range env {
 		vars = append(vars, k+"="+v)
 	}
