@@ -1069,8 +1069,11 @@ func TestLoginGivesViewersTheInboxOnly(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &page); err != nil || !page.ReadOnly || len(page.Messages) != 1 {
 		t.Errorf("list signed in = %d %s", w.Code, w.Body)
 	}
-	if w := get("/report", c, false); w.Code != 200 {
-		t.Errorf("report signed in = %d", w.Code)
+	if w := get("/report", c, false); w.Code != 200 || !strings.Contains(w.Header().Get("Content-Security-Policy"), "frame-ancestors 'none'") {
+		t.Errorf("report signed in = %d %v", w.Code, w.Header())
+	}
+	if w := get("/", c, false); !strings.Contains(w.Header().Get("Content-Security-Policy"), "frame-ancestors 'none'") || w.Header().Get("X-Frame-Options") != "DENY" {
+		t.Errorf("another page may frame Echo Inbox: %v", w.Header())
 	}
 	if w := get("/v1/messages", c, false); w.Code != http.StatusUnauthorized {
 		t.Errorf("a viewer reading the API = %d", w.Code)

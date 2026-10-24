@@ -168,7 +168,8 @@ func (u *UI) remove(w http.ResponseWriter, r *http.Request) {
 
 // frameCSP is the policy for a message's HTML: no scripts, no requests
 // (remote images only when asked) and a sandbox, so the email can't
-// reach the page, the API or the token even when opened on its own.
+// reach the page, the API or the token even when opened on its own. Only
+// Echo Inbox itself may frame it.
 // Email relies on inline styles, which is why it isn't a srcdoc frame:
 // that would inherit the page's style-src 'self'.
 func frameCSP(images bool) string {
@@ -177,7 +178,7 @@ func frameCSP(images bool) string {
 		img = "* data:"
 	}
 	return "default-src 'none'; style-src 'unsafe-inline'; font-src data:; img-src " + img +
-		"; sandbox allow-popups allow-popups-to-escape-sandbox"
+		"; frame-ancestors 'self'; sandbox allow-popups allow-popups-to-escape-sandbox"
 }
 
 // frame serves a message's HTML for the HTML tab's iframe. Links open in
@@ -189,6 +190,7 @@ func (u *UI) frame(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Security-Policy", frameCSP(r.URL.Query().Get("images") == "1"))
+	w.Header().Set("X-Frame-Options", "SAMEORIGIN")
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	_, _ = fmt.Fprint(w, `<!doctype html><meta charset="utf-8"><base target="_blank">`, m.HTML)
 }

@@ -33,8 +33,9 @@ var static embed.FS
 
 // CSP is the page's Content-Security-Policy: nothing but Echo's own files.
 // Message HTML never runs in the page; it gets its own frame and policy
-// (see frameCSP).
-const CSP = "default-src 'self'; img-src 'self' data:; style-src 'self'; frame-src 'self'; script-src 'self'"
+// (see frameCSP). No other page may frame Echo Inbox, so none can trick
+// a click on Delete or Release.
+const CSP = "default-src 'self'; img-src 'self' data:; style-src 'self'; frame-src 'self'; script-src 'self'; frame-ancestors 'none'"
 
 // Paths the page fetches. The contract test drives exactly these.
 const (
@@ -107,6 +108,7 @@ func (u *UI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	h := w.Header()
 	h.Set("Content-Security-Policy", CSP)
+	h.Set("X-Frame-Options", "DENY") // for browsers without frame-ancestors
 	h.Set("X-Content-Type-Options", "nosniff")
 	h.Set("Referrer-Policy", "no-referrer")
 	h.Set("Cache-Control", "no-store")

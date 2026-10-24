@@ -226,7 +226,8 @@ func localPath(p string) string {
 
 func (l *Login) serveLogin(w http.ResponseWriter, r *http.Request) {
 	h := w.Header()
-	h.Set("Content-Security-Policy", CSP+"; form-action 'self'; frame-ancestors 'none'")
+	h.Set("Content-Security-Policy", CSP+"; form-action 'self'") // CSP has frame-ancestors 'none'
+	h.Set("X-Frame-Options", "DENY")
 	h.Set("X-Content-Type-Options", "nosniff")
 	h.Set("Referrer-Policy", "no-referrer")
 	h.Set("Cache-Control", "no-store")

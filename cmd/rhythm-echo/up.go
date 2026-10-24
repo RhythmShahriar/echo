@@ -727,6 +727,7 @@ func liveRun(in *catcher.Inbox, mode string, checks check.Options, f catcher.Fil
 // for saving or sharing; Echo Inbox at / is the live view.
 func liveReport(w http.ResponseWriter, _ *http.Request, in *catcher.Inbox, mode string, checks check.Options) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src * data:; frame-src 'self' data:")
+	w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src * data:; frame-src 'self' data:; frame-ancestors 'none'")
+	w.Header().Set("X-Frame-Options", "DENY")
 	_ = report.HTML(w, report.Result{Run: liveRun(in, mode, checks, catcher.Filter{})})
 }

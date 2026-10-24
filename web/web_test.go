@@ -69,8 +69,11 @@ func TestPageIsSmallWhateverTheInbox(t *testing.T) {
 	if a.Body.String() != b.Body.String() || b.Body.Len() > 200<<10 {
 		t.Errorf("page is %d bytes with 10,000 messages, %d without", b.Body.Len(), a.Body.Len())
 	}
-	if got := b.Header().Get("Content-Security-Policy"); got != "default-src 'self'; img-src 'self' data:; style-src 'self'; frame-src 'self'; script-src 'self'" {
+	if got := b.Header().Get("Content-Security-Policy"); got != "default-src 'self'; img-src 'self' data:; style-src 'self'; frame-src 'self'; script-src 'self'; frame-ancestors 'none'" {
 		t.Errorf("CSP = %q", got)
+	}
+	if got := b.Header().Get("X-Frame-Options"); got != "DENY" {
+		t.Errorf("X-Frame-Options = %q", got)
 	}
 	if b.Header().Get("X-Content-Type-Options") != "nosniff" || !strings.HasPrefix(b.Header().Get("Content-Type"), "text/html") {
 		t.Errorf("headers: %v", b.Header())
@@ -181,7 +184,7 @@ func TestMessageHTMLIsSandboxed(t *testing.T) {
 	inbox.Add(model.Message{ID: "m2", Channel: model.SMS, Text: "no html"})
 	w := get(u, PathMessages+"/m1/html")
 	csp := w.Header().Get("Content-Security-Policy")
-	for _, want := range []string{"default-src 'none'", "style-src 'unsafe-inline'", "img-src data:;", "sandbox allow-popups"} {
+	for _, want := range []string{"default-src 'none'", "style-src 'unsafe-inline'", "img-src data:;", "frame-ancestors 'self'", "sandbox allow-popups"} {
 		if !strings.Contains(csp, want) {
 			t.Errorf("frame CSP %q lacks %q", csp, want)
 		}
