@@ -1,0 +1,17 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+# Echo in place of Mailpit in a Laravel Sail docker-compose.yml. Replace the
+# mailpit service with this one. It keeps the name, so MAIL_HOST=mailpit,
+# MAIL_PORT=1025 and FORWARD_MAILPIT_* in .env work unchanged; the inbox is
+# at http://localhost:8025 as before.
+services:
+  mailpit:
+    image: "ghcr.io/rhythmshahriar/echo:1"
+    ports:
+      # Loopback only: Echo has no token on Sail's private network, and
+      # its API holds everything the app sent.
+      - "127.0.0.1:${FORWARD_MAILPIT_PORT:-1025}:1025"
+      - "127.0.0.1:${FORWARD_MAILPIT_DASHBOARD_PORT:-8025}:8025"
+    networks:
+      - sail

@@ -1,0 +1,27 @@
+#ddev-generated
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+# Echo as a service next to the web container. It takes the router ports
+# DDEV gives Mailpit (8025 over HTTP, 8026 over HTTPS); config.echo.yaml
+# moves Mailpit aside and has it pass every message on to Echo.
+# Settings go in .ddev/.env.echo:
+#   ddev dotenv set .ddev/.env.echo --echo-docker-image=ghcr.io/rhythmshahriar/echo:1.2.3
+#   ddev dotenv set .ddev/.env.echo --rhythm-echo-token=change-me
+services:
+  echo:
+    container_name: ddev-${DDEV_SITENAME}-echo
+    image: ${ECHO_DOCKER_IMAGE:-ghcr.io/rhythmshahriar/echo:1}
+    restart: "no"
+    labels:
+      com.ddev.site-name: ${DDEV_SITENAME}
+      com.ddev.approot: ${DDEV_APPROOT}
+    expose:
+      - "8025"
+      - "1025"
+    environment:
+      - VIRTUAL_HOST=$DDEV_HOSTNAME
+      - HTTP_EXPOSE=8025:8025
+      - HTTPS_EXPOSE=8026:8025
+      # Empty: no token, which --private-network allows on DDEV's network.
+      - RHYTHM_ECHO_TOKEN=${RHYTHM_ECHO_TOKEN:-}

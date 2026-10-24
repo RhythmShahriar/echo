@@ -1,0 +1,14 @@
+#ddev-generated
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+# DDEV's Mailpit runs inside the web container on localhost:1025 and
+# catches PHP's mail() and SMTP to localhost. It stays, on other router
+# ports and relays every message it gets to Echo, so nothing in the app
+# needs to change. Mailer settings that name echo:1025 reach Echo directly.
+mailpit_http_port: "8029"
+mailpit_https_port: "8030"
+web_environment:
+  - MP_SMTP_RELAY_HOST=echo
+  - MP_SMTP_RELAY_PORT=1025
+  - MP_SMTP_RELAY_ALL=true

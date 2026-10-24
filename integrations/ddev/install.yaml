@@ -1,0 +1,18 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+# DDEV add-on: Echo in place of DDEV's built-in Mailpit. See README.md.
+# Sections: https://docs.ddev.com/en/stable/users/extend/creating-add-ons/
+name: echo
+
+project_files:
+  - docker-compose.echo.yaml
+  - config.echo.yaml
+  - commands/host/echo
+
+ddev_version_constraint: ">= v1.24.10"
+
+post_install_actions:
+  - |
+    #ddev-description:How to open Echo
+    echo "Echo replaces Mailpit after ddev restart: ddev echo opens the inbox (https port 8026)."
