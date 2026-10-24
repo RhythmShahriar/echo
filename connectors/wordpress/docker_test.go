@@ -723,7 +723,7 @@ func (r *rig) browse(t *testing.T, c *http.Client, method, u string, form url.Va
 }
 
 // install rewrites the connector's settings in the mounted mu-plugins,
-// pointed at the test's Echo with its token, and waits until the site
+// pointed at the test's Echo with its token and waits until the site
 // runs with them.
 func (r *rig) install(t *testing.T, s Settings) {
 	t.Helper()

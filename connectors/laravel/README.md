@@ -52,7 +52,7 @@ Everything can be set from the environment. If you want the file, run `php artis
 **HTTP decisions.** Echo answers each request before it's sent:
 - `fake`: the app gets Echo's response, and nothing is sent.
 - `block`: the request fails with Laravel's `ConnectionException`, as if the network were down.
-- `allow`: the request is sent, and the response is reported afterwards. Echo always allows the site's own host (the host of `APP_URL`, never the request's `Host` header), loopback and the hosts in its allowlist.
+- `allow`: the request is sent and the response is reported afterwards. Echo always allows the site's own host (the host of `APP_URL`, never the request's `Host` header), loopback and the hosts in its allowlist.
 
 **Mail decisions.** Sealed, Echo keeps the message and the app sees a normal send. Observed, the real transport sends it, and the connector then reports the outcome against the same message: sent, or failed with the transport's error (a dead SMTP server, a rejected API key). The exception still reaches the app as usual.
 
