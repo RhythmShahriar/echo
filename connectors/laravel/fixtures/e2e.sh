@@ -11,7 +11,7 @@
 #   connectors/laravel/fixtures/e2e.sh          # or: make -C connectors/laravel e2e
 #   E2E_FRESH=1 connectors/laravel/fixtures/e2e.sh   # recreate the app first
 #
-# Needs docker, go, curl and jq. Uses ports 18960-18962 on 127.0.0.1.
+# Needs docker, go, curl and jq. Uses ports 18960-18965 on 127.0.0.1.
 set -euo pipefail
 
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -21,20 +21,24 @@ app="$here/app"
 api_port=${E2E_API_PORT:-18960}
 smtp_port=${E2E_SMTP_PORT:-18961}
 app_port=${E2E_APP_PORT:-18962}
+obs_api_port=${E2E_OBSERVE_API_PORT:-18963}
+obs_smtp_port=${E2E_OBSERVE_SMTP_PORT:-18964}
+closed_port=${E2E_CLOSED_PORT:-18965} # nothing listens here: a dead SMTP server
 api="http://127.0.0.1:$api_port"
+obs_api="http://127.0.0.1:$obs_api_port"
 site="http://127.0.0.1:$app_port"
 name="rhythm-echo-laravel-e2e-$$"
 cache=${E2E_CACHE:-$here/.cache}
 php_image=php:8.3-cli
 export PATH="/usr/local/go/bin:$PATH"
 
-catcher_pid=""
+pids=()
 cleanup() {
 	docker rm -f "$name" >/dev/null 2>&1 || true
-	if [ -n "$catcher_pid" ]; then
-		kill "$catcher_pid" 2>/dev/null || true
-		wait "$catcher_pid" 2>/dev/null || true
-	fi
+	for pid in "${pids[@]}"; do
+		kill "$pid" 2>/dev/null || true
+		wait "$pid" 2>/dev/null || true
+	done
 }
 trap cleanup EXIT
 
@@ -51,9 +55,9 @@ in_app() {
 	docker run --rm -u "$(id -u):$(id -g)" --network host \
 		-e COMPOSER_HOME=/cache -e HOME=/tmp \
 		-e APP_ENV=staging -e APP_URL="$site" \
-		-e MAIL_MAILER=smtp -e MAIL_HOST=127.0.0.1 -e MAIL_PORT="$smtp_port" -e MAIL_SCHEME= \
+		-e MAIL_MAILER=smtp -e MAIL_HOST=127.0.0.1 -e MAIL_PORT="${E2E_MAIL_PORT:-$smtp_port}" -e MAIL_SCHEME= \
 		-e QUEUE_CONNECTION=database \
-		-e RHYTHM_ECHO_URL="$api" \
+		-e RHYTHM_ECHO_URL="${E2E_ECHO_URL:-$api}" \
 		-e RHYTHM_ECHO_RUN="${RHYTHM_ECHO_RUN:-}" -e RHYTHM_ECHO_ENABLED="${RHYTHM_ECHO_ENABLED:-}" \
 		-v "$cache":/cache -v "$pkg":/pkg -w /pkg/fixtures/app "$image" "$@"
 }
@@ -63,6 +67,27 @@ artisan() { in_app "$php_image" php artisan "$@"; }
 
 # messages prints the catcher's messages for a run as JSON.
 messages() { curl -fsS "$api/v1/messages?run=$1"; }
+
+# start_catcher <api port> <smtp port> <mode> starts a catcher and waits.
+start_catcher() {
+	local url="http://127.0.0.1:$1"
+	if curl -fsS "$url/v1/health" >/dev/null 2>&1; then
+		fail "something already listens on $url; stop it or pick other E2E_*_PORT values"
+	fi
+	"$cache/catcher" -http "127.0.0.1:$1" -smtp "127.0.0.1:$2" -mode "$3" &
+	pids+=("$!")
+	for _ in $(seq 50); do
+		curl -fsS "$url/v1/health" >/dev/null 2>&1 && return
+		sleep 0.1
+	done
+	fail "the catcher on $url did not start"
+}
+
+# send_mail <subject> sends one mail through the app's default mailer.
+send_mail() {
+	artisan tinker --execute \
+		"Illuminate\\Support\\Facades\\Mail::raw('hello', fn (\$m) => \$m->to('ada@example.test')->subject('$1'));"
+}
 
 check() { # check <description> <jq filter that must be true> <json>
 	if [ "$(jq -r "$2" <<<"$3" 2>/dev/null)" != "true" ]; then
@@ -76,16 +101,8 @@ mkdir -p "$cache"
 
 # 1. The catcher.
 (cd "$root" && GOWORK=off go build -o "$cache/catcher" ./connectors/laravel/fixtures/catcher)
-if curl -fsS "$api/v1/health" >/dev/null 2>&1; then
-	fail "something already listens on $api; stop it or set E2E_API_PORT"
-fi
-"$cache/catcher" -http "127.0.0.1:$api_port" -smtp "127.0.0.1:$smtp_port" -mode seal &
-catcher_pid=$!
-for _ in $(seq 50); do
-	curl -fsS "$api/v1/health" >/dev/null 2>&1 && break
-	sleep 0.1
-done
-curl -fsS "$api/v1/health" >/dev/null || fail "the catcher did not start"
+start_catcher "$api_port" "$smtp_port" seal
+start_catcher "$obs_api_port" "$obs_smtp_port" observe
 
 # 2. The app, created once.
 if [ -n "${E2E_FRESH:-}" ]; then
@@ -161,10 +178,26 @@ check "the canary carries RHYTHM_ECHO_RUN" 'all(.[]; .action == "doctor")' "$can
 
 # 7. Control: with the connector off, the same mailer reaches the SMTP sink,
 #    so the "nothing reached the SMTP sink" check above means something.
-RHYTHM_ECHO_ENABLED=false artisan tinker --execute \
-	"Illuminate\\Support\\Facades\\Mail::raw('control', fn (\$m) => \$m->to('control@example.test')->subject('Echo off'));" >/dev/null
+RHYTHM_ECHO_ENABLED=false send_mail "Echo off" >/dev/null
 all=$(curl -fsS "$api/v1/messages")
 check "control: with the connector off, mail goes out over SMTP" \
 	'any(.[]; .source.via == "smtp" and .subject == "Echo off")' "$all"
 
-echo "PASS: Laravel connector end to end ($(jq length <<<"$all") messages)"
+# 8. Observe mode, against a second catcher: a real send is reported after.
+#    Its SMTP sink stands in for the real mail server.
+E2E_ECHO_URL=$obs_api E2E_MAIL_PORT=$obs_smtp_port send_mail "Observed ok" >/dev/null
+obs=$(curl -fsS "$obs_api/v1/messages")
+check "observe: the delivered mail is marked sent" \
+	'any(.[]; .source.via == "laravel" and .subject == "Observed ok" and .status == "sent" and (.error // "") == "")' "$obs"
+check "observe: and it really went out" 'any(.[]; .source.via == "smtp" and .subject == "Observed ok")' "$obs"
+
+# A dead SMTP server: the send fails and Echo records why.
+if E2E_ECHO_URL=$obs_api E2E_MAIL_PORT=$closed_port send_mail "Observed fail" >/dev/null 2>&1; then
+	echo "note: tinker swallowed the transport error" >&2
+fi
+obs=$(curl -fsS "$obs_api/v1/messages")
+check "observe: the failed mail is marked failed, with the transport's error" \
+	'any(.[]; .subject == "Observed fail" and .status == "failed" and (.error | contains("'"$closed_port"'")))' "$obs"
+check "observe: one message per mail, not a duplicate" '[.[] | select(.subject == "Observed fail")] | length == 1' "$obs"
+
+echo "PASS: Laravel connector end to end ($(jq length <<<"$all") sealed, $(jq length <<<"$obs") observed messages)"

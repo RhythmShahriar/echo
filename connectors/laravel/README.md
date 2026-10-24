@@ -50,9 +50,11 @@ Everything can be set from the environment. If you want the file, run `php artis
 - `block`: the request fails with Laravel's `ConnectionException`, as if the network were down.
 - `allow`: the request is sent, and the response is reported afterwards. Echo always allows the site's own host, loopback, and the hosts in its allowlist.
 
+**Mail decisions.** Sealed, Echo keeps the message and the app sees a normal send. Observed, the real transport sends it, and the connector then reports the outcome against the same message: sent, or failed with the transport's error (a dead SMTP server, a rejected API key). The exception still reaches the app as usual.
+
 **Echo unreachable.** With `mode` set to `seal`, mail fails with a `TransportException` and HTTP calls fail with a `ConnectionException`. Nothing leaves. The `array` and `log` mailers keep working, because they never leave the machine. With `mode` set to `observe`, traffic goes out normally.
 
-**Why not `Http::preventStrayRequests()`?** It throws on every request that isn't faked, including the site's own host and the hosts you allow. Echo already decides per host and answers sealed requests with provider-shaped fakes, which is what keeps code paths like webhook retry counters working. So the connector doesn't call it.
+**No `Http::preventStrayRequests()`.** The seal doesn't use it, and you don't need to call it on staging. It throws on every request that isn't faked, including the site's own host and the hosts you allow. Echo already decides per host and answers sealed requests with provider-shaped fakes, which is what keeps code paths like webhook retry counters working.
 
 **Why the transport and not only `MessageSending`?** A `MessageSending` listener that returns `false` does cancel the send. But Laravel dispatches that event with `until()`, which stops at the first listener that returns anything other than `null`. One other listener returning `true` would let the mail out. The transport wrapper can't be skipped like that. The `MessageSending` listener is only a fallback for apps that bind their own mail manager.
 

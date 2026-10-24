@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\Mail;
 use Rhythm\Echo\Mail\EchoMailManager;
 use Rhythm\Echo\Mail\EchoTransport;
 use Rhythm\Echo\Tests\Fixtures\OrderShipped;
+use Symfony\Component\Mailer\Exception\TransportException;
 
 class MailTest extends TestCase
 {
@@ -53,7 +54,39 @@ class MailTest extends TestCase
         Mail::to('ada@example.test')->send(new OrderShipped);
 
         $this->assertSame(1, $this->delivered());
-        $this->assertCount(1, $this->captures('email'));
+        $c = $this->captures('email');
+        $this->assertCount(2, $c);
+        $this->assertArrayNotHasKey('phase', $c[0]);
+        $this->assertSame('after', $c[1]['phase']);
+        $this->assertSame($c[0]['_id'], $c[1]['id']);
+        $this->assertArrayNotHasKey('error', $c[1]);
+        $this->assertArrayNotHasKey('email', $c[1]);
+    }
+
+    public function test_observed_mail_that_fails_is_reported_with_the_error(): void
+    {
+        $this->mode('observe');
+        $this->app['config']->set('mail.mailers.smtp', ['transport' => 'smtp', 'host' => '127.0.0.1', 'port' => 18998, 'timeout' => 2]);
+
+        try {
+            Mail::mailer('smtp')->raw('Hi', fn ($m) => $m->to('a@example.test')->subject('Fails'));
+            $this->fail('the send should fail');
+        } catch (TransportException $e) {
+            $this->assertStringContainsString('18998', $e->getMessage());
+        }
+
+        $c = $this->captures('email');
+        $this->assertCount(2, $c);
+        $this->assertSame('after', $c[1]['phase']);
+        $this->assertSame($c[0]['_id'], $c[1]['id']);
+        $this->assertStringContainsString('Connection could not be established', $c[1]['error']);
+    }
+
+    public function test_sealed_mail_sends_no_after_phase(): void
+    {
+        Mail::raw('Hi', fn ($m) => $m->to('a@example.test')->subject('Sealed'));
+
+        $this->assertSame([null], array_map(fn ($c) => $c['phase'] ?? null, $this->captures()));
     }
 
     public function test_failover_mailer_captures_once(): void
