@@ -87,6 +87,9 @@ func compareRuns(before, after *model.Run, beforeDir, afterDir, version string, 
 		g.add(c, "site-wide")
 	}
 	out.Changes = g.list()
+	for i, c := range out.Changes {
+		out.Changes[i].Diff = modelDiff(ChangeDiff(c))
+	}
 	out.Warnings = append(mismatch(before, after), notes...)
 	if len(o.Accept) > 0 {
 		Accept(out, o.Accept)

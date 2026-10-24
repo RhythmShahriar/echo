@@ -101,6 +101,19 @@ func (d *diffCache) get(before, after string) []Hunk {
 	return hs
 }
 
+// modelDiff is hs as a Change carries it in comparison.json: the hunks'
+// lines one after another (a jump in Line starts the next hunk). nil
+// when there are none.
+func modelDiff(hs []Hunk) []model.DiffLine {
+	var out []model.DiffLine
+	for _, h := range hs {
+		for _, l := range h {
+			out = append(out, model.DiffLine{Op: l.Op, Line: l.Line, Text: l.Text})
+		}
+	}
+	return out
+}
+
 func diffable(check string) bool { return check == "message/text" || check == "message/payload" }
 
 // Summary says what a hunk changed in one line: "line 9 added: Order

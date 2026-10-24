@@ -6,6 +6,7 @@ package compare
 import (
 	"encoding/json"
 	"math/rand/v2"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -348,4 +349,28 @@ func TestChangeDiffIsWorkedOutOnce(t *testing.T) {
 	if n > maxCachedDiffs {
 		t.Errorf("the cache holds %d diffs", n)
 	}
+}
+
+// TestComparisonCarriesTheDiff: a text change carries its diff in
+// comparison.json, so a reader of the JSON doesn't have to work it out.
+func TestComparisonCarriesTheDiff(t *testing.T) {
+	act := func(text string) model.Action {
+		return model.Action{ID: "action:order", Label: "Order", Messages: []model.Message{email("ann@shop.test", "Receipt", text)}}
+	}
+	c := Compare(run(act("a\nb\nc\nd\ne\nf\n")), run(act("a\nb\nc\nd\nOrder total: $42.00\ne\nf\n")), "", "", "test")
+	for _, ch := range c.Changes {
+		if ch.Check != "message/text" {
+			if ch.Diff != nil {
+				t.Errorf("%s carries a diff: %+v", ch.Check, ch.Diff)
+			}
+			continue
+		}
+		want := []model.DiffLine{{Op: OpCtx, Line: 3, Text: "c"}, {Op: OpCtx, Line: 4, Text: "d"}, {Op: OpAdd, Line: 5, Text: "Order total: $42.00"},
+			{Op: OpCtx, Line: 6, Text: "e"}, {Op: OpCtx, Line: 7, Text: "f"}}
+		if !slices.Equal(ch.Diff, want) {
+			t.Errorf("diff = %+v", ch.Diff)
+		}
+		return
+	}
+	t.Fatalf("no text change: %s", titles(c.Changes))
 }

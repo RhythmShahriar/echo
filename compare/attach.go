@@ -59,12 +59,24 @@ func byteSize(n int64) string {
 // ends inside it.
 var placeholderRe = regexp.MustCompile(`\[attachment (.+?) ([\w.+-]+/[\w.+-]+) (?:(\d+) sha256:([0-9a-f]{64})|cut)\]`)
 
-// Attachments lists the files an email carries, from its raw MIME body:
-// every part with a file name, or that says it is an attachment. A part
-// the catcher replaced by its placeholder line gives the placeholder's
-// facts. Other channels carry none.
+// Attachments lists the files an email carries: the list the catcher
+// kept on the message (Message.Attachments) when it has one, else from its
+// raw MIME body, as a run from an older Echo needs: every part with a
+// file name, or that says it is an attachment. A part the catcher replaced
+// by its placeholder line gives the placeholder's facts. Other channels
+// carry none.
 func Attachments(m model.Message) []Attachment {
-	if m.Channel != model.Email || strings.TrimSpace(m.Body) == "" {
+	if m.Channel != model.Email {
+		return nil
+	}
+	if len(m.Attachments) > 0 {
+		out := make([]Attachment, 0, len(m.Attachments))
+		for _, a := range m.Attachments {
+			out = append(out, Attachment{Name: a.Name, Type: a.Type, Size: a.Size, SHA256: a.SHA256})
+		}
+		return out
+	}
+	if strings.TrimSpace(m.Body) == "" {
 		return nil
 	}
 	cut := truncated(m)

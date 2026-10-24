@@ -174,3 +174,17 @@ func TestByteSize(t *testing.T) {
 		}
 	}
 }
+
+// TestAttachmentsKeptOnTheMessage: the list the catcher keeps on a
+// message is used before its MIME body is parsed.
+func TestAttachmentsKeptOnTheMessage(t *testing.T) {
+	m := model.Message{Channel: model.Email, Body: "Subject: x\r\n\r\nno MIME parts here",
+		Attachments: []model.Attachment{{Name: "invoice-42.pdf", Type: "application/pdf", Size: 84211, SHA256: strings.Repeat("a", 64)}}}
+	got := Attachments(m)
+	if len(got) != 1 || got[0].Name != "invoice-42.pdf" || got[0].Size != 84211 || got[0].SHA256 != strings.Repeat("a", 64) {
+		t.Errorf("attachments = %+v", got)
+	}
+	if got := Attachments(model.Message{Channel: model.SMS, Attachments: m.Attachments}); got != nil {
+		t.Errorf("an SMS: %+v", got)
+	}
+}
