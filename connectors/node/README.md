@@ -93,7 +93,7 @@ import '@rhythmsh/echo/cypress';
 cy.echoLatest({ to: '+15551230000', channel: 'sms' }).its('code').then((code) => cy.get('#otp').type(code));
 ```
 
-`latest({ to, channel, run, action, since, q, wait })` calls Echo's `GET /v1/messages/latest` and returns `{ codes, links, message }`, plus `code` (the first code) and `link` (the first link's URL). `channel` takes one channel or a list. Echo waits up to `wait` for the message to arrive: a duration such as `'10s'` or `'1500ms'`, or milliseconds; the default is `10s` and the most is `1m`. When nothing arrives in time, the call throws (Cypress: the command fails) with Echo's reason, so the test fails where the message went missing.
+`latest({ to, channel, run, action, since, q, wait })` calls Echo's `GET /v1/messages/latest` and returns `{ codes, links, message }`, plus `code` (the first code) and `link` (the first link's URL). `channel` takes one channel or a list. Echo waits up to `wait` for the message to arrive: a Go duration such as `'10s'`, `'1500ms'` or `'1m30s'`, or milliseconds (anything else throws before the call); the default is `10s` and the most is `1m`. When nothing arrives in time, the call throws (Cypress: the command fails) with Echo's reason, so the test fails where the message went missing.
 
 Echo's address and token come from `RHYTHM_ECHO_URL` and `RHYTHM_ECHO_TOKEN`, or from the second argument (`{ url, token }`). In Cypress they come from `Cypress.env`: set `CYPRESS_RHYTHM_ECHO_URL` and `CYPRESS_RHYTHM_ECHO_TOKEN` in the shell, or `env` in `cypress.config`. `cy.echoLatest` uses `cy.request`, which Cypress sends from Node, so Echo needs no CORS setup. Neither helper depends on Playwright or Cypress.
 
@@ -132,6 +132,14 @@ The connector stays completely inert, with no hooks installed, when any of these
 - during `next build` (`NEXT_PHASE=phase-production-build`), so static generation is never blocked
 
 `RHYTHM_ECHO_FORCE=1` overrides all of these. Preview and development deployments on Vercel activate it, including `next start` on a preview, which runs with `NODE_ENV=production`. `next start` on your own staging server also runs with `NODE_ENV=production`, so set `RHYTHM_ECHO_FORCE=1` there.
+
+When it stays off although a `RHYTHM_ECHO_*` variable (or a `url`, `token`, `writeToken` or `siteId` option) points it at Echo, it logs the reason once, so a staging server that forgot `RHYTHM_ECHO_FORCE` does not send real mail without a hint:
+
+```
+[rhythm-echo] off: NODE_ENV=production (set RHYTHM_ECHO_FORCE=1 only on a server that is not production)
+```
+
+A Vercel production deploy and `next build` stay quiet, because Vercel often shares variables across environments.
 
 When active, it logs one line per runtime:
 

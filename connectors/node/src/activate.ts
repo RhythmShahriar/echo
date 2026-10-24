@@ -4,7 +4,7 @@
 // Turning the connector on: configuration, the production guard and the
 // one status line. Shared by the Node and Next.js entry points; safe on Edge.
 
-import { guard, resolveConfig, type Options } from './config.js';
+import { env, guard, resolveConfig, type Options } from './config.js';
 import { state } from './state.js';
 
 /** activate applies options and the production guard; false means every hook passes calls straight through. */
@@ -23,8 +23,20 @@ export function activate(o?: Options): boolean {
   if (g.warning && !s.warned.has('guard')) {
     s.warned.add('guard');
     cfg.logger.warn(`[rhythm-echo] ${g.warning}`);
+  } else if (!g.active && !g.quiet && configured(o) && !s.warned.has('guard')) {
+    // Someone pointed this app at Echo and the guard still said no (a
+    // staging server running `next start`, say). Without this line mail
+    // and webhooks would go out for real with no hint why.
+    s.warned.add('guard');
+    cfg.logger.warn(`[rhythm-echo] off: ${g.reason}`);
   }
   return g.active;
+}
+
+/** configured reports whether anything asks for Echo here: an option or a RHYTHM_ECHO_* variable. */
+function configured(o?: Options): boolean {
+  if (o && (o.url || o.token || o.writeToken || o.siteId)) return true;
+  return Object.entries(env()).some(([k, v]) => k.startsWith('RHYTHM_ECHO_') && v !== undefined && v !== '');
 }
 
 let reason = '';

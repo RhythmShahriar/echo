@@ -69,6 +69,45 @@ describe('production guard', () => {
     }
   });
 
+  // A staging server running `next start` has NODE_ENV=production: with
+  // Echo configured, staying off silently would send real mail unexplained.
+  it('says why it is off when Echo is configured', async () => {
+    const before = { ...process.env };
+    try {
+      for (const [k, v] of Object.entries({ NODE_ENV: 'production', RHYTHM_ECHO_URL: 'http://127.0.0.1:20499' })) process.env[k] = v;
+      state().warned.clear();
+      const log = silent();
+      expect(await register({ logger: log })).toBe(false);
+      expect(await register({ logger: log })).toBe(false);
+      expect(log.lines).toEqual(['[rhythm-echo] off: NODE_ENV=production (set RHYTHM_ECHO_FORCE=1 only on a server that is not production)']);
+
+      // an option counts as configuring it too
+      delete process.env.RHYTHM_ECHO_URL;
+      state().warned.clear();
+      const log2 = silent();
+      expect(await register({ url: 'http://127.0.0.1:20499', logger: log2 })).toBe(false);
+      expect(log2.lines).toHaveLength(1);
+
+      // nothing points at Echo: a production server that merely has the package stays quiet
+      state().warned.clear();
+      const log3 = silent();
+      expect(await register({ logger: log3 })).toBe(false);
+      expect(log3.lines).toHaveLength(0);
+
+      // certain production stays quiet even with settings shared from preview
+      process.env.VERCEL_ENV = 'production';
+      process.env.RHYTHM_ECHO_URL = 'http://127.0.0.1:20499';
+      state().warned.clear();
+      const log4 = silent();
+      expect(await register({ logger: log4 })).toBe(false);
+      expect(log4.lines).toHaveLength(0);
+    } finally {
+      for (const k of Object.keys(process.env)) if (!(k in before)) delete process.env[k];
+      Object.assign(process.env, before);
+      state().warned.clear();
+    }
+  });
+
   it('names the reason in the active line', async () => {
     const echo = await fakeEcho('seal');
     try {

@@ -114,6 +114,12 @@ export interface Guard {
   reason: string;
   /** A one-line problem with the environment worth logging even when inactive. */
   warning?: string;
+  /**
+   * Off for certain (a Vercel production deploy, `next build`), so nothing
+   * is logged even when RHYTHM_ECHO_* settings are present: env vars shared
+   * by every Vercel environment would otherwise log on every cold start.
+   */
+  quiet?: boolean;
 }
 
 /** NODE_ENV values that mean "not production". Anything else counts as production. */
@@ -141,9 +147,9 @@ const nonProduction = new Set(['development', 'test', 'staging', 'preview', 'loc
  */
 export function guard(cfg: Pick<Config, 'force'>, e: Env = env()): Guard {
   if (cfg.force) return { active: true, reason: 'forced by RHYTHM_ECHO_FORCE' };
-  if (e.NEXT_PHASE === 'phase-production-build') return { active: false, reason: 'next build' };
+  if (e.NEXT_PHASE === 'phase-production-build') return { active: false, reason: 'next build', quiet: true };
   const vercel = (e.VERCEL_ENV ?? '').toLowerCase();
-  if (vercel === 'production') return { active: false, reason: 'VERCEL_ENV=production' };
+  if (vercel === 'production') return { active: false, reason: 'VERCEL_ENV=production', quiet: true };
   if (vercel !== '') return { active: true, reason: `VERCEL_ENV=${vercel}` };
   const raw = e.NODE_ENV;
   if (raw === undefined || raw.trim() === '') {
