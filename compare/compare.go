@@ -11,8 +11,6 @@ package compare
 
 import (
 	"cmp"
-	"crypto/sha1" //nolint:gosec // fingerprints, not security
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/url"
@@ -258,8 +256,9 @@ func content(b, a model.Message) (out []model.Change, note string) {
 			ch("message/reply-to", what+": lost its Reply-To", roles(b.ReplyTo), "", "Replies now go to the sender address; restore Reply-To if customers should reach a person.")
 		}
 	}
-	if fingerprint(text(b)) != fingerprint(text(a)) {
-		ch("message/text", what+": text changed", excerpt(text(b)), excerpt(text(a)), "Read the new text; if the change is intended, take a new snapshot.")
+	if bt, at := text(b), text(a); len(Diff(bt, at)) > 0 {
+		// The full texts, so a report can show the diff (ChangeDiff).
+		ch("message/text", what+": text changed", bt, at, "Read the new text; if the change is intended, take a new snapshot.")
 	}
 	if b.Event != a.Event && b.Event != "" {
 		ch("message/event", what+": event changed", b.Event, a.Event, "")
@@ -277,6 +276,16 @@ func content(b, a model.Message) (out []model.Change, note string) {
 		}
 		if len(added) > 0 {
 			ch("message/fields-added", what+": payload has new fields", "", strings.Join(limit(added, 12), ", "), "")
+		}
+		// Same fields, other values: a line diff of the indented JSON
+		// shows which. Lost or new fields already say the payload moved.
+		if len(lost) == 0 && len(added) == 0 {
+			bj, bok := prettyJSON(b.Body)
+			aj, aok := prettyJSON(a.Body)
+			if bok && aok && len(Diff(bj, aj)) > 0 {
+				ch("message/payload", what+": payload changed", bj, aj,
+					"Whatever receives this (a CRM, Zapier, an app) now gets other values; if the change is intended, take a new snapshot.")
+			}
 		}
 	}
 	return out, ""
@@ -399,25 +408,16 @@ func display(s string) string {
 // testAddrName matches Soundcheck's fake names ("soundcheck-test 3f2a").
 var testAddrName = regexp.MustCompile(`(?i)(?:soundcheck|echo)-test[\w -]*`)
 
+// text is what a message says: its plain text, or the visible text of
+// its HTML when it has none.
 func text(m model.Message) string {
 	if strings.TrimSpace(m.Text) != "" {
-		return m.Text
+		return strings.ReplaceAll(m.Text, "\r\n", "\n")
 	}
 	if m.HTML != "" {
-		return tags.ReplaceAllString(m.HTML, " ")
+		return visibleText(m.HTML)
 	}
 	return ""
-}
-
-// fingerprint hashes text with what varies run to run removed: numbers,
-// dates, tokens, test data, whitespace.
-func fingerprint(s string) string {
-	s = template(volatileRe.ReplaceAllString(s, "~"))
-	if strings.TrimSpace(s) == "" {
-		return ""
-	}
-	sum := sha1.Sum([]byte(strings.TrimSpace(s))) //nolint:gosec // not for security
-	return hex.EncodeToString(sum[:8])
 }
 
 func excerpt(s string) string {
@@ -525,6 +525,11 @@ func (g *grouper) add(c model.Change, action string) {
 		g.by = map[string]*model.Change{}
 	}
 	k := c.Class + "|" + c.Check + "|" + c.Title + "|" + c.Before + "|" + c.After
+	if hs := ChangeDiff(c); hs != nil {
+		// The full texts differ in test data from action to action; the
+		// edit is what makes two changes the same.
+		k = c.Class + "|" + c.Check + "|" + c.Title + "|" + signature(hs)
+	}
 	if have, found := g.by[k]; found {
 		if !slices.Contains(have.Actions, action) {
 			have.Actions = append(have.Actions, action)
