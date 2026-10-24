@@ -423,3 +423,53 @@ func mustEval(t *testing.T, p string) string {
 	}
 	return r
 }
+
+// TestRestartIsReported: Echo restarts while an action runs (here the
+// site's request swaps in a new catcher with its own boot ID and an empty
+// inbox). The run names both boots and says what that cost. Without a
+// restart it says nothing.
+func TestRestartIsReported(t *testing.T) {
+	first := catcher.NewServer(catcher.NewInbox(10), catcher.Config{Version: "test", BootID: "boot-1"})
+	second := catcher.NewServer(catcher.NewInbox(10), catcher.Config{Version: "test", BootID: "boot-2"})
+	var restarted atomic.Bool
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if restarted.Load() {
+			second.ServeHTTP(w, r)
+			return
+		}
+		first.ServeHTTP(w, r)
+	}))
+	defer srv.Close()
+	restart := false
+	shop := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		if restart {
+			restarted.Store(true)
+		}
+	}))
+	defer shop.Close()
+	cfg := config.Default()
+	cfg.Site = shop.URL
+	cfg.Quiet = config.Duration{Duration: 100 * time.Millisecond}
+	cfg.Actions = []config.Action{{Name: "Contact form", HTTP: &config.HTTPAction{URL: "/contact"}}}
+	o := Options{Config: cfg, Client: client.New(srv.URL, ""), Version: "test"}
+
+	run, err := Run(context.Background(), o)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(run.BootIDs) != 0 || len(run.Warnings) != 0 {
+		t.Errorf("no restart, yet boots %v and warnings %q", run.BootIDs, run.Warnings)
+	}
+
+	restart = true
+	run, err = Run(context.Background(), o)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(run.BootIDs, []string{"boot-1", "boot-2"}) {
+		t.Errorf("boots = %v", run.BootIDs)
+	}
+	if len(run.Warnings) != 1 || !strings.HasPrefix(run.Warnings[0], "Echo restarted during the run; it keeps messages in memory") {
+		t.Errorf("warnings = %q", run.Warnings)
+	}
+}

@@ -168,9 +168,31 @@ func Run(ctx context.Context, o Options) (*model.Run, error) {
 	}
 	if ctx.Err() == nil {
 		creditLate(ctx, o, run, actions, done.ended, opts)
+		checkRestart(ctx, o.Client, h, run)
 	}
 	run.Duration = float64(time.Since(start).Milliseconds())
 	return run, ctx.Err()
+}
+
+// checkRestart asks Echo for its boot ID again once the actions are done.
+// A different one means Echo restarted during the run, so a message
+// missing from it may be Echo's doing rather than the site's: the run
+// records both boots and says so. An Echo from before boot IDs, or one
+// that no longer answers, is left alone.
+func checkRestart(ctx context.Context, c *client.Client, before client.Health, run *model.Run) {
+	if before.BootID == "" {
+		return
+	}
+	now, err := c.Health(ctx)
+	if err != nil || now.BootID == "" || now.BootID == before.BootID {
+		return
+	}
+	run.BootIDs = []string{before.BootID, now.BootID}
+	lost := "messages sent while it was down are missing from this run"
+	if before.Store == "" || before.Store == "memory" {
+		lost = "it keeps messages in memory, so those that arrived before the restart and while it was down are missing from this run"
+	}
+	run.Warnings = append(run.Warnings, "Echo restarted during the run; "+lost+"; run again with Echo up throughout")
 }
 
 // withWaits fills a timeout or quiet that isn't more than 0 with the
