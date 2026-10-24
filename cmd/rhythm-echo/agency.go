@@ -36,8 +36,10 @@ func (s *session) agencyReport() int {
 		return s.fail(usageErr("--site reads the hub's results: name the hub's store with --store"))
 	case len(s.args) > 0:
 		return s.fail(usageErr("report --site takes no run folder or snapshot"))
+	case s.format == "pdf":
+		o.pdf = true // -o client.pdf: the PDF there, its HTML beside it
 	case s.format != "" && s.format != "html":
-		return s.fail(usageErr("the agency report is HTML (-o <file>.html); --pdf adds a PDF"))
+		return s.fail(usageErr("the agency report is HTML (-o <file>.html), or a PDF with -o <file>.pdf"))
 	case o.brandColor != "" && !hexColor.MatchString(o.brandColor):
 		return s.fail(usageErr("--brand-color %q: want #RGB or #RRGGBB, e.g. #1F6FEB", o.brandColor))
 	case o.failOn != "":
@@ -77,7 +79,13 @@ func (s *session) agencyReport() int {
 		return s.fail(fmt.Errorf("no update windows for site %q in %s since %s; rhythm echo schedule runs them",
 			o.site, o.storeDir, since.Local().Format("2 Jan 2006")))
 	}
-	out := cmp.Or(o.output, o.site+"-report.html")
+	out, pdf := cmp.Or(o.output, o.site+"-report.html"), ""
+	if o.pdf {
+		pdf = strings.TrimSuffix(out, filepath.Ext(out)) + ".pdf"
+	}
+	if s.format == "pdf" {
+		pdf, out = out, strings.TrimSuffix(out, filepath.Ext(out))+".html"
+	}
 	in := report.AgencyInput{Site: o.site, Since: since, Runs: runs, Brand: brand}
 	if err := writeFile(out, func(w io.Writer) error { return report.Agency(w, in) }); err != nil {
 		return s.fail(err)
@@ -87,8 +95,7 @@ func (s *session) agencyReport() int {
 			since.Local().Format("2 Jan 2006"))
 	}
 	open := out
-	if o.pdf {
-		pdf := strings.TrimSuffix(out, filepath.Ext(out)) + ".pdf"
+	if pdf != "" {
 		if err := report.PDF(out, pdf); err != nil {
 			if errors.Is(err, report.ErrNoBrowser) {
 				fmt.Fprintf(s.stderr, "rhythm echo: %v; the HTML report is %s\n", err, out)

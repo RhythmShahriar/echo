@@ -67,6 +67,11 @@ func TestAgencyReport(t *testing.T) {
 		!strings.Contains(errOut, "the HTML report is pdf.html") {
 		t.Errorf("--pdf without Chrome: %d %v %s", code, err, errOut)
 	}
+	// -o client.pdf names the PDF; the HTML goes beside it.
+	code, _, errOut = runCLI(t, "report", "--site", "client-a", "--store", root, "-o", "client.pdf")
+	if _, err := os.Stat("client.html"); code != exitError || err != nil || !strings.Contains(errOut, "the HTML report is client.html") {
+		t.Errorf("-o client.pdf without Chrome: %d %v %s", code, err, errOut)
+	}
 
 	for _, c := range []struct {
 		args []string
@@ -78,6 +83,7 @@ func TestAgencyReport(t *testing.T) {
 		{[]string{"report", "--pdf"}, "add --site <id>"},
 		{[]string{"report", "--site", "../x", "--store", root}, `--site "../x": a hub site's id is letters, digits`},
 		{[]string{"report", "--site", "a/b", "--store", root}, `--site "a/b"`},
+		{[]string{"report", "-o", "x.pdf"}, "can't tell the format of x.pdf"},
 	} {
 		if code, _, errOut := runCLI(t, c.args...); code != exitUsage || !strings.Contains(errOut, c.want) {
 			t.Errorf("%v: %d %s", c.args, code, errOut)

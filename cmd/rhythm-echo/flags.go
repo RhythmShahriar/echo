@@ -284,7 +284,9 @@ func parse(c cmdSpec, args []string) (*plan, error) {
 	case len(chosen) == 1:
 		p.format = chosen[0]
 	case o.output != "":
-		if p.format = formatFromExt(o.output); p.format == "" {
+		if p.format = formatFromExt(o.output); p.format == "" && c.name == "report" && o.site != "" && strings.EqualFold(filepath.Ext(o.output), ".pdf") {
+			p.format = "pdf" // the agency report printed to a PDF
+		} else if p.format == "" {
 			return nil, cli.Usagef("can't tell the format of %s; add --json, --md, --junit or --html", o.output)
 		}
 	}
@@ -519,7 +521,7 @@ var flagDocs = map[string]flagDoc{
 	"link":        {"--link", "print the first link instead (magic, verify, reset, login or\nunsubscribe)"},
 	"kind":        {"--kind <k>", "with --link: only this kind of link, e.g. magic or reset"},
 	"site":        {"--site <id>", "the agency report for this hub site: did its update windows\nbreak anything (--store is the hub's store)"},
-	"pdf":         {"--pdf", "with --site: also print it to a PDF (needs Chrome or Chromium)"},
+	"pdf":         {"--pdf", "with --site: also print it to a PDF beside the HTML (needs Chrome\nor Chromium); -o <file>.pdf writes the PDF there and the HTML beside it"},
 	"brand-name":  {"--brand-name <name>", "with --site: the agency's name on the report"},
 	"brand-logo":  {"--brand-logo <file>", "with --site: the agency's logo (PNG, JPEG, GIF, WebP or SVG)"},
 	"brand-color": {"--brand-color <#hex>", "with --site: the report's accent color, e.g. #1F6FEB"},

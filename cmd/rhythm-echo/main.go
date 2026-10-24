@@ -361,7 +361,8 @@ Deliverability (check, headers; never sends anything):
 Agency report (report --site <id> --store <the hub's store>; rhythm echo schedule fills it):
       --site <id>            the hub site to report on: did its update windows break anything
       --since <d>            the period, e.g. 90d (default 30d)
-      --pdf                  also print it to a PDF (needs Chrome or Chromium)
+      --pdf                  also print it to a PDF beside the HTML (needs Chrome or Chromium);
+                             -o <file>.pdf writes the PDF there and the HTML beside it
       --brand-name <name>    the agency's name on the report
       --brand-logo <file>    the agency's logo (PNG, JPEG, GIF, WebP or SVG)
       --brand-color <#hex>   the report's accent color, e.g. #1F6FEB
