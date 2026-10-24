@@ -32,11 +32,11 @@ Echo Staging Seal's buttons and `wp echo` commands run the `rhythm-echo` binary 
 
 - **Banner:** "This is a sealed copy" in the admin bar while Echo seals the site, "Echo is observing: sends go out" when Echo observes. The mode is the one Echo reports, asked at most once a minute.
 - **Tools > Echo** (administrators only): the sends Echo stopped, counted by plugin and channel (faked: Echo answered; blocked: Echo refused), the update buttons and the settings form. Every form needs `manage_options` and its nonce.
-- **Snapshot before updating** runs `rhythm-echo snapshot --name before-updates`. **Compare since last update** runs `rhythm-echo compare`. Their output shows on the page. Without `RHYTHM_ECHO_BIN`, or where the host disables `proc_open`, the page shows the commands to run yourself.
+- **Snapshot before updating** runs `rhythm-echo snapshot --name before-updates`. **Compare since last update** runs `rhythm-echo compare --snapshot before-updates`, so a snapshot taken in between does not change what it compares against. Their output shows on the page. Without `RHYTHM_ECHO_BIN`, or where the host disables `proc_open`, the page shows the commands to run yourself.
 - **WP-CLI:** `wp echo status`, `wp echo snapshot <name>` and `wp echo compare [--snapshot=<name>]` stream rhythm-echo's output and exit with its code:
 
   ```sh
-  wp echo snapshot before-updates && wp plugin update --all && wp echo compare
+  wp echo snapshot before-updates && wp plugin update --all && wp echo compare --snapshot=before-updates
   ```
 
 - If the mu-plugin is installed too, it runs the seal with its own settings and the plugin only adds its screens and commands.

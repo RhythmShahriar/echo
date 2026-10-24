@@ -462,7 +462,7 @@ final class Echo_Staging_Seal {
 			}
 		} else {
 			echo '<p>' . esc_html( $why ) . ' ' . esc_html__( 'Run these where Echo is installed instead:', 'echo-staging-seal' ) . '</p>';
-			echo '<pre><code>rhythm echo snapshot --name ' . esc_html( self::BEFORE_UPDATES ) . "\nrhythm echo compare</code></pre>";
+			echo '<pre><code>rhythm echo snapshot --name ' . esc_html( self::BEFORE_UPDATES ) . "\nrhythm echo compare --snapshot " . esc_html( self::BEFORE_UPDATES ) . '</code></pre>';
 		}
 		$out = get_transient( self::OUTPUT . get_current_user_id() );
 		if ( is_array( $out ) && isset( $out['command'], $out['code'], $out['output'] ) && is_string( $out['command'] ) && is_int( $out['code'] ) && is_string( $out['output'] ) ) {
@@ -647,8 +647,10 @@ final class Echo_Staging_Seal {
 			wp_die( esc_html__( 'Sorry, you are not allowed to run Echo.', 'echo-staging-seal' ), '', array( 'response' => 403 ) );
 		}
 		check_admin_referer( 'echo_staging_seal_run' );
+		// Both buttons use the same snapshot, so a snapshot taken in between
+		// by hand or by CI does not change what "since last update" means.
 		$command = sanitize_key( self::posted( 'command' ) );
-		$argv    = self::argv( $command, 'snapshot' === $command ? self::BEFORE_UPDATES : '' );
+		$argv    = self::argv( $command, in_array( $command, array( 'snapshot', 'compare' ), true ) ? self::BEFORE_UPDATES : '' );
 		$why     = self::unavailable();
 		if ( null === $argv || '' !== $why ) {
 			wp_die( esc_html( '' !== $why ? $why : __( 'Unknown command.', 'echo-staging-seal' ) ), '', array( 'response' => 400 ) );

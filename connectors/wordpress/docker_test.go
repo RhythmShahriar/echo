@@ -625,6 +625,12 @@ func testPlugin(t *testing.T, r *rig) {
 		!strings.Contains(page, "stub on stderr") || !strings.Contains(page, "rhythm echo snapshot --name before-updates (exit code 0)") {
 		t.Errorf("snapshot button: HTTP %d\n%.3000s", status, page)
 	}
+	// Compare goes against the snapshot the other button saved, not the newest.
+	run.Set("command", "compare")
+	if status, page := r.browse(t, admin, http.MethodPost, post, run); status != http.StatusOK || !strings.Contains(page, "stub rhythm-echo compare --snapshot before-updates") {
+		t.Errorf("compare button: HTTP %d\n%.3000s", status, page)
+	}
+	run.Set("command", "snapshot")
 
 	// Settings need the nonce too. A blank token keeps the saved one.
 	m = regexp.MustCompile(`name="action" value="echo_staging_seal_settings">\s*<input type="hidden" id="_wpnonce" name="_wpnonce" value="([0-9a-f]+)"`).FindStringSubmatch(page)
