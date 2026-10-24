@@ -30,9 +30,11 @@ import (
 	"github.com/RhythmShahriar/echo/check"
 	"github.com/RhythmShahriar/echo/client"
 	"github.com/RhythmShahriar/echo/config"
+	"github.com/RhythmShahriar/echo/mask"
 	"github.com/RhythmShahriar/echo/model"
 	"github.com/RhythmShahriar/echo/store"
 	"github.com/RhythmShahriar/echo/wire"
+	"github.com/RhythmShahriar/rhythm/kit/secrets"
 )
 
 // Replayer sends a signed webhook for a replay action (package replay).
@@ -133,7 +135,7 @@ func Run(ctx context.Context, o Options) (*model.Run, error) {
 	}
 	o.Config = cfg
 	if r := cfg.ProductionReason(cfg.Site); cfg.Site != "" && r != "" {
-		return nil, fmt.Errorf("%w against %s: %s; actions only run against staging and local sites", ErrProduction, cfg.Site, r)
+		return nil, fmt.Errorf("%w against %s: %s; actions only run against staging and local sites", ErrProduction, shownURL(cfg.Site), r)
 	}
 	h, err := o.Client.Health(ctx)
 	if err != nil {
@@ -283,7 +285,7 @@ func refuse(cfg config.Config, a config.Action, mode string, fake *fakeData) err
 		target = resolve(cfg.Site, a.Replay.To)
 	}
 	if r := cfg.ProductionReason(target); target != "" && r != "" {
-		return fmt.Errorf("refusing to run against %s: %s", target, r)
+		return fmt.Errorf("refusing to run against %s: %s", shownURL(target), r)
 	}
 	if a.Replay != nil && mode != catcher.Seal {
 		return fmt.Errorf("Echo is in %s mode; replays only run sealed, so the site's reactions can't reach anyone (rhythm echo up --seal)", mode) //nolint:staticcheck // "Echo" is a name, so it stays capitalized
@@ -388,7 +390,7 @@ func doHTTP(ctx context.Context, o Options, a config.Action, runValue string, fa
 	}
 	req, err := http.NewRequestWithContext(ctx, method, target, body)
 	if err != nil {
-		return err
+		return hideURL(err, target)
 	}
 	if ctype != "" {
 		req.Header.Set("Content-Type", ctype)
@@ -400,15 +402,39 @@ func doHTTP(ctx context.Context, o Options, a config.Action, runValue string, fa
 	req.AddCookie(&http.Cookie{Name: wire.RunHeader, Value: url.QueryEscape(runValue)}) //nolint:gosec // a request cookie we send, not one we set in a browser
 	resp, err := o.HTTP.Do(req)
 	if err != nil {
-		return err
+		return hideURL(err, target)
 	}
 	defer func() { _ = resp.Body.Close() }()
 	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<20))
 	if resp.StatusCode >= 400 {
-		return fmt.Errorf("%s %s returned %s", method, target, resp.Status)
+		return fmt.Errorf("%s %s returned %s", method, shownURL(target), resp.Status)
 	}
 	return nil
 }
+
+// shownURL is a target URL as errors show it: an action's URL may carry
+// a key from ${env:...} in its query, and an action's error goes to the
+// terminal, run.json and the HTML report, which are shared and exported.
+func shownURL(u string) string { return mask.URL(secrets.Redact(u)) }
+
+// hideURL returns err with target shown as shownURL shows it.
+func hideURL(err error, target string) error {
+	if ue := (*url.Error)(nil); errors.As(err, &ue) {
+		ue.URL = shownURL(ue.URL)
+		return err
+	}
+	return &maskedError{msg: strings.ReplaceAll(err.Error(), target, shownURL(target)), err: err}
+}
+
+// maskedError is an error whose text hides a secret; errors.Is and As
+// still see the error it wraps.
+type maskedError struct {
+	msg string
+	err error
+}
+
+func (e *maskedError) Error() string { return e.msg }
+func (e *maskedError) Unwrap() error { return e.err }
 
 // command runs cmd in the shell (see Shell) with RHYTHM_ECHO_RUN set to
 // runValue, signed like the header when RunKey is set, so connectors in CLI processes

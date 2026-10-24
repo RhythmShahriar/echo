@@ -4,9 +4,14 @@
 package runner
 
 import (
+	"context"
+	"errors"
+	"fmt"
+	"net/http"
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/RhythmShahriar/echo/check"
 	"github.com/RhythmShahriar/echo/config"
@@ -53,5 +58,31 @@ func TestCompareOptionsMapIgnoreByActionID(t *testing.T) {
 	}
 	if !slices.Equal(o.Ignore["action:contact-form"], []string{"*@agency.test"}) || len(o.Ignore) != 1 {
 		t.Errorf("ignore: %v", o.Ignore)
+	}
+}
+
+// TestErrorsHideTheTargetsSecrets: an action's URL may hold a key from
+// ${env:...}; the errors that name the URL (in the terminal, run.json
+// and the report) show it masked.
+func TestErrorsHideTheTargetsSecrets(t *testing.T) {
+	t.Setenv("ECHO_TEST_API_KEY", "supersecretvalue123")
+	a := config.Action{Name: "x", HTTP: &config.HTTPAction{URL: "http://127.0.0.1:21349/x?api_key=${env:ECHO_TEST_API_KEY}&page=2"}}
+	o := Options{Config: config.Default(), HTTP: &http.Client{Timeout: time.Second}}
+	err := doHTTP(context.Background(), o, a, "run/x", newFake())
+	if err == nil || strings.Contains(err.Error(), "supersecretvalue123") || !strings.Contains(err.Error(), "page=2") {
+		t.Errorf("a failed request: %v", err)
+	}
+	cfg := config.Default()
+	cfg.Production = []string{"127.0.0.1:21349"}
+	err = refuse(cfg, a, "seal", newFake())
+	if err == nil || strings.Contains(err.Error(), "supersecretvalue123") || !strings.Contains(err.Error(), "refusing to run against http://127.0.0.1:21349/x?api_key=") {
+		t.Errorf("the production refusal: %v", err)
+	}
+	if got := hideURL(errors.New("GET http://a.test/?token=abc123def456 failed"), "http://a.test/?token=abc123def456"); strings.Contains(got.Error(), "abc123def456") {
+		t.Errorf("a plain error: %v", got)
+	}
+	wrapped := hideURL(fmt.Errorf("x: %w", context.Canceled), "http://a.test/")
+	if !errors.Is(wrapped, context.Canceled) {
+		t.Errorf("the masked error lost what it wraps: %v", wrapped)
 	}
 }
