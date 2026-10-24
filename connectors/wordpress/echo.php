@@ -63,7 +63,7 @@ final class Rhythm_Echo {
 	/** Bytes of request or response body reported to Echo. */
 	const MAX_BODY = 2097152;
 
-	/** The canary address and URL `echo doctor` expects to see caught. */
+	/** The canary address and URL `rhythm echo doctor` expects to see caught. */
 	const CANARY_EMAIL = 'canary@echo.invalid';
 	const CANARY_URL   = 'https://canary.echo.invalid/';
 
@@ -230,7 +230,7 @@ final class Rhythm_Echo {
 			? 'WP_ENVIRONMENT_TYPE is not set, and WordPress treats that as production.'
 			: 'WP_ENVIRONMENT_TYPE is production.';
 		printf(
-			'<div class="notice notice-warning"><p><strong>Rhythm Echo is installed but not running:</strong> %s Echo only runs on test sites. Set WP_ENVIRONMENT_TYPE to staging, development or local on a test copy, or remove <code>wp-content/mu-plugins/rhythm-echo.php</code> (run <code>rhythm echo uninstall wordpress</code>).</p></div>',
+			'<div class="notice notice-warning"><p><strong>Rhythm Echo is installed but not running:</strong> %s Echo only runs on test sites. Set WP_ENVIRONMENT_TYPE to staging, development or local on a test copy, or remove <code>wp-content/mu-plugins/rhythm-echo.php</code> (run <code>rhythm echo install wordpress --uninstall</code>).</p></div>',
 			esc_html( $why )
 		);
 	}
@@ -1463,7 +1463,7 @@ final class Rhythm_Echo {
 	}
 
 	// ---------------------------------------------------------------------
-	// REST routes for `echo doctor`.
+	// REST routes for `rhythm echo doctor`.
 
 	public static function routes(): void {
 		register_rest_route(
@@ -1507,7 +1507,7 @@ final class Rhythm_Echo {
 	}
 
 	/**
-	 * What `echo doctor` needs to know: whether the connector runs, which
+	 * What `rhythm echo doctor` needs to know: whether the connector runs, which
 	 * email layer it uses, and whether this site can reach Echo.
 	 *
 	 * @return array<string, mixed>

@@ -31,7 +31,7 @@ const (
 	SettingsPath = "mu-plugins/rhythm-echo/settings.php"
 )
 
-// The plugin's REST routes for `echo doctor`, under /wp-json/. Both need
+// The plugin's REST routes for `rhythm echo doctor`, under /wp-json/. Both need
 // X-Echo-Token when a token is configured; without one, an administrator
 // or a request from loopback or a private network.
 const (
