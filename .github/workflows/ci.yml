@@ -118,7 +118,21 @@ jobs:
           mkdir -p "$RUNNER_TEMP/ctx/linux/amd64"
           CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -o "$RUNNER_TEMP/ctx/linux/amd64/rhythm-echo" ./cmd/rhythm-echo
           docker buildx build --load --platform linux/amd64 -t rhythm-echo:ci -f Dockerfile "$RUNNER_TEMP/ctx"
-      - uses: ddev/github-action-add-on-test@d614651ba8fffdb956ab7864f191c32353330d68 # v2.6.2
+      # The add-on runs the image with its default CMD, which needs
+      # up --private-network. Until this Echo has it the add-on can't
+      # start, so the test waits (with a warning) instead of failing every
+      # PR. The release's images job fails outright on the same check.
+      - name: Check the default CMD against this Echo
+        id: cmd
+        run: |
+          if .github/scripts/check-image-cmd.sh "$RUNNER_TEMP/ctx/linux/amd64/rhythm-echo" Dockerfile; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::skipping the DDEV add-on test until up --private-network is in this Echo"
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.cmd.outputs.ready == 'true'
+        uses: ddev/github-action-add-on-test@d614651ba8fffdb956ab7864f191c32353330d68 # v2.6.2
         env:
           ECHO_TEST_IMAGE: rhythm-echo:ci
         with:

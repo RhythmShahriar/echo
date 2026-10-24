@@ -46,6 +46,11 @@ jobs:
             mkdir -p "ctx/linux/$arch"
             tar -xzf "dl/rhythm-echo_linux_${arch}.tar.gz" -C "ctx/linux/$arch" rhythm-echo
           done
+      # An image whose default CMD names a flag this Echo lacks fails at
+      # start for docker run with no arguments, DDEV and Lando. Nothing is
+      # pushed then.
+      - name: Check the default CMD against this Echo
+        run: .github/scripts/check-image-cmd.sh ctx/linux/amd64/rhythm-echo Dockerfile
       - name: Build, push and sign
         env:
           GH_TOKEN: ${{ github.token }}
