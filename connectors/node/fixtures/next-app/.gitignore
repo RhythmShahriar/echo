@@ -1,0 +1,5 @@
+/node_modules/
+/.next/
+/.echo-pack/
+next-env.d.ts
+*.tsbuildinfo
