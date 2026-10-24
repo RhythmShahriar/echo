@@ -33,18 +33,20 @@ import (
 	"github.com/RhythmShahriar/echo/runner"
 	"github.com/RhythmShahriar/echo/sendmail"
 	"github.com/RhythmShahriar/rhythm/kit"
+	"github.com/RhythmShahriar/rhythm/kit/cli"
 )
 
 var version = "dev"
 
-// Exit codes, as in Tuner and Soundcheck. Every command returns one of
-// these; the help text lists them under "Exit codes".
+// Exit codes, the kit's shared ones as in Tuner and Soundcheck. Every
+// command returns one of these; the help text lists them under "Exit
+// codes".
 const (
-	exitOK       = 0   // done and nothing at or above --fail-on
-	exitFindings = 1   // --fail-on hit, an action failed, a doctor check failed, or the site rejected a replay
-	exitUsage    = 2   // wrong command line, or .echo/config.yaml asks for what isn't there
-	exitError    = 3   // couldn't run: Echo not reachable, every action failed, no DNS answer, a file or network error
-	exitCanceled = 130 // interrupted
+	exitOK       = cli.ExitOK          // done and nothing at or above --fail-on
+	exitFindings = cli.ExitFindings    // --fail-on hit, an action failed, a doctor check failed, or the site rejected a replay
+	exitUsage    = cli.ExitUsage       // wrong command line, or .echo/config.yaml asks for what isn't there
+	exitError    = cli.ExitUnavailable // couldn't run: Echo not reachable, every action failed, no DNS answer, a file or network error
+	exitCanceled = cli.ExitInterrupted // interrupted
 )
 
 func main() { os.Exit(run(os.Args[1:], os.Stdin, os.Stdout, os.Stderr)) }

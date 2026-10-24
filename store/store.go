@@ -218,8 +218,8 @@ func (s Store) latest() string {
 
 // migrateLatest moves an older version's snapshots/LATEST file to
 // .latest, once, then removes the temp files it leaked each time writing
-// LATEST failed (kit/cache.WriteFile keeps its temp when the rename
-// fails). A LATEST folder is a snapshot and stays.
+// LATEST failed (kit/cache.WriteFile before rhythm v0.6.0 kept its temp
+// when the rename failed). A LATEST folder is a snapshot and stays.
 func (s Store) migrateLatest() {
 	snaps := filepath.Join(s.Root, "snapshots")
 	old := filepath.Join(snaps, "LATEST")
@@ -244,6 +244,9 @@ func (s Store) migrateLatest() {
 // writeAtomic writes data to path through a temp file in the same folder
 // and a rename, removing the temp file whenever a step fails, so a
 // failure never leaves a half-written pointer or a stray file behind.
+// It stays apart from kit/cache.WriteFile, which now cleans up the same
+// way, for its temp name: the kit's .tmp-* is what migrateLatest removes
+// as an old leak, so another Echo's cleanup could delete it mid-write.
 func writeAtomic(path string, data []byte) error {
 	if err := os.MkdirAll(filepath.Dir(path), dirMode); err != nil {
 		return err

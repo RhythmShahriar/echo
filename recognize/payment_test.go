@@ -10,7 +10,6 @@ import (
 	"testing"
 
 	"github.com/RhythmShahriar/echo/model"
-	"github.com/RhythmShahriar/rhythm/kit/secrets"
 )
 
 var (
@@ -46,7 +45,7 @@ var paymentCases = []tcase{
 		req:   stripeReq("POST", "/v1/checkout/sessions", stripeTestKey, "mode=payment"),
 		check: func(t *testing.T, m model.Message) { eq(t, "event", m.Event, "checkout.sessions create") }},
 	{name: "live key, masked by the connector", provider: "stripe", status: 403,
-		req:   stripeReq("POST", "/v1/payment_intents", secrets.Mask(stripeLiveKey, 8), "amount=4000&currency=usd"),
+		req:   stripeReq("POST", "/v1/payment_intents", stripeLiveKey[:8]+"•••••", "amount=4000&currency=usd"),
 		check: func(t *testing.T, m model.Message) { eq(t, "mode", m.Subject, "live mode") }},
 	{name: "live key as Basic user", provider: "stripe", status: 403,
 		req: req("POST", "https://api.stripe.com/v1/charges", map[string]string{

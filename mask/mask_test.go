@@ -90,7 +90,7 @@ func TestRules(t *testing.T) {
 		{"json bare key, random value", JSON, `{"key":"a8f3k29dk3m2x9"}`, "a8f3k29dk3m2x9", `"key":"`, false},
 		{"json license_key", JSON, `{"license_key":"abc"}`, `"abc"`, `"license_key"`, false},
 		{"json meta_data keys kept", JSON, `{"meta_data":[{"id":1,"key":"_billing_phone","value":"555"},{"key":"gift wrap","value":"yes"}]}`, "", "", true},
-		{"json order_key kept", JSON, `{"order_key":"wc_order_Ab12Cd34","idempotency_key":"k-1"}`, "", "", true},
+		{"json order_key masked", JSON, `{"order_key":"wc_order_Ab12Cd34","idempotency_key":"k-1"}`, "Ab12Cd34", `"idempotency_key":"k-1"`, false},
 		{"json token counts kept", JSON, `{"usage":{"prompt_tokens":12,"total_tokens":40}}`, "", "", true},
 		{"json author kept", JSON, `{"author": 12, "keywords": "shoes", "total": 42.5}`, "", "", true},
 		{"json order kept", JSON, `{"id":4242,"status":"processing","line_items":[{"sku":"A1","qty":2}]}`, "", "", true},

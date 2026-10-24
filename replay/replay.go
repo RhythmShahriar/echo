@@ -235,7 +235,7 @@ func liveKeys(env []string, scan map[string]string) error {
 	for _, kv := range env {
 		name, v, _ := strings.Cut(kv, "=")
 		if k := liveKey.FindString(v); k != "" {
-			found = append(found, name+"="+secrets.Mask(k, 8))
+			found = append(found, name+"="+liveKeyShown(k))
 		}
 	}
 	names := make([]string, 0, len(scan))
@@ -245,7 +245,7 @@ func liveKeys(env []string, scan map[string]string) error {
 	sort.Strings(names)
 	for _, n := range names {
 		if k := liveKey.FindString(scan[n]); k != "" {
-			found = append(found, n+": "+secrets.Mask(k, 8))
+			found = append(found, n+": "+liveKeyShown(k))
 		}
 	}
 	if len(found) > 0 {
@@ -254,6 +254,10 @@ func liveKeys(env []string, scan map[string]string) error {
 	}
 	return nil
 }
+
+// liveKeyShown is a live key as the refusal names it: its mode prefix
+// (sk_live_ or rk_live_), which carries no secret, and bullets.
+func liveKeyShown(k string) string { return k[:len("sk_live_")] + secrets.Mask(k, 0) }
 
 func lookupEnv(env []string, name string) (string, bool) {
 	for i := len(env) - 1; i >= 0; i-- {

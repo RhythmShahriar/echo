@@ -5,8 +5,12 @@
 // JSON payloads and raw MIME. It builds on the rhythm kit's secrets
 // package and adds the rules Echo needs on top of it: one-time links and
 // codes in email, credential headers named any way, bot tokens in API
-// paths, secrets in JSON numbers and base64 MIME parts. The rules move to
-// the kit once it has them.
+// paths, secrets in JSON numbers and base64 MIME parts. Since rhythm
+// v0.6.0 the kit has narrower forms of the reset key, Telegram, /key/
+// and JWT rules; these stay until the kit's match Echo's (a Telegram
+// token of any length, a /key/ segment of any shape, any query key named
+// code, otp or k, a JWT with a short signature and session or assertion
+// headers).
 //
 // Every function keeps at most Keep characters of a secret and none for
 // values that change on every send (reset keys, login codes), so a
@@ -168,7 +172,9 @@ func codes(s string) string {
 var jsonField = regexp.MustCompile(`"((?:[^"\\]|\\.)*)"(\s*:\s*)("(?:[^"\\]|\\.)*"|-?\d[\d.eE+-]*)`)
 
 // notSecretKeys are names ending in "key" that don't hold a credential.
-var notSecretKeys = map[string]bool{"orderkey": true, "metakey": true, "cachekey": true, "idempotencykey": true,
+// A WooCommerce order_key is not among them: it opens the order's page
+// for a guest, so the kit masks it.
+var notSecretKeys = map[string]bool{"metakey": true, "cachekey": true, "idempotencykey": true,
 	"sortkey": true, "primarykey": true, "foreignkey": true, "partitionkey": true, "objectkey": true, "routingkey": true}
 
 // secretField reports whether a JSON key names a credential. The words
