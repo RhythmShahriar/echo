@@ -434,3 +434,32 @@ func TestMessageDropsBcc(t *testing.T) {
 		t.Errorf("cut message:\n%s", got)
 	}
 }
+
+// TestMessageHeaderInjection builds an email from API fields that hold
+// line breaks: each stays one header and adds none.
+func TestMessageHeaderInjection(t *testing.T) {
+	m := model.Message{
+		ID: "m3", Method: "POST", Source: model.Source{Via: "proxy"},
+		From:    "a@shop.test\r\nBcc: spy@evil.test",
+		To:      []string{"b@example.com\nX-Injected: 1"},
+		CC:      []string{"c@example.com\r"},
+		ReplyTo: "r@shop.test\r\n\r\nbody text",
+		Subject: "Hi\r\nBcc: spy2@evil.test",
+		Text:    "hello",
+	}
+	got := string(Message(m))
+	head, _, _ := strings.Cut(got, "\r\n\r\n")
+	for _, line := range strings.Split(head, "\r\n") {
+		name, _, _ := strings.Cut(line, ":")
+		switch name {
+		case "From", "To", "Cc", "Reply-To", "Subject", "Date", "Message-ID", "X-Echo-Release", "MIME-Version", "Content-Type", "Content-Transfer-Encoding":
+		default:
+			t.Errorf("injected header line %q in:\n%s", line, got)
+		}
+	}
+	for _, want := range []string{"From: a@shop.test Bcc: spy@evil.test\r\n", "To: b@example.com X-Injected: 1\r\n", "Cc: c@example.com\r\n", "Reply-To: r@shop.test  body text\r\n", "Subject: Hi Bcc: spy2@evil.test\r\n"} {
+		if !strings.Contains(head, want) {
+			t.Errorf("headers lack %q:\n%s", want, head)
+		}
+	}
+}

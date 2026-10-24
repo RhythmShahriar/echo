@@ -319,13 +319,13 @@ func (rl *releaser) send(ctx context.Context, m model.Message, to string) error 
 // has all of it (with an X-Echo-Release header added and Bcc dropped),
 // else one built from the fields (text, HTML or both).
 func Message(m model.Message) []byte {
-	release := "X-Echo-Release: " + m.ID + "\r\n"
+	release := "X-Echo-Release: " + oneLine(m.ID) + "\r\n"
 	if raw := m.Body; raw != "" && rawMIME(m) && !strings.HasSuffix(raw, "…(truncated)") {
 		return append([]byte(release), dropBcc(crlf(raw))...)
 	}
 	var b bytes.Buffer
 	h := func(k, v string) {
-		if v != "" {
+		if v = oneLine(v); v != "" {
 			b.WriteString(k + ": " + v + "\r\n")
 		}
 	}
@@ -333,7 +333,7 @@ func Message(m model.Message) []byte {
 	h("To", strings.Join(m.To, ", "))
 	h("Cc", strings.Join(m.CC, ", "))
 	h("Reply-To", m.ReplyTo)
-	h("Subject", mime.QEncoding.Encode("utf-8", m.Subject))
+	h("Subject", mime.QEncoding.Encode("utf-8", oneLine(m.Subject)))
 	h("Date", m.At.Format(time.RFC1123Z))
 	h("Message-ID", "<"+m.ID+".release@echo.local>")
 	b.WriteString(release)
@@ -372,6 +372,16 @@ func rawMIME(m model.Message) bool {
 		return true
 	}
 	return m.Method == ""
+}
+
+// headerBreaks turns line breaks into spaces. Fields captured from an
+// HTTP API are whatever the request said: a From or To holding
+// "\r\nBcc: x" would otherwise add a header to the released email.
+var headerBreaks = strings.NewReplacer("\r\n", " ", "\r", " ", "\n", " ")
+
+// oneLine returns v as a single header line.
+func oneLine(v string) string {
+	return strings.TrimSpace(headerBreaks.Replace(v))
 }
 
 func crlf(s string) string {
