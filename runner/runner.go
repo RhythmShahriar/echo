@@ -38,6 +38,7 @@ import (
 // with Echo's token itself (replay.Options.Token).
 type Replayer func(ctx context.Context, a config.ReplayAction, to, run string) error
 
+// Options says what Run runs and against which Echo.
 type Options struct {
 	Config  config.Config
 	Client  *client.Client
@@ -47,6 +48,12 @@ type Options struct {
 	Replay  Replayer
 	Only    []string // run only these action names
 	Hooks   Hooks
+	// Quiet and Timeout override the config's waits when more than 0
+	// (the CLI's --quiet and --timeout). Quiet replaces every action's
+	// quiet, its own included. Run refuses values Echo can't honor with
+	// an error that matches ErrWaits.
+	Quiet   time.Duration
+	Timeout time.Duration
 }
 
 // Hooks report progress.
@@ -97,7 +104,10 @@ func Select(cfg config.Config, only []string) ([]config.Action, error) {
 // production is refused (ErrProduction) before anything is sent.
 func Run(ctx context.Context, o Options) (*model.Run, error) {
 	start := time.Now()
-	cfg := withWaits(o.Config)
+	cfg, err := o.waits()
+	if err != nil {
+		return nil, err
+	}
 	o.Config = cfg
 	if r := cfg.ProductionReason(cfg.Site); cfg.Site != "" && r != "" {
 		return nil, fmt.Errorf("%w against %s: %s; actions only run against staging and local sites", ErrProduction, cfg.Site, r)
@@ -117,12 +127,14 @@ func Run(ctx context.Context, o Options) (*model.Run, error) {
 	}
 	fake := newFake()
 	opts := check.Options{SiteHost: host(cfg.Site), AllowRecipients: cfg.AllowRecipients}
-	lost := map[string]bool{} // IDs of messages Echo couldn't credit to any action
+	lost := map[string]bool{}       // IDs of messages Echo couldn't credit to any action
+	ended := map[string]time.Time{} // when each action stopped waiting, by ID
 	for i, a := range actions {
 		if ctx.Err() != nil {
 			break
 		}
 		act, unsure := runAction(ctx, o, run, a, fake, opts)
+		ended[act.ID] = time.Now()
 		for _, id := range unsure {
 			lost[id] = true
 		}
@@ -133,6 +145,9 @@ func Run(ctx context.Context, o Options) (*model.Run, error) {
 	}
 	if w := ambiguityWarning(len(lost)); w != "" {
 		run.Warnings = append(run.Warnings, w)
+	}
+	if ctx.Err() == nil {
+		creditLate(ctx, o, run, actions, ended, opts)
 	}
 	run.Duration = float64(time.Since(start).Milliseconds())
 	return run, ctx.Err()
@@ -162,6 +177,7 @@ func ActionID(name string) string { return config.ActionID(name) }
 func runAction(ctx context.Context, o Options, run *model.Run, a config.Action, fake *fakeData, opts check.Options) (model.Action, []string) {
 	cfg := o.Config
 	runID := run.ID
+	quiet := o.quietFor(a)
 	act := model.Action{ID: ActionID(a.Name), Label: a.Name, Kind: kind(a)}
 	start := time.Now()
 	if err := refuse(cfg, a, run.Mode, fake); err != nil {
@@ -196,9 +212,10 @@ func runAction(ctx context.Context, o Options, run *model.Run, a config.Action, 
 			o.Hooks.Log(fmt.Sprintf("flush %q: %v", f, ferr))
 		}
 	}
-	want := a.Expect.Total()
-	wctx, cancel := context.WithTimeout(ctx, cfg.Timeout.Duration)
-	msgs, werr := o.Client.Wait(wctx, client.Filter{Run: runID, Action: act.ID}, want, cfg.Quiet.Duration, cfg.Timeout.Duration)
+	// Echo answers with what it has once the timeout passes; the grace
+	// lets that answer arrive instead of cutting the request off first.
+	wctx, cancel := context.WithTimeout(ctx, cfg.Timeout.Duration+waitGrace)
+	msgs, werr := wait(wctx, o.Client, client.Filter{Run: runID, Action: act.ID}, a.Expect, quiet, cfg.Timeout.Duration)
 	cancel()
 	if werr != nil && act.Error == "" {
 		act.Error = werr.Error()

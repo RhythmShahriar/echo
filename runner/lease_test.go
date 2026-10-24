@@ -78,7 +78,9 @@ func TestAmbiguityWarning(t *testing.T) {
 				http.Error(w, "token", http.StatusUnauthorized)
 				return
 			}
-			since = append(since, r.URL.Query().Get("since"))
+			if q := r.URL.Query(); q.Has("since") { // not the end-of-run list
+				since = append(since, q.Get("since"))
+			}
 			// The same ambiguous message falls in both actions' windows
 			// here; it counts once.
 			_, _ = w.Write([]byte(`[{"id":"m1","attribution":"ambiguous"},{"id":"m2","run":"r"},{"id":"m3","attribution":"ambiguous"},{"id":"m4","attribution":"late"}]`))

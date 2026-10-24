@@ -72,7 +72,7 @@ func TestSnapshotThenCompare(t *testing.T) {
 	cfg := config.Default()
 	cfg.Site = shop.URL
 	cfg.Quiet = config.Duration{Duration: 500 * time.Millisecond}
-	cfg.Timeout = config.Duration{Duration: 5 * time.Second}
+	cfg.Timeout = config.Duration{Duration: 2 * time.Second} // the broken run waits it out for the lost email
 	cfg.Actions = []config.Action{
 		{Name: "Contact form", HTTP: &config.HTTPAction{URL: "/contact", Form: map[string]string{
 			"name": "${fake:name}", "email": "${fake:email}", "message": "Hello"}}, Expect: config.Expect{model.Email: {N: 2}}},
