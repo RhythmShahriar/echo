@@ -132,13 +132,30 @@ func answerQuery(q []byte) []byte {
 	return out
 }
 
+// shortWaits makes a query wait 300ms and a check 2s for one test, so a
+// dead resolver costs seconds, not the real 15s budget. The test must not
+// call t.Parallel: parallel tests run after it, when the waits are back.
+func shortWaits(t *testing.T) {
+	t.Helper()
+	q, b := queryTimeout, checkBudget
+	queryTimeout, checkBudget = 300*time.Millisecond, 2*time.Second
+	t.Cleanup(func() { queryTimeout, checkBudget = q, b })
+}
+
+// The real waits keep a dead resolver to seconds too.
+func TestWaitsAreBounded(t *testing.T) {
+	if queryTimeout > 5*time.Second || checkBudget > 15*time.Second || queryTimeout >= checkBudget {
+		t.Errorf("query %s, check %s; want at most 5s and 15s", queryTimeout, checkBudget)
+	}
+}
+
 func TestUnreachableResolverIsOneError(t *testing.T) {
-	t.Parallel()
+	shortWaits(t)
 	addr := blackHole(t)
 	start := time.Now()
 	r := Check(context.Background(), "shop.test", Options{Resolver: NewServer(addr)})
-	if took := time.Since(start); took > 16*time.Second {
-		t.Errorf("took %s, want under 16s", took)
+	if took := time.Since(start); took > checkBudget+time.Second {
+		t.Errorf("took %s, want under the %s budget", took, checkBudget)
 	}
 	if !r.Unreachable || r.Resolver != addr {
 		t.Errorf("Unreachable = %v, Resolver = %q; want true, %q", r.Unreachable, r.Resolver, addr)
@@ -159,12 +176,12 @@ func TestUnreachableResolverIsOneError(t *testing.T) {
 }
 
 func TestHalfWorkingResolverKeepsRecordWarnings(t *testing.T) {
-	t.Parallel()
+	shortWaits(t)
 	addr := halfWorking(t)
 	start := time.Now()
 	r := Check(context.Background(), "shop.test", Options{Resolver: NewServer(addr)})
-	if took := time.Since(start); took > 16*time.Second {
-		t.Errorf("took %s, want under 16s", took)
+	if took := time.Since(start); took > checkBudget+time.Second {
+		t.Errorf("took %s, want under the %s budget", took, checkBudget)
 	}
 	if r.Unreachable {
 		t.Fatalf("MX answered, so the resolver is reachable: %q", titles(r))
