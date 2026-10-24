@@ -1642,6 +1642,74 @@ func TestImportRefusesArchivesThatEscape(t *testing.T) {
 	}
 }
 
+// tarArchive is a gzipped tar of plain files, written in the order given
+// as name, body pairs.
+func tarArchive(t *testing.T, entries ...string) string {
+	t.Helper()
+	var buf bytes.Buffer
+	gz := gzip.NewWriter(&buf)
+	tw := tar.NewWriter(gz)
+	for i := 0; i+1 < len(entries); i += 2 {
+		h := tar.Header{Typeflag: tar.TypeReg, Name: entries[i], Mode: 0o600, Size: int64(len(entries[i+1]))}
+		if err := tw.WriteHeader(&h); err != nil {
+			t.Fatal(err)
+		}
+		_, _ = tw.Write([]byte(entries[i+1]))
+	}
+	_ = tw.Close()
+	_ = gz.Close()
+	p := filepath.Join(t.TempDir(), "crafted.tgz")
+	if err := os.WriteFile(p, buf.Bytes(), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return p
+}
+
+func TestImportRefusesReservedNamesAndRepeats(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("HOME", root)
+	work := filepath.Join(root, "work")
+	writeConfigAt(t, work, noopConfig)
+	t.Chdir(work)
+	run := func(name string) string {
+		return `{"schema":"` + model.Schema + `","tool":"rhythm-echo","name":"` + name + `","actions":[]}`
+	}
+	// A real snapshot first, so LATEST exists and must survive.
+	if code, _, errOut := runCLI(t, "snapshot", "--import", tarArchive(t, "base/run.json", run("base"))); code != exitOK {
+		t.Fatalf("import base: %d %q", code, errOut)
+	}
+	latest := filepath.Join(config.Dir, "snapshots", "LATEST")
+	for _, tc := range []struct {
+		name string
+		tgz  string
+		want string
+	}{
+		{"LATEST", tarArchive(t, "LATEST/run.json", run("LATEST")), "isn't in a snapshot folder"},
+		{"latest", tarArchive(t, "latest/run.json", run("latest")), "isn't in a snapshot folder"},
+		{"run.json twice", tarArchive(t, "base/run.json", run("base"), "base/run.json", run("base")), "it holds run.json twice"},
+	} {
+		code, _, errOut := runCLI(t, "snapshot", "--import", tc.tgz, "--force")
+		if code != exitUsage || !strings.Contains(errOut, "not a snapshot archive: ") || !strings.Contains(errOut, tc.want) {
+			t.Errorf("%s: %d %q; want 2 and %q", tc.name, code, errOut, tc.want)
+		}
+		if fi, err := os.Lstat(latest); err != nil || !fi.Mode().IsRegular() {
+			t.Fatalf("%s: LATEST is no longer the pointer file: %v", tc.name, err)
+		}
+	}
+	tgz := tarArchive(t, "base/run.json", run("base"))
+	for _, args := range [][]string{
+		{"snapshot", "--import", tgz, "--name", "LATEST", "--force"},
+		{"snapshot", "--name", "Latest"},
+	} {
+		if code, _, errOut := runCLI(t, args...); code != exitUsage || !strings.Contains(errOut, "LATEST is taken") {
+			t.Errorf("%v: %d %q", args, code, errOut)
+		}
+	}
+	if b, err := os.ReadFile(latest); err != nil || strings.TrimSpace(string(b)) != "base" {
+		t.Errorf("LATEST = %q %v, want base", b, err)
+	}
+}
+
 // decodeEnvelope checks out is one JSON envelope of kind, with every
 // field of one and decodes its data into data.
 func decodeEnvelope(t *testing.T, out []byte, kind jsonKind, data any) envelope {

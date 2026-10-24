@@ -83,6 +83,15 @@ func exportSnapshot(w io.Writer, dir, name string) error {
 	return gz.Close()
 }
 
+// snapshotName reports whether name can name a snapshot: a valid store
+// name that isn't LATEST, the file that points at the newest snapshot.
+// The check ignores case because macOS and Windows folders do too, so a
+// snapshot called latest would land on the pointer file there. Names
+// starting with a dot (the store's own folders) aren't valid store names.
+func snapshotName(name string) bool {
+	return store.ValidName(name) && !strings.EqualFold(name, "LATEST")
+}
+
 // errArchive marks an archive that isn't a snapshot export: the user's
 // to fix, so it exits 2.
 var errArchive = errors.New("not a snapshot archive")
@@ -115,7 +124,7 @@ func unpackSnapshot(r io.Reader, dest string) (string, error) {
 		switch {
 		case strings.Contains(name, `\`) || path.IsAbs(name) || slices.Contains(strings.Split(name, "/"), ".."):
 			return "", fmt.Errorf("%w: %q points outside the snapshot", errArchive, name)
-		case !store.ValidName(first) || rest == "" && h.Typeflag != tar.TypeDir:
+		case !snapshotName(first) || rest == "" && h.Typeflag != tar.TypeDir:
 			return "", fmt.Errorf("%w: %q isn't in a snapshot folder", errArchive, name)
 		case top != "" && first != top:
 			return "", fmt.Errorf("%w: it holds more than one snapshot (%s and %s)", errArchive, top, first)
@@ -149,6 +158,9 @@ func unpackSnapshot(r io.Reader, dest string) (string, error) {
 // writeEntry writes size bytes from r to a new 0600 file at target.
 func writeEntry(target string, r io.Reader, size int64) error {
 	f, err := os.OpenFile(target, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600) //nolint:gosec // checked to be inside dest
+	if errors.Is(err, fs.ErrExist) {
+		return fmt.Errorf("%w: it holds %s twice", errArchive, filepath.Base(target))
+	}
 	if err != nil {
 		return err
 	}

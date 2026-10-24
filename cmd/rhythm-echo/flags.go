@@ -252,8 +252,8 @@ func parse(c cmdSpec, args []string) (*plan, error) {
 	if o.since < 0 {
 		return nil, cli.Usagef("--since %s: give how long ago, e.g. 10m", o.since)
 	}
-	if o.name != "" && !store.ValidName(o.name) {
-		return nil, cli.Usagef("--name %q: use letters, digits, dots, dashes and underscores", o.name)
+	if o.name != "" && !snapshotName(o.name) {
+		return nil, cli.Usagef("--name %q: use letters, digits, dots, dashes and underscores (LATEST is taken)", o.name)
 	}
 	p.st = store.Store{Root: storeRoot(o.storeDir, path)}
 	url := cmp.Or(o.url, os.Getenv("RHYTHM_ECHO_URL"), "http://"+p.cfg.Listen)
