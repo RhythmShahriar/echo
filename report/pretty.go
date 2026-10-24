@@ -141,8 +141,12 @@ func (p *Pretty) Message(m model.Message) {
 	// Everything here comes from the site: make it safe to print.
 	to, what = Safe(to), Safe(what)
 	kind := Safe(check.Kind(m)) // the destination is shown next to it
+	files := attachmentList(m)
 	if p.o.Plain {
 		fmt.Fprintf(p.w, "%s %s to %s: %s [%s]\n", m.At.Local().Format("15:04:05"), kind, to, what, m.Status)
+		if files != "" {
+			fmt.Fprintf(p.w, "  attaches %s\n", files)
+		}
 		return
 	}
 	glyph := channelGlyph[m.Channel]
@@ -150,6 +154,9 @@ func (p *Pretty) Message(m model.Message) {
 	status := lipgloss.NewStyle().Foreground(statusColor(m.Status)).Render(string(m.Status))
 	body := ui.Truncate("→ "+to, 30) + "  " + muted.Render(ui.Truncate(what, 40))
 	fmt.Fprintln(p.w, ui.Pad(head, 40)+body+"  "+status)
+	if files != "" {
+		fmt.Fprintln(p.w, muted.Render("            attaches "+ui.Truncate(files, width-21)))
+	}
 	if m.Error != "" && p.o.Verbose {
 		fmt.Fprintln(p.w, muted.Render("            "+Safe(m.Error)))
 	}

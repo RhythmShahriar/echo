@@ -288,6 +288,16 @@ func hunkText(h compare.Hunk) []string {
 	return out
 }
 
+// attachmentList is the files an email carries, made safe to print:
+// "invoice-42.pdf (application/pdf, 84 KB), logo.png (image/png, 2 KB)".
+func attachmentList(m model.Message) string {
+	var out []string
+	for _, a := range compare.Attachments(m) {
+		out = append(out, Safe(a.String()))
+	}
+	return strings.Join(out, ", ")
+}
+
 func firstLine(s string) string {
 	s, _, _ = strings.Cut(strings.TrimSpace(s), "\n")
 	return s

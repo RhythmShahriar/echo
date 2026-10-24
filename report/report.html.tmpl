@@ -137,6 +137,7 @@ footer { margin-top: 44px; color: var(--muted); font-size: 12px; display: flex; 
         <div class="row"><span class="time">{{.Time}}</span>{{if .From}}<span class="via">from {{.From}}</span>{{end}}{{if .Via}}<span class="via">via {{.Via}}</span>{{end}}{{if .Method}}<span class="via">{{.Method}} {{.URL}}</span>{{end}}</div>
         {{if .Subject}}<div class="subject">{{.Subject}}</div>{{end}}
         {{if .Event}}<div class="subject">event: {{.Event}}</div>{{end}}
+        {{if .Attachments}}<div class="row">{{range .Attachments}}<span class="via">attaches {{.}}</span>{{end}}</div>{{end}}
         <div class="preview">
           {{if .HTML}}{{if .Remote}}<button class="remote" type="button" data-remote>Load remote images</button>{{end}}<iframe sandbox title="Email preview" srcdoc="{{.HTML}}"></iframe>
           {{else if and (eq .Channel "email") .Text}}<pre>{{.Text}}</pre>

@@ -101,6 +101,7 @@ type htmlMessage struct {
 	Error                                             string
 	Via                                               string
 	Issues                                            []string
+	Attachments                                       []string // "invoice-42.pdf (application/pdf, 84 KB)"
 }
 
 // HTML writes a standalone report: one file, opens in any browser.
@@ -184,6 +185,9 @@ func message(m model.Message, issues []string) htmlMessage {
 	}
 	if m.Channel != model.Email {
 		hm.Body = pretty(m.Body)
+	}
+	for _, a := range compare.Attachments(m) {
+		hm.Attachments = append(hm.Attachments, a.String())
 	}
 	if m.Response != nil {
 		hm.Response = fmt.Sprintf("%d %s", m.Response.Status, strings.TrimSpace(pretty(m.Response.Body)))

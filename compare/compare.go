@@ -270,6 +270,7 @@ func content(b, a model.Message, textCovered bool) (out []model.Change, note str
 		// The full texts, so a report can show the diff (ChangeDiff).
 		ch("message/text", what+": text changed", bt, at, "Read the new text; if the change is intended, take a new snapshot.")
 	}
+	out = append(out, attachments(b, a, what)...)
 	if b.Event != a.Event && b.Event != "" {
 		ch("message/event", what+": event changed", b.Event, a.Event, "")
 	}

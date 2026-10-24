@@ -71,6 +71,7 @@ func Markdown(w io.Writer, r Result) error {
 				markdownDiff(&b, ch)
 			}
 		}
+		attachmentTable(&b, run)
 		notes(&b, c.Warnings)
 	} else {
 		issues := Issues(run)
@@ -92,11 +93,31 @@ func Markdown(w io.Writer, r Result) error {
 			}
 			b.WriteString("\n")
 		}
+		attachmentTable(&b, run)
 		notes(&b, run.Warnings)
 	}
 	fmt.Fprintf(&b, "<sub>rhythm-echo %s · %s mode · %s</sub>\n", run.Version, run.Mode, run.Started.UTC().Format("2006-01-02 15:04 MST"))
 	_, err := io.WriteString(w, b.String())
 	return err
+}
+
+// attachmentTable lists the files the run's emails carry, when any do, so
+// a reviewer sees the invoice is still attached.
+func attachmentTable(b *strings.Builder, run *model.Run) {
+	var rows []string
+	for _, a := range run.Actions {
+		for _, m := range a.Messages {
+			if files := attachmentList(m); files != "" {
+				rows = append(rows, fmt.Sprintf("| %s | %s | %s |\n", cell(check.Capitalize(check.Describe(m))+" to "+strings.Join(m.To, ", ")), cell(a.Label), cell(files)))
+			}
+		}
+	}
+	if len(rows) == 0 {
+		return
+	}
+	b.WriteString("| Email | Action | Attachments |\n|---|---|---|\n")
+	b.WriteString(strings.Join(rows, ""))
+	b.WriteString("\n")
 }
 
 // mdHunks caps the hunks per change in Markdown: a PR comment has a size

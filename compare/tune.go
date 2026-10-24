@@ -139,6 +139,7 @@ var Checks = []string{
 	ActionFailed, "message/missing", "message/failing", "message/new", "message/fewer", "message/more",
 	"message/subject", "message/from", "message/copies", "message/reply-to", "message/text", "message/event",
 	"message/fields-lost", "message/fields-added", "message/payload",
+	"message/attachment-lost", "message/attachment-changed", "message/attachment-new",
 }
 
 // issuePrefixes are the families of checks other packages report as
