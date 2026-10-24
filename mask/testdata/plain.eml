@@ -1,0 +1,7 @@
+From: shop@shop.test
+To: jane@example.com
+Subject: Order #42 shipped
+Content-Type: text/plain
+
+Track it at https://shop.test/orders/42?page=2&utm_source=email
+Zip code 90210

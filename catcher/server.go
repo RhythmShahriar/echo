@@ -17,10 +17,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/RhythmShahriar/echo/mask"
 	"github.com/RhythmShahriar/echo/model"
 	"github.com/RhythmShahriar/echo/recognize"
 	"github.com/RhythmShahriar/echo/wire"
-	"github.com/RhythmShahriar/rhythm/kit/secrets"
 )
 
 // Modes.
@@ -171,7 +171,7 @@ func (s *Server) http(c wire.Capture, run, action string, src model.Source) (wir
 	h := c.HTTP
 	if c.Phase == wire.After && c.ID != "" {
 		s.Inbox.Update(c.ID, func(m *model.Message) {
-			m.Response = &model.Response{Status: h.Status, Body: s.cut(secrets.Redact(h.Response))}
+			m.Response = &model.Response{Status: h.Status, Body: s.cut(mask.Body(h.Response))}
 			switch {
 			case c.Error != "":
 				m.Status, m.Error = model.Failed, c.Error
@@ -194,15 +194,18 @@ func (s *Server) http(c wire.Capture, run, action string, src model.Source) (wir
 	}
 	req := recognize.Request{Method: strings.ToUpper(h.Method), URL: u, Headers: lower(h.Headers), Body: []byte(h.Body)}
 	m := model.Message{Run: run, Action: action, Source: src, Method: req.Method,
-		URL: secrets.Redact(h.URL), Headers: redactHeaders(req.Headers), Body: s.cut(secrets.Redact(h.Body))}
+		URL: mask.Text(h.URL), Headers: mask.Headers(req.Headers), Body: s.cut(mask.Body(h.Body))}
 	rec := recognize.Recognize(req, &m)
-	m.URL = recognize.RedactURL(rec, h.URL) // a catch hook's URL is its credential
+	m.URL = mask.Text(recognize.RedactURL(rec, h.URL)) // a catch hook's URL is its credential
+	// Recognizers copy what they read from the raw request: the SMS text,
+	// the chat message, and for unknown APIs the host and path as To.
+	maskFields(&m)
 	allowed := s.allowed(u.Hostname(), src.Host)
 	d := wire.Decision{Mode: s.cfg.Mode}
 	switch {
 	case c.Phase == wire.After: // observed with nothing before: record as sent
 		m.Status = model.Sent
-		m.Response = &model.Response{Status: h.Status, Body: s.cut(secrets.Redact(h.Response))}
+		m.Response = &model.Response{Status: h.Status, Body: s.cut(mask.Body(h.Response))}
 		if h.Status >= 400 || c.Error != "" {
 			m.Status, m.Error = model.Failed, c.Error
 		}
@@ -253,16 +256,42 @@ func (s *Server) allowed(host, site string) bool {
 
 func (s *Server) email(e *wire.Email) model.Message {
 	m := model.Message{Channel: model.Email, Provider: "", From: e.From, To: e.To, CC: e.CC, BCC: e.BCC,
-		ReplyTo: e.ReplyTo, Subject: e.Subject, Text: e.Text, HTML: e.HTML, Headers: redactHeaders(lower(e.Headers))}
+		ReplyTo: e.ReplyTo, Subject: e.Subject, Text: e.Text, HTML: e.HTML, Headers: lower(e.Headers)}
 	if e.Raw != "" {
 		if parsed, err := ParseMIME([]byte(e.Raw)); err == nil {
 			fillEmpty(&m, parsed)
 		}
-		m.Body = s.cut(secrets.Redact(e.Raw))
+		// Decoded first: a reset link in a base64 part is invisible to
+		// every rule.
+		m.Body = s.cut(mask.MIME(e.Raw))
 	}
-	m.Text = secrets.Redact(m.Text)
-	m.HTML = s.cut(secrets.Redact(m.HTML))
+	m.Headers = mask.Headers(m.Headers)
+	maskFields(&m)
+	m.HTML = s.cut(m.HTML)
 	return m
+}
+
+// maskFields masks the fields a message's text and recipients are read
+// into: a subject can hold a login code, an HTML link a reset key, and a
+// recipient copied from an API path a bot token.
+func maskFields(m *model.Message) {
+	m.Subject, m.Text, m.HTML = mask.Text(m.Subject), mask.Text(m.Text), mask.Text(m.HTML)
+	m.From, m.ReplyTo = maskAddress(m.From), maskAddress(m.ReplyTo)
+	m.To, m.CC, m.BCC = maskAddresses(m.To), maskAddresses(m.CC), maskAddresses(m.BCC)
+}
+
+func maskAddress(v string) string { return mask.URL(mask.Text(v)) }
+
+// maskAddresses returns a masked copy: the list may be the caller's.
+func maskAddresses(list []string) []string {
+	if list == nil {
+		return nil
+	}
+	out := make([]string, len(list))
+	for i, v := range list {
+		out[i] = maskAddress(v)
+	}
+	return out
 }
 
 // fillEmpty copies fields the connector didn't send from a parsed MIME
@@ -387,21 +416,6 @@ func lower(h map[string]string) map[string]string {
 	out := make(map[string]string, len(h))
 	for k, v := range h {
 		out[strings.ToLower(k)] = v
-	}
-	return out
-}
-
-// redactHeaders masks credentials in header values. Authorization-like
-// headers are masked whole, whatever their format.
-func redactHeaders(h map[string]string) map[string]string {
-	out := make(map[string]string, len(h))
-	for k, v := range h {
-		switch k {
-		case "authorization", "proxy-authorization", "cookie", "x-api-key", "api-key", "x-postmark-server-token", "x-echo-token":
-			out[k] = secrets.Mask(v, 0)
-		default:
-			out[k] = secrets.Redact(v)
-		}
 	}
 	return out
 }

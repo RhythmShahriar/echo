@@ -6,6 +6,7 @@ package catcher
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"net"
 	"net/http"
@@ -297,5 +298,69 @@ func TestHookSecretsMaskedInURL(t *testing.T) {
 	m, _ := s.Inbox.Get(d.ID)
 	if m.Provider != "zapier" || m.URL != "https://hooks.zapier.com/hooks/catch/1234567/c9•••••/" || strings.Contains(m.URL+strings.Join(m.To, ""), secret) {
 		t.Errorf("url %q, to %q", m.URL, m.To)
+	}
+}
+
+// TestCaptureMasksEverySecret runs the masking gaps from the security
+// review through Capture: none of the secret appears anywhere in the
+// stored message, while ordinary values next to it are kept.
+func TestCaptureMasksEverySecret(t *testing.T) {
+	const secret = "Zq9TOPSECRETvalue77"
+	const code = "482913"
+	b64 := base64.StdEncoding.EncodeToString([]byte("Reset: https://shop.test/wp-login.php?action=rp&key=" + secret + "&login=jane\r\n"))
+	for _, c := range []struct {
+		name    string
+		capture wire.Capture
+		kept    []string
+	}{
+		{"reset link, magic link and login code in an email", wire.Capture{Kind: "email", Source: wire.Source{Via: "wordpress"}, Email: &wire.Email{
+			To: []string{"jane@example.com"}, Subject: "Your login code is " + code,
+			Text: "Reset: https://shop.test/wp-login.php?action=rp&key=" + secret + "&login=jane\nOrders: https://shop.test/orders?page=2",
+			HTML: `<a href="https://shop.test/magic?k=` + secret + `&amp;page=2">Log in</a>`}},
+			[]string{"login=jane", "orders?page=2", "&amp;page=2", "Your login code is"}},
+		{"credential headers", wire.Capture{Kind: "http", HTTP: &wire.HTTP{Method: "GET", URL: "https://shop.example/admin/api/orders.json?page=2",
+			Headers: map[string]string{"X-Auth-Token": secret, "X-Amz-Security-Token": secret, "Private-Token": secret, "X-Goog-Api-Key": secret,
+				"X-Shopify-Access-Token": secret, "X-Request-Id": "req-7f3a9c"}}},
+			[]string{"req-7f3a9c", "orders.json?page=2"}},
+		{"telegram bot token", wire.Capture{Kind: "http", HTTP: &wire.HTTP{Method: "POST",
+			URL: "https://api.telegram.org/bot123456789:AAH" + secret + "abcdefghij/sendMessage", Body: `{"chat_id":42,"text":"New order"}`,
+			Headers: map[string]string{"Content-Type": "application/json"}}},
+			[]string{"/sendMessage", `"chat_id":42`}},
+		{"ifttt key", wire.Capture{Kind: "http", HTTP: &wire.HTTP{Method: "POST",
+			URL: "https://maker.ifttt.com/trigger/new_order/with/key/" + secret, Body: `{"value1":"42"}`}},
+			[]string{"/trigger/new_order/with/key/"}},
+		{"base64 MIME body", wire.Capture{Kind: "email", Source: wire.Source{Via: "laravel"}, Email: &wire.Email{Raw: "From: shop@shop.test\r\nTo: jane@example.com\r\n" +
+			"Subject: Reset\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Transfer-Encoding: base64\r\n\r\n" + b64 + "\r\n"}},
+			[]string{"login=jane", "Content-Transfer-Encoding: 8bit"}},
+		{"JSON secrets, numeric too", wire.Capture{Kind: "http", HTTP: &wire.HTTP{Method: "POST", URL: "https://crm.example/api/leads",
+			Headers: map[string]string{"Content-Type": "application/json"},
+			Body:    `{"apiKey": 123456789012, "auth":{"user":"u","pass":"` + secret + `"}, "key":"` + secret + `", "lead":"Jane"}`}},
+			[]string{`"lead":"Jane"`, `"user":"u"`}},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			s := NewServer(NewInbox(10), Config{})
+			c.capture.Version = 1
+			if c.capture.Kind == "http" {
+				c.capture.Phase = wire.Before
+			}
+			d, err := s.Capture(c.capture)
+			if err != nil {
+				t.Fatal(err)
+			}
+			m, _ := s.Inbox.Get(d.ID)
+			b, _ := json.Marshal(m)
+			stored := string(b)
+			for _, gone := range []string{secret, code, "123456789012", secret[4:12]} {
+				if strings.Contains(stored, gone) {
+					t.Errorf("%q stored: %s", gone, stored)
+				}
+			}
+			for _, k := range c.kept {
+				k, _ := json.Marshal(k)
+				if !strings.Contains(stored, strings.Trim(string(k), `"`)) {
+					t.Errorf("%s lost: %s", k, stored)
+				}
+			}
+		})
 	}
 }
