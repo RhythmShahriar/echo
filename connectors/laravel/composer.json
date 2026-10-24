@@ -6,7 +6,6 @@
         "staging",
         "email",
         "webhooks",
-        "testing",
         "mail-catcher",
         "rhythm",
         "echo"
