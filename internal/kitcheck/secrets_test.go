@@ -49,7 +49,7 @@ func TestRedactKeeps(t *testing.T) {
 }
 
 // TestRedactHeader masks credential headers by name, whatever the value
-// looks like, and leaves the rest readable.
+// looks like. The rest stay readable.
 func TestRedactHeader(t *testing.T) {
 	for _, name := range []string{"x-auth-token", "X-Auth-Token", "Authorization", "X-Api-Key", "X-WP-Nonce"} {
 		if got := secrets.RedactHeader(name, "abc"); strings.Contains(got, "abc") {

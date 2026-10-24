@@ -256,7 +256,7 @@ func liveKeys(env []string, scan map[string]string) error {
 }
 
 // liveKeyShown is a live key as the refusal names it: its mode prefix
-// (sk_live_ or rk_live_), which carries no secret, and bullets.
+// (sk_live_ or rk_live_), which carries no secret, then bullets.
 func liveKeyShown(k string) string { return k[:len("sk_live_")] + secrets.Mask(k, 0) }
 
 func lookupEnv(env []string, name string) (string, bool) {

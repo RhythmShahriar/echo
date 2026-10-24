@@ -762,7 +762,7 @@ func TestWatchShowsWhatArrivedWhileItStarted(t *testing.T) {
 
 // TestWatchShowsCapturesOfARun is the session the bug was reported from:
 // a connector POSTs captures tagged with a run to /v1/capture while that
-// run's action is open, and watch prints each one as it arrives.
+// run's action is open and watch prints each one as it arrives.
 func TestWatchShowsCapturesOfARun(t *testing.T) {
 	t.Chdir(t.TempDir())
 	in := catcher.NewInbox(100)

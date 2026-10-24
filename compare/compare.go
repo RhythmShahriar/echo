@@ -602,7 +602,7 @@ var connectorVias = []string{"wordpress", "laravel", "node"}
 
 // silentConnectors notes each action that sent nothing at all this time
 // although a connector in the site sent its mail in the snapshot. Echo
-// can't tell that from a site that stopped sending, but a connector that
+// can't tell that from a site that stopped sending. A connector that
 // can't reach Echo is the likelier cause when every message is gone.
 func silentConnectors(before, after *model.Run) []string {
 	var w []string

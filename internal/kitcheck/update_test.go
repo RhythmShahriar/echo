@@ -115,7 +115,7 @@ func TestUpdateInstallsSigned(t *testing.T) {
 }
 
 // TestUpdateRefusesTamperedChecksums: someone swapped the archive and
-// rewrote checksums.txt to match it, but can't sign it. Nothing changes.
+// rewrote checksums.txt to match it. They can't sign it, so nothing changes.
 func TestUpdateRefusesTamperedChecksums(t *testing.T) {
 	r := signed(t)
 	evil := archive(t, "#!/bin/sh\necho owned\n")
