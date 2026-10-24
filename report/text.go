@@ -103,9 +103,13 @@ func notes(b *strings.Builder, ns []string) {
 	b.WriteString("\n</details>\n\n")
 }
 
+// cell makes text safe for a Markdown table cell: one line, no controls,
+// and nothing that starts a column, code span, link or HTML tag.
 func cell(s string) string {
-	return strings.NewReplacer("|", `\|`, "\n", " ", "\r", "", "<", "&lt;", ">", "&gt;").Replace(s)
+	return Safe(cellEscaper.Replace(s))
 }
+
+var cellEscaper = strings.NewReplacer("|", `\|`, "`", "\\`", "[", `\[`, "]", `\]`, "\n", " ", "\r", "", "<", "&lt;", ">", "&gt;")
 
 type junitSuites struct {
 	XMLName  xml.Name     `xml:"testsuites"`
@@ -155,9 +159,10 @@ func JUnit(w io.Writer, r Result, failOn string) error {
 					continue
 				}
 				text := strings.TrimSpace(strings.Join([]string{"actions: " + actionsLabel(ch.Actions, 10), beforeAfter(ch), ch.Detail, ch.Fix}, "\n"))
-				tc := junitCase{Name: ch.Title, Classname: strings.ReplaceAll(ch.Check, "/", "."), Out: text}
+				text = safeLines(text)
+				tc := junitCase{Name: Safe(ch.Title), Classname: strings.ReplaceAll(ch.Check, "/", "."), Out: text}
 				if i <= limit && class != model.Fixed {
-					tc.Failure, tc.Out = &junitFailure{Message: classInfo[class].Label + ": " + ch.Title, Type: class, Text: text}, ""
+					tc.Failure, tc.Out = &junitFailure{Message: classInfo[class].Label + ": " + Safe(ch.Title), Type: class, Text: text}, ""
 					s.Failures++
 				}
 				s.Cases = append(s.Cases, tc)
@@ -172,16 +177,16 @@ func JUnit(w io.Writer, r Result, failOn string) error {
 		}
 		for _, a := range r.Run.Actions {
 			s := junitSuite{Name: "echo." + a.ID, Timestamp: stamp}
-			tc := junitCase{Name: a.Label + " sends its messages", Classname: "echo.action", Out: Tally(&model.Run{Actions: []model.Action{a}})}
+			tc := junitCase{Name: Safe(a.Label) + " sends its messages", Classname: "echo.action", Out: Tally(&model.Run{Actions: []model.Action{a}})}
 			if a.Error != "" {
-				tc.Failure, tc.Out = &junitFailure{Message: a.Error, Type: "action"}, ""
+				tc.Failure, tc.Out = &junitFailure{Message: Safe(a.Error), Type: "action"}, ""
 				s.Failures++
 			}
 			s.Cases = append(s.Cases, tc)
 			for _, i := range a.Issues {
-				c := junitCase{Name: i.Title, Classname: strings.ReplaceAll(i.Check, "/", "."), Out: i.Detail}
+				c := junitCase{Name: Safe(i.Title), Classname: strings.ReplaceAll(i.Check, "/", "."), Out: safeLines(i.Detail)}
 				if i.Level.Rank() <= limit {
-					c.Failure, c.Out = &junitFailure{Message: i.Title, Type: string(i.Level), Text: i.Detail + "\n" + i.Fix}, ""
+					c.Failure, c.Out = &junitFailure{Message: Safe(i.Title), Type: string(i.Level), Text: safeLines(i.Detail + "\n" + i.Fix)}, ""
 					s.Failures++
 				}
 				s.Cases = append(s.Cases, c)

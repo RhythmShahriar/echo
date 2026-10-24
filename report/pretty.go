@@ -85,9 +85,10 @@ func (p *Pretty) Header(version, target string) {
 		return
 	}
 	if p.o.Plain {
-		fmt.Fprintf(p.w, "rhythm echo %s - %s\n\n", version, target)
+		fmt.Fprintf(p.w, "rhythm echo %s - %s\n\n", version, Safe(target))
 		return
 	}
+	target = Safe(target)
 	left := ui.Brand.Render("♪") + " " + bold.Render("rhythm echo") + " " + muted.Render(version)
 	gap := max(2, width-lipgloss.Width(left)-lipgloss.Width(target))
 	fmt.Fprintf(p.w, "\n  %s%s%s\n  %s\n\n", left, strings.Repeat(" ", gap), muted.Render(target), muted.Render(strings.Repeat("─", width)))
@@ -98,6 +99,7 @@ func (p *Pretty) Step(label, value string) {
 	if p.o.Quiet {
 		return
 	}
+	value = Safe(value)
 	if p.o.Plain {
 		fmt.Fprintf(p.w, "%s: %s\n", label, value)
 		return
@@ -107,6 +109,7 @@ func (p *Pretty) Step(label, value string) {
 
 // Log prints a note to stderr.
 func (p *Pretty) Log(msg string) {
+	msg = Safe(msg)
 	if p.o.Plain {
 		fmt.Fprintln(p.errw, msg)
 		return
@@ -134,7 +137,9 @@ func (p *Pretty) Message(m model.Message) {
 			what += " " + pathOf(m.URL)
 		}
 	}
-	kind := check.Kind(m) // the destination is shown next to it
+	// Everything here comes from the site: make it safe to print.
+	to, what = Safe(to), Safe(what)
+	kind := Safe(check.Kind(m)) // the destination is shown next to it
 	if p.o.Plain {
 		fmt.Fprintf(p.w, "%s %s to %s: %s [%s]\n", m.At.Local().Format("15:04:05"), kind, to, what, m.Status)
 		return
@@ -145,7 +150,7 @@ func (p *Pretty) Message(m model.Message) {
 	body := ui.Truncate("→ "+to, 30) + "  " + muted.Render(ui.Truncate(what, 40))
 	fmt.Fprintln(p.w, ui.Pad(head, 40)+body+"  "+status)
 	if m.Error != "" && p.o.Verbose {
-		fmt.Fprintln(p.w, muted.Render("            "+m.Error))
+		fmt.Fprintln(p.w, muted.Render("            "+Safe(m.Error)))
 	}
 }
 
@@ -169,10 +174,11 @@ func (p *Pretty) Action(a *model.Action, done, total int) {
 		got = Tally(&model.Run{Actions: []model.Action{*a}})
 	}
 	short := unmet(a)
+	label, failure := Safe(a.Label), Safe(a.Error)
 	if p.o.Plain {
-		line := fmt.Sprintf("[%d/%d] %s: %s", done, total, a.Label, got)
+		line := fmt.Sprintf("[%d/%d] %s: %s", done, total, label, got)
 		if a.Error != "" {
-			line += " (failed: " + a.Error + ")"
+			line += " (failed: " + failure + ")"
 		} else if short {
 			line += " (fewer than expected)"
 		}
@@ -186,9 +192,9 @@ func (p *Pretty) Action(a *model.Action, done, total int) {
 	if short && a.Error == "" {
 		got += ", fewer than expected"
 	}
-	fmt.Fprintf(p.w, "  %s %s %s\n", mark, ui.Pad(bold.Render(ui.Truncate(a.Label, 34)), 36), muted.Render(got))
+	fmt.Fprintf(p.w, "  %s %s %s\n", mark, ui.Pad(bold.Render(ui.Truncate(label, 34)), 36), muted.Render(got))
 	if a.Error != "" {
-		fmt.Fprintln(p.w, "    "+muted.Render(ui.Truncate(a.Error, width-4)))
+		fmt.Fprintln(p.w, "    "+muted.Render(ui.Truncate(failure, width-4)))
 	}
 	if p.o.Verbose {
 		for _, m := range a.Messages {
@@ -218,15 +224,15 @@ func (p *Pretty) comparison(r Result, hint string) {
 		}
 		for _, class := range model.Classes {
 			for _, ch := range groups[class] {
-				fmt.Fprintf(p.w, "[%s] %s - %s\n", classInfo[class].Label, ch.Title, actionsLabel(ch.Actions, 3))
+				fmt.Fprintf(p.w, "[%s] %s - %s\n", classInfo[class].Label, Safe(ch.Title), Safe(actionsLabel(ch.Actions, 3)))
 				if ba := beforeAfter(ch); ba != "" {
-					fmt.Fprintf(p.w, "  %s\n", ba)
+					fmt.Fprintf(p.w, "  %s\n", Safe(ba))
 				}
 				if ch.Detail != "" {
-					fmt.Fprintf(p.w, "  %s\n", firstLine(ch.Detail))
+					fmt.Fprintf(p.w, "  %s\n", Safe(firstLine(ch.Detail)))
 				}
 				if fix := firstLine(ch.Fix); fix != "" && class != model.Fixed {
-					fmt.Fprintf(p.w, "  fix: %s\n", fix)
+					fmt.Fprintf(p.w, "  fix: %s\n", Safe(fix))
 				}
 			}
 		}
@@ -286,12 +292,12 @@ func (p *Pretty) run(r Result, hint string) {
 			fmt.Fprintln(p.w)
 		}
 		for _, i := range issues {
-			fmt.Fprintf(p.w, "[%s] %s - %s\n", strings.ToUpper(string(i.Level)), i.Title, actionsLabel(i.Actions, 3))
+			fmt.Fprintf(p.w, "[%s] %s - %s\n", strings.ToUpper(string(i.Level)), Safe(i.Title), Safe(actionsLabel(i.Actions, 3)))
 			if i.Detail != "" {
-				fmt.Fprintf(p.w, "  %s\n", firstLine(i.Detail))
+				fmt.Fprintf(p.w, "  %s\n", Safe(firstLine(i.Detail)))
 			}
 			if fix := firstLine(i.Fix); fix != "" && i.Level != model.Notice {
-				fmt.Fprintf(p.w, "  fix: %s\n", fix)
+				fmt.Fprintf(p.w, "  fix: %s\n", Safe(fix))
 			}
 		}
 		if p.o.Quiet {
@@ -359,6 +365,7 @@ func (p *Pretty) run(r Result, hint string) {
 
 func (p *Pretty) notes(ns []string) {
 	for i, n := range ns {
+		n = Safe(n)
 		if i == 5 {
 			n = fmt.Sprintf("…and %d more notes in the report", len(ns)-5)
 		}
@@ -374,7 +381,10 @@ func (p *Pretty) notes(ns []string) {
 }
 
 // card renders an important change or issue with its details and fix.
+// Its text may come from captured messages (a subject in a title), so
+// it's made safe here.
 func card(badge string, color lipgloss.Color, title, where string, details []string, fix string) string {
+	title, where, fix = Safe(title), Safe(where), Safe(fix)
 	titleCol := width - indent - 2
 	head := badge + "  "
 	listed := true
@@ -387,6 +397,7 @@ func card(badge string, color lipgloss.Color, title, where string, details []str
 	body := []string{head}
 	pad := strings.Repeat(" ", indent)
 	for i, d := range details {
+		d = Safe(d)
 		if d == "" || (i == 0 && listed && d == where) {
 			continue
 		}
@@ -400,8 +411,8 @@ func card(badge string, color lipgloss.Color, title, where string, details []str
 }
 
 func line(marker, title, right string) string {
-	right = ui.Truncate(right, 28)
-	t := ui.Truncate(title, width-8-len(right)-2)
+	right = ui.Truncate(Safe(right), 28)
+	t := ui.Truncate(Safe(title), width-8-len(right)-2)
 	return "    " + marker + "  " + ui.Pad(t, width-6-lipgloss.Width(right)) + muted.Render(right)
 }
 
@@ -439,7 +450,7 @@ func runPanel(r *model.Run, counts map[model.Level]int) string {
 	title := "ECHO"
 	verdictText := capitalize(runVerdict(r, counts))
 	if r.Name != "" {
-		title, verdictText = "SNAPSHOT "+strings.ToUpper(r.Name), "saved"
+		title, verdictText = "SNAPSHOT "+Safe(strings.ToUpper(r.Name)), "saved"
 	}
 	head := bold.Render(title) + "   " + lipgloss.NewStyle().Foreground(color).Bold(true).Render(verdictText)
 	var parts []string
@@ -472,7 +483,7 @@ func refName(r model.RunRef, relative bool) string {
 		when = " (" + r.Started.UTC().Format("2 Jan 2006 15:04 MST") + ")"
 	}
 	if r.Name != "" {
-		return fmt.Sprintf("snapshot %q%s", r.Name, when)
+		return fmt.Sprintf("snapshot %q%s", Safe(r.Name), when)
 	}
 	return "the earlier run" + when
 }
