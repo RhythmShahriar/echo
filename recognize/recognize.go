@@ -140,6 +140,18 @@ func Name(provider string) string {
 	return provider
 }
 
+// SecretHook reports whether a provider's URLs are catch hooks, where the
+// URL names the destination (one Zap, one scenario) as well as being its
+// credential.
+func SecretHook(provider string) bool {
+	for _, r := range registry {
+		if r.Provider == provider {
+			return r.SecretURL
+		}
+	}
+	return false
+}
+
 // host reports whether r is for host or a subdomain of it.
 func host(r Request, hosts ...string) bool {
 	h := strings.ToLower(r.URL.Hostname())

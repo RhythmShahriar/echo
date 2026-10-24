@@ -163,7 +163,8 @@ func TestMaskedHookURLsPair(t *testing.T) {
 	}
 	a = []model.Message{hook("https://hooks.zapier.com/hooks/catch/123/xy•••••/", `{"order":2}`)}
 	got := titles(Messages(b, a))
-	if !strings.Contains(got, "broke: Zapier webhook is no longer sent") || !strings.Contains(got, "new: Zapier webhook is now sent") {
+	if !strings.Contains(got, "broke: Zapier webhook to hooks.zapier.com/hooks/catch/123/ab••••• is no longer sent") ||
+		!strings.Contains(got, "new: Zapier webhook to hooks.zapier.com/hooks/catch/123/xy••••• is now sent") {
 		t.Errorf("another hook is another message:\n%s", got)
 	}
 }
@@ -213,5 +214,21 @@ func TestSubjectChangesKeepTheirCase(t *testing.T) {
 	a.Subject = "YOUR ORDER #1043 AT SHOP"
 	if cs := Messages([]model.Message{b}, []model.Message{a}); len(cs) != 0 {
 		t.Errorf("case alone isn't a change: %+v", cs)
+	}
+}
+
+func TestMovedZapierHook(t *testing.T) {
+	hook := func(path string) model.Message {
+		return model.Message{Channel: model.Webhook, Provider: "zapier", Method: "POST", Status: model.Faked,
+			URL: "https://hooks.zapier.com/hooks/catch/" + path + "/"}
+	}
+	got := titles(Messages([]model.Message{hook("1234567/ab•••••")}, []model.Message{hook("7654321/zx•••••")}))
+	for _, want := range []string{
+		"broke: Zapier webhook to hooks.zapier.com/hooks/catch/1234567/ab••••• is no longer sent",
+		"new: Zapier webhook to hooks.zapier.com/hooks/catch/7654321/zx••••• is now sent",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("missing %q:\n%s", want, got)
+		}
 	}
 }

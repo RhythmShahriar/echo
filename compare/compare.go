@@ -20,6 +20,7 @@ import (
 
 	"github.com/RhythmShahriar/echo/check"
 	"github.com/RhythmShahriar/echo/model"
+	"github.com/RhythmShahriar/echo/recognize"
 )
 
 // Compare diffs before and after.
@@ -279,6 +280,11 @@ func identityLabel(m model.Message) string {
 	case model.Webhook:
 		if m.Event != "" {
 			return fmt.Sprintf("%s (%q)", what, m.Event)
+		}
+		// One Zap or scenario is its own destination: name the (masked) hook,
+		// so a moved hook doesn't read as the same webhook lost and new.
+		if u, err := url.Parse(m.URL); err == nil && u.Host != "" && recognize.SecretHook(m.Provider) {
+			return what + " to " + u.Host + strings.TrimSuffix(u.Path, "/")
 		}
 	}
 	return what
