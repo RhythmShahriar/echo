@@ -1,0 +1,33 @@
+# Publishes the Node connector (connectors/node) to npm as @rhythmsh/echo
+# when a version tag is pushed, with provenance. Needs the NPM_TOKEN
+# repository secret (an npm granular token with write access), until npm
+# Trusted Publishing is set up for the package.
+name: npm
+on:
+  push:
+    tags: ["v*"]
+permissions:
+  contents: read
+  id-token: write   # npm provenance
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: connectors/node
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      - run: npm ci
+      - run: npm version "${GITHUB_REF_NAME#v}" --no-git-tag-version --allow-same-version
+      - run: npm test
+      - name: Publish
+        run: |
+          tag=latest
+          case "$GITHUB_REF_NAME" in *-*) tag=next ;; esac   # v1.1.0-rc1 → next, never latest
+          npm publish --provenance --access public --tag "$tag"
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
