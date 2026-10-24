@@ -23,6 +23,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/RhythmShahriar/echo/catcher"
@@ -57,7 +58,8 @@ type Options struct {
 	Timeout time.Duration
 	// Parallel runs up to this many actions at once (compare --parallel)
 	// once the site is seen tagging its mail; 0 or 1 runs them one by
-	// one. See runAll.
+	// one. A client without Echo's leases runs them one by one too and
+	// adds a run warning. See runAll.
 	Parallel int
 	// RunKey signs the run value the runner hands the site (X-Echo-Run,
 	// its cookie and RHYTHM_ECHO_RUN), so a connector that has the key
@@ -69,6 +71,12 @@ type Options struct {
 	// token or a site's write token) is the caller's to decide; it is not
 	// taken from Client.Token for that reason.
 	RunKey string
+
+	// assumeLeases lets tests run actions in parallel with a client that
+	// has no lease API, for sites whose mail is all tagged.
+	assumeLeases bool
+	// flush, when set, makes flush commands take turns (see runAll).
+	flush *sync.Mutex
 }
 
 // Hooks report progress.
@@ -208,11 +216,7 @@ func runAction(ctx context.Context, o Options, run *model.Run, a config.Action, 
 	if err != nil {
 		act.Error = err.Error()
 	}
-	for _, f := range cfg.Flush {
-		if ferr := command(ctx, f, runValue, nil); ferr != nil && o.Hooks.Log != nil {
-			o.Hooks.Log(fmt.Sprintf("flush %q: %v", f, ferr))
-		}
-	}
+	o.runFlush(ctx, runValue)
 	// Echo answers with what it has once the timeout passes; the grace
 	// lets that answer arrive instead of cutting the request off first.
 	wctx, cancel := context.WithTimeout(ctx, cfg.Timeout.Duration+waitGrace)
@@ -231,6 +235,23 @@ func runAction(ctx context.Context, o Options, run *model.Run, a config.Action, 
 	act.Issues = append(act.Issues, expectations(a.Expect, msgs)...)
 	act.Duration = float64(time.Since(start).Milliseconds())
 	return act, unsure
+}
+
+// runFlush runs the config's flush commands for one action, taking
+// turns with other actions' flushes when o.flush is set.
+func (o Options) runFlush(ctx context.Context, runValue string) {
+	if len(o.Config.Flush) == 0 {
+		return
+	}
+	if o.flush != nil {
+		o.flush.Lock()
+		defer o.flush.Unlock()
+	}
+	for _, f := range o.Config.Flush {
+		if err := command(ctx, f, runValue, nil); err != nil && o.Hooks.Log != nil {
+			o.Hooks.Log(fmt.Sprintf("flush %q: %v", f, err))
+		}
+	}
 }
 
 func kind(a config.Action) string {

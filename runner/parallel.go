@@ -51,9 +51,23 @@ type finished struct {
 //
 // Actions still start in config order. Without Parallel nothing changes:
 // one by one, shared leases.
+//
+// Parallel also needs Echo's leases (catcher C5). Without them Echo keeps
+// one open action for everybody, so each Begin takes the untagged mail
+// of the action before it, with nothing to warn about. A client without
+// leases runs one by one and says so in the run's warnings.
 func runAll(ctx context.Context, o Options, run *model.Run, actions []config.Action, fake *fakeData, opts check.Options) finished {
-	g := newGate(ctx, max(o.Parallel, 1))
+	width := max(o.Parallel, 1)
+	if width > 1 && !o.leases() {
+		width = 1
+		run.Warnings = append(run.Warnings, noLeasesWarning)
+	}
+	g := newGate(ctx, width)
 	defer g.close()
+	// Flush commands (wp cron event run, queue:work) run once per action.
+	// Some queue runners break with two of them at once, so they take
+	// turns even when actions don't.
+	o.flush = &sync.Mutex{}
 	if g.width > 1 {
 		go g.watch(ctx, o.Client, run.ID)
 	}
@@ -100,6 +114,19 @@ func runAll(ctx context.Context, o Options, run *model.Run, actions []config.Act
 		}
 	}
 	return out
+}
+
+// noLeasesWarning is the run warning when Options.Parallel asked for
+// parallel actions that this Echo can't keep apart.
+const noLeasesWarning = "actions ran one by one: running them in parallel needs a newer Echo that keeps a lease per action"
+
+// leases reports whether o.Client has the lease API (see leaser).
+func (o Options) leases() bool {
+	if o.assumeLeases {
+		return true
+	}
+	_, ok := any(o.Client).(leaser)
+	return ok
 }
 
 // gate decides when the next action may start; see runAll.

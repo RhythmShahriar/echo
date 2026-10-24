@@ -12,6 +12,8 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"sync"
@@ -107,7 +109,7 @@ func TestParallelTaggedActions(t *testing.T) {
 	cfg.Actions = httpActions(8)
 	var progress []int
 	start := time.Now()
-	run, err := Run(context.Background(), Options{Config: cfg, Client: echo, Parallel: 4,
+	run, err := Run(context.Background(), Options{Config: cfg, Client: echo, Parallel: 4, assumeLeases: true,
 		Hooks: Hooks{Action: func(_ *model.Action, done, _ int) { progress = append(progress, done) }}})
 	if err != nil {
 		t.Fatal(err)
@@ -145,7 +147,7 @@ func TestParallelFalseRunsAlone(t *testing.T) {
 	cfg.Actions = httpActions(7)
 	no := false
 	cfg.Actions[3].Parallel = &no // A4
-	run, err := Run(context.Background(), Options{Config: cfg, Client: echo, Parallel: 4})
+	run, err := Run(context.Background(), Options{Config: cfg, Client: echo, Parallel: 4, assumeLeases: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -187,7 +189,7 @@ func TestUntaggedMailRunsOneByOne(t *testing.T) {
 	cfg.Site = shop.URL
 	cfg.Quiet, cfg.Timeout = config.Duration{Duration: 100 * time.Millisecond}, config.Duration{Duration: 10 * time.Second}
 	cfg.Actions = httpActions(4)
-	run, err := Run(context.Background(), Options{Config: cfg, Client: echo, Parallel: 4})
+	run, err := Run(context.Background(), Options{Config: cfg, Client: echo, Parallel: 4, assumeLeases: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -208,7 +210,7 @@ func TestParallelStopsOnCancel(t *testing.T) {
 	cfg.Quiet = config.Duration{Duration: 100 * time.Millisecond}
 	cfg.Actions = httpActions(6)
 	ctx, cancel := context.WithCancel(context.Background())
-	run, err := Run(ctx, Options{Config: cfg, Client: echo, Parallel: 2,
+	run, err := Run(ctx, Options{Config: cfg, Client: echo, Parallel: 2, assumeLeases: true,
 		Hooks: Hooks{Action: func(_ *model.Action, done, _ int) {
 			if done == 1 {
 				cancel()
@@ -297,5 +299,75 @@ func TestTagged(t *testing.T) {
 		if tagged(*m) != want {
 			t.Errorf("tagged(%+v) = %v", *m, !want)
 		}
+	}
+}
+
+// Today's client and catcher keep one open action for everybody, so
+// parallel actions would hand one action's untagged mail to the next.
+// Without leases Parallel runs one by one and says why, and every
+// message stays with the action that caused it.
+func TestParallelWithoutLeasesRunsOneByOne(t *testing.T) {
+	s, log, echo := echoWithLog(t)
+	if (Options{Client: echo}).leases() {
+		t.Skip("the client has leases; TestParallelTaggedActions covers it")
+	}
+	shop := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if _, err := echo.Capture(context.Background(), wire.Capture{Kind: "email", Run: r.Header.Get(wire.RunHeader), Source: wire.Source{Via: "wordpress"},
+			Email: &wire.Email{To: []string{"buyer@shop.test"}, Subject: r.URL.Path, Text: "Hello"}}); err != nil {
+			t.Error(err)
+		}
+		s.Inbox.Add(model.Message{Channel: model.Email, Source: model.Source{Via: "smtp"}, Subject: "untagged " + r.URL.Path, Text: "Hello", To: []string{"buyer@shop.test"}})
+	}))
+	defer shop.Close()
+	cfg := config.Default()
+	cfg.Site = shop.URL
+	cfg.Quiet, cfg.Timeout = config.Duration{Duration: 150 * time.Millisecond}, config.Duration{Duration: 10 * time.Second}
+	cfg.Actions = httpActions(6)
+	run, err := Run(context.Background(), Options{Config: cfg, Client: echo, Parallel: 4})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if w := log.widest(); w != 1 {
+		t.Errorf("actions overlapped without leases: %q", log.events)
+	}
+	for i, a := range run.Actions {
+		path := fmt.Sprintf("/a%d", i+1)
+		var got []string
+		for _, m := range a.Messages {
+			got = append(got, m.Subject)
+		}
+		slices.Sort(got)
+		if want := []string{path, "untagged " + path}; !slices.Equal(got, want) {
+			t.Errorf("%s got %q, want %q", a.Label, got, want)
+		}
+	}
+	if !slices.Equal(run.Warnings, []string{noLeasesWarning}) {
+		t.Errorf("warnings: %q", run.Warnings)
+	}
+}
+
+// Flush commands take turns even when actions run at once.
+func TestParallelFlushTakesTurns(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the flush command uses sh")
+	}
+	_, _, echo := echoWithLog(t)
+	dir := t.TempDir()
+	cfg := config.Default()
+	cfg.Site = taggingSite(t, echo).URL
+	cfg.Quiet, cfg.Timeout = config.Duration{Duration: 100 * time.Millisecond}, config.Duration{Duration: 10 * time.Second}
+	cfg.Actions = httpActions(4)
+	// mkdir fails while another flush holds the lock folder.
+	lock := filepath.Join(dir, "lock")
+	cfg.Flush = []string{fmt.Sprintf("mkdir %q && sleep 0.1 && rmdir %q", lock, lock)}
+	var mu sync.Mutex
+	var logs []string
+	_, err := Run(context.Background(), Options{Config: cfg, Client: echo, Parallel: 4, assumeLeases: true,
+		Hooks: Hooks{Log: func(s string) { mu.Lock(); logs = append(logs, s); mu.Unlock() }}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(logs) != 0 {
+		t.Errorf("flushes ran at once: %q", logs)
 	}
 }
