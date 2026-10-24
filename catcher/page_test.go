@@ -59,6 +59,55 @@ func TestPagingIsStableUnderConcurrentAdds(t *testing.T) {
 	}
 }
 
+// Several captures at once whose checks take different times: SMTP, the
+// proxy and connectors add together and the server always checks.
+func TestPagingIsStableUnderConcurrentAdders(t *testing.T) {
+	const adders, each = 8, 200
+	in := NewInbox(2 * adders * each)
+	in.SetCheck(func(m model.Message) []model.Issue {
+		if strings.HasSuffix(m.Subject, "1") || strings.HasSuffix(m.Subject, "3") {
+			time.Sleep(time.Millisecond) // a slow rule: later adds overtake this one
+		}
+		return nil
+	})
+	var wg sync.WaitGroup
+	for a := range adders {
+		wg.Go(func() {
+			for i := range each {
+				in.Add(model.Message{Channel: model.Email, Subject: fmt.Sprint(a, "-", i)})
+			}
+		})
+	}
+	wg.Wait()
+	in.mu.Lock()
+	for i := 1; i < len(in.msgs); i++ {
+		if in.msgs[i-1].seq >= in.msgs[i].seq {
+			t.Errorf("msgs out of seq order at %d: %d then %d", i, in.msgs[i-1].seq, in.msgs[i].seq)
+			break
+		}
+	}
+	in.mu.Unlock()
+	seen := map[string]bool{}
+	rows := 0
+	page, next, err := in.Page(Filter{}, "", 37)
+	for {
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, m := range page {
+			seen[m.ID] = true
+			rows++
+		}
+		if next == "" || rows > 2*adders*each { // a cursor that lands wrong can loop forever
+			break
+		}
+		page, next, err = in.Page(Filter{}, next, 37)
+	}
+	if rows != adders*each || len(seen) != adders*each {
+		t.Errorf("paging gave %d rows, %d unique; want %d of each", rows, len(seen), adders*each)
+	}
+}
+
 func TestPageFiltersAndEnds(t *testing.T) {
 	in := NewInbox(100)
 	var sms []string

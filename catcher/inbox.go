@@ -46,7 +46,8 @@ type Inbox struct {
 	// was masked, by message ID. It lives in memory only, never with the
 	// messages, so nothing that stores or reports them sees it.
 	found   map[string]found
-	seq     int
+	seq     int // the seq of the newest entry
+	made    int // messages Add has begun to store, so each gets its own ID
 	deleted int // messages removed or dropped since the inbox was made, for Mailpit's info
 	onAdd   func(model.Message)
 	check   func(model.Message) []model.Issue // fills Issues; nil leaves them alone
@@ -401,14 +402,14 @@ func (in *Inbox) Add(m model.Message) model.Message { return in.add(m, found{}) 
 // add is Add, keeping f for Latest.
 func (in *Inbox) add(m model.Message, f found) model.Message {
 	in.mu.Lock()
-	in.seq++
-	seq, check := in.seq, in.check
+	in.made++
+	made, check := in.made, in.check
 	in.mu.Unlock()
 	if m.At.IsZero() {
 		m.At = in.now().UTC()
 	}
 	if m.ID == "" {
-		m.ID = model.NewID(fmt.Sprint(m.At.UnixNano(), seq, m.URL, m.Subject))
+		m.ID = model.NewID(fmt.Sprint(m.At.UnixNano(), made, m.URL, m.Subject))
 	}
 	// Checked unlocked: the rules read up to MaxBody of text and HTML,
 	// and SMTP, the proxy and connectors add at the same time.
@@ -417,7 +418,11 @@ func (in *Inbox) add(m model.Message, f found) model.Message {
 	}
 	in.mu.Lock()
 	in.attribute(&m)
-	e := &entry{seq: seq, m: m}
+	// The page order is taken here, in the lock that appends, not with
+	// made above: a capture whose check ran longer may append after one
+	// that began later, and Page needs msgs sorted by seq.
+	in.seq++
+	e := &entry{seq: in.seq, m: m}
 	in.msgs = append(in.msgs, e)
 	in.index[m.ID] = e
 	if !f.empty() {
