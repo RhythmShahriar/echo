@@ -10,6 +10,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/RhythmShahriar/echo/model"
@@ -65,23 +66,37 @@ func decodeExtras(body []byte) extras {
 	return x
 }
 
-// attachments returns the files x describes as model attachments. A
-// checksum that isn't a SHA-256 in hex is dropped rather than shown as
-// one and a negative size is read as unknown.
+// attachments returns the files x describes as model attachments, at
+// most maxAttachments of them. A checksum that isn't a SHA-256 in hex is
+// dropped rather than shown as one, a type that isn't a MIME type is
+// dropped too and a negative size is read as unknown.
 func (x extras) attachments() []model.Attachment {
 	if x.Email == nil || len(x.Email.Attachments) == 0 {
 		return nil
 	}
-	out := make([]model.Attachment, 0, len(x.Email.Attachments))
-	for _, a := range x.Email.Attachments {
+	files := x.Email.Attachments[:min(len(x.Email.Attachments), maxAttachments)]
+	out := make([]model.Attachment, 0, len(files))
+	for _, a := range files {
 		sum := strings.ToLower(a.SHA256)
 		if b, err := hex.DecodeString(sum); err != nil || len(b) != sha256.Size {
 			sum = ""
 		}
-		out = append(out, model.Attachment{Name: a.Name, Type: a.Type, Size: max(a.Size, 0), SHA256: sum})
+		typ := strings.ToLower(strings.TrimSpace(a.Type))
+		if len(typ) > 127 || !mimeType.MatchString(typ) {
+			typ = ""
+		}
+		out = append(out, model.Attachment{Name: a.Name, Type: typ, Size: max(a.Size, 0), SHA256: sum})
 	}
 	return out
 }
+
+// maxAttachments is how many files of one email Echo keeps: far more than
+// any real email attaches, few enough that a capture can't fill the inbox
+// with entries.
+const maxAttachments = 100
+
+// mimeType is a MIME type without parameters: application/pdf.
+var mimeType = regexp.MustCompile(`^[a-z0-9][a-z0-9!#$&^_.+-]*/[a-z0-9][a-z0-9!#$&^_.+-]*$`)
 
 // sigLen is the length of a run signature: 16 bytes in unpadded base64url.
 const sigLen = 22

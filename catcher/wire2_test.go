@@ -102,6 +102,25 @@ func TestWire2AttachmentsCleaned(t *testing.T) {
 	}
 }
 
+// TestWire2AttachmentsBounded: a capture can't list more than
+// maxAttachments files, nor a type that isn't a MIME type.
+func TestWire2AttachmentsBounded(t *testing.T) {
+	files := make([]wireAttachment, maxAttachments+40)
+	for i := range files {
+		files[i] = wireAttachment{Name: "f.pdf", Type: "Application/PDF"}
+	}
+	files[0].Type = strings.Repeat("x", 4096)
+	files[1].Type = "text/html; <script>"
+	x := extras{}
+	x.Email = &struct {
+		Attachments []wireAttachment `json:"attachments"`
+	}{Attachments: files}
+	got := x.attachments()
+	if len(got) != maxAttachments || got[0].Type != "" || got[1].Type != "" || got[2].Type != "application/pdf" {
+		t.Errorf("%d attachments, types %q %q %q", len(got), got[0].Type, got[1].Type, got[2].Type)
+	}
+}
+
 func TestWire2AttachmentsYieldToMIME(t *testing.T) {
 	raw := "From: a@shop.test\r\nTo: b@example.test\r\nSubject: s\r\nContent-Type: multipart/mixed; boundary=b\r\n\r\n" +
 		"--b\r\nContent-Type: text/plain\r\n\r\nhi\r\n" +
