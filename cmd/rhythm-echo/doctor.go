@@ -247,6 +247,7 @@ func (d *doctor) laravel(dir string) {
 	cmd := exec.CommandContext(s.ctx, "php", "artisan", "echo:canary", "--json")
 	cmd.Dir = dir
 	cmd.WaitDelay = shellWaitDelay
+	killGroup(cmd)
 	cmd.Env = append(os.Environ(), "RHYTHM_ECHO_RUN="+d.run+"/laravel")
 	if out, err := cmd.CombinedOutput(); err != nil {
 		d.fail("Laravel", strings.TrimSpace(lastLine(string(out))))
@@ -300,6 +301,7 @@ func (d *doctor) node(dir, stack, mode string) {
 	cmd := exec.CommandContext(s.ctx, bin, "--import", "@rhythmsh/echo/register", "--input-type=module", "-e", nodeCanary) //nolint:gosec // a fixed script
 	cmd.Dir = dir
 	cmd.WaitDelay = shellWaitDelay
+	killGroup(cmd)
 	cmd.Env = append(os.Environ(), "RHYTHM_ECHO_URL="+s.echo.URL, "RHYTHM_ECHO_RUN="+d.run+"/"+action)
 	if s.echo.Token != "" {
 		cmd.Env = append(cmd.Env, "RHYTHM_ECHO_TOKEN="+s.echo.Token)
@@ -524,13 +526,13 @@ func sameSite(a, b string) bool {
 const shellWaitDelay = 2 * time.Second
 
 // shell runs line in the platform's shell: sh -c, or cmd /C on Windows,
-// which has no sh. Canceling ctx kills the shell but a child it started
-// (sleep, wp cron) can live on and hold the output pipe open, so Wait
-// would block until that child exits. WaitDelay closes the pipe instead,
-// so Ctrl+C returns within two seconds.
+// which has no sh. Canceling ctx kills the shell's whole process group
+// on Unix (killGroup), so a child it started (sleep, wp cron) goes too.
+// A child that left the group, or one on Windows, can still hold the
+// output pipe open, so Wait would block until it exits; WaitDelay closes
+// the pipe instead, so Ctrl+C returns within two seconds.
 //
-// This stands in for runner.Shell, which kills the whole process group,
-// until that is released.
+// This stands in for runner.Shell until that is released.
 func shell(ctx context.Context, line string) *exec.Cmd {
 	name, flag := "sh", "-c"
 	if runtime.GOOS == "windows" {
@@ -538,6 +540,7 @@ func shell(ctx context.Context, line string) *exec.Cmd {
 	}
 	cmd := exec.CommandContext(ctx, name, flag, line) //nolint:gosec // the user's configured command
 	cmd.WaitDelay = shellWaitDelay
+	killGroup(cmd)
 	return cmd
 }
 
