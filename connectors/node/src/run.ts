@@ -232,7 +232,7 @@ export async function accept(c: RunClaim): Promise<string | undefined> {
   if (!c.forwarded && isLoopbackAddr(c.remote)) return `${run}/${action}`;
   warnOnce(
     'run-remote',
-    `ignored an X-Echo-Run from ${c.remote ? c.remote : 'a request with no peer address'}${c.forwarded ? ' behind a proxy' : ''}: without RHYTHM_ECHO_TOKEN only a direct call from this machine may set the run (set the same token here and in Echo)`,
+    `ignored an X-Echo-Run from ${c.remote ? c.remote : 'a request with no peer address (as in Next.js and other Fetch-request apps)'}${c.forwarded ? ' behind a proxy' : ''}: without RHYTHM_ECHO_TOKEN only a direct call from this machine may set the run (set RHYTHM_ECHO_TOKEN here and the same token in Echo)`,
   );
   return undefined;
 }
