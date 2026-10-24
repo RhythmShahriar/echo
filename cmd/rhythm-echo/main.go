@@ -1,7 +1,21 @@
 // Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
 // SPDX-License-Identifier: MIT
 
-// rhythm-echo is the Echo binary, normally run as `rhythm echo`.
+// Command rhythm-echo captures every email, SMS, webhook and API call a
+// site sends, seals staging so none of it reaches real people, and
+// compares what each action sends before and after a change. It is
+// normally run as `rhythm echo`; the rhythm CLI runs this binary.
+//
+// Usage:
+//
+//	rhythm-echo <command> [flags]
+//
+// The commands are up (the catcher), install, doctor, watch, ls, show,
+// clear, snapshot, compare, run, report, snapshots, replay, check,
+// headers, init, ca and sendmail; `rhythm-echo help` lists their flags
+// and exit codes. Every command exits 0 when done, 1 for findings, 2 for
+// a usage error and 3 when it couldn't run, as Tuner and Soundcheck do;
+// sendmail uses sendmail's own codes instead.
 package main
 
 import (
