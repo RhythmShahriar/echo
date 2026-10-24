@@ -26,11 +26,11 @@ func (r *Result) checkAuth() {
 	case "fail":
 		r.issue("dmarc", model.Error, "DMARC failed",
 			src+" reports dmarc=fail for "+r.FromDomain+": neither SPF nor DKIM passed for a domain aligned with From. Mail like this goes to spam or is rejected under p=quarantine/reject.",
-			"Run `echo check "+r.FromDomain+"` with this message's sender, then publish the DKIM records of the sending service under "+r.FromDomain+".")
+			"Run `rhythm echo check "+r.FromDomain+"` with this message's sender, then publish the DKIM records of the sending service under "+r.FromDomain+".")
 	case "temperror", "permerror":
 		r.issue("dmarc", model.Warning, "DMARC could not be evaluated",
 			src+" reports dmarc="+a.DMARC+"; a permerror usually means a malformed _dmarc record.",
-			"Check the TXT record at _dmarc."+r.FromDomain+" with `echo check "+r.FromDomain+"`.")
+			"Check the TXT record at _dmarc."+r.FromDomain+" with `rhythm echo check "+r.FromDomain+"`.")
 	case "none", "":
 		r.issue("dmarc", model.Warning, "Receiver found no DMARC policy",
 			src+" didn't apply DMARC to "+r.FromDomain+" (dmarc=none or no result), so it has no policy to protect it.",
@@ -57,7 +57,7 @@ func (r *Result) checkAuth() {
 	case "permerror":
 		r.issue("spf", model.Error, "SPF record is broken (permerror)",
 			"The SPF record at "+mailfrom+" can't be evaluated: a syntax error, more than 10 lookups, or multiple records.",
-			"Run `echo check "+mailfrom+"` to find the problem in the SPF record.")
+			"Run `rhythm echo check "+mailfrom+"` to find the problem in the SPF record.")
 	case "temperror":
 		r.issue("spf", model.Warning, "SPF could not be evaluated",
 			"The receiver hit a DNS error looking up SPF for "+mailfrom+".", "Check the domain's nameservers answer TXT queries reliably.")
@@ -67,7 +67,7 @@ func (r *Result) checkAuth() {
 		d := a.prop("dkim", "header.d")
 		r.issue("dkim", model.Error, "DKIM signature failed",
 			src+" reports dkim="+a.DKIM+" for d="+orUnknown(d)+": the key is missing or the message was changed after signing (a footer added by a plugin or a mailing list).",
-			"Check the key at "+orUnknown(a.prop("dkim", "header.s"))+"._domainkey."+orUnknown(d)+" with `echo check`, and that nothing modifies mail after the service signs it.")
+			"Check the key at "+orUnknown(a.prop("dkim", "header.s"))+"._domainkey."+orUnknown(d)+" with `rhythm echo check`, and that nothing modifies mail after the service signs it.")
 	}
 }
 

@@ -203,7 +203,7 @@ func JUnit(w io.Writer, r Result, failOn string) error {
 	return err
 }
 
-// JSONValue writes any value as indented JSON (messages for `echo ls --json`).
+// JSONValue writes any value as indented JSON (messages for `rhythm echo ls --json`).
 func JSONValue(w io.Writer, v any) error {
 	enc := json.NewEncoder(w)
 	enc.SetIndent("", "  ")

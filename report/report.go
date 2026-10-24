@@ -1,7 +1,7 @@
-// Package report renders Echo's results: a live line per captured message
-// (`echo watch`), the terminal summary of a run or a comparison, plain
-// text for logs and screen readers, JSON, Markdown, JUnit XML and a
-// standalone HTML inbox with message previews.
+// Package report renders Echo's results: a live line per captured
+// message (`rhythm echo watch`), the terminal summary of a run or a
+// comparison, plain text for logs and screen readers, JSON, Markdown,
+// JUnit XML and a standalone HTML inbox with message previews.
 package report
 
 import (

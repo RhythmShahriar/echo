@@ -86,11 +86,11 @@ func (c *checker) dkim() {
 				"Set up domain authentication in "+provider.Label+" and publish the DKIM records it gives you under "+d+".")
 		case provider.Note != "":
 			c.issue("dkim", model.Notice, "DKIM selector unknown for the sending service", provider.Note,
-				"Run `echo headers` on a message the site sent, then check again with its selector.")
+				"Run `rhythm echo headers` on a message the site sent, then check again with its selector.")
 		default:
 			c.issue("dkim", model.Notice, "No DKIM key found at common selectors",
 				"No key was found at the usual selectors ("+strings.Join(commonSelectors(), ", ")+"). The domain may use another selector; the check can't list them.",
-				"Run `echo headers` on a message the site sent to learn its selector, or publish a DKIM key (TXT at <selector>._domainkey."+d+") from your sending service.")
+				"Run `rhythm echo headers` on a message the site sent to learn its selector, or publish a DKIM key (TXT at <selector>._domainkey."+d+") from your sending service.")
 		}
 		return
 	}

@@ -12,9 +12,9 @@ package wire
 const Version = 1
 
 // RunHeader carries "<run>/<action>" from the thing that triggered a
-// request (Soundcheck's browser, `echo run`) to the connector, which copies
-// it into every capture, so messages are tied to the action that caused
-// them. Connectors also accept it as a cookie of the same name.
+// request (Soundcheck's browser, `rhythm echo run`) to the connector,
+// which copies it into every capture, so messages are tied to the action
+// that caused them. Connectors also accept it as a cookie of the same name.
 const RunHeader = "X-Echo-Run"
 
 // TokenHeader authenticates connectors when Echo listens beyond loopback.
