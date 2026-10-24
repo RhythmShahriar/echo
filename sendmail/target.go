@@ -5,13 +5,13 @@ package sendmail
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
 	"net/http"
 	"net/url"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -36,7 +36,7 @@ type target struct {
 //  2. RHYTHM_ECHO_URL, asking its /v1/health for the SMTP address (the
 //     capture API when it reports none)
 //  3. smtp: in the nearest .echo/config.yaml, from the working folder up
-//     (the API at its listen: when smtp is off)
+//     as FindConfig searches (the API at its listen: when smtp is off)
 //  4. 127.0.0.1:1025
 func findTarget(getenv func(string) string, stderr io.Writer) target {
 	if addr := getenv(EnvSMTP); addr != "" {
@@ -48,7 +48,7 @@ func findTarget(getenv func(string) string, stderr io.Writer) target {
 		}
 		return target{api: api, from: EnvURL}
 	}
-	if path := nearestConfig(); path != "" {
+	if path := nearestConfig(stderr); path != "" {
 		smtp, listen, err := readConfig(path)
 		switch {
 		case err != nil:
@@ -122,24 +122,18 @@ func isLoopback(host string) bool {
 	return ip != nil && ip.IsLoopback()
 }
 
-// nearestConfig returns .echo/config.yaml in the working folder or the
-// closest folder above it, or "".
-func nearestConfig() string {
-	dir, err := os.Getwd()
+// nearestConfig returns the .echo/config.yaml FindConfig finds from the
+// working folder, or "". It tells stderr about a config it won't use.
+func nearestConfig(stderr io.Writer) string {
+	path, err := FindConfig(".")
+	var ue *UntrustedError
+	if errors.As(err, &ue) {
+		fmt.Fprintf(stderr, "rhythm-echo sendmail: %v\n", err)
+	}
 	if err != nil {
 		return ""
 	}
-	for {
-		p := filepath.Join(dir, config.Path())
-		if fi, err := os.Stat(p); err == nil && !fi.IsDir() {
-			return p
-		}
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			return ""
-		}
-		dir = parent
-	}
+	return path
 }
 
 // readConfig reads only the addresses from an Echo config. It doesn't
