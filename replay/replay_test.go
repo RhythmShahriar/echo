@@ -533,3 +533,28 @@ func TestSecretReady(t *testing.T) {
 		t.Errorf("secret set: %v", err)
 	}
 }
+
+// TestProductionRefused: a live site is refused even when its name
+// resolves to a private address (a hosts-file entry or a VPN) or it's
+// also listed as staging, and whatever the case or the subdomain.
+func TestProductionRefused(t *testing.T) {
+	srv, got := receiver(t, stripeSecret, verifyStripe)
+	_, port, _ := strings.Cut(srv.Listener.Addr().String(), ":")
+	o := opts(stripeSecret)
+	o.Resolver = staticResolver{"shop.example": {"127.0.0.1"}, "www.shop.example": {"127.0.0.1"}, "staging.test": {"127.0.0.1"}}
+	o.Production = []string{"shop.example"}
+	for _, target := range []string{"http://shop.example:" + port + "/hook", "http://WWW.Shop.Example:" + port + "/hook"} {
+		o.Staging = []string{target}
+		_, err := Send(context.Background(), mustLoad(t, "invoice.paid"), Target{URL: target}, o)
+		if !errors.Is(err, ErrRefused) || !strings.Contains(err.Error(), `matches "shop.example" under production`) {
+			t.Errorf("%s: %v", target, err)
+		}
+	}
+	if len(got.reqs) != 0 {
+		t.Fatalf("%d requests reached a production site", len(got.reqs))
+	}
+	o.Staging = nil
+	if res, err := Send(context.Background(), mustLoad(t, "invoice.paid"), Target{URL: "http://staging.test:" + port + "/hook"}, o); err != nil || res.Status != 200 {
+		t.Errorf("a site not under production: %+v %v", res, err)
+	}
+}

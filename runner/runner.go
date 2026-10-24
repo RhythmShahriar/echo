@@ -61,6 +61,9 @@ var (
 	ErrUnknownAction = errors.New("no action")
 )
 
+// ErrProduction means the config's site is a live site.
+var ErrProduction = errors.New("refusing to run")
+
 // Select returns the configured actions to run: all of them, or those
 // named in only (case-insensitive, in the config's order). Every name in
 // only must match an action.
@@ -89,14 +92,18 @@ func Select(cfg config.Config, only []string) ([]config.Action, error) {
 	return out, nil
 }
 
-// Run runs every action and returns the run.
+// Run runs every action and returns the run. A site listed under
+// production is refused (ErrProduction) before anything is sent.
 func Run(ctx context.Context, o Options) (*model.Run, error) {
 	start := time.Now()
+	cfg := o.Config
+	if r := cfg.ProductionReason(cfg.Site); cfg.Site != "" && r != "" {
+		return nil, fmt.Errorf("%w against %s: %s; actions only run against staging and local sites", ErrProduction, cfg.Site, r)
+	}
 	h, err := o.Client.Health(ctx)
 	if err != nil {
 		return nil, err
 	}
-	cfg := o.Config
 	actions, err := Select(cfg, o.Only)
 	if err != nil {
 		return nil, err
@@ -134,7 +141,7 @@ func runAction(ctx context.Context, o Options, run *model.Run, a config.Action, 
 	runID := run.ID
 	act := model.Action{ID: ActionID(a.Name), Label: a.Name, Kind: kind(a)}
 	start := time.Now()
-	if err := refuse(a, run.Mode); err != nil {
+	if err := refuse(cfg, a, run.Mode, fake); err != nil {
 		act.Error = err.Error()
 		return act
 	}
@@ -191,11 +198,22 @@ func kind(a config.Action) string {
 	return ""
 }
 
-// refuse stops an action that must not run, before anything is sent.
-// A replay outside seal mode would let the site's reactions (order
-// emails, SMS, CRM calls) reach real people, so it's refused the way
-// `rhythm echo replay` refuses it.
-func refuse(a config.Action, mode string) error {
+// refuse stops an action that must not run, before anything is sent: one
+// aimed at a site listed under production, and a replay outside seal
+// mode, which would let the site's reactions (order emails, SMS, CRM
+// calls) reach real people. Replays are refused the way `rhythm echo
+// replay` refuses them.
+func refuse(cfg config.Config, a config.Action, mode string, fake *fakeData) error {
+	target := ""
+	switch {
+	case a.HTTP != nil:
+		target = resolve(cfg.Site, fake.expand(a.HTTP.URL))
+	case a.Replay != nil:
+		target = resolve(cfg.Site, a.Replay.To)
+	}
+	if r := cfg.ProductionReason(target); target != "" && r != "" {
+		return fmt.Errorf("refusing to run against %s: %s", target, r)
+	}
 	if a.Replay != nil && mode != catcher.Seal {
 		return fmt.Errorf("Echo is in %s mode; replays only run sealed, so the site's reactions can't reach anyone (rhythm echo up --seal)", mode) //nolint:staticcheck // "Echo" is a name, so it stays capitalized
 	}
@@ -248,10 +266,7 @@ func noun(ch model.Channel) string {
 
 func doHTTP(ctx context.Context, o Options, a config.Action, runValue string, fake *fakeData) error {
 	h := a.HTTP
-	target := resolve(o.Config.Site, fake.expand(h.URL))
-	if o.Config.IsProduction(target) {
-		return fmt.Errorf("refusing to run against %s: it's listed under production", target)
-	}
+	target := resolve(o.Config.Site, fake.expand(h.URL)) // refuse checked it isn't production
 	method := strings.ToUpper(h.Method)
 	if method == "" {
 		method = http.MethodGet

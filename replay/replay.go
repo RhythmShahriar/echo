@@ -6,9 +6,10 @@
 // what the site sends in response: "payment_intent.succeeded → order email
 // + SMS + CRM call".
 //
-// Safety is enforced here, not left to callers: the target must be a
-// configured staging URL or resolve only to loopback or private addresses
-// (checked again at dial time, so DNS can't change the answer), live keys
+// Safety is enforced here, not left to callers: a target listed under
+// production is refused, and any other must be a configured staging URL
+// or resolve only to loopback or private addresses (checked again at
+// dial time, so DNS can't change the answer), live keys
 // anywhere in reach refuse the send, secrets must look like test secrets,
 // redirects aren't followed and no proxy is used.
 package replay
@@ -30,6 +31,7 @@ import (
 
 	"github.com/RhythmShahriar/rhythm/kit/secrets"
 
+	"github.com/RhythmShahriar/echo/config"
 	"github.com/RhythmShahriar/echo/model"
 )
 
@@ -60,6 +62,10 @@ type Options struct {
 	// Staging lists URL prefixes from config that may be targeted even
 	// when they resolve to public addresses.
 	Staging []string
+	// Production lists live sites from config (URLs or hosts, see
+	// config.ProductionEntry). A target under one is refused even when
+	// it's also listed as staging or resolves to a private address.
+	Production []string
 	// Env is the environment secrets are read from and scanned for live
 	// keys; nil means os.Environ().
 	Env []string
@@ -132,6 +138,9 @@ func Send(ctx context.Context, e Event, t Target, o Options) (Result, error) {
 		return res, fmt.Errorf("target %q: want an http:// or https:// URL", t.URL)
 	}
 	res.URL = secrets.Redact(u.String())
+	if e := config.ProductionEntry(o.Production, t.URL); e != "" {
+		return res, fmt.Errorf("%w: %s matches %q under production; replays never go to a live site", ErrRefused, res.URL, e)
+	}
 	r := o.Resolver
 	if r == nil {
 		r = net.DefaultResolver

@@ -115,16 +115,46 @@ func TestSnapshotThenCompare(t *testing.T) {
 func TestProductionRefused(t *testing.T) {
 	srv := httptest.NewServer(catcher.NewServer(catcher.NewInbox(10), catcher.Config{}))
 	defer srv.Close()
+	var hits atomic.Int32
+	target := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { hits.Add(1) }))
+	defer target.Close()
 	cfg := config.Default()
-	cfg.Site, cfg.Production = "https://shop.com", []string{"https://shop.com"}
-	cfg.Quiet, cfg.Timeout = config.Duration{Duration: 100 * time.Millisecond}, config.Duration{Duration: time.Second}
+	cfg.Production = []string{"shop.example"}
+	cfg.Quiet, cfg.Timeout = config.Duration{Duration: 50 * time.Millisecond}, config.Duration{Duration: time.Second}
+
+	// The site itself: nothing runs, not even the health check.
+	cfg.Site = "HTTPS://WWW.Shop.Example:443/"
 	cfg.Actions = []config.Action{{Name: "Order", HTTP: &config.HTTPAction{URL: "/checkout"}}}
-	run, err := Run(context.Background(), Options{Config: cfg, Client: client.New(srv.URL, "")})
+	_, err := Run(context.Background(), Options{Config: cfg, Client: client.New("http://127.0.0.1:1", "")})
+	if !errors.Is(err, ErrProduction) || err.Error() !=
+		`refusing to run against HTTPS://WWW.Shop.Example:443/: it matches "shop.example" under production; actions only run against staging and local sites` {
+		t.Errorf("production site: %v", err)
+	}
+
+	// An action or replay aimed at production from a staging site.
+	cfg.Site = target.URL
+	replayed := false
+	cfg.Actions = []config.Action{
+		{Name: "Order", HTTP: &config.HTTPAction{URL: "http://shop.example/checkout"}},
+		{Name: "Paid", Replay: &config.ReplayAction{Event: "payment_intent.succeeded", To: "https://api.shop.example/hook"}},
+		{Name: "Local", HTTP: &config.HTTPAction{URL: "/ok"}},
+	}
+	run, err := Run(context.Background(), Options{Config: cfg, Client: client.New(srv.URL, ""),
+		Replay: func(context.Context, config.ReplayAction, string, string) error { replayed = true; return nil }})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(run.Actions[0].Error, "production") {
-		t.Errorf("error = %q", run.Actions[0].Error)
+	for i, want := range []string{
+		`refusing to run against http://shop.example/checkout: it matches "shop.example" under production`,
+		`refusing to run against https://api.shop.example/hook: it matches "shop.example" under production`,
+		"",
+	} {
+		if run.Actions[i].Error != want {
+			t.Errorf("%s: error = %q, want %q", run.Actions[i].Label, run.Actions[i].Error, want)
+		}
+	}
+	if replayed || hits.Load() != 1 {
+		t.Errorf("replayed %v, %d requests to the staging site", replayed, hits.Load())
 	}
 }
 

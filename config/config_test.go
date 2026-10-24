@@ -61,9 +61,39 @@ func TestErrors(t *testing.T) {
 }
 
 func TestIsProduction(t *testing.T) {
-	c := Config{Production: []string{"https://shop.com"}}
-	if !c.IsProduction("https://shop.com/checkout") || c.IsProduction("https://staging.shop.com/") {
-		t.Error("IsProduction")
+	c := Config{Production: []string{"https://shop.example", "admin.other.test:8443", "https://multi.test/live"}}
+	for raw, want := range map[string]bool{
+		"https://shop.example/checkout":     true,
+		"HTTP://shop.example/":              true, // the scheme doesn't make it another site
+		"https://SHOP.example":              true,
+		"https://www.shop.example":          true,
+		"https://shop.example:443/":         true,
+		"http://shop.example:80":            true,
+		"https://shop.example.:8080/x":      true, // an entry without a port covers every port
+		"shop.example":                      true,
+		"https://admin.other.test:8443/wp":  true,
+		"https://multi.test/LIVE/cart":      true,
+		"https://shop.example.staging.test": false,
+		"https://myshop.example":            false,
+		"https://staging-shop.example":      false,
+		"https://admin.other.test/":         false, // the entry names a port
+		"https://multi.test/staging":        false,
+		"https://multi.test/lively":         false,
+		"":                                  false,
+		"/relative":                         false,
+	} {
+		if got := c.IsProduction(raw); got != want {
+			t.Errorf("IsProduction(%q) = %v, want %v", raw, got, want)
+		}
+	}
+	if r := c.ProductionReason("https://www.shop.example/"); r != `it matches "https://shop.example" under production` {
+		t.Errorf("reason = %q", r)
+	}
+	if r := c.ProductionReason("https://staging.test/"); r != "" {
+		t.Errorf("reason for staging = %q", r)
+	}
+	if _, err := Load(write(t, "production:\n  - shop.example\n  - \"https://\"\n")); err == nil || !strings.Contains(err.Error(), `line 3: production: "https://" isn't a URL or host name`) {
+		t.Errorf("an entry without a host: %v", err)
 	}
 }
 

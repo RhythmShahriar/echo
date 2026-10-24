@@ -43,7 +43,7 @@ type Config struct {
 	Allow           []string         `yaml:"allow,omitempty"`            // hosts reachable even when sealed: ["api.stripe.com", "*.sandbox.paypal.com"]
 	AllowRecipients []string         `yaml:"allow_recipients,omitempty"` // addresses or numbers that may really be messaged in observe mode
 	Staging         []string         `yaml:"staging,omitempty"`          // URL prefixes that are staging: replay only sends to these (and local addresses)
-	Production      []string         `yaml:"production,omitempty"`       // URL prefixes that are live sites: actions refuse them
+	Production      []string         `yaml:"production,omitempty"`       // live sites, as URLs or hosts (subdomains count): actions and replays refuse them
 	Flush           []string         `yaml:"flush,omitempty"`            // commands run after each action so async senders send now
 	Quiet           Duration         `yaml:"quiet,omitempty"`            // how long nothing must arrive before an action counts as done; default 2s
 	Timeout         Duration         `yaml:"timeout,omitempty"`          // longest wait per action; default 30s
@@ -328,6 +328,11 @@ func (c Config) Validate() error {
 	if c.Mode != "seal" && c.Mode != "observe" {
 		return fmt.Errorf("%smode: %q isn't seal or observe", c.at("mode"), c.Mode)
 	}
+	for i, p := range c.Production {
+		if entryURL(p) == nil {
+			return fmt.Errorf("%sproduction: %q isn't a URL or host name", c.at("production", i), p)
+		}
+	}
 	seen := map[string]bool{}
 	for i, a := range c.Actions {
 		n := 0
@@ -482,9 +487,72 @@ func (c Config) at(path ...any) string {
 	return ""
 }
 
-// IsProduction reports whether url is a live site.
-func (c Config) IsProduction(url string) bool {
-	return slices.ContainsFunc(c.Production, func(p string) bool { return p != "" && strings.HasPrefix(url, p) })
+// IsProduction reports whether raw is a live site listed under
+// production.
+func (c Config) IsProduction(raw string) bool { return ProductionEntry(c.Production, raw) != "" }
+
+// ProductionReason says why raw counts as a live site, for messages such
+// as "refusing to run against <url>: <reason>", or returns "" when it
+// doesn't.
+func (c Config) ProductionReason(raw string) string {
+	e := ProductionEntry(c.Production, raw)
+	if e == "" {
+		return ""
+	}
+	return fmt.Sprintf("it matches %q under production", e)
+}
+
+// ProductionEntry returns the entry of production that raw falls under,
+// or "". Entries are URLs or bare host names. A match ignores the scheme
+// and the case of the host, treats :80 and :443 as no port, covers
+// subdomains (www.shop.example is under shop.example) and needs a
+// listed port or path only when the entry names one. The comparison is
+// deliberately loose: refusing a staging URL by mistake costs a config
+// edit, while missing a live one sends real mail.
+func ProductionEntry(production []string, raw string) string {
+	t := entryURL(raw)
+	if t == nil {
+		return ""
+	}
+	for _, e := range production {
+		p := entryURL(e)
+		switch {
+		case p == nil:
+		case t.host != p.host && !strings.HasSuffix(t.host, "."+p.host):
+		case p.port != "" && t.port != p.port:
+		case p.path != "" && t.path != p.path && !strings.HasPrefix(t.path, p.path+"/"):
+		default:
+			return e
+		}
+	}
+	return ""
+}
+
+type site struct{ host, port, path string }
+
+// entryURL reads a production entry or a target into a comparable form,
+// or returns nil when it has no host.
+func entryURL(raw string) *site {
+	s := strings.TrimSpace(raw)
+	if s == "" {
+		return nil
+	}
+	if !strings.Contains(s, "://") {
+		s = "https://" + strings.TrimPrefix(s, "//")
+	}
+	u, err := url.Parse(s)
+	if err != nil {
+		return nil
+	}
+	host := strings.TrimSuffix(strings.TrimPrefix(strings.ToLower(u.Hostname()), "*."), ".")
+	if host == "" {
+		return nil
+	}
+	port := u.Port()
+	if port == "80" || port == "443" {
+		port = ""
+	}
+	return &site{host: host, port: port, path: strings.ToLower(strings.TrimSuffix(u.Path, "/"))}
 }
 
 // Path is the default config file location.
@@ -505,7 +573,7 @@ mitm: false             # decrypt HTTPS through the proxy (trust the CA from: rh
 allow: []               # hosts reachable even when sealed, e.g. ["api.stripe.com"] (test-mode keys only)
 allow_recipients: []    # in observe mode, recipients you may really message, e.g. ["*@yourcompany.com"]
 staging: []             # URL prefixes that are staging; replay only sends to these and local addresses
-production: []          # URL prefixes of live sites; actions refuse them
+production: []          # live sites, e.g. ["shop.com"] (subdomains too); actions and replays refuse them
 
 flush: []               # run after each action so queued mail and webhooks go out now, e.g.
                         #   ["wp cron event run --due-now", "wp action-scheduler run"]
