@@ -73,14 +73,21 @@ type Options struct {
 // Proxy is an http.Handler that speaks the forward-proxy protocol.
 type Proxy struct {
 	opt   Options
+	outer *http.Server // serves proxy clients (Serve)
 	inner *http.Server // serves requests decrypted from intercepted tunnels
 	conns *connListener
 	once  sync.Once
+
+	// Tunnels are hijacked, so neither server can close them: they're
+	// kept here for Shutdown and Close.
+	mu       sync.Mutex
+	hijacked map[net.Conn]struct{}
+	closed   bool
 }
 
 type targetKey struct{}
 
-// New returns a proxy. Call Close to stop the interception server.
+// New returns a proxy. Call Shutdown or Close to stop it.
 func New(opt Options) (*Proxy, error) {
 	if opt.Server == nil {
 		return nil, errors.New("proxy: Options.Server is required")
@@ -112,7 +119,13 @@ func New(opt Options) (*Proxy, error) {
 			ForceAttemptHTTP2:     true,
 		}
 	}
-	p := &Proxy{opt: opt, conns: newConnListener()}
+	p := &Proxy{opt: opt, conns: newConnListener(), hijacked: map[net.Conn]struct{}{}}
+	p.outer = &http.Server{
+		Handler:           p,
+		ReadHeaderTimeout: 30 * time.Second,
+		IdleTimeout:       90 * time.Second,
+		ErrorLog:          slog.NewLogLogger(opt.Log.Handler(), slog.LevelDebug),
+	}
 	p.inner = &http.Server{
 		Handler:           http.HandlerFunc(p.serveIntercepted),
 		ReadHeaderTimeout: 30 * time.Second,
@@ -128,16 +141,62 @@ func New(opt Options) (*Proxy, error) {
 	return p, nil
 }
 
-// Close stops serving intercepted connections.
-func (p *Proxy) Close() error {
+// Shutdown stops the proxy gracefully: it stops accepting clients, waits
+// (until ctx is done) for requests in flight, then closes open tunnels.
+// When ctx ends first it closes everything at once, like Close.
+func (p *Proxy) Shutdown(ctx context.Context) error {
+	err := p.outer.Shutdown(ctx)
 	_ = p.conns.Close()
-	return p.inner.Close()
+	err = errors.Join(err, p.inner.Shutdown(ctx))
+	p.closeHijacked()
+	if err != nil {
+		_ = p.Close()
+	}
+	return err
+}
+
+// Close stops the proxy at once: listeners, requests in flight, tunnels.
+func (p *Proxy) Close() error {
+	err := p.outer.Close()
+	_ = p.conns.Close()
+	err = errors.Join(err, p.inner.Close())
+	p.closeHijacked()
+	return err
+}
+
+// track keeps a hijacked connection for Shutdown and Close; it reports
+// false (and closes c) once the proxy is stopping.
+func (p *Proxy) track(c net.Conn) bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.closed {
+		_ = c.Close()
+		return false
+	}
+	p.hijacked[c] = struct{}{}
+	return true
+}
+
+func (p *Proxy) untrack(c net.Conn) {
+	p.mu.Lock()
+	delete(p.hijacked, c)
+	p.mu.Unlock()
+}
+
+func (p *Proxy) closeHijacked() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.closed = true
+	for c := range p.hijacked {
+		_ = c.Close()
+	}
+	clear(p.hijacked)
 }
 
 // ListenAndServe listens on addr. Beyond loopback it insists on a token,
 // so the proxy is never an open relay.
 func (p *Proxy) ListenAndServe(addr string) error {
-	if !isLoopbackAddr(addr) && p.opt.Token == "" {
+	if !IsLoopbackAddr(addr) && p.opt.Token == "" {
 		return fmt.Errorf("proxy: listening on %s (beyond loopback) needs a token", addr)
 	}
 	l, err := net.Listen("tcp", addr)
@@ -147,15 +206,10 @@ func (p *Proxy) ListenAndServe(addr string) error {
 	return p.Serve(l)
 }
 
-// Serve accepts proxy clients on l.
+// Serve accepts proxy clients on l until Shutdown or Close, and then
+// returns http.ErrServerClosed.
 func (p *Proxy) Serve(l net.Listener) error {
-	srv := &http.Server{
-		Handler:           p,
-		ReadHeaderTimeout: 30 * time.Second,
-		IdleTimeout:       90 * time.Second,
-		ErrorLog:          slog.NewLogLogger(p.opt.Log.Handler(), slog.LevelDebug),
-	}
-	return srv.Serve(l)
+	return p.outer.Serve(l)
 }
 
 func (p *Proxy) startInner() {
@@ -292,11 +346,17 @@ func (p *Proxy) tunnel(w http.ResponseWriter, r *http.Request, target, id, run s
 		http.Error(w, "rhythm-echo proxy: "+err.Error(), http.StatusBadGateway)
 		return
 	}
-	client, buf, err := hijack(w)
+	if !p.track(up) {
+		http.Error(w, "rhythm-echo proxy: shutting down", http.StatusServiceUnavailable)
+		return
+	}
+	defer p.untrack(up)
+	client, buf, err := p.hijack(w)
 	if err != nil {
 		_ = up.Close()
 		return
 	}
+	defer p.untrack(client)
 	rec(http.StatusOK, "")
 	p.opt.Log.Debug("tunnel", "host", host)
 	_, _ = io.WriteString(client, "HTTP/1.1 200 Connection established\r\n\r\n")
@@ -312,10 +372,12 @@ func (p *Proxy) tunnel(w http.ResponseWriter, r *http.Request, target, id, run s
 // intercept terminates TLS with a leaf for host and hands the connection
 // to the inner HTTP/1.1 server, which supports keep-alive.
 func (p *Proxy) intercept(w http.ResponseWriter, r *http.Request, target, host string) {
-	client, buf, err := hijack(w)
+	client, buf, err := p.hijack(w)
 	if err != nil {
 		return
 	}
+	// Tracked through the handshake only: the inner server owns it after.
+	defer p.untrack(client)
 	if _, err := io.WriteString(client, "HTTP/1.1 200 Connection established\r\n\r\n"); err != nil {
 		_ = client.Close()
 		return
@@ -599,11 +661,16 @@ func (c *capBuffer) Write(b []byte) (int, error) {
 	return len(b), nil
 }
 
-func hijack(w http.ResponseWriter) (net.Conn, *bufio.Reader, error) {
+// hijack takes over the client connection and tracks it; the caller
+// untracks it when done.
+func (p *Proxy) hijack(w http.ResponseWriter) (net.Conn, *bufio.Reader, error) {
 	c, rw, err := http.NewResponseController(w).Hijack()
 	if err != nil {
 		http.Error(w, "rhythm-echo proxy: can't take over the connection", http.StatusInternalServerError)
 		return nil, nil, err
+	}
+	if !p.track(c) {
+		return nil, nil, net.ErrClosed
 	}
 	_ = c.SetDeadline(time.Time{}) // the server's header timeout no longer applies
 	return c, rw.Reader, nil
@@ -617,7 +684,9 @@ func closeWrite(c net.Conn) {
 	_ = c.Close()
 }
 
-func isLoopbackAddr(addr string) bool {
+// IsLoopbackAddr reports whether a host:port listen address is reachable
+// from this machine only: localhost or a loopback IP.
+func IsLoopbackAddr(addr string) bool {
 	host, _, err := net.SplitHostPort(addr)
 	if err != nil {
 		return false

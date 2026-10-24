@@ -7,6 +7,7 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"errors"
 	"io"
 	"net"
 	"net/http"
@@ -438,5 +439,69 @@ func TestAllowedPaymentHostIsInterceptedWithMITM(t *testing.T) {
 	}
 	if ms := h.messages(t, 1); len(ms) != 1 || ms[0].Provider != "stripe" || ms[0].Status != model.Blocked {
 		t.Errorf("messages = %+v", ms)
+	}
+}
+
+// TestShutdownStopsListenerAndTunnels: after Shutdown the port refuses
+// connections and an open tunnel is closed.
+func TestShutdownStopsListenerAndTunnels(t *testing.T) {
+	up, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = up.Close() }()
+	go func() {
+		for {
+			c, err := up.Accept()
+			if err != nil {
+				return
+			}
+			go func() { _, _ = io.Copy(c, c); _ = c.Close() }() // echo server
+		}
+	}()
+
+	p, err := New(Options{Server: catcher.NewServer(catcher.NewInbox(10), catcher.Config{Mode: catcher.Observe})})
+	if err != nil {
+		t.Fatal(err)
+	}
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	served := make(chan error, 1)
+	go func() { served <- p.Serve(l) }()
+
+	conn, err := net.Dial("tcp", l.Addr().String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = conn.Close() }()
+	_ = conn.SetDeadline(time.Now().Add(5 * time.Second))
+	_, _ = io.WriteString(conn, "CONNECT "+up.Addr().String()+" HTTP/1.1\r\nHost: "+up.Addr().String()+"\r\n\r\n")
+	br := bufioReader(conn)
+	resp, err := http.ReadResponse(br, &http.Request{Method: http.MethodConnect}) //nolint:bodyclose // a CONNECT answer has no body; the conn is the tunnel
+	if err != nil || resp.StatusCode != http.StatusOK {
+		t.Fatalf("CONNECT: %v %v", resp, err)
+	}
+	_, _ = io.WriteString(conn, "ping")
+	b := make([]byte, 4)
+	if _, err := io.ReadFull(br, b); err != nil || string(b) != "ping" {
+		t.Fatalf("tunnel answered %q, %v", b, err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	if err := p.Shutdown(ctx); err != nil {
+		t.Fatalf("Shutdown: %v", err)
+	}
+	if err := <-served; !errors.Is(err, http.ErrServerClosed) {
+		t.Errorf("Serve returned %v", err)
+	}
+	if c, err := net.DialTimeout("tcp", l.Addr().String(), time.Second); err == nil {
+		_ = c.Close()
+		t.Error("the proxy port still accepts connections")
+	}
+	if _, err := br.ReadByte(); err == nil {
+		t.Error("the tunnel is still open")
 	}
 }

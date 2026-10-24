@@ -19,6 +19,7 @@ import (
 	"github.com/RhythmShahriar/echo/catcher"
 	"github.com/RhythmShahriar/echo/check"
 	"github.com/RhythmShahriar/echo/model"
+	"github.com/RhythmShahriar/echo/proxy"
 	"github.com/RhythmShahriar/echo/report"
 	"github.com/RhythmShahriar/echo/wire"
 )
@@ -35,20 +36,62 @@ func cmdUp(s *session) int {
 	if smtpOn && !loopback(cfg.SMTP) && token == "" {
 		return s.fail(usageErr("--smtp %s is reachable from other machines; set --token (or RHYTHM_ECHO_TOKEN): the sink then asks for it as the SMTP password", cfg.SMTP))
 	}
-	if cfg.Proxy != "" && cfg.Proxy != "off" && !loopback(cfg.Proxy) && token == "" {
+	proxyOn := cfg.Proxy != "" && cfg.Proxy != "off"
+	if proxyOn && !loopback(cfg.Proxy) && token == "" {
 		return s.fail(usageErr("--proxy %s is reachable from other machines; set --token (or RHYTHM_ECHO_TOKEN) so it isn't an open relay", cfg.Proxy))
 	}
-	inbox := catcher.NewInbox(10000)
-	srv := catcher.NewServer(inbox, catcher.Config{Mode: cfg.Mode, Allow: cfg.Allow, Token: token, Version: version})
-	inbox.OnAdd(newLiveLog(s.view).add)
 
-	api := &http.Server{Addr: cfg.Listen, Handler: upHandler(upRoutes(srv, inbox, cfg.Mode), token), ReadHeaderTimeout: 10 * time.Second}
+	// Every port is taken before anything is printed, so a port in use
+	// fails with only its error, and whatever was started is stopped again
+	// (in reverse) on every way out.
+	var stack cleanups
+	defer stack.run()
 	ln, err := net.Listen("tcp", cfg.Listen)
 	if err != nil {
 		return s.fail(fmt.Errorf("listening on %s: %w (is Echo already running? see: rhythm echo doctor)", cfg.Listen, err))
 	}
+	stack.push(func(context.Context) { _ = ln.Close() })
+	var sl, pl net.Listener
+	if smtpOn {
+		if sl, err = net.Listen("tcp", cfg.SMTP); err != nil {
+			return s.fail(fmt.Errorf("SMTP on %s: %w", cfg.SMTP, err))
+		}
+		stack.push(func(context.Context) { _ = sl.Close() })
+	}
+	if proxyOn {
+		if pl, err = net.Listen("tcp", cfg.Proxy); err != nil {
+			return s.fail(fmt.Errorf("proxy on %s: %w", cfg.Proxy, err))
+		}
+		stack.push(func(context.Context) { _ = pl.Close() })
+	}
+
+	inbox := catcher.NewInbox(10000)
+	srv := catcher.NewServer(inbox, catcher.Config{Mode: cfg.Mode, Allow: cfg.Allow, Token: token, Version: version})
+	inbox.OnAdd(newLiveLog(s.view).add)
 	errs := make(chan error, 3)
+	api := &http.Server{Addr: cfg.Listen, Handler: upHandler(upRoutes(srv, inbox, cfg.Mode), token), ReadHeaderTimeout: 10 * time.Second}
 	go func() { errs <- api.Serve(ln) }()
+	stack.push(func(ctx context.Context) { _ = api.Shutdown(ctx) })
+	smtpLine := ""
+	if sl != nil {
+		sink := catcher.NewSMTP(srv, cfg.SMTP)
+		smtpLine = cfg.SMTP + "  (point a mailer or sendmail_path here)"
+		if !loopback(cfg.SMTP) {
+			sink.Backend = tokenBackend{inner: sink.Backend, token: token}
+			smtpLine = cfg.SMTP + "  (log in with any username and the token as the password)"
+		}
+		go func() { errs <- sink.Serve(sl) }()
+		stack.push(func(context.Context) { _ = sink.Close() })
+	}
+	proxyLine := ""
+	if pl != nil {
+		line, stop, err := startProxy(s, srv, pl)
+		if err != nil {
+			return s.fail(err)
+		}
+		proxyLine = line
+		stack.push(stop)
+	}
 
 	s.start("this machine")
 	s.view.Step("Mode", modeLine(cfg.Mode))
@@ -57,25 +100,11 @@ func cmdUp(s *session) int {
 		apiLine = "http://" + cfg.Listen + "  (connectors post here; open /?token=<your token> once for the live view)"
 	}
 	s.view.Step("API", apiLine)
-	stopSMTP := func() {}
-	if smtpOn {
-		sl, err := net.Listen("tcp", cfg.SMTP)
-		if err != nil {
-			return s.fail(fmt.Errorf("SMTP on %s: %w", cfg.SMTP, err))
-		}
-		sink := catcher.NewSMTP(srv, cfg.SMTP)
-		line := cfg.SMTP + "  (point a mailer or sendmail_path here)"
-		if !loopback(cfg.SMTP) {
-			sink.Backend = tokenBackend{inner: sink.Backend, token: token}
-			line = cfg.SMTP + "  (log in with any username and the token as the password)"
-		}
-		go func() { errs <- sink.Serve(sl) }()
-		stopSMTP = func() { _ = sink.Close() }
-		s.view.Step("SMTP", line)
+	if smtpLine != "" {
+		s.view.Step("SMTP", smtpLine)
 	}
-	stopProxy, err := startProxy(s, srv)
-	if err != nil {
-		return s.fail(err)
+	if proxyLine != "" {
+		s.view.Step("Proxy", proxyLine)
 	}
 	if len(cfg.Allow) > 0 {
 		s.view.Step("Allowed", strings.Join(cfg.Allow, ", "))
@@ -91,15 +120,27 @@ func cmdUp(s *session) int {
 			return s.fail(err)
 		}
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
-	_ = api.Shutdown(ctx)
-	stopSMTP()
-	stopProxy()
+	stack.run()
 	if !s.o.quiet {
 		fmt.Fprintf(s.stderr, "\nStopped. Captured %s this session.\n", report.Tally(liveRun(inbox, cfg.Mode)))
 	}
 	return exitOK
+}
+
+// cleanups is a stack of stop functions, run last first.
+type cleanups []func(context.Context)
+
+func (c *cleanups) push(f func(context.Context)) { *c = append(*c, f) }
+
+// run stops everything pushed so far, giving graceful shutdowns 3 seconds
+// in all. It's safe to call again: the stack is empty after.
+func (c *cleanups) run() {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	for i := len(*c) - 1; i >= 0; i-- {
+		(*c)[i](ctx)
+	}
+	*c = nil
 }
 
 // upRoute is one route of up's API listener. upHandler puts every route
@@ -223,17 +264,8 @@ func modeLine(mode string) string {
 	return "seal: nothing leaves; Echo answers for every service"
 }
 
-func loopback(addr string) bool {
-	host, _, err := net.SplitHostPort(addr)
-	if err != nil {
-		return false
-	}
-	if host == "localhost" {
-		return true
-	}
-	ip := net.ParseIP(host)
-	return ip != nil && ip.IsLoopback()
-}
+// loopback reports whether a listen address stays on this machine.
+func loopback(addr string) bool { return proxy.IsLoopbackAddr(addr) }
 
 // liveRun groups the inbox into actions (by run and action, "Live" for
 // messages outside any action) so the HTML report can show it.

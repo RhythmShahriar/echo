@@ -20,28 +20,23 @@ import (
 	"github.com/RhythmShahriar/echo/sendmail"
 )
 
-// startProxy runs the HTTP(S) proxy for apps and SDKs that skip the
-// connectors, when --proxy (or proxy: in the config) is set.
-func startProxy(s *session, srv *catcher.Server) (func(), error) {
+// startProxy serves the HTTP(S) proxy on ln, for apps and SDKs that skip
+// the connectors (--proxy, or proxy: in the config). up binds ln with its
+// other listeners, so nothing is printed before every port is taken. It
+// returns the line up prints for the proxy and the proxy's shutdown.
+func startProxy(s *session, srv *catcher.Server, ln net.Listener) (string, func(context.Context), error) {
 	cfg := s.cfg
-	if cfg.Proxy == "" || cfg.Proxy == "off" {
-		return func() {}, nil
-	}
 	var ca *proxy.CA
 	if cfg.MITM {
 		var err error
 		if ca, err = proxy.LoadCA(""); err != nil {
-			return nil, fmt.Errorf("loading the proxy CA: %w", err)
+			return "", nil, fmt.Errorf("loading the proxy CA: %w", err)
 		}
 	}
 	p, err := proxy.New(proxy.Options{Server: srv, CA: ca, MITM: cfg.MITM, Allow: cfg.Allow, Token: s.echo.Token,
 		Log: slog.New(viewHandler{log: s.view.Log})})
 	if err != nil {
-		return nil, err
-	}
-	ln, err := net.Listen("tcp", cfg.Proxy)
-	if err != nil {
-		return nil, fmt.Errorf("proxy on %s: %w", cfg.Proxy, err)
+		return "", nil, err
 	}
 	go func() {
 		if err := p.Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) {
@@ -52,8 +47,12 @@ func startProxy(s *session, srv *catcher.Server) (func(), error) {
 	if cfg.MITM {
 		line += "; decrypting HTTPS, trust " + ca.CertPath
 	}
-	s.view.Step("Proxy", line)
-	return func() { _ = p.Close() }, nil
+	return line, stopProxy(p), nil
+}
+
+// stopProxy stops p: gracefully until ctx is done, then at once.
+func stopProxy(p *proxy.Proxy) func(context.Context) {
+	return func(ctx context.Context) { _ = p.Shutdown(ctx) }
 }
 
 // viewHandler shows the proxy's warnings (a refused payment tunnel) in
