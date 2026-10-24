@@ -234,6 +234,8 @@ func runVerdict(r *model.Run, counts map[model.Level]int) string {
 	switch {
 	case failed > 0:
 		return prefix + plural(failed, "action failed", "actions failed")
+	case counts[model.Error] > 0 && r.Mode == "check":
+		return prefix + "delivery has errors"
 	case counts[model.Error] > 0:
 		return prefix + "messages have errors"
 	case counts[model.Warning] > 0:

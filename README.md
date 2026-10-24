@@ -67,7 +67,7 @@ rhythm echo watch                                # see each message as it's sent
 | Stack | Connector | Catches |
 |---|---|---|
 | **WordPress** | one mu-plugin, written by `install` | every `wp_mail()` (beats FluentSMTP, Post SMTP), every `wp_remote_*()` call (SMS plugins, Woo webhooks, Slack, GA4, Meta CAPI, API mailers), and raw cURL SDKs through Echo's proxy |
-| **Laravel** | `composer require --dev rhythmsh/echo-laravel` | every mailer and transport, the `Http` client, Vonage and Slack notifications, queued jobs (the action follows them) |
+| **Laravel** | `composer require rhythmsh/echo-laravel` | every mailer and transport, the `Http` client, Vonage and Slack notifications, queued jobs (the action follows them) |
 | **Next.js · Node** | `npm i -D @rhythmsh/echo` + `instrumentation.ts` | `fetch` (Node and Edge), `http`/`https` (axios, SDKs), Nodemailer; built for Vercel previews too |
 | **Anything** | SMTP, `sendmail_path`, `HTTPS_PROXY` | mail and outbound HTTPS from any language, through Echo's SMTP sink and MITM proxy |
 

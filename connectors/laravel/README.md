@@ -8,7 +8,7 @@ The Laravel connector for [Rhythm Echo](https://github.com/RhythmShahriar/echo).
 Laravel 11, 12 and 13 on PHP 8.2+.
 
 ```sh
-composer require rhythmsh/echo-laravel        # inert in production, so staging can install it with --no-dev
+composer require rhythmsh/echo-laravel        # not --dev: staging deploys skip dev packages, and it is inert in production
 rhythm-echo up                               # Echo on 127.0.0.1:8025
 php artisan echo:status
 ```

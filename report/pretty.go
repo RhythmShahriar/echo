@@ -278,9 +278,15 @@ func (p *Pretty) run(r Result, hint string) {
 		if p.o.Quiet {
 			return
 		}
-		fmt.Fprintf(p.w, "\n%s - %s, %s, %s - %s, %s\n", capitalize(runVerdict(r.Run, counts)),
-			plural(counts[model.Error], "error", "errors"), plural(counts[model.Warning], "warning", "warnings"),
-			plural(counts[model.Notice], "notice", "notices"), plural(len(r.Run.Actions), "action", "actions"), Tally(r.Run))
+		levels := fmt.Sprintf("%s, %s, %s", plural(counts[model.Error], "error", "errors"),
+			plural(counts[model.Warning], "warning", "warnings"), plural(counts[model.Notice], "notice", "notices"))
+		if r.Run.Mode == "check" {
+			// check and headers read DNS and files; they run no actions.
+			fmt.Fprintf(p.w, "\n%s - %s\n", capitalize(runVerdict(r.Run, counts)), levels)
+		} else {
+			fmt.Fprintf(p.w, "\n%s - %s - %s, %s\n", capitalize(runVerdict(r.Run, counts)), levels,
+				plural(len(r.Run.Actions), "action", "actions"), Tally(r.Run))
+		}
 		p.notes(r.Run.Warnings)
 		if hint != "" {
 			fmt.Fprintln(p.w, hint)
@@ -318,8 +324,13 @@ func (p *Pretty) run(r Result, hint string) {
 		return
 	}
 	fmt.Fprintln(p.w, runPanel(r.Run, counts))
-	fmt.Fprintf(p.w, "  %s\n", muted.Render(fmt.Sprintf("%s · %s · %s · %s mode", plural(len(r.Run.Actions), "action", "actions"), Tally(r.Run),
-		(time.Duration(r.Run.Duration)*time.Millisecond).Round(time.Second), r.Run.Mode)))
+	took := (time.Duration(r.Run.Duration) * time.Millisecond).Round(time.Second)
+	if r.Run.Mode == "check" {
+		fmt.Fprintf(p.w, "  %s\n", muted.Render(fmt.Sprintf("checked in %s", took)))
+	} else {
+		fmt.Fprintf(p.w, "  %s\n", muted.Render(fmt.Sprintf("%s · %s · %s · %s mode", plural(len(r.Run.Actions), "action", "actions"), Tally(r.Run),
+			took, r.Run.Mode)))
+	}
 	p.notes(r.Run.Warnings)
 	if hint != "" {
 		fmt.Fprintf(p.w, "\n  %s %s\n", ui.Brand.Render("→"), muted.Render(hint))
