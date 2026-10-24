@@ -33,10 +33,14 @@ checksum:
 release:
   prerelease: auto
 
-# Keyless Sigstore signature over checksums.txt. Verify with:
+# Keyless Sigstore signature over checksums.txt. The Action checks it with
+# .github/scripts/verify-release.sh before it runs a download. By hand:
 #   cosign verify-blob --bundle checksums.txt.sigstore.json \
-#     --certificate-identity https://github.com/RhythmShahriar/.github/.github/workflows/release-go.yml@refs/heads/master \
+#     --certificate-identity-regexp '^https://github\.com/RhythmShahriar/\.github/\.github/workflows/release-go\.yml@' \
+#     --certificate-github-workflow-repository RhythmShahriar/echo \
 #     --certificate-oidc-issuer https://token.actions.githubusercontent.com checksums.txt
+# The identity ends in the ref release.yml calls the shared workflow by
+# (refs/heads/master for v1.0.0, a commit SHA since it is pinned).
 signs:
   - cmd: cosign
     artifacts: checksum

@@ -53,9 +53,12 @@ inputs:
     required: false
     default: ""
   version:
-    description: Echo version to install, e.g. 1.0.0. Default the latest release.
+    description: >
+      Echo version to install, e.g. 1.0.0, or "latest". Default: the Action's own release when it
+      is used by a release tag (RhythmShahriar/echo@v1.2.3), otherwise the latest release, with a
+      warning. Every download is checked against its cosign signature before it runs.
     required: false
-    default: latest
+    default: ""
   upload:
     description: Upload the HTML and JUnit reports as a workflow artifact.
     required: false
@@ -86,12 +89,27 @@ outputs:
 runs:
   using: composite
   steps:
+    - name: Install cosign
+      uses: sigstore/cosign-installer@d58896d6a1865668819e1d91763c7751a165e159 # v3.9.2
+
     - name: Install Echo
       shell: bash
       env:
         VERSION: ${{ inputs.version }}
+        ACTION_REF: ${{ github.action_ref }}
+        VERIFY: ${{ github.action_path }}/.github/scripts/verify-release.sh
       run: |
         set -euo pipefail
+        # The binary follows the Action: RhythmShahriar/echo@v1.2.3 runs Echo 1.2.3,
+        # so a new release can't change a pinned build.
+        if [ -z "$VERSION" ]; then
+          if [[ $ACTION_REF =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            VERSION=$ACTION_REF
+          else
+            VERSION=latest
+            echo "::warning::Installing the latest Echo release because this Action isn't used by a release tag. Use RhythmShahriar/echo@vX.Y.Z or set version so a new release can't change your build."
+          fi
+        fi
         case "$(uname -m)" in x86_64|amd64) arch=amd64 ;; aarch64|arm64) arch=arm64 ;; *) echo "unsupported CPU $(uname -m)"; exit 1 ;; esac
         os=$(uname -s | tr '[:upper:]' '[:lower:]')
         if [ "$VERSION" = latest ]; then
@@ -102,9 +120,10 @@ runs:
         dir="$RUNNER_TEMP/echo-bin"
         mkdir -p "$dir" && cd "$dir"
         archive="rhythm-echo_${os}_${arch}.tar.gz"
-        curl -fsSLO "$base/$archive"
-        curl -fsSLO "$base/checksums.txt"
-        grep " $archive\$" checksums.txt | sha256sum -c -
+        for f in "$archive" checksums.txt checksums.txt.sigstore.json; do
+          curl -fsSLO "$base/$f"
+        done
+        bash "$VERIFY" "$dir" "$archive"
         tar -xzf "$archive" rhythm-echo
         echo "$dir" >> "$GITHUB_PATH"
         ./rhythm-echo --version
@@ -215,7 +234,7 @@ runs:
 
     - name: Upload reports
       if: always() && inputs.mode != 'up' && inputs.upload == 'true' && steps.check.outputs.report != ''
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
       with:
         name: echo-report
         path: ${{ runner.temp }}/echo-report/

@@ -1,0 +1,75 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+# Runs the Action (uses: ./) the way a user's workflow does, against the
+# current Echo release.
+name: action-test
+on:
+  pull_request:
+    paths: [action.yml, .github/scripts/**, .github/workflows/action-test.yml, integrations/**]
+  push:
+    branches: [master]
+    paths: [action.yml, .github/scripts/**, .github/workflows/action-test.yml, integrations/**]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  # The Action installs and verifies the release, then starts Echo.
+  install:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: ./
+        id: echo
+        with:
+          mode: up
+      - name: Echo answers
+        run: |
+          rhythm-echo --version
+          curl -fsS "$RHYTHM_ECHO_URL/v1/health"
+          kill "$(cat "$RUNNER_TEMP/echo.pid")"
+
+  # A release whose checksums.txt or archive changed after signing must
+  # never install.
+  tampered:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: sigstore/cosign-installer@d58896d6a1865668819e1d91763c7751a165e159 # v3.9.2
+      - name: Download the latest release
+        run: |
+          mkdir -p "$RUNNER_TEMP/rel" && cd "$RUNNER_TEMP/rel"
+          for f in rhythm-echo_linux_amd64.tar.gz checksums.txt checksums.txt.sigstore.json; do
+            curl -fsSLO "https://github.com/RhythmShahriar/echo/releases/latest/download/$f"
+          done
+      - name: The untouched release verifies
+        run: bash .github/scripts/verify-release.sh "$RUNNER_TEMP/rel" rhythm-echo_linux_amd64.tar.gz
+      - name: A changed checksums.txt fails
+        run: |
+          d="$RUNNER_TEMP/sums" && cp -r "$RUNNER_TEMP/rel" "$d"
+          # Point the archive's line at a different archive's hash, as an
+          # attacker who replaced both files would.
+          sum=$(sha256sum /bin/sh | awk '{print $1}')
+          awk -v s="$sum" '$2 == "rhythm-echo_linux_amd64.tar.gz" {$1 = s} {print}' "$RUNNER_TEMP/rel/checksums.txt" > "$d/checksums.txt"
+          cmp -s "$RUNNER_TEMP/rel/checksums.txt" "$d/checksums.txt" && { echo "::error::the line to change is missing"; exit 1; }
+          if bash .github/scripts/verify-release.sh "$d" rhythm-echo_linux_amd64.tar.gz; then
+            echo "::error::a tampered checksums.txt verified"; exit 1
+          fi
+      - name: A changed archive fails
+        run: |
+          d="$RUNNER_TEMP/archive" && cp -r "$RUNNER_TEMP/rel" "$d"
+          printf 'x' >> "$d/rhythm-echo_linux_amd64.tar.gz"
+          if bash .github/scripts/verify-release.sh "$d" rhythm-echo_linux_amd64.tar.gz; then
+            echo "::error::a tampered archive verified"; exit 1
+          fi
+      - name: A missing signature fails
+        run: |
+          d="$RUNNER_TEMP/nosig" && cp -r "$RUNNER_TEMP/rel" "$d"
+          rm "$d/checksums.txt.sigstore.json"
+          if bash .github/scripts/verify-release.sh "$d" rhythm-echo_linux_amd64.tar.gz; then
+            echo "::error::a release without a signature verified"; exit 1
+          fi
