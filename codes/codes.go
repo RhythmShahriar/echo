@@ -141,11 +141,11 @@ var notCodeWords = []string{"zip", "postal", "post", "area", "country", "promo",
 
 // keywords name a one-time code, as whole words in lower case.
 // "one-time" and "two-factor" are two words each (see pairs).
-var keywords = []string{"code", "passcode", "otp", "pin", "verification", "verify", "2fa", "mfa"}
+var keywords = []string{"code", "passcode", "otp", "pin", "verification", "verify", "2fa", "mfa", "login", "signin"}
 
-// pairs are two-word keywords: the first word, then the second after one
-// space or hyphen.
-var pairs = map[string]string{"time": "one", "factor": "two"}
+// pairs are two-word keywords, by their second word: the first words it
+// may follow after one space or hyphen ("one-time", "sign in", "log in").
+var pairs = map[string][]string{"time": {"one"}, "factor": {"two"}, "in": {"sign", "log"}}
 
 // subjectLead is how far into the body a code counts when the subject
 // names one.
@@ -166,9 +166,10 @@ func find(s string, lead int) (codes []string, named bool) {
 				continue
 			}
 			kws = append(kws, w)
-		case pairs[word] != "" && i > 0:
+		case len(pairs[word]) > 0 && i > 0:
 			p := ws[i-1]
-			if w[0]-p[1] == 1 && strings.ContainsRune(" -", rune(s[p[1]])) && strings.EqualFold(s[p[0]:p[1]], pairs[word]) {
+			if w[0]-p[1] == 1 && strings.ContainsRune(" -", rune(s[p[1]])) &&
+				slices.ContainsFunc(pairs[word], func(first string) bool { return strings.EqualFold(s[p[0]:p[1]], first) }) {
 				kws = append(kws, [2]int{p[0], w[1]})
 			}
 		}

@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/RhythmShahriar/echo/check"
@@ -129,5 +130,21 @@ func TestInboxWithoutCheckKeepsIssues(t *testing.T) {
 	given := []model.Issue{{Check: "x/y"}}
 	if m := in.Add(model.Message{Issues: given}); len(m.Issues) != 1 {
 		t.Errorf("no check set, issues kept: %+v", m.Issues)
+	}
+}
+
+// TestSignInCodesAreMasked: a code named by "to sign in" or "to log in"
+// is masked in what the inbox keeps, as one named "code" is.
+func TestSignInCodesAreMasked(t *testing.T) {
+	s := NewServer(NewInbox(10), Config{})
+	srv := httptest.NewServer(s)
+	defer srv.Close()
+	for _, text := range []string{"Use 482913 to sign in.", "Enter 551203 to log in."} {
+		d := post(t, srv, wire.Capture{Version: 1, Kind: "email", Source: wire.Source{Via: "test"}, Email: &wire.Email{
+			From: "shop@shop.example", To: []string{"ann@example.com"}, Subject: "Welcome", Text: text}})
+		m := getMessage(t, srv, d.ID)
+		if strings.ContainsAny(m.Text, "0123456789") {
+			t.Errorf("%q is stored as %q", text, m.Text)
+		}
 	}
 }

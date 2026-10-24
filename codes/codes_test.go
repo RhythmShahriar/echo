@@ -34,7 +34,10 @@ func TestCodes(t *testing.T) {
 		// Negatives.
 		{"subject names it, order number", model.Message{Subject: "Your verification code", Text: "Your order 482913 is here."}, nil},
 		{"subject names it, far down", model.Message{Subject: "Your code", Text: strings.Repeat("Hello. ", 100) + "Meeting 482913."}, nil},
-		{"subject without a keyword", model.Message{Subject: "Welcome", Text: "Use 482913 to sign in."}, nil},
+		{"sign in names it", model.Message{Subject: "Welcome", Text: "Use 482913 to sign in."}, []string{"482913"}},
+		{"log in names it", model.Message{Subject: "Welcome", Text: "Enter 551203 to log in."}, []string{"551203"}},
+		{"login names it", model.Message{Subject: "Welcome", Text: "Your login: 731905"}, []string{"731905"}},
+		{"subject without a keyword", model.Message{Subject: "Welcome", Text: "Your order 482913 has shipped."}, nil},
 		{"no keyword", model.Message{Text: "Thanks! We received 482913 votes."}, nil},
 		{"order number", model.Message{Text: "Order #482913 is confirmed. Use the code below at checkout."}, nil},
 		{"order number without #", model.Message{Text: "Your verification for order 482913 is done."}, nil},
