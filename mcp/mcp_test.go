@@ -15,6 +15,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -346,6 +347,15 @@ func TestSession(t *testing.T) {
 		}
 		if acts, _ := res["actions"].([]any); len(acts) != 1 || acts[0].(map[string]any)["label"] != "Checkout" {
 			t.Errorf("run: %s", text)
+		}
+		// The run has its report.html, as a CLI run does, and only its
+		// owner may open the folder or the files.
+		dir, _ := res["dir"].(string)
+		fi, err := os.Stat(filepath.Join(dir, "report.html"))
+		if err != nil || fi.Size() == 0 {
+			t.Errorf("report.html in %q: %v", dir, err)
+		} else if di, err := os.Stat(dir); runtime.GOOS != "windows" && (err != nil || di.Mode().Perm() != 0o700 || fi.Mode().Perm() != 0o600) {
+			t.Errorf("modes: folder %v, report %v", di.Mode(), fi.Mode())
 		}
 		if _, text, isErr := ss.tool("run_action", map[string]any{"actions": []string{"refund"}}); !isErr || !strings.Contains(text, `"refund"`) {
 			t.Errorf("unknown action: %v %s", isErr, text)

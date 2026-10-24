@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"time"
@@ -18,6 +19,7 @@ import (
 	"github.com/RhythmShahriar/echo/client"
 	"github.com/RhythmShahriar/echo/dns"
 	"github.com/RhythmShahriar/echo/model"
+	"github.com/RhythmShahriar/echo/report"
 	"github.com/RhythmShahriar/echo/runner"
 	"github.com/RhythmShahriar/echo/store"
 )
@@ -441,9 +443,20 @@ func (s *Server) runActions(ctx context.Context, only []string) (any, error) {
 	if err := store.SaveRun(dir, r); err != nil {
 		return nil, err
 	}
+	saveReport(report.Result{Run: r, Dir: dir})
 	s.Store.ExcludeFromGit()
 	_ = s.Store.Prune(keepRuns)
 	return view(r, dir), err
+}
+
+// saveReport writes report.html beside run.json, as the CLI does, so a
+// run an agent started opens like any other. A failure costs only the
+// page, not the run.
+func saveReport(res report.Result) {
+	var b bytes.Buffer
+	if report.HTML(&b, res) == nil {
+		_ = os.WriteFile(filepath.Join(res.Dir, "report.html"), b.Bytes(), 0o600)
+	}
 }
 
 func (s *Server) snapshot(ctx context.Context, name string, only []string) (any, error) {
@@ -466,6 +479,7 @@ func (s *Server) snapshot(ctx context.Context, name string, only []string) (any,
 	if err := store.SaveRun(dir, r); err != nil {
 		return nil, err
 	}
+	saveReport(report.Result{Run: r, Dir: dir})
 	final, err := s.Store.Promote(dir, name)
 	if err == nil {
 		err = s.Store.SetLatest(name)
@@ -543,6 +557,7 @@ func (s *Server) compare(ctx context.Context, snapshot string, only []string) (a
 	if err := store.SaveComparison(dir, c); err != nil {
 		return nil, err
 	}
+	saveReport(report.Result{Run: after, Comparison: c, Dir: dir})
 	s.Store.ExcludeFromGit()
 	_ = s.Store.Prune(keepRuns)
 	v := comparisonView{Verdict: Verdict(c), Snapshot: before.Name, Counts: map[string]int{}, Changes: []changeView{},
