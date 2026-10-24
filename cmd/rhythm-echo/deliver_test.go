@@ -8,6 +8,7 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"io"
 	"net"
 	"net/http"
@@ -15,9 +16,11 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/RhythmShahriar/echo/catcher"
 	"github.com/RhythmShahriar/echo/client"
+	"github.com/RhythmShahriar/echo/model"
 	"github.com/RhythmShahriar/echo/wire"
 )
 
@@ -132,5 +135,104 @@ func TestCheckAndHeadersOptions(t *testing.T) {
 	}
 	if !strings.Contains(out, "Sent by: SendGrid") {
 		t.Errorf("headers:\n%s", out)
+	}
+}
+
+// blackHole is a DNS server on loopback that reads every query and never
+// answers, like a firewalled or crashed resolver.
+func blackHole(t *testing.T) string {
+	t.Helper()
+	pc, err := net.ListenPacket("udp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = pc.Close() })
+	go func() {
+		buf := make([]byte, 1500)
+		for {
+			if _, _, err := pc.ReadFrom(buf); err != nil {
+				return
+			}
+		}
+	}()
+	return pc.LocalAddr().String()
+}
+
+// closedPort is a loopback UDP port nothing listens on: queries to it
+// are refused at once.
+func closedPort(t *testing.T) string {
+	t.Helper()
+	pc, err := net.ListenPacket("udp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	addr := pc.LocalAddr().String()
+	_ = pc.Close()
+	return addr
+}
+
+func TestCheckUnreachableResolverExitsThree(t *testing.T) {
+	addr := blackHole(t)
+	start := time.Now()
+	// --fail-on none must not turn "nothing was checked" into a pass.
+	code, out, errOut := runCLI(t, "check", "shop.test", "--resolver", addr, "--fail-on", "none", "--plain")
+	took := time.Since(start)
+	if code != exitError {
+		t.Errorf("black hole: exit %d, want %d\n%s\n%s", code, exitError, out, errOut)
+	}
+	if took >= 16*time.Second {
+		t.Errorf("black hole took %s, want under 16s", took)
+	}
+	want := "rhythm echo: Could not reach the resolver " + addr
+	if !strings.Contains(errOut, want) || strings.Count(errOut, "rhythm echo:") != 1 || strings.Contains(errOut, "127.0.0.53") {
+		t.Errorf("want one error naming %s:\n%s", addr, errOut)
+	}
+	if strings.Contains(out, "lookup failed") || strings.Contains(out, "Records:") {
+		t.Errorf("per-record warnings hide the cause:\n%s", out)
+	}
+}
+
+func TestCheckRefusedResolverJSON(t *testing.T) {
+	addr := closedPort(t)
+	code, out, errOut := runCLI(t, "check", "shop.test", "--resolver", addr, "--json")
+	if code != exitError {
+		t.Fatalf("refused: exit %d\n%s\n%s", code, out, errOut)
+	}
+	var rep struct {
+		Unreachable bool          `json:"unreachable"`
+		Resolver    string        `json:"resolver"`
+		Issues      []model.Issue `json:"issues"`
+	}
+	if err := json.Unmarshal([]byte(out), &rep); err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	if !rep.Unreachable || rep.Resolver != addr || len(rep.Issues) != 1 || rep.Issues[0].Check != "dns/resolver" ||
+		!strings.Contains(rep.Issues[0].Fix, "at "+addr) {
+		t.Errorf("json: %+v", rep)
+	}
+	// A bad --fail-on is still the user's mistake, not the resolver's.
+	if code, _, _ := runCLI(t, "check", "shop.test", "--resolver", addr, "--fail-on", "broke"); code != exitUsage {
+		t.Errorf("bad --fail-on: exit %d", code)
+	}
+}
+
+func TestAnsweredLookups(t *testing.T) {
+	for _, tc := range []struct {
+		err  error
+		want bool
+	}{
+		{nil, true},
+		{&net.DNSError{Err: "no such host", IsNotFound: true}, true},
+		{&net.DNSError{Err: "server misbehaving", IsTemporary: true}, true},
+		{&net.DNSError{Err: "i/o timeout", IsTimeout: true}, false},
+		{&net.DNSError{Err: "read udp 127.0.0.1:1->127.0.0.1:2: read: connection refused", IsTemporary: true}, false},
+		{context.DeadlineExceeded, false},
+	} {
+		if got := answered(tc.err); got != tc.want {
+			t.Errorf("answered(%v) = %v", tc.err, got)
+		}
+	}
+	if got := lookupCause(&net.DNSError{Err: "dial udp 127.0.0.1:2: i/o timeout", Server: "127.0.0.53:53"}); got != "i/o timeout" {
+		t.Errorf("lookupCause: %q", got)
 	}
 }

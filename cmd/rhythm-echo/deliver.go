@@ -5,6 +5,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -13,6 +14,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/RhythmShahriar/echo/client"
@@ -79,13 +81,33 @@ func cmdCheck(s *session) int {
 			sender.SMTPHost = *host
 		}
 	}
-	ctx, cancel := context.WithTimeout(s.ctx, 60*time.Second)
+	if err := s.checkFailOn(false); err != nil {
+		return s.fail(err)
+	}
+	ctx, cancel := context.WithTimeout(s.ctx, dnsBudget)
 	defer cancel()
 	s.view.Header(version, domain)
 	if sender != nil && sender.Provider != "" {
 		s.view.Step("Sender", providerLabel(sender.Provider))
 	}
-	rep := dns.Check(ctx, domain, s.dnsOptions(sender))
+	opts, pr := s.dnsOptions(sender)
+	rep := dns.Check(ctx, domain, opts)
+	if s.ctx.Err() != nil {
+		return s.fail(s.ctx.Err())
+	}
+	if pr.unreachable() {
+		// Nothing was looked up, so the warnings each record gives
+		// would only hide the one cause. This is "couldn't run", not a
+		// finding, so --fail-on has no say in it.
+		issue := pr.issue()
+		rep.Issues = []model.Issue{issue}
+		if s.o.json {
+			_ = jsonOut(s, unreachableReport{Report: rep, Unreachable: true, Resolver: s.o.resolver})
+			return exitError
+		}
+		fmt.Fprintf(s.stderr, "rhythm echo: %s (%s)\n  %s\n", issue.Title, issue.Detail, issue.Fix)
+		return exitError
+	}
 	if s.o.json {
 		return jsonOut(s, rep)
 	}
@@ -93,16 +115,144 @@ func cmdCheck(s *session) int {
 	return s.issues(domain, rep.Issues)
 }
 
-// dnsOptions are the DNS check settings from --resolver and --mta-sts-fetch.
-func (s *session) dnsOptions(sender *dns.Sender) dns.Options {
+// dnsOptions are the DNS check settings from --resolver and
+// --mta-sts-fetch. Lookups go through the returned probe, which limits
+// each one and tells whether the resolver answered at all.
+func (s *session) dnsOptions(sender *dns.Sender) (dns.Options, *probe) {
 	opts := dns.Options{Sender: sender}
 	if s.o.mtaSTSFetch {
 		opts.HTTP = &http.Client{Timeout: 10 * time.Second}
 	}
+	var r dns.Resolver = dns.System
 	if s.o.resolver != "" {
-		opts.Resolver = customResolver(s.o.resolver)
+		r = customResolver(s.o.resolver)
 	}
-	return opts
+	pr := &probe{r: r, addr: s.o.resolver}
+	opts.Resolver = pr
+	return opts, pr
+}
+
+const (
+	// dnsQuery is how long one lookup may take. Go's default (5 s, two
+	// tries per server) let a dead resolver hold check for a minute.
+	dnsQuery = 3 * time.Second
+	// dnsBudget caps a whole check: a dead resolver ends it in this
+	// long, whatever the number of lookups.
+	dnsBudget = 15 * time.Second
+)
+
+// unreachableReport is check --json when no lookup got an answer.
+type unreachableReport struct {
+	dns.Report
+	Unreachable bool   `json:"unreachable"`
+	Resolver    string `json:"resolver,omitempty"`
+}
+
+// probe is a Resolver that gives each lookup at most dnsQuery and counts
+// the ones the server answered. An answer includes "no such name" and a
+// server error: the resolver is there, the domain's records are not.
+type probe struct {
+	r    dns.Resolver
+	addr string // --resolver, or "" for the system's
+
+	mu              sync.Mutex
+	asked, answered int
+	last            error // the last lookup that got no answer
+}
+
+func (p *probe) LookupTXT(ctx context.Context, name string) ([]string, error) {
+	ctx, cancel := context.WithTimeout(ctx, dnsQuery)
+	defer cancel()
+	v, err := p.r.LookupTXT(ctx, name)
+	return v, p.note(err)
+}
+
+func (p *probe) LookupMX(ctx context.Context, name string) ([]*net.MX, error) {
+	ctx, cancel := context.WithTimeout(ctx, dnsQuery)
+	defer cancel()
+	v, err := p.r.LookupMX(ctx, name)
+	return v, p.note(err)
+}
+
+func (p *probe) LookupHost(ctx context.Context, host string) ([]string, error) {
+	ctx, cancel := context.WithTimeout(ctx, dnsQuery)
+	defer cancel()
+	v, err := p.r.LookupHost(ctx, host)
+	return v, p.note(err)
+}
+
+func (p *probe) LookupCNAME(ctx context.Context, host string) (string, error) {
+	ctx, cancel := context.WithTimeout(ctx, dnsQuery)
+	defer cancel()
+	v, err := p.r.LookupCNAME(ctx, host)
+	return v, p.note(err)
+}
+
+func (p *probe) note(err error) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.asked++
+	if answered(err) {
+		p.answered++
+	} else {
+		p.last = err
+	}
+	return err
+}
+
+// answered reports whether a lookup's result came from a DNS server.
+// Go reports a timeout, a refused port and a dial error the same way as
+// a reply, in a *net.DNSError, so the replies are picked out: no error,
+// no such name, or the server's own error code.
+func answered(err error) bool {
+	var de *net.DNSError
+	switch {
+	case err == nil || dns.NotFound(err):
+		return true
+	case !errors.As(err, &de) || de.IsTimeout:
+		return false
+	}
+	return de.Err == "server misbehaving"
+}
+
+// unreachable reports whether every lookup went unanswered.
+func (p *probe) unreachable() bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.asked > 0 && p.answered == 0
+}
+
+// issue is the one error check reports when the resolver never answered.
+// The fix points at the resolver: the domain was never asked about.
+func (p *probe) issue() model.Issue {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	i := model.Issue{Check: "dns/resolver", Level: model.Error, Title: "Could not reach the system resolver",
+		Fix: "Check this machine's DNS settings and network connection, or pass --resolver host:port to ask another DNS server."}
+	if p.addr != "" {
+		i.Title = "Could not reach the resolver " + p.addr
+		i.Fix = "Check that a DNS server is running at " + p.addr + " and answers queries from this machine, or leave out --resolver to use the system's."
+	}
+	if p.last != nil {
+		i.Detail = lookupCause(p.last)
+	}
+	i.Identify()
+	return i
+}
+
+// lookupCause is the part of a lookup error that says what went wrong.
+// Go names the system's server ("on 127.0.0.53:53") even when a custom
+// Dial asked another, so that part would point at the wrong machine.
+func lookupCause(err error) string {
+	var de *net.DNSError
+	if errors.As(err, &de) {
+		msg := de.Err
+		if i := strings.LastIndex(msg, ": "); i >= 0 {
+			msg = msg[i+2:]
+		}
+		return msg
+	}
+	return err.Error()
 }
 
 // deliverySummary says which mail records were found and which weren't
@@ -162,8 +312,9 @@ func cmdHeaders(s *session) int {
 	r := headers.Analyze(raw)
 	issues := r.Issues
 	if *withDNS && r.FromDomain != "" {
-		ctx, cancel := context.WithTimeout(s.ctx, 60*time.Second)
-		rep := dns.Check(ctx, r.FromDomain, s.dnsOptions(&r.Sender))
+		ctx, cancel := context.WithTimeout(s.ctx, dnsBudget)
+		opts, _ := s.dnsOptions(&r.Sender)
+		rep := dns.Check(ctx, r.FromDomain, opts)
 		cancel()
 		issues = append(issues, rep.Issues...)
 	}
@@ -331,7 +482,11 @@ func resolveTarget(site, to string) string {
 	return strings.TrimRight(site, "/") + "/" + strings.TrimLeft(to, "/")
 }
 
+// customResolver asks the DNS server at addr (port 53 when it has none).
 func customResolver(addr string) dns.Resolver {
+	if _, _, err := net.SplitHostPort(addr); err != nil {
+		addr = net.JoinHostPort(strings.Trim(addr, "[]"), "53")
+	}
 	return &net.Resolver{PreferGo: true, Dial: func(ctx context.Context, network, _ string) (net.Conn, error) {
 		var d net.Dialer
 		return d.DialContext(ctx, network, addr)

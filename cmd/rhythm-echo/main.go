@@ -22,7 +22,7 @@ const (
 	exitOK       = 0   // done, and nothing at or above --fail-on
 	exitFindings = 1   // --fail-on hit, an action failed, a doctor check failed, or the site rejected a replay
 	exitUsage    = 2   // wrong command line, or .echo/config.yaml asks for what isn't there
-	exitError    = 3   // couldn't run: Echo not reachable, every action failed, a file or network error
+	exitError    = 3   // couldn't run: Echo not reachable, every action failed, no DNS answer, a file or network error
 	exitCanceled = 130 // interrupted
 )
 
@@ -199,7 +199,8 @@ Exit codes (as in Tuner and Soundcheck):
   1    findings: --fail-on hit, an action failed, a doctor check failed, or the site
        rejected a replay
   2    usage error: a wrong command line, or .echo/config.yaml asks for what isn't there
-  3    couldn't run: Echo not reachable, every action failed, a file or network error
+  3    couldn't run: Echo not reachable, every action failed, the DNS resolver never
+       answered, a file or network error
   130  interrupted
   sendmail exits with sendmail's codes instead (sysexits: 64 usage, 69 Echo unreachable…)
 
