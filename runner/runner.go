@@ -228,7 +228,7 @@ func doHTTP(ctx context.Context, o Options, a config.Action, runValue string, fa
 	}
 	defer func() { _ = resp.Body.Close() }()
 	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<20))
-	if resp.StatusCode >= 500 {
+	if resp.StatusCode >= 400 {
 		return fmt.Errorf("%s %s returned %s", method, target, resp.Status)
 	}
 	return nil
