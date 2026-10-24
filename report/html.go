@@ -124,7 +124,7 @@ func HTML(w io.Writer, r Result) error {
 }
 
 func message(m model.Message, issues []string) htmlMessage {
-	hm := htmlMessage{ID: m.ID, Channel: string(m.Channel), Glyph: channelGlyph[m.Channel], Kind: capitalize(check.Describe(m)),
+	hm := htmlMessage{ID: m.ID, Channel: string(m.Channel), Glyph: channelGlyph[m.Channel], Kind: capitalize(check.Kind(m)),
 		Status: string(m.Status), StatusKey: string(m.Status), Time: m.At.Local().Format("15:04:05"), From: m.From,
 		To: strings.Join(m.To, ", "), Subject: m.Subject, Event: m.Event, Method: m.Method, URL: m.URL, Text: m.Text,
 		HTML: m.HTML, Error: m.Error, Via: strings.Trim(m.Source.Via+" · "+m.Source.Plugin, " ·"), Issues: issues}

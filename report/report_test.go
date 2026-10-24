@@ -92,6 +92,12 @@ func TestPlainOutputs(t *testing.T) {
 	if got := buf.String(); !strings.Contains(got, "Twilio SMS to +15551230000: Thanks {first_name} [faked]") {
 		t.Errorf("message line = %q", got)
 	}
+	buf.Reset()
+	p.Message(model.Message{Channel: model.Webhook, Status: model.Faked, Method: "POST", URL: "https://crm.shop.test/api/leads",
+		To: []string{"crm.shop.test/api/leads"}})
+	if got := buf.String(); !strings.Contains(got, " webhook to crm.shop.test/api/leads: POST [faked]") || strings.Count(got, "crm.shop.test") != 1 {
+		t.Errorf("the host is shown once: %q", got)
+	}
 }
 
 func TestPrettyRendersWithoutPanics(t *testing.T) {

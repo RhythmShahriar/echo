@@ -126,9 +126,12 @@ func (p *Pretty) Message(m model.Message) {
 		what = m.Event
 	}
 	if what == "" && m.Method != "" {
-		what = m.Method + " " + pathOf(m.URL)
+		what = m.Method
+		if !strings.Contains(to, "/") { // the path isn't shown yet
+			what += " " + pathOf(m.URL)
+		}
 	}
-	kind := check.Describe(m)
+	kind := check.Kind(m) // the destination is shown next to it
 	if p.o.Plain {
 		fmt.Fprintf(p.w, "%s %s to %s: %s [%s]\n", m.At.Local().Format("15:04:05"), kind, to, what, m.Status)
 		return
