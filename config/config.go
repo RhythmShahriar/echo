@@ -445,7 +445,7 @@ const (
 )
 
 // waits checks the global timeout and quiet: 0 < quiet <= timeout <=
-// MaxTimeout, and quiet <= MaxQuiet. A timeout of 0 failed every action
+// MaxTimeout with quiet <= MaxQuiet. A timeout of 0 failed every action
 // at once and left the HTTP client waiting forever.
 func (c Config) waits() error {
 	t := c.Timeout.Duration
@@ -668,7 +668,7 @@ flush: []               # run after each action so queued mail and webhooks go o
                         #   ["wp cron event run --due-now", "wp action-scheduler run"]
                         #   ["php artisan queue:work --stop-when-empty"]
 quiet: 2s               # an action is done when nothing new arrives for this long (at most 30s)
-timeout: 30s            # longest wait per action (at most 1m, and at least quiet)
+timeout: 30s            # longest wait per action (at least quiet, at most 1m)
 
 # What snapshot and compare run. Each action makes the site send something.
 # Form submits and multi-step journeys are better run by Soundcheck with --echo.

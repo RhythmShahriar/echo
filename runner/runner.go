@@ -139,8 +139,8 @@ func Run(ctx context.Context, o Options) (*model.Run, error) {
 }
 
 // withWaits fills a timeout or quiet that isn't more than 0 with the
-// default. Load refuses such values, but a Config built in code skips
-// Load, and a timeout of 0 would leave the HTTP client waiting forever.
+// default. Load refuses such values but a Config built in code skips
+// Load. With a timeout of 0 the HTTP client would wait forever.
 func withWaits(cfg config.Config) config.Config {
 	d := config.Default()
 	if cfg.Timeout.Duration <= 0 {
