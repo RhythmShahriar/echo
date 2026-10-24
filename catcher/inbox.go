@@ -36,9 +36,13 @@ type Inbox struct {
 	eventSeq uint64           // the Seq of the latest event
 	scopes   []scope          // the actions in progress, oldest first, for messages that don't say
 	closed   map[string]scope // the last action each run closed, for mail that arrives late
-	seq      int
-	onAdd    func(model.Message)
-	check    func(model.Message) []model.Issue // fills Issues; nil leaves them alone
+	// found holds the codes and links read from each message before it
+	// was masked, by message ID. It lives in memory only, never with the
+	// messages, so nothing that stores or reports them sees it.
+	found map[string]found
+	seq   int
+	onAdd func(model.Message)
+	check func(model.Message) []model.Issue // fills Issues; nil leaves them alone
 	// after is time.After. Tests swap it for a clock they move by hand, so
 	// Wait's quiet period doesn't depend on how fast the machine is.
 	after func(time.Duration) <-chan time.Time
@@ -65,6 +69,7 @@ type scope struct {
 // dropped first).
 func NewInbox(max int) *Inbox {
 	return &Inbox{max: max, maxBytes: DefaultMaxBytes, changed: make(chan struct{}), index: map[string]*entry{}, closed: map[string]scope{},
+		found: map[string]found{},
 		after: time.After, now: time.Now}
 }
 
@@ -263,7 +268,10 @@ func (in *Inbox) late(m model.Message) (scope, bool) {
 
 // Add stores m after filling its ID, time, run and issues. It returns
 // the stored message.
-func (in *Inbox) Add(m model.Message) model.Message {
+func (in *Inbox) Add(m model.Message) model.Message { return in.add(m, found{}) }
+
+// add is Add, keeping f for Latest.
+func (in *Inbox) add(m model.Message, f found) model.Message {
 	in.mu.Lock()
 	in.seq++
 	seq, check := in.seq, in.check
@@ -284,6 +292,9 @@ func (in *Inbox) Add(m model.Message) model.Message {
 	e := &entry{seq: seq, m: m}
 	in.msgs = append(in.msgs, e)
 	in.index[m.ID] = e
+	if !f.empty() {
+		in.found[m.ID] = f
+	}
 	in.bytes += size(m)
 	in.record(EventAdd, m.ID)
 	in.evict()
@@ -487,6 +498,7 @@ func (in *Inbox) forget(e *entry) {
 	in.bytes -= size(e.m)
 	if in.index[e.m.ID] == e {
 		delete(in.index, e.m.ID)
+		delete(in.found, e.m.ID)
 	}
 	in.record(EventDelete, e.m.ID)
 }

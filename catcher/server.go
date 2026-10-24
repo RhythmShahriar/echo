@@ -106,6 +106,7 @@ func NewServer(inbox *Inbox, cfg Config) *Server {
 	s.mux.HandleFunc("GET /v1/health", s.health)
 	s.mux.HandleFunc("POST /v1/capture", s.capture)
 	s.mux.HandleFunc("GET /v1/messages", s.list)
+	s.mux.HandleFunc("GET /v1/messages/latest", s.latest)
 	s.mux.HandleFunc("GET /v1/messages/{id}", s.get)
 	s.mux.HandleFunc("DELETE /v1/messages", s.clear)
 	s.mux.HandleFunc("DELETE /v1/messages/{id}", s.deleteOne)
@@ -156,6 +157,7 @@ var capabilities = []string{
 	"search",      // /v1/messages takes q, limit and before, and since as a duration
 	"events",      // GET /v1/events streams changes; DELETE /v1/messages/{id}
 	"attachments", // emails list their files: name, type, size and sha256
+	"codes",       // GET /v1/messages/latest answers one-time codes and links
 }
 
 // health is what GET /v1/health answers, in this order.
@@ -222,7 +224,7 @@ func (s *Server) Capture(c wire.Capture) (wire.Decision, error) {
 		if c.Email == nil {
 			return wire.Decision{}, errors.New("an email capture needs email")
 		}
-		m := s.email(c.Email)
+		m, f := s.email(c.Email)
 		m.Run, m.Action, m.Source = run, action, src
 		// Mail handed to Echo's own SMTP sink or sendmail stand-in ends
 		// there in every mode: nothing delivers it, so it's never "sent".
@@ -234,7 +236,7 @@ func (s *Server) Capture(c wire.Capture) (wire.Decision, error) {
 		if c.Error != "" {
 			m.Status = model.Failed
 		}
-		m = s.Inbox.Add(m)
+		m = s.Inbox.add(m, f)
 		act := wire.Fake
 		if sent {
 			act = wire.Allow
@@ -280,6 +282,7 @@ func (s *Server) http(c wire.Capture, run, action string, src model.Source) (wir
 	m.Body = s.fit(&m, h.Body, mask.Body)
 	rec := recognize.Recognize(req, &m)
 	m.URL = s.fitAny(recognize.RedactURL(rec, h.URL), mask.Text) // a catch hook's URL is its credential
+	f := extract(m)                                              // an SMS login code, read before masking hides it
 	// Recognizers copy what they read from the raw request: the SMS text,
 	// the chat message and for unknown APIs the host and path as To.
 	s.maskFields(&m)
@@ -312,7 +315,8 @@ func (s *Server) http(c wire.Capture, run, action string, src model.Source) (wir
 		m.Response = &model.Response{Status: f.Status, Body: s.fitAny(f.Body, nil)}
 		d.Action, d.Response = wire.Fake, &wire.Response{Status: f.Status, Headers: f.Headers, Body: f.Body}
 	}
-	m = s.Inbox.Add(m)
+	f.hide(&m)
+	m = s.Inbox.add(m, f)
 	d.ID = m.ID
 	return d, nil
 }
@@ -340,7 +344,9 @@ func (s *Server) allowed(host, site string) bool {
 	return false
 }
 
-func (s *Server) email(e *wire.Email) model.Message {
+// email turns a captured email into a masked message, with the codes and
+// links read from it before masking.
+func (s *Server) email(e *wire.Email) (model.Message, found) {
 	m := model.Message{Channel: model.Email, Provider: "", From: e.From, To: e.To, CC: e.CC, BCC: e.BCC,
 		ReplyTo: e.ReplyTo, Subject: e.Subject, Text: e.Text, HTML: e.HTML, Headers: lower(e.Headers)}
 	if e.Raw != "" {
@@ -359,9 +365,11 @@ func (s *Server) email(e *wire.Email) model.Message {
 	for i := range m.Attachments { // a file name is the sender's text too
 		m.Attachments[i].Name = s.fitAny(m.Attachments[i].Name, mask.Text)
 	}
+	f := extract(m)
 	m.Headers = s.headers(m.Headers)
 	s.maskFields(&m)
-	return m
+	f.hide(&m)
+	return m, f
 }
 
 // maskFields masks the fields a message's text and recipients are read

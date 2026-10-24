@@ -21,6 +21,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/RhythmShahriar/echo/codes"
 	"github.com/RhythmShahriar/echo/model"
 	"github.com/RhythmShahriar/echo/wire"
 )
@@ -200,6 +201,68 @@ func (c *Client) Events(ctx context.Context) (<-chan Event, error) {
 		}
 	}()
 	return out, nil
+}
+
+// LatestQuery selects the message Latest returns. Zero fields match
+// anything.
+type LatestQuery struct {
+	To       string          // part of a recipient
+	Channels []model.Channel // any of these; e.g. email and sms
+	Run      string
+	Action   string
+	// Since leaves out messages from before it, such as the code from
+	// the previous login: set it to just before the step that sends.
+	Since time.Time
+	Q     string        // a search, as in Filter
+	Wait  time.Duration // how long to wait for a match; at most a minute
+}
+
+// Latest is the newest matching message with what Echo read from it before
+// masking: the one-time codes (most likely first) and the links of a
+// known kind. Message is the stored message, masked as always.
+type Latest struct {
+	Codes   []string      `json:"codes"`
+	Links   []codes.Link  `json:"links"`
+	Message model.Message `json:"message"`
+}
+
+// Code returns the most likely one-time code, or "" when there's none.
+func (l Latest) Code() string {
+	if len(l.Codes) == 0 {
+		return ""
+	}
+	return l.Codes[0]
+}
+
+// Link returns the first link of kind (codes.Magic, codes.Verify,
+// codes.Reset, codes.Login, codes.Unsubscribe), or "".
+func (l Latest) Link(kind string) string {
+	for _, k := range l.Links {
+		if k.Kind == kind {
+			return k.URL
+		}
+	}
+	return ""
+}
+
+// Latest returns the newest message matching lq with its codes and links,
+// for a test that signs in or checks out: the code just sent, or the
+// magic link. It waits up to lq.Wait for one; with none, the error is a
+// 404 (IsNotFound). Needs an Echo with the "codes" capability.
+func (c *Client) Latest(ctx context.Context, lq LatestQuery) (Latest, error) {
+	q := Filter{Run: lq.Run, Action: lq.Action, To: lq.To, Since: lq.Since, Q: lq.Q}.query()
+	if len(lq.Channels) > 0 {
+		names := make([]string, len(lq.Channels))
+		for i, ch := range lq.Channels {
+			names[i] = string(ch)
+		}
+		q.Set("channel", strings.Join(names, ","))
+	}
+	if lq.Wait > 0 {
+		q.Set("wait", lq.Wait.String())
+	}
+	var l Latest
+	return l, c.do(ctx, http.MethodGet, "/v1/messages/latest", q, nil, &l)
 }
 
 // Message returns one message by ID.
