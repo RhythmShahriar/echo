@@ -9,7 +9,7 @@ services:
   mailpit:
     image: "ghcr.io/rhythmshahriar/echo:1"
     ports:
-      # Loopback only: Echo has no token on Sail's private network, and
+      # Loopback only: Echo has no token on Sail's private network and
       # its API holds everything the app sent.
       - "127.0.0.1:${FORWARD_MAILPIT_PORT:-1025}:1025"
       - "127.0.0.1:${FORWARD_MAILPIT_DASHBOARD_PORT:-8025}:8025"

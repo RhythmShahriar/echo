@@ -71,7 +71,7 @@ For WordPress, two more steps:
 p="docker compose -f docs/seal/examples/docker-compose.yml"
 # No route out: this fails at once.
 $p exec app sh -c 'env -u https_proxy -u http_proxy curl -m 3 https://1.1.1.1/'
-# Through Echo: faked while sealed, and recorded.
+# Through Echo: faked while sealed and recorded.
 $p exec app curl -sS --cacert /echo-ca/ca.pem -d 'To=%2B15551230000&Body=hi' \
   https://api.twilio.com/2010-04-01/Accounts/AC123/Messages.json
 # Mail goes to the sink.
@@ -82,14 +82,14 @@ $p exec app sh -c "printf 'To: a@example.test\nSubject: hi\n\nhi\n' | sendmail -
 automatically, with a small nginx app in place of WordPress (see
 `proxy/testdata/compose.override.yml`). It checks that:
 - the app has no route out
-- the CA certificate is shared, and the key isn't
+- the CA certificate is shared but the key isn't
 - HTTP and HTTPS requests to `api.twilio.com` are faked
 - the proxy refuses clients without the token
 - mail reaches the sink
 - the inbox is readable from the host
 - the site is reachable through the front
 
-Ports are 18925 and 18980, and everything is removed afterwards.
+Ports are 18925 and 18980. Everything is removed afterwards.
 
 ## Notes
 
@@ -102,5 +102,5 @@ Ports are 18925 and 18980, and everything is removed afterwards.
 - **Observe mode:** use `--observe` instead of `--seal`. Everything is
   recorded and forwarded. The network seal still guarantees that nothing
   bypasses Echo.
-- **BusyBox `wget`** (Alpine) sends `GET` instead of `POST` through a proxy,
+- **BusyBox `wget`** (Alpine) sends `GET` instead of `POST` through a proxy
   and ignores `no_proxy`. Use curl for checks.

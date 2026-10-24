@@ -2,7 +2,7 @@
 
 `rhythm-echo mcp` is a [Model Context Protocol](https://modelcontextprotocol.io)
 server on stdin and stdout. A coding agent can then ask Echo what the site
-sent ("what did checkout send?"), get the code from a sign-up email, and
+sent ("what did checkout send?"), get the code from a sign-up email and
 check what changed since a snapshot, without reading terminal output.
 
 Start Echo first (`rhythm echo up`), then add the server to the agent from
