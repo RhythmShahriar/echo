@@ -558,3 +558,24 @@ func TestProductionRefused(t *testing.T) {
 		t.Errorf("a site not under production: %+v %v", res, err)
 	}
 }
+
+// With Echo's token, X-Echo-Run is signed the way wire.SignRun signs it
+// (the K0 test vector), so a connector that has the token trusts it.
+func TestRunHeaderSigned(t *testing.T) {
+	srv, got := receiver(t, stripeSecret, verifyStripe)
+	o := opts(stripeSecret)
+	o.Action, o.Token = "checkout", "secret"
+	res, err := Send(context.Background(), mustLoad(t, "stripe/checkout.session.completed"), Target{URL: srv.URL}, o)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := "r1/checkout.NhOp3HY0JQ76wSoPnn3sZg"; got.reqs[0].Header.Get("X-Echo-Run") != want || res.Headers["X-Echo-Run"] != want {
+		t.Errorf("X-Echo-Run = %q (result %q), want %q", got.reqs[0].Header.Get("X-Echo-Run"), res.Headers["X-Echo-Run"], want)
+	}
+	if res.Run != "r1" || res.Action != "checkout" {
+		t.Errorf("the result names the run unsigned: %q %q", res.Run, res.Action)
+	}
+	if signRun("", "r1", "checkout") != "r1/checkout" {
+		t.Error("no token: unsigned")
+	}
+}

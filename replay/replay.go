@@ -81,6 +81,10 @@ type Options struct {
 	Timeout     time.Duration
 	Now         func() time.Time
 	MaxBody     int // response bytes kept; default 64 KiB
+
+	// Token is Echo's token. When set, X-Echo-Run is signed with it, as
+	// connectors with a token only trust a signed value.
+	Token string
 }
 
 // Result is what happened.
@@ -167,7 +171,7 @@ func Send(ctx context.Context, e Event, t Target, o Options) (Result, error) {
 	}
 	res.Run = orDefault(o.Run, "replay-"+model.NewID(e.Name+now().String()+randomID(8)))
 	res.Action = orDefault(o.Action, "replay-"+strings.NewReplacer("/", "-", " ", "-").Replace(e.Name))
-	h.Set("X-Echo-Run", res.Run+"/"+res.Action)
+	h.Set("X-Echo-Run", signRun(o.Token, res.Run, res.Action))
 	res.Headers = maskHeaders(h, o.HMAC)
 
 	timeout := o.Timeout
