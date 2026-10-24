@@ -66,11 +66,11 @@ func formReq(raw string, body string, headers ...string) Request {
 func join(parts ...string) string { return strings.Join(parts, "") }
 
 func allCases() []tcase {
-	return slices.Concat(coreCases, emailCases, smsCases, chatCases, analyticsCases, pushCases, paymentCases, crmCases)
+	return slices.Concat(coreCases, emailCases, smsCases, chatCases, analyticsCases, pushCases, paymentCases, crmCases, mailboxCases, declaredCases())
 }
 
 func allNegatives() []negative {
-	return slices.Concat(coreNegatives, emailNegatives, smsNegatives, chatNegatives, analyticsNegatives, pushNegatives, paymentNegatives, crmNegatives)
+	return slices.Concat(coreNegatives, emailNegatives, smsNegatives, chatNegatives, analyticsNegatives, pushNegatives, paymentNegatives, crmNegatives, mailboxNegatives, declaredNegatives())
 }
 
 func TestRecognizers(t *testing.T) {
@@ -126,7 +126,8 @@ func TestFakesAreWellFormed(t *testing.T) {
 					t.Errorf("body without content type: %q", f.Body)
 				}
 			}
-			if f.Status != 204 && f.Status != 202 && f.Body == "" && c.provider != "sendgrid" {
+			// SendGrid and APNs answer success with no body.
+			if f.Status != 204 && f.Status != 202 && f.Body == "" && c.provider != "sendgrid" && c.provider != "apns" {
 				t.Errorf("empty body with status %d", f.Status)
 			}
 		})

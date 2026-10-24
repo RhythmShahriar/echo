@@ -68,6 +68,12 @@ type Recognizer struct {
 	// reports. A provider with several recognizers names it on each.
 	Name    string
 	Channel model.Channel
+	// Hosts names the hosts the recognizer claims, for the catalog: a
+	// name covers its subdomains too ("api.twilio.com"), "*" stands for
+	// one or more labels ("email.*.amazonaws.com") and a pattern with a
+	// port is matched against host:port ("*:5678"). Match still decides;
+	// a test checks every positive fixture's host is covered.
+	Hosts []string
 	// Priority orders recognizers: higher ones are tried first. Host and
 	// path matchers use 0. One that matches on something any host can
 	// carry (a header) goes below 0, so a request to a known host is
@@ -141,6 +147,46 @@ func Providers() []string {
 			out = append(out, r.Provider)
 		}
 	}
+	return out
+}
+
+// Entry is one provider in the catalog.
+type Entry struct {
+	Provider string        // slug stored on messages ("mailjet")
+	Name     string        // display name ("Mailjet")
+	Channel  model.Channel // the channel its messages are filed under
+	// Hosts are the host patterns it claims (see Recognizer.Hosts), from
+	// all its recognizers. None means any host (WooCommerce webhooks are
+	// told by a header).
+	Hosts []string
+	// Declared is true for a provider described in YAML
+	// (recognize/providers) rather than Go.
+	Declared bool
+}
+
+// Catalog lists every provider Echo recognizes, by channel and then
+// slug, for `rhythm echo providers` and the docs.
+func Catalog() []Entry {
+	var out []Entry
+	for _, r := range registry {
+		i := slices.IndexFunc(out, func(e Entry) bool { return e.Provider == r.Provider })
+		if i < 0 {
+			out = append(out, Entry{Provider: r.Provider, Name: r.Name, Channel: r.Channel,
+				Declared: slices.ContainsFunc(declared, func(d declaredProvider) bool { return d.rec.Provider == r.Provider })})
+			i = len(out) - 1
+		}
+		for _, h := range r.Hosts {
+			if !slices.Contains(out[i].Hosts, h) {
+				out[i].Hosts = append(out[i].Hosts, h)
+			}
+		}
+	}
+	slices.SortFunc(out, func(a, b Entry) int {
+		if c := strings.Compare(string(a.Channel), string(b.Channel)); c != 0 {
+			return c
+		}
+		return strings.Compare(a.Provider, b.Provider)
+	})
 	return out
 }
 

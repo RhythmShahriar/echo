@@ -116,6 +116,7 @@ var stripe = Recognizer{
 	Provider: "stripe",
 	Name:     "Stripe",
 	Channel:  model.Payment,
+	Hosts:    []string{"api.stripe.com"},
 	Match:    func(r Request) bool { return host(r, "api.stripe.com") },
 	Fill: func(r Request, m *model.Message) {
 		if res, _, action := stripeCall(r); res != "" {
@@ -201,6 +202,7 @@ var paypal = Recognizer{
 	Provider: "paypal",
 	Name:     "PayPal",
 	Channel:  model.Payment,
+	Hosts:    []string{"api-m.paypal.com", "api.paypal.com", "api-m.sandbox.paypal.com", "api.sandbox.paypal.com"},
 	Match: func(r Request) bool {
 		return host(r, "api-m.paypal.com", "api.paypal.com", "api-m.sandbox.paypal.com", "api.sandbox.paypal.com")
 	},

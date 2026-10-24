@@ -30,6 +30,7 @@ var vonageSMS = Recognizer{
 	Provider: "vonage",
 	Name:     "Vonage",
 	Channel:  model.SMS,
+	Hosts:    []string{"rest.nexmo.com"},
 	Match: func(r Request) bool {
 		return host(r, "rest.nexmo.com") && r.URL.Path == "/sms/json"
 	},
@@ -57,6 +58,7 @@ var vonageMessages = Recognizer{
 	Provider: "vonage",
 	Name:     "Vonage",
 	Channel:  model.SMS,
+	Hosts:    []string{"api.nexmo.com", "messages-sandbox.nexmo.com"},
 	Match: func(r Request) bool {
 		return host(r, "api.nexmo.com", "messages-sandbox.nexmo.com") && r.URL.Path == "/v1/messages" && r.Method == "POST"
 	},
@@ -88,6 +90,7 @@ var messagebird = Recognizer{
 	Provider: "messagebird",
 	Name:     "MessageBird",
 	Channel:  model.SMS,
+	Hosts:    []string{"rest.messagebird.com"},
 	Match: func(r Request) bool {
 		return host(r, "rest.messagebird.com") && r.URL.Path == "/messages" && r.Method == "POST"
 	},
@@ -125,6 +128,7 @@ var bird = Recognizer{
 	Provider: "bird",
 	Name:     "Bird",
 	Channel:  model.SMS,
+	Hosts:    []string{"api.bird.com"},
 	Match: func(r Request) bool {
 		s := segments(r)
 		return host(r, "api.bird.com") && len(s) == 5 && s[0] == "workspaces" && s[2] == "channels" && s[4] == "messages" && r.Method == "POST"
@@ -152,6 +156,7 @@ var plivo = Recognizer{
 	Provider: "plivo",
 	Name:     "Plivo",
 	Channel:  model.SMS,
+	Hosts:    []string{"api.plivo.com"},
 	Match: func(r Request) bool {
 		s := segments(r)
 		return host(r, "api.plivo.com") && len(s) == 4 && s[1] == "Account" && s[3] == "Message" && r.Method == "POST"
@@ -183,6 +188,7 @@ var sns = Recognizer{
 	Provider: "amazon-sns",
 	Name:     "Amazon SNS",
 	Channel:  model.SMS,
+	Hosts:    []string{"sns.*.amazonaws.com"},
 	Match: func(r Request) bool {
 		h := strings.ToLower(r.URL.Hostname())
 		if !strings.HasPrefix(h, "sns.") || !strings.HasSuffix(h, ".amazonaws.com") {
@@ -221,6 +227,7 @@ var telnyx = Recognizer{
 	Provider: "telnyx",
 	Name:     "Telnyx",
 	Channel:  model.SMS,
+	Hosts:    []string{"api.telnyx.com"},
 	Match: func(r Request) bool {
 		return host(r, "api.telnyx.com") && strings.HasPrefix(r.URL.Path, "/v2/messages") && r.Method == "POST"
 	},
@@ -251,6 +258,7 @@ var clicksend = Recognizer{
 	Provider: "clicksend",
 	Name:     "ClickSend",
 	Channel:  model.SMS,
+	Hosts:    []string{"rest.clicksend.com"},
 	Match: func(r Request) bool {
 		return host(r, "rest.clicksend.com") && r.URL.Path == "/v3/sms/send"
 	},
@@ -291,6 +299,7 @@ var whatsapp = Recognizer{
 	Provider: "whatsapp-cloud",
 	Name:     "WhatsApp Cloud API",
 	Channel:  model.WhatsApp,
+	Hosts:    []string{"graph.facebook.com"},
 	Match: func(r Request) bool {
 		return host(r, "graph.facebook.com") && r.Method == "POST" && graphPath(r, "messages")
 	},

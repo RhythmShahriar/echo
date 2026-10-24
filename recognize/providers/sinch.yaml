@@ -1,0 +1,17 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+# Sinch SMS REST API: POST /xms/v1/{service_plan_id}/batches, in every
+# region.
+provider: sinch
+name: Sinch
+channel: sms
+host: sms.api.sinch.com
+path: /xms/v1/*/batches
+method: POST
+to: $.to
+from: $.from
+text: $.body
+reply:
+  status: 201
+  body: {"id": "${id}", "to": [], "from": "", "canceled": false, "body": "", "type": "mt_text", "created_at": "${now}", "modified_at": "${now}"}

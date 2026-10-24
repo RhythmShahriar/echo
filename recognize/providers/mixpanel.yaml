@@ -1,0 +1,24 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+# Mixpanel ingestion: /track for events, /engage for profile updates.
+# SDKs post a JSON list, or a form whose data field is base64 JSON (that
+# form is recognized, its fields are not read).
+provider: mixpanel
+name: Mixpanel
+channel: analytics
+host: [api.mixpanel.com, api-eu.mixpanel.com, api-in.mixpanel.com]
+path: [/track, /track/, /engage, /engage/]
+method: POST
+to:
+  - $[*].properties.distinct_id
+  - $.properties.distinct_id
+  - $[*].$distinct_id
+  - $.$distinct_id
+event:
+  - $[*].event
+  - $.event
+  - path:0
+reply:
+  status: 200
+  body: "1"

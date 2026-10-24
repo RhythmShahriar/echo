@@ -1,0 +1,41 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+positive:
+  - name: send
+    url: https://api.mailjet.com/v3.1/send
+    body:
+      Messages:
+        - From: {Email: orders@shop.test, Name: Shop}
+          To: [{Email: ann@example.com, Name: Ann}]
+          Cc: [{Email: bob@example.com}]
+          Subject: Your order, 1042
+          TextPart: Thanks, Ann.
+          HTMLPart: <p>Thanks, Ann.</p>
+    want:
+      channel: email
+      from: orders@shop.test
+      to: [ann@example.com]
+      cc: [bob@example.com]
+      subject: Your order, 1042
+      text: Thanks, Ann.
+      html: <p>Thanks, Ann.</p>
+  - name: template with globals
+    url: https://api.mailjet.com/v3.1/send
+    body:
+      Globals: {From: {Email: orders@shop.test}, Subject: Shipped}
+      Messages:
+        - To: [{Email: ann@example.com}, {Email: cy@example.com}]
+          TemplateID: 4242
+    want:
+      from: orders@shop.test
+      to: [ann@example.com, cy@example.com]
+      subject: Shipped
+      event: "4242"
+negative:
+  - name: contacts API
+    method: GET
+    url: https://api.mailjet.com/v3/REST/contact
+  - name: older send API
+    url: https://api.mailjet.com/v3/send
+    body: {FromEmail: orders@shop.test}

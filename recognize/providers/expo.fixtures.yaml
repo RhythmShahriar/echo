@@ -1,0 +1,26 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+positive:
+  - name: one message
+    url: https://exp.host/--/api/v2/push/send
+    body: {to: "ExponentPushToken[xxxxxxxxxxxxxxxxxxxxxx]", title: Order shipped, body: Arrives Friday}
+    want:
+      channel: push
+      to: ["ExponentPushToken[xxxxxxxxxxxxxxxxxxxxxx]"]
+      subject: Order shipped
+      text: Arrives Friday
+  - name: a list, several tokens
+    url: https://exp.host/--/api/v2/push/send
+    body:
+      - {to: ["ExponentPushToken[a]", "ExponentPushToken[b]"], title: Sale, body: "20% off, today only"}
+    want:
+      to: ["ExponentPushToken[a]", "ExponentPushToken[b]"]
+      text: "20% off, today only"
+negative:
+  - name: receipts
+    url: https://exp.host/--/api/v2/push/getReceipts
+    body: {ids: [abc]}
+  - name: Expo website
+    method: GET
+    url: https://expo.dev/accounts/shop

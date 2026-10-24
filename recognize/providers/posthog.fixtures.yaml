@@ -1,0 +1,23 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+positive:
+  - name: capture
+    url: https://us.i.posthog.com/capture/
+    body: {api_key: phc_example, event: order placed, distinct_id: user-1042}
+    want: {channel: analytics, to: [user-1042], event: order placed}
+  - name: batch, EU
+    url: https://eu.i.posthog.com/batch/
+    body:
+      api_key: phc_example
+      batch:
+        - {event: $pageview, properties: {distinct_id: u1}}
+        - {event: signed up, properties: {distinct_id: u1}}
+    want: {to: [u1, u1], event: "$pageview,signed up"}
+negative:
+  - name: feature flags
+    url: https://us.i.posthog.com/decide/?v=3
+    body: {api_key: phc_example, distinct_id: u1}
+  - name: app pages
+    method: GET
+    url: https://app.posthog.com/project/1/insights

@@ -1,0 +1,23 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+# PostHog capture: single events, batches and the /i/v0/e endpoint the
+# web snippet uses. Cloud (US and EU) only; a self-hosted instance is
+# recorded as a generic webhook.
+provider: posthog
+name: PostHog
+channel: analytics
+host: [i.posthog.com, app.posthog.com, eu.posthog.com]
+path: [/capture, /capture/, /batch, /batch/, /e, /e/, /i/v0/e, /i/v0/e/]
+method: POST
+to:
+  - $.distinct_id
+  - $.properties.distinct_id
+  - $.batch[*].distinct_id
+  - $.batch[*].properties.distinct_id
+event:
+  - $.event
+  - $.batch[*].event
+reply:
+  status: 200
+  body: {"status": 1}

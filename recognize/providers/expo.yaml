@@ -1,0 +1,23 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+# Expo push service: one message or a list of them, each to one or more
+# Expo push tokens.
+provider: expo
+name: Expo Push
+channel: push
+host: [exp.host, api.expo.dev]
+path: [/--/api/v2/push/send, /v2/push/send]
+method: POST
+to:
+  - $[*].to
+  - $.to
+subject:
+  - $[0].title
+  - $.title
+text:
+  - $[0].body
+  - $.body
+reply:
+  status: 200
+  body: {"data": [{"status": "ok", "id": "${uuid}"}]}

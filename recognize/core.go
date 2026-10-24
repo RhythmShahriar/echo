@@ -27,6 +27,7 @@ var twilio = Recognizer{
 	Provider: "twilio",
 	Name:     "Twilio",
 	Channel:  model.SMS,
+	Hosts:    []string{"api.twilio.com"},
 	Match: func(r Request) bool {
 		return host(r, "api.twilio.com") && strings.HasSuffix(r.URL.Path, "/Messages.json") && r.Method == "POST"
 	},
@@ -59,6 +60,7 @@ var slack = Recognizer{
 	Provider: "slack",
 	Name:     "Slack",
 	Channel:  model.Chat,
+	Hosts:    []string{"hooks.slack.com", "slack.com"},
 	Match: func(r Request) bool {
 		return host(r, "hooks.slack.com") || (host(r, "slack.com") && strings.HasPrefix(r.URL.Path, "/api/chat.postMessage"))
 	},
@@ -87,6 +89,7 @@ var discord = Recognizer{
 	Provider: "discord",
 	Name:     "Discord",
 	Channel:  model.Chat,
+	Hosts:    []string{"discord.com", "discordapp.com"},
 	Match: func(r Request) bool {
 		return (host(r, "discord.com") || host(r, "discordapp.com")) && strings.HasPrefix(r.URL.Path, "/api/webhooks/")
 	},

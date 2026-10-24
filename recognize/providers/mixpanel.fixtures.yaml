@@ -1,0 +1,29 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+positive:
+  - name: track
+    url: https://api.mixpanel.com/track
+    body:
+      - event: Signed up
+        properties: {distinct_id: user-1042, token: example}
+      - event: Order completed
+        properties: {distinct_id: user-1042}
+    want:
+      channel: analytics
+      to: [user-1042, user-1042]
+      event: Signed up,Order completed
+  - name: engage, EU residency
+    url: https://api-eu.mixpanel.com/engage
+    body:
+      - $distinct_id: user-7
+        $set: {plan: pro}
+    want:
+      to: [user-7]
+      event: engage
+negative:
+  - name: query API
+    method: GET
+    url: https://mixpanel.com/api/2.0/events
+  - name: export API
+    url: https://data.mixpanel.com/api/2.0/export

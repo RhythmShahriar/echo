@@ -47,6 +47,7 @@ var sendgrid = Recognizer{
 	Provider: "sendgrid",
 	Name:     "SendGrid",
 	Channel:  model.Email,
+	Hosts:    []string{"api.sendgrid.com"},
 	Match: func(r Request) bool {
 		return host(r, "api.sendgrid.com") && r.URL.Path == "/v3/mail/send"
 	},
@@ -102,6 +103,7 @@ var mailgun = Recognizer{
 	Provider: "mailgun",
 	Name:     "Mailgun",
 	Channel:  model.Email,
+	Hosts:    []string{"api.mailgun.net", "api.eu.mailgun.net"},
 	Match: func(r Request) bool {
 		s := segments(r)
 		return host(r, "api.mailgun.net", "api.eu.mailgun.net") && len(s) == 3 && s[0] == "v3" &&
@@ -145,6 +147,7 @@ var postmark = Recognizer{
 	Provider: "postmark",
 	Name:     "Postmark",
 	Channel:  model.Email,
+	Hosts:    []string{"api.postmarkapp.com"},
 	Match: func(r Request) bool {
 		return host(r, "api.postmarkapp.com") && strings.HasPrefix(r.URL.Path, "/email")
 	},
@@ -202,6 +205,7 @@ var resend = Recognizer{
 	Provider: "resend",
 	Name:     "Resend",
 	Channel:  model.Email,
+	Hosts:    []string{"api.resend.com"},
 	Match: func(r Request) bool {
 		return host(r, "api.resend.com") && (r.URL.Path == "/emails" || r.URL.Path == "/emails/batch") && r.Method == "POST"
 	},
@@ -244,6 +248,7 @@ var ses = Recognizer{
 	Provider: "amazon-ses",
 	Name:     "Amazon SES",
 	Channel:  model.Email,
+	Hosts:    []string{"email.*.amazonaws.com", "email-fips.*.amazonaws.com"},
 	Match: func(r Request) bool {
 		h := strings.ToLower(r.URL.Hostname())
 		if !strings.HasSuffix(h, ".amazonaws.com") || !strings.HasPrefix(h, "email.") && !strings.HasPrefix(h, "email-fips.") {
@@ -325,6 +330,7 @@ var brevo = Recognizer{
 	Provider: "brevo",
 	Name:     "Brevo",
 	Channel:  model.Email,
+	Hosts:    []string{"api.brevo.com", "api.sendinblue.com"},
 	Match: func(r Request) bool {
 		return host(r, "api.brevo.com", "api.sendinblue.com") && r.URL.Path == "/v3/smtp/email"
 	},
@@ -359,6 +365,7 @@ var sparkpost = Recognizer{
 	Provider: "sparkpost",
 	Name:     "SparkPost",
 	Channel:  model.Email,
+	Hosts:    []string{"api.sparkpost.com", "api.eu.sparkpost.com"},
 	Match: func(r Request) bool {
 		return host(r, "api.sparkpost.com", "api.eu.sparkpost.com") && strings.HasPrefix(r.URL.Path, "/api/v1/transmissions") && r.Method == "POST"
 	},
@@ -393,6 +400,7 @@ var mandrill = Recognizer{
 	Provider: "mandrill",
 	Name:     "Mandrill",
 	Channel:  model.Email,
+	Hosts:    []string{"mandrillapp.com"},
 	Match: func(r Request) bool {
 		return host(r, "mandrillapp.com") && strings.HasPrefix(r.URL.Path, "/api/1.0/messages/send")
 	},

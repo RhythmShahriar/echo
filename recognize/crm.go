@@ -66,6 +66,7 @@ var hubspot = Recognizer{
 	Provider: "hubspot",
 	Name:     "HubSpot",
 	Channel:  model.Webhook,
+	Hosts:    []string{"api.hubapi.com", "api.hubspot.com", "api.hsforms.com"},
 	Match: func(r Request) bool {
 		return host(r, "api.hubapi.com", "api.hubspot.com", "api.hsforms.com")
 	},
@@ -121,6 +122,7 @@ var mailchimp = Recognizer{
 	Provider: "mailchimp",
 	Name:     "Mailchimp",
 	Channel:  model.Webhook,
+	Hosts:    []string{"api.mailchimp.com"},
 	Match: func(r Request) bool {
 		return host(r, "api.mailchimp.com") && strings.HasPrefix(r.URL.Path, "/3.0/")
 	},
@@ -163,6 +165,7 @@ var klaviyo = Recognizer{
 	Provider: "klaviyo",
 	Name:     "Klaviyo",
 	Channel:  model.Webhook,
+	Hosts:    []string{"a.klaviyo.com"},
 	Match:    func(r Request) bool { return host(r, "a.klaviyo.com") },
 	Fill: func(r Request, m *model.Message) {
 		var p map[string]any
@@ -204,6 +207,7 @@ var activecampaign = Recognizer{
 	Provider: "activecampaign",
 	Name:     "ActiveCampaign",
 	Channel:  model.Webhook,
+	Hosts:    []string{"api-us1.com", "activehosted.com"},
 	Match: func(r Request) bool {
 		return host(r, "api-us1.com", "activehosted.com") && strings.HasPrefix(r.URL.Path, "/api/3/")
 	},
@@ -245,6 +249,7 @@ var zapier = Recognizer{
 	Name:      "Zapier",
 	SecretURL: true,
 	Channel:   model.Webhook,
+	Hosts:     []string{"hooks.zapier.com"},
 	Match:     func(r Request) bool { return host(r, "hooks.zapier.com") },
 	Fill:      hookFill,
 	Fake: func(Request, *model.Message) Fake {
@@ -259,6 +264,7 @@ var makeHook = Recognizer{
 	Name:      "Make",
 	SecretURL: true,
 	Channel:   model.Webhook,
+	Hosts:     []string{"hook.*.make.com", "hook.*.integromat.com"},
 	Match: func(r Request) bool {
 		h := strings.ToLower(r.URL.Hostname())
 		return strings.HasPrefix(h, "hook.") && (strings.HasSuffix(h, ".make.com") || strings.HasSuffix(h, ".integromat.com"))
@@ -277,6 +283,7 @@ var n8n = Recognizer{
 	Name:      "n8n",
 	SecretURL: true,
 	Channel:   model.Webhook,
+	Hosts:     []string{"n8n.cloud", "n8n.*", "*-n8n.*", "*:5678"},
 	Match: func(r Request) bool {
 		p := r.URL.Path
 		if !strings.HasPrefix(p, "/webhook/") && !strings.HasPrefix(p, "/webhook-test/") {
@@ -299,6 +306,7 @@ var ifttt = Recognizer{
 	Name:      "IFTTT",
 	SecretURL: true,
 	Channel:   model.Webhook,
+	Hosts:     []string{"maker.ifttt.com"},
 	Match: func(r Request) bool {
 		s := segments(r)
 		return host(r, "maker.ifttt.com") && len(s) >= 5 && s[0] == "trigger" && s[len(s)-2] == "key" && s[len(s)-3] == "with"

@@ -1,0 +1,15 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+positive:
+  - name: batch
+    url: https://us.sms.api.sinch.com/xms/v1/0123456789abcdef/batches
+    body: {from: "+15550100", to: ["+15550123", "+15550124"], body: "Your code is 1042"}
+    want: {channel: sms, from: "+15550100", to: ["+15550123", "+15550124"], text: Your code is 1042}
+negative:
+  - name: list batches
+    method: GET
+    url: https://us.sms.api.sinch.com/xms/v1/0123456789abcdef/batches
+  - name: groups
+    url: https://eu.sms.api.sinch.com/xms/v1/0123456789abcdef/groups
+    body: {name: vip}

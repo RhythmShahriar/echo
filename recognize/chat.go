@@ -26,6 +26,7 @@ var teams = Recognizer{
 	Provider: "teams",
 	Name:     "Teams",
 	Channel:  model.Chat,
+	Hosts:    []string{"webhook.office.com", "outlook.office.com", "outlook.office365.com", "logic.azure.com", "api.powerplatform.com"},
 	Match: func(r Request) bool {
 		p := r.URL.Path
 		switch {
@@ -96,6 +97,7 @@ var telegram = Recognizer{
 	Provider: "telegram",
 	Name:     "Telegram",
 	Channel:  model.Chat,
+	Hosts:    []string{"api.telegram.org"},
 	Match: func(r Request) bool {
 		s := segments(r)
 		return host(r, "api.telegram.org") && len(s) == 2 && telegramBot.MatchString(s[0]) && strings.HasPrefix(s[1], "send")

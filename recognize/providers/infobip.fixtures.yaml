@@ -1,0 +1,27 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+positive:
+  - name: advanced
+    url: https://xyz12.api.infobip.com/sms/2/text/advanced
+    body:
+      messages:
+        - from: Shop
+          destinations: [{to: "41793026727"}, {to: "41793026728"}]
+          text: Your order has shipped
+    want: {channel: sms, from: Shop, to: ["41793026727", "41793026728"], text: Your order has shipped}
+  - name: v3 messages
+    url: https://xyz12.api.infobip.com/sms/3/messages
+    body:
+      messages:
+        - sender: Shop
+          destinations: [{to: "41793026727"}]
+          content: {text: Code 1042}
+    want: {from: Shop, to: ["41793026727"], text: Code 1042}
+negative:
+  - name: delivery reports
+    method: GET
+    url: https://xyz12.api.infobip.com/sms/1/reports
+  - name: email API
+    url: https://xyz12.api.infobip.com/email/3/send
+    body: x
