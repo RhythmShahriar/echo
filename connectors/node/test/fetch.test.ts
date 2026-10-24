@@ -201,16 +201,19 @@ describe('runs', () => {
       await (await fetch(`http://127.0.0.1:${port}/signup`, { headers: { 'x-echo-run': 'mw/signup' } })).text();
       const [c] = await echo.waitFor((c) => befores(c) && c.http!.url.endsWith('/from-middleware'));
       expect(c!.run).toBe('mw/signup');
-      expect(c!.source.host).toBe(`127.0.0.1:${port}`);
+      // no site configured: the request's Host is not taken as the site
+      expect(c!.source.host).toBeUndefined();
     } finally {
       site.close();
     }
   });
 
-  it('treats the incoming request host as the site', async () => {
+  it('never takes the site from the incoming Host or X-Forwarded-Host', async () => {
     const host = new URL(api.url).host;
-    await withEchoRun({ headers: { host } }, () => fetch(`${api.url}/self`));
-    expect(api.requests).toHaveLength(1);
-    expect(echo.captures).toHaveLength(0);
+    const res = await withEchoRun({ headers: { host, 'x-forwarded-host': host } }, () => fetch(`${api.url}/self`));
+    expect(res.headers.get('x-echo')).toBe('fake');
+    expect(api.requests).toHaveLength(0);
+    const [c] = await echo.waitFor(befores);
+    expect(c!.source.host).toBeUndefined();
   });
 });

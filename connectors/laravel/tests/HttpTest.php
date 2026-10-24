@@ -6,10 +6,45 @@ namespace Rhythm\Echo\Tests;
 
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Route;
 use Rhythm\Echo\Tests\Fixtures\PingTwilio;
 
 class HttpTest extends TestCase
 {
+    protected function defineRoutes($router): void
+    {
+        Route::get('/sms', fn () => (string) Http::post('https://api.twilio.com/2010-04-01/Accounts/AC0/Messages.json')->status());
+        Route::get('/self', fn () => (string) Http::get('http://site.test/up')->status());
+    }
+
+    /** Handle test requests as a web server would, not as the console. */
+    private function asWebServer(): void
+    {
+        (new \ReflectionProperty($this->app, 'isRunningInConsole'))->setValue($this->app, false);
+    }
+
+    public function test_a_forged_host_header_never_unseals_a_provider(): void
+    {
+        $this->asWebServer();
+        $this->get('http://api.twilio.com/sms', ['Host' => 'api.twilio.com', 'X-Forwarded-Host' => 'api.twilio.com'])
+            ->assertOk()->assertSee('201');
+
+        $c = $this->captures('http');
+        $this->assertCount(1, $c, 'faked: no after capture');
+        $this->assertSame('site.test', $c[0]['source']['host']);
+    }
+
+    public function test_calls_to_the_app_url_host_are_allowed_and_reported(): void
+    {
+        $this->asWebServer();
+        Http::fake(['site.test/*' => Http::response('ok')]);
+        $this->get('/self')->assertOk()->assertSee('200');
+
+        $c = $this->captures('http');
+        $this->assertSame(['before', 'after'], array_column($c, 'phase'));
+        $this->assertSame('site.test', $c[0]['source']['host']);
+    }
+
     public function test_sealed_requests_get_echos_fake(): void
     {
         (new PingTwilio)->handle();

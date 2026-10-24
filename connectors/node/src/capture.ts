@@ -5,17 +5,32 @@
 // and a guess at which package made the call.
 
 import type { Config } from './config.js';
-import type { Context } from './state.js';
 
-/** Hosts that are never messages: Echo itself, the site, loopback. */
-export function skipHost(hostname: string, port: string, cfg: Config, ctx: Context): boolean {
-  const h = hostname.toLowerCase().replace(/^\[|\]$/g, '');
+/**
+ * Hosts that are never messages: Echo itself and loopback. The site's own
+ * hosts are not skipped: those calls are captured with source.host set.
+ * Echo lets them through and records them as sent.
+ */
+export function skipHost(hostname: string, port: string, cfg: Config): boolean {
+  const h = bare(hostname);
   const hostPort = port ? `${h}:${port}` : h;
   if (cfg.echoHost && (hostPort === cfg.echoHost || h === cfg.echoHost)) return true;
-  // the request's own host; a Host without a port matches that host on any port
-  if (ctx.host && (ctx.host === hostPort || (!ctx.host.includes(':') && ctx.host === h))) return true;
-  if (cfg.site.some((s) => s === h || s === hostPort)) return true;
   return !cfg.captureLoopback && isLoopback(h);
+}
+
+/**
+ * siteHost is the source.host to report for a call to hostname: the
+ * configured site host it matches, or else the first configured one. A
+ * site host without a port matches that host on any port.
+ */
+export function siteHost(hostname: string, port: string, cfg: Pick<Config, 'site'>): string | undefined {
+  const h = bare(hostname);
+  const hostPort = port ? `${h}:${port}` : h;
+  return cfg.site.find((s) => s === hostPort || s === h) ?? cfg.site[0];
+}
+
+function bare(hostname: string): string {
+  return hostname.toLowerCase().replace(/^\[|\]$/g, '');
 }
 
 export function isLoopback(h: string): boolean {

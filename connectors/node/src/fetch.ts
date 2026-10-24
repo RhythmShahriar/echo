@@ -6,7 +6,7 @@
 // globalThis.fetch is by then, so its cache sits above this wrapper and
 // only real network requests reach it.
 
-import { guessPackage, maskHeaders, skipHost, utf8 } from './capture.js';
+import { guessPackage, maskHeaders, siteHost, skipHost, utf8 } from './capture.js';
 import { send, sendLater, sealed, errText } from './client.js';
 import { currentContext } from './run.js';
 import { state } from './state.js';
@@ -47,9 +47,8 @@ async function echoFetch(orig: typeof fetch, input: RequestInfo | URL, init: Req
     return orig(input, init); // let fetch report the bad URL itself
   }
   if (url.protocol !== 'http:' && url.protocol !== 'https:') return orig(input, init);
-  if (skipHost(url.hostname, url.port, cfg, {})) return orig(input, init);
+  if (skipHost(url.hostname, url.port, cfg)) return orig(input, init);
   const ctx = await currentContext();
-  if (skipHost(url.hostname, url.port, cfg, ctx)) return orig(input, init);
 
   const method = (init?.method ?? (input instanceof Request ? input.method : 'GET')).toUpperCase();
   const headers = new Headers(input instanceof Request ? input.headers : undefined);
@@ -60,7 +59,7 @@ async function echoFetch(orig: typeof fetch, input: RequestInfo | URL, init: Req
   const base: Omit<Capture, 'v' | 'phase'> = {
     kind: 'http',
     run: ctx.run,
-    source: { via: 'node', stack: 'node', hook: 'fetch', plugin: plugin || undefined, host: ctx.host },
+    source: { via: 'node', stack: 'node', hook: 'fetch', plugin: plugin || undefined, host: siteHost(url.hostname, url.port, cfg) },
   };
   const d = await send({
     ...base,

@@ -13,7 +13,12 @@ export interface Options {
   token?: string;
   /** Activate even where the production guard says no. Default: RHYTHM_ECHO_FORCE. */
   force?: boolean;
-  /** Extra hosts that count as the site itself (never captured). Default: RHYTHM_ECHO_SITE, comma separated. */
+  /**
+   * The site's own hosts or URLs. Calls to them are captured and Echo lets
+   * them through as the site talking to itself. Default: RHYTHM_ECHO_SITE
+   * (comma separated), VERCEL_URL, VERCEL_BRANCH_URL, NEXT_PUBLIC_SITE_URL.
+   * Never taken from a request's Host header, which a visitor controls.
+   */
   site?: string[];
   /**
    * Capture requests to loopback hosts too. Off by default because local
@@ -34,6 +39,7 @@ export interface Config {
   echoHost: string;
   token: string;
   force: boolean;
+  /** The site's own hosts, first the one reported as source.host. Empty when none is configured. */
   site: string[];
   captureLoopback: boolean;
   maxBody: number;
@@ -60,9 +66,13 @@ export function resolveConfig(o: Options = {}, e: Env = env()): Config {
   } catch {
     // an unparseable URL leaves every capture unanswered, which fails closed
   }
-  const site = [...(o.site ?? []), ...(e.RHYTHM_ECHO_SITE ?? '').split(','), e.VERCEL_URL, e.VERCEL_BRANCH_URL]
-    .map((s) => (s ?? '').trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/.*$/, ''))
-    .filter(Boolean);
+  const site = [
+    ...new Set(
+      [...(o.site ?? []), ...(e.RHYTHM_ECHO_SITE ?? '').split(','), e.VERCEL_URL, e.VERCEL_BRANCH_URL, e.NEXT_PUBLIC_SITE_URL]
+        .map((s) => (s ?? '').trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/.*$/, ''))
+        .filter(Boolean),
+    ),
+  ];
   return {
     url,
     echoHost,

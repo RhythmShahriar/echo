@@ -79,7 +79,7 @@ In serverless functions and short scripts, `await flush()` (exported by both ent
 | `RHYTHM_ECHO_URL` | `http://127.0.0.1:8025` | Echo's capture API. On a preview deployment, this is a URL that reaches your Echo (a tunnel). |
 | `RHYTHM_ECHO_TOKEN` | none | Sent as `X-Echo-Token`. Needed when Echo listens beyond loopback. |
 | `RHYTHM_ECHO_FORCE` | off | `1` turns the connector on even where the production guard says no. |
-| `RHYTHM_ECHO_SITE` | none | Extra hosts that count as the site itself, comma separated. They are never captured. |
+| `RHYTHM_ECHO_SITE` | none | The site's own hosts or URLs, comma separated. `VERCEL_URL`, `VERCEL_BRANCH_URL` and `NEXT_PUBLIC_SITE_URL` count too. Calls to them are captured and Echo lets them through as sent. |
 | `RHYTHM_ECHO_RUN` | none | `<run>/<action>` for work done outside a request. Echo's action runner sets it. |
 
 `register(options)` accepts the same settings in code (`url`, `token`, `force`, `site`) as well as:
@@ -117,7 +117,7 @@ If Echo can't be reached while the site is sealed, outbound requests fail as net
 | `http` / `https` | Node | axios (Twilio, SendGrid), got, needle, `http.get`, and older SDKs. Requests are held until the body is written. An allowed request then goes out through its own agent unchanged. A faked one is answered through Node's own HTTP parser. |
 | Nodemailer | Node | `sendMail` on every transport, in Nodemailer's ESM and CJS builds. When sealed, it resolves with a fake `info` (`messageId`, `accepted`) without connecting. |
 
-The connector never captures requests to Echo itself, to the site's own host (the incoming request's `Host`, `VERCEL_URL`, `RHYTHM_ECHO_SITE`) or to loopback.
+The connector never captures requests to Echo itself or to loopback. Calls to the site's own host are captured and reported with `source.host`. Echo lets them through and records them as sent. The site's host comes only from configuration (`RHYTHM_ECHO_SITE`, `VERCEL_URL`, `VERCEL_BRANCH_URL`, `NEXT_PUBLIC_SITE_URL` or the `site` option), never from the incoming request's `Host` or `X-Forwarded-Host`, which a visitor can set to a provider's host. With none configured, every outbound call is treated as a call to someone else.
 
 It masks credentials before they leave the process, keeping only the scheme: `authorization` becomes `Bearer •••••`, and API-key and token headers are masked too. Echo then redacts secrets in bodies.
 

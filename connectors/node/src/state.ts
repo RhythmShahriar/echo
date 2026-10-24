@@ -12,8 +12,6 @@ import type { Config } from './config.js';
 export interface Context {
   /** "<run>/<action>" from X-Echo-Run. */
   run?: string;
-  /** The incoming request's host: the site itself, never captured. */
-  host?: string;
 }
 
 export type Resolver = () => Context | undefined | Promise<Context | undefined>;

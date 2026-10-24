@@ -115,16 +115,12 @@ class Connector
 
     /**
      * The site's own host, which Echo always lets through (loopback and
-     * cron-style calls to itself).
+     * cron-style calls to itself). It is the host of APP_URL, never the
+     * request's Host: Laravel does not trust hosts by default, so a visitor
+     * who sent Host: api.twilio.com would have unsealed Twilio.
      */
     public function siteHost(): string
     {
-        if (! $this->app->runningInConsole() && $this->app->bound('request')) {
-            $host = (string) $this->app->make('request')->getHost();
-            if ($host !== '') {
-                return $host;
-            }
-        }
         $url = $this->app->make('config')->get('app.url');
 
         return is_string($url) ? (string) parse_url($url, PHP_URL_HOST) : '';

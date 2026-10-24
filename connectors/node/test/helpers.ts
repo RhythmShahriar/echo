@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: MIT
 
 // A tiny Echo for tests: POST /v1/capture records the capture and answers
-// like the real catcher (seal: fake HTTP and email; observe: allow), unless
-// a test sets its own decide().
+// like the real catcher (seal: fake HTTP and email; observe: allow; a call
+// to the reported source.host: allow), unless a test sets its own decide().
 
 import http from 'node:http';
 import type { AddressInfo } from 'node:net';
@@ -56,6 +56,7 @@ export async function fakeEcho(mode: 'seal' | 'observe' = 'seal'): Promise<FakeE
       if (c.kind === 'email') d.action = echo.mode === 'observe' ? 'allow' : 'fake';
       else if (c.phase === 'after') d.action = 'allow';
       else if (echo.mode === 'observe') d.action = 'allow';
+      else if (c.source.host && new URL(c.http!.url).hostname === c.source.host.replace(/:\d+$/, '')) d.action = 'allow';
       else
         d = {
           ...d,

@@ -68,11 +68,14 @@ export function runFromHeaders(h: HeadersLike | null | undefined): string | unde
   return clean(header(h, RUN_HEADER)) ?? clean(cookie(h, RUN_HEADER));
 }
 
-/** contextFromHeaders adds the request's host, which counts as the site itself. */
+/**
+ * contextFromHeaders is what a request tells the connector: only the run.
+ * The site's own host never comes from Host or X-Forwarded-Host, because a
+ * visitor who set either to api.sendgrid.com would unseal SendGrid.
+ */
 export function contextFromHeaders(h: HeadersLike | null | undefined): Context {
   if (!h) return {};
-  const host = (header(h, 'x-forwarded-host') ?? header(h, 'host'))?.split(',')[0]?.trim().toLowerCase();
-  return { run: runFromHeaders(h), host: host || undefined };
+  return { run: runFromHeaders(h) };
 }
 
 /**
@@ -92,21 +95,17 @@ export function echoMiddleware(): (req: RequestLike, res: unknown, next: (err?: 
   return (req, _res, next) => withEchoRun(req, () => next());
 }
 
-/** currentContext finds the run and site host for a capture being made now. */
+/** currentContext finds the run for a capture being made now. */
 export async function currentContext(): Promise<Context> {
   const ctx: Context = { ...als()?.getStore() };
-  if (!ctx.run || !ctx.host) {
+  if (!ctx.run) {
     for (const r of state().resolvers) {
       try {
-        const found = await r();
-        if (found) {
-          ctx.run ??= found.run;
-          ctx.host ??= found.host;
-        }
+        ctx.run ??= (await r())?.run;
       } catch {
         // a resolver outside its framework's request scope: nothing to add
       }
-      if (ctx.run && ctx.host) break;
+      if (ctx.run) break;
     }
   }
   ctx.run ??= clean(env().RHYTHM_ECHO_RUN);
