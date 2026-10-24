@@ -11,27 +11,51 @@
 // when any are given, at wp-content/mu-plugins/rhythm-echo/settings.php.
 // mu-plugins only loads top-level files, so the settings file is never run
 // as a plugin, and it is PHP, so the web server never serves the token.
+//
+// The same connector also ships as a regular plugin, Echo Staging Seal
+// (plugin/echo-staging-seal), for WordPress.org: it adds an admin bar
+// banner, Tools > Echo and `wp echo` commands. PluginZip builds its zip and
+// InstallPlugin writes it into a site. It reads the same settings file.
 package wordpress
 
 import (
-	_ "embed"
+	"archive/zip"
+	"embed"
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 )
 
 //go:embed echo.php
 var plugin []byte
 
+// pluginTree is Echo Staging Seal without its connector, which PluginFiles
+// adds from echo.php so the two never drift.
+//
+//go:embed plugin/echo-staging-seal
+var pluginTree embed.FS
+
 // Paths inside wp-content.
 const (
 	PluginPath   = "mu-plugins/rhythm-echo.php"
 	SettingsPath = "mu-plugins/rhythm-echo/settings.php"
+)
+
+// Echo Staging Seal, the regular plugin: its slug (the folder in plugins/
+// and in the zip) and where it goes inside wp-content.
+const (
+	PluginSlug = "echo-staging-seal"
+	PluginDir  = "plugins/" + PluginSlug
+	// connectorFile is where echo.php goes inside the plugin.
+	connectorFile = "includes/connector.php"
 )
 
 // The plugin's REST routes for `rhythm echo doctor`, under /wp-json/. They
@@ -73,6 +97,11 @@ type Settings struct {
 	// CA is the path, on the site's machine, to Echo's CA certificate (PEM).
 	// It is added to the WordPress HTTP API's CA bundle, not replacing it.
 	CA string
+	// Bin is the rhythm-echo binary on the site's machine, which Echo
+	// Staging Seal's buttons and `wp echo` commands run. Project is the
+	// folder with .echo/config.yaml it runs in. The mu-plugin ignores both.
+	Bin     string
+	Project string
 }
 
 // Plugin returns the mu-plugin's PHP source.
@@ -90,7 +119,7 @@ func SettingsPHP(s Settings) ([]byte, error) {
 	b.WriteString("<?php\n// Rhythm Echo connector settings, written by `rhythm echo install wordpress`.\n")
 	b.WriteString("// RHYTHM_ECHO_* constants and environment variables override these.\n")
 	b.WriteString("// " + marker + "\nreturn array(\n")
-	for _, kv := range [][2]string{{"url", s.URL}, {"token", s.Token}, {"mode", s.Mode}, {"proxy", s.Proxy}, {"ca", s.CA}} {
+	for _, kv := range [][2]string{{"url", s.URL}, {"token", s.Token}, {"mode", s.Mode}, {"proxy", s.Proxy}, {"ca", s.CA}, {"bin", s.Bin}, {"project", s.Project}} {
 		if kv[1] != "" {
 			fmt.Fprintf(&b, "\t%s => %s,\n", phpString(kv[0]), phpString(kv[1]))
 		}
@@ -167,6 +196,9 @@ func Uninstall(dir string) error {
 	}
 	if err := os.Remove(path); err != nil {
 		return err
+	}
+	if pluginOurs(content) {
+		return nil // Echo Staging Seal reads the same settings
 	}
 	return os.RemoveAll(filepath.Join(content, filepath.Dir(SettingsPath)))
 }
@@ -314,6 +346,130 @@ func sortedKeys(m map[string][]byte) []string {
 	}
 	sort.Strings(keys)
 	return keys
+}
+
+// PluginFiles returns Echo Staging Seal's files keyed by path relative to
+// its folder: the plugin tree with echo.php as includes/connector.php.
+func PluginFiles() (map[string][]byte, error) {
+	out := map[string][]byte{connectorFile: Plugin()}
+	root := "plugin/" + PluginSlug
+	err := fs.WalkDir(pluginTree, root, func(p string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+		b, err := pluginTree.ReadFile(p)
+		if err != nil {
+			return err
+		}
+		out[strings.TrimPrefix(p, root+"/")] = b
+		return nil
+	})
+	return out, err
+}
+
+// PluginZip writes Echo Staging Seal as WordPress installs it from a zip
+// (Plugins > Add New > Upload, or WordPress.org): every file under
+// echo-staging-seal/. The entries are sorted with a fixed time, so the same
+// source always gives the same zip.
+func PluginZip(w io.Writer) error {
+	files, err := PluginFiles()
+	if err != nil {
+		return err
+	}
+	z := zip.NewWriter(w)
+	when := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	for _, rel := range sortedKeys(files) {
+		h := &zip.FileHeader{Name: path.Join(PluginSlug, rel), Method: zip.Deflate, Modified: when}
+		h.SetMode(0o644)
+		f, err := z.CreateHeader(h)
+		if err != nil {
+			return err
+		}
+		if _, err := f.Write(files[rel]); err != nil {
+			return err
+		}
+	}
+	return z.Close()
+}
+
+// InstallPlugin writes Echo Staging Seal into the WordPress at dir (the
+// site root or wp-content) and the settings file, as Install does, unless
+// s is empty. The plugin still has to be activated (wp plugin activate
+// echo-staging-seal). An existing plugins/echo-staging-seal/ that Echo
+// didn't write is left alone.
+func InstallPlugin(dir string, s Settings) error {
+	content, err := ContentDir(dir)
+	if err != nil {
+		return err
+	}
+	settings, err := Files(s)
+	if err != nil {
+		return err
+	}
+	files, err := PluginFiles()
+	if err != nil {
+		return err
+	}
+	base := filepath.Join(content, PluginDir)
+	if entries, err := os.ReadDir(base); err == nil && len(entries) > 0 && !pluginOurs(content) {
+		return fmt.Errorf("%s exists and wasn't written by Echo; remove it first", base)
+	}
+	for _, rel := range sortedKeys(files) {
+		p := filepath.Join(base, filepath.FromSlash(rel))
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil { //nolint:gosec // the web server must read plugins
+			return err
+		}
+		if err := writeFile(p, files[rel]); err != nil {
+			return err
+		}
+	}
+	if b, ok := settings[SettingsPath]; ok {
+		p := filepath.Join(content, SettingsPath)
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil { //nolint:gosec // see above
+			return err
+		}
+		return writeFile(p, b)
+	}
+	return nil
+}
+
+// UninstallPlugin removes Echo Staging Seal from the WordPress at dir, and
+// the settings file unless the mu-plugin still uses it. Deactivate it first
+// (wp plugin deactivate) so WordPress doesn't report it missing. It reports
+// fs.ErrNotExist when there was nothing to remove.
+func UninstallPlugin(dir string) error {
+	content, err := ContentDir(dir)
+	if err != nil {
+		return err
+	}
+	base := filepath.Join(content, PluginDir)
+	if !isDir(base) {
+		return fmt.Errorf("%s: %w", base, fs.ErrNotExist)
+	}
+	if !pluginOurs(content) {
+		return fmt.Errorf("%s wasn't written by Echo; leaving it alone", base)
+	}
+	if err := os.RemoveAll(base); err != nil {
+		return err
+	}
+	if Installed(content) {
+		return nil
+	}
+	return os.RemoveAll(filepath.Join(content, filepath.Dir(SettingsPath)))
+}
+
+// PluginInstalled reports whether Echo Staging Seal is in the WordPress at
+// dir.
+func PluginInstalled(dir string) bool {
+	content, err := ContentDir(dir)
+	return err == nil && pluginOurs(content)
+}
+
+// pluginOurs reports whether wp-content's Echo Staging Seal was written by
+// Echo: its connector carries the marker.
+func pluginOurs(content string) bool {
+	ok, err := ours(filepath.Join(content, PluginDir, filepath.FromSlash(connectorFile)))
+	return err == nil && ok
 }
 
 // IsNotInstalled reports whether err from Uninstall means there was

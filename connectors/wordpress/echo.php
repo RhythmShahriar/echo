@@ -48,7 +48,8 @@
  * RHYTHM_ECHO_TOKEN, RHYTHM_ECHO_MODE, RHYTHM_ECHO_FORCE, RHYTHM_ECHO_PROXY,
  * RHYTHM_ECHO_CA; the same names in
  * the environment; mu-plugins/rhythm-echo/settings.php (written by the
- * installer, returns an array).
+ * installer, returns an array); inside Echo Staging Seal, what its
+ * settings screen saved.
  *
  * PHP 7.4 or later, WordPress 5.7 or later.
  */
@@ -184,12 +185,13 @@ final class Rhythm_Echo {
 		if ( null !== self::$config ) {
 			return self::$config;
 		}
-		$file = array();
-		$path = __DIR__ . '/rhythm-echo/settings.php';
-		if ( is_readable( $path ) ) {
-			$loaded = include $path;
-			if ( is_array( $loaded ) ) {
-				$file = $loaded;
+		$file = self::settings_file();
+		// Echo Staging Seal (the regular plugin that carries this file) adds
+		// what was saved on its settings screen here.
+		if ( function_exists( 'apply_filters' ) ) {
+			$filtered = apply_filters( 'rhythm_echo_settings', $file );
+			if ( is_array( $filtered ) ) {
+				$file = $filtered;
 			}
 		}
 		$url  = self::setting( 'RHYTHM_ECHO_URL', $file, 'url' );
@@ -206,11 +208,28 @@ final class Rhythm_Echo {
 	}
 
 	/**
+	 * The installer's settings file: mu-plugins/rhythm-echo/settings.php,
+	 * for this file as a mu-plugin and inside Echo Staging Seal alike, so
+	 * a plugin update never takes the settings with it.
+	 *
+	 * @return array<string, mixed>
+	 */
+	public static function settings_file(): array {
+		$dir  = defined( 'WPMU_PLUGIN_DIR' ) ? WPMU_PLUGIN_DIR : __DIR__;
+		$path = $dir . '/rhythm-echo/settings.php';
+		if ( ! is_readable( $path ) ) {
+			return array();
+		}
+		$loaded = include $path;
+		return is_array( $loaded ) ? $loaded : array();
+	}
+
+	/**
 	 * A setting from a constant, the environment or the settings file.
 	 *
 	 * @param array<string, mixed> $file
 	 */
-	private static function setting( string $name, array $file, string $key ): string {
+	public static function setting( string $name, array $file, string $key ): string {
 		if ( defined( $name ) ) {
 			$v = constant( $name );
 			return is_bool( $v ) ? ( $v ? '1' : '' ) : trim( (string) $v );
@@ -230,11 +249,11 @@ final class Rhythm_Echo {
 		return in_array( strtolower( $v ), array( '1', 'true', 'yes', 'on' ), true );
 	}
 
-	private static function environment(): string {
+	public static function environment(): string {
 		return function_exists( 'wp_get_environment_type' ) ? wp_get_environment_type() : 'production';
 	}
 
-	private static function sealed(): bool {
+	public static function sealed(): bool {
 		return 'observe' !== self::config()['mode'];
 	}
 
@@ -1539,16 +1558,19 @@ final class Rhythm_Echo {
 	/**
 	 * One request to Echo, with a short timeout and no proxy. Raw cURL when
 	 * it is there, so nothing else hooked into the WordPress HTTP API sees
-	 * or changes Echo's own traffic; the HTTP API otherwise.
+	 * or changes Echo's own traffic; the HTTP API otherwise. $token, when
+	 * given, is sent instead of the configured one (Echo Staging Seal reads
+	 * the log with its own).
 	 *
 	 * @return array{0: int, 1: string, 2: string}
 	 */
-	private static function call( string $method, string $path, string $body = '' ): array {
+	public static function call( string $method, string $path, string $body = '', ?string $token = null ): array {
 		$cfg     = self::config();
 		$url     = $cfg['url'] . $path;
+		$token   = null !== $token ? $token : $cfg['token'];
 		$headers = array( 'Content-Type: application/json', 'User-Agent: rhythm-echo-wordpress/' . self::VERSION );
-		if ( '' !== $cfg['token'] ) {
-			$headers[] = 'X-Echo-Token: ' . $cfg['token'];
+		if ( '' !== $token ) {
+			$headers[] = 'X-Echo-Token: ' . $token;
 		}
 		if ( function_exists( 'curl_init' ) ) {
 			$ch = curl_init( $url );

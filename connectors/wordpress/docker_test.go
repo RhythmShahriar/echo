@@ -23,15 +23,18 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"math/rand/v2"
 	"net"
 	"net/http"
+	"net/http/cookiejar"
 	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -470,6 +473,169 @@ func TestDockerWordPress(t *testing.T) {
 			t.Errorf("without Proxy, raw cURL still used the proxy: %q", got)
 		}
 	})
+
+	t.Run("echo staging seal plugin", func(t *testing.T) { testPlugin(t, r) })
+}
+
+// Echo Staging Seal, the regular plugin, in place of the mu-plugin: the
+// seal, the admin bar banner, Tools > Echo with its capability and nonce
+// checks, the buttons and wp echo with a stub rhythm-echo. It runs last:
+// removing the plugin removes the folder the container mounts.
+func testPlugin(t *testing.T, r *rig) {
+	s := r.seal()
+	if err := Uninstall(r.content); err != nil {
+		t.Fatal(err)
+	}
+	if err := InstallPlugin(r.content, Settings{URL: r.echoURL, Token: token, Bin: "/opt/echo-bin/rhythm-echo", Project: "/tmp"}); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(2500 * time.Millisecond) // opcache
+	r.wp(t, nil, "plugin", "activate", PluginSlug)
+	defer func() {
+		r.wp(t, nil, "plugin", "deactivate", PluginSlug)
+		if err := UninstallPlugin(r.content); err != nil {
+			t.Error(err)
+		}
+		r.install(t, Settings{})
+	}()
+
+	r.get(t, "twilio", map[string]string{"X-Echo-Run": signed("plug/sms")})
+	msgs := s.Inbox.List(catcher.Filter{})
+	if len(msgs) != 1 || msgs[0].Status != model.Faked || msgs[0].Source.Plugin != "echo-fixture" || msgs[0].Run != "plug" {
+		t.Fatalf("sealed through the plugin = %+v", msgs)
+	}
+
+	admin := r.login(t, "admin", "admin-test-pass")
+	tools := r.wpURL + "/wp-admin/tools.php?page=" + PluginSlug
+	status, page := r.browse(t, admin, http.MethodGet, tools, nil)
+	for _, want := range []string{"This is a sealed copy", `id="echo-staging-seal-log"`, "<td>echo-fixture</td><td>sms</td><td>1</td><td>0</td>", "Snapshot before updating", "Compare since last update"} {
+		if status != http.StatusOK || !strings.Contains(page, want) {
+			t.Errorf("Tools > Echo as admin: HTTP %d, no %q", status, want)
+		}
+	}
+	m := regexp.MustCompile(`value="snapshot">\s*<input type="hidden" id="_wpnonce" name="_wpnonce" value="([0-9a-f]+)"`).FindStringSubmatch(page)
+	if m == nil {
+		t.Fatalf("no nonce on the snapshot button:\n%.3000s", page)
+	}
+	runNonce := m[1]
+
+	r.wp(t, nil, "user", "create", "sub", "sub@shop.test", "--role=subscriber", "--user_pass=sub-test-pass")
+	sub := r.login(t, "sub", "sub-test-pass")
+	if status, page := r.browse(t, sub, http.MethodGet, tools, nil); status != http.StatusForbidden || strings.Contains(page, "echo-staging-seal-log") {
+		t.Errorf("Tools > Echo as a subscriber: HTTP %d", status)
+	}
+	if _, page := r.browse(t, sub, http.MethodGet, r.wpURL+"/wp-admin/profile.php", nil); !strings.Contains(page, "This is a sealed copy") {
+		t.Error("a subscriber sees no banner")
+	}
+
+	post := r.wpURL + "/wp-admin/admin-post.php"
+	run := url.Values{"action": {"echo_staging_seal_run"}, "command": {"snapshot"}}
+	if status, _ := r.browse(t, admin, http.MethodPost, post, run); status != http.StatusForbidden {
+		t.Errorf("snapshot without a nonce: HTTP %d, want 403", status)
+	}
+	run.Set("_wpnonce", runNonce)
+	if status, _ := r.browse(t, sub, http.MethodPost, post, run); status != http.StatusForbidden {
+		t.Errorf("snapshot as a subscriber: HTTP %d, want 403", status)
+	}
+	status, page = r.browse(t, admin, http.MethodPost, post, run)
+	if status != http.StatusOK || !strings.Contains(page, "stub rhythm-echo snapshot --name before-updates") ||
+		!strings.Contains(page, "stub on stderr") || !strings.Contains(page, "rhythm echo snapshot --name before-updates (exit code 0)") {
+		t.Errorf("snapshot button: HTTP %d\n%.3000s", status, page)
+	}
+
+	// Settings need the nonce too. A blank token keeps the saved one.
+	m = regexp.MustCompile(`name="action" value="echo_staging_seal_settings">\s*<input type="hidden" id="_wpnonce" name="_wpnonce" value="([0-9a-f]+)"`).FindStringSubmatch(page)
+	if m == nil {
+		t.Fatal("no nonce on the settings form")
+	}
+	form := url.Values{"action": {"echo_staging_seal_settings"}, "echo_url": {"http://echo.test:8025/"}, "echo_mode": {"observe"}, "echo_token": {"saved-token"}}
+	if status, _ := r.browse(t, admin, http.MethodPost, post, form); status != http.StatusForbidden {
+		t.Errorf("settings without a nonce: HTTP %d, want 403", status)
+	}
+	form.Set("_wpnonce", m[1])
+	r.browse(t, admin, http.MethodPost, post, form)
+	form.Set("echo_token", "")
+	if status, page := r.browse(t, admin, http.MethodPost, post, form); status != http.StatusOK || !strings.Contains(page, "Settings saved.") {
+		t.Errorf("settings: HTTP %d", status)
+	}
+	var saved map[string]string
+	if err := json.Unmarshal([]byte(r.wp(t, nil, "option", "get", "echo_staging_seal_settings", "--format=json")), &saved); err != nil ||
+		saved["url"] != "http://echo.test:8025" || saved["mode"] != "observe" || saved["token"] != "saved-token" {
+		t.Errorf("saved settings = %v (%v)", saved, err)
+	}
+	// The installer's settings file wins over the screen's.
+	if ping := r.rest(t, "ping", nil); ping["echo"].(map[string]any)["url"] != r.echoURL {
+		t.Errorf("ping echo = %v", ping["echo"])
+	}
+
+	// The banner follows the mode Echo reports.
+	r.observe()
+	r.wp(t, nil, "transient", "delete", "echo_staging_seal_mode")
+	if _, page := r.browse(t, admin, http.MethodGet, tools, nil); !strings.Contains(page, "Echo is observing: sends go out") {
+		t.Error("no observe banner")
+	}
+	r.seal()
+	r.wp(t, nil, "transient", "delete", "echo_staging_seal_mode")
+
+	// wp echo runs rhythm-echo with its output streamed and its exit code kept.
+	if out := r.wp(t, nil, "echo", "snapshot", "before-x"); !strings.Contains(out, "stub rhythm-echo snapshot --name before-x") {
+		t.Errorf("wp echo snapshot: %s", out)
+	}
+	out, err := r.dc("exec", "-T", "cli", "wp", "echo", "compare", "--snapshot=before-x")
+	if code := exitCode(err); code != 1 || !strings.Contains(out, "stub rhythm-echo compare --snapshot before-x") || !strings.Contains(out, "stub on stderr") {
+		t.Errorf("wp echo compare: exit %d\n%s", code, out)
+	}
+	if out := r.wp(t, nil, "echo", "status"); !strings.Contains(out, "Seal:        on: nothing leaves this site") ||
+		!strings.Contains(out, "(reachable, seal)") || !strings.Contains(out, "stub rhythm-echo snapshots") {
+		t.Errorf("wp echo status: %s", out)
+	}
+	if out, err := r.dc("exec", "-T", "cli", "wp", "echo", "snapshot", "a/b"); err == nil || !strings.Contains(out, "is not a snapshot name") {
+		t.Errorf("wp echo snapshot a/b: %v\n%s", err, out)
+	}
+}
+
+func exitCode(err error) int {
+	var e *exec.ExitError
+	if errors.As(err, &e) {
+		return e.ExitCode()
+	}
+	if err != nil {
+		return -1
+	}
+	return 0
+}
+
+// login signs a user in through wp-login.php and returns their browser.
+func (r *rig) login(t *testing.T, user, pass string) *http.Client {
+	t.Helper()
+	jar, _ := cookiejar.New(nil)
+	c := &http.Client{Jar: jar}
+	r.browse(t, c, http.MethodGet, r.wpURL+"/wp-login.php", nil) // sets the test cookie
+	status, page := r.browse(t, c, http.MethodPost, r.wpURL+"/wp-login.php", url.Values{"log": {user}, "pwd": {pass}, "testcookie": {"1"}, "redirect_to": {r.wpURL + "/wp-admin/"}})
+	if status != http.StatusOK || strings.Contains(page, "login_error") {
+		t.Fatalf("login as %s: HTTP %d\n%.1500s", user, status, page)
+	}
+	return c
+}
+
+// browse makes a request as a logged-in user, following redirects.
+func (r *rig) browse(t *testing.T, c *http.Client, method, u string, form url.Values) (int, string) {
+	t.Helper()
+	var body io.Reader
+	if form != nil {
+		body = strings.NewReader(form.Encode())
+	}
+	req, _ := http.NewRequest(method, u, body)
+	if form != nil {
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	}
+	resp, err := c.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	b, _ := io.ReadAll(resp.Body)
+	return resp.StatusCode, string(b)
 }
 
 // install rewrites the connector's settings in the mounted mu-plugins,
@@ -694,7 +860,7 @@ func start(t *testing.T) *rig {
 	// mailer and the fixture plugin.
 	dir := t.TempDir()
 	content := filepath.Join(dir, "wp-content")
-	for _, d := range []string{"mu-plugins", "plugins/echo-fixture"} {
+	for _, d := range []string{"mu-plugins", "plugins/echo-fixture", PluginDir, "echo-bin"} {
 		if err := os.MkdirAll(filepath.Join(content, d), 0o755); err != nil {
 			t.Fatal(err)
 		}
@@ -705,6 +871,13 @@ func start(t *testing.T) *rig {
 	}
 	copyFile(t, "testdata/early-mailer.php", filepath.Join(content, "mu-plugins/early-mailer.php"))
 	copyFile(t, "testdata/echo-fixture/echo-fixture.php", filepath.Join(content, "plugins/echo-fixture/echo-fixture.php"))
+	// A stand-in rhythm-echo for Echo Staging Seal's buttons and wp echo:
+	// it prints its arguments and, like compare finding a change, exits 1
+	// for compare.
+	stub := "#!/bin/sh\necho \"stub rhythm-echo $*\"\necho \"stub on stderr\" >&2\n[ \"$1\" = compare ] && exit 1\nexit 0\n"
+	if err := os.WriteFile(filepath.Join(content, "echo-bin", "rhythm-echo"), []byte(stub), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	_ = os.Chmod(dir, 0o755)
 
 	r.compose = filepath.Join(dir, "compose.yaml")
@@ -798,6 +971,8 @@ services:
       - site:/var/www/html
       - %[1]s/mu-plugins:/var/www/html/wp-content/mu-plugins:ro
       - %[1]s/plugins/echo-fixture:/var/www/html/wp-content/plugins/echo-fixture:ro
+      - %[1]s/plugins/echo-staging-seal:/var/www/html/wp-content/plugins/echo-staging-seal:ro
+      - %[1]s/echo-bin:/opt/echo-bin:ro
   cli:
     image: wordpress:cli-2.12.0-php8.3
     depends_on: [wp]
@@ -809,6 +984,8 @@ services:
       - site:/var/www/html
       - %[1]s/mu-plugins:/var/www/html/wp-content/mu-plugins:ro
       - %[1]s/plugins/echo-fixture:/var/www/html/wp-content/plugins/echo-fixture:ro
+      - %[1]s/plugins/echo-staging-seal:/var/www/html/wp-content/plugins/echo-staging-seal:ro
+      - %[1]s/echo-bin:/opt/echo-bin:ro
 volumes:
   site: {}
 `, content, wpPort, smtpPort, hookPort, indent(extra, "    "))

@@ -12,7 +12,10 @@
 // one's result is printed.
 // The setup may set "env" (wp_get_environment_type, default development),
 // "token" (RHYTHM_ECHO_TOKEN), "server" ($_SERVER entries), "cookie"
-// ($_COOKIE entries) and "getenv" (process environment).
+// ($_COOKIE entries), "getenv" (process environment) and "require" (more
+// files to load after the plugin, such as Echo Staging Seal's class). A
+// method named Class::method is called on that class instead of
+// Rhythm_Echo.
 
 list( , $plugin, $setup, $method, $args ) = $argv;
 $setup = (array) json_decode( $setup, true );
@@ -63,10 +66,14 @@ function network_home_url() {
 }
 
 require $plugin;
+foreach ( (array) ( $setup['require'] ?? array() ) as $file ) {
+	require $file;
+}
 
 $result = null;
 foreach ( explode( ',', $method ) as $name ) {
-	$m = new ReflectionMethod( 'Rhythm_Echo', $name );
+	list( $class, $name ) = false !== strpos( $name, '::' ) ? explode( '::', $name, 2 ) : array( 'Rhythm_Echo', $name );
+	$m                    = new ReflectionMethod( $class, $name );
 	$m->setAccessible( true );
 	$result = $m->invokeArgs( null, (array) json_decode( $args, true ) );
 }
