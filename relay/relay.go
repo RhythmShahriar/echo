@@ -306,7 +306,7 @@ func (rl *releaser) send(ctx context.Context, m model.Message, to string) error 
 // else one built from the fields (text, HTML or both).
 func Message(m model.Message) []byte {
 	release := "X-Echo-Release: " + m.ID + "\r\n"
-	if raw := m.Body; raw != "" && !strings.HasSuffix(raw, "…(truncated)") {
+	if raw := m.Body; raw != "" && rawMIME(m) && !strings.HasSuffix(raw, "…(truncated)") {
 		return append([]byte(release), dropBcc(crlf(raw))...)
 	}
 	var b bytes.Buffer
@@ -346,6 +346,18 @@ func Message(m model.Message) []byte {
 		part("text/plain", m.Text)
 	}
 	return b.Bytes()
+}
+
+// rawMIME reports whether m.Body is the email itself. For mail sent
+// through a provider's HTTP API (SendGrid, Mailgun) Body is the API
+// request, JSON or a form that may name every recipient, so the email is
+// built from the fields instead.
+func rawMIME(m model.Message) bool {
+	switch m.Source.Via {
+	case "smtp", "sendmail":
+		return true
+	}
+	return m.Method == ""
 }
 
 func crlf(s string) string {

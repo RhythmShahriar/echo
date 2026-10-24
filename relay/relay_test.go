@@ -283,6 +283,28 @@ func TestRelease(t *testing.T) {
 			t.Errorf("released a log entry: %d", code)
 		}
 	})
+
+	t.Run("email from a provider's HTTP API", func(t *testing.T) {
+		api := in.Add(model.Message{Run: "r1", Channel: model.Email, Provider: "sendgrid", Method: http.MethodPost,
+			URL: "https://api.sendgrid.com/v3/mail/send", Status: model.Faked, Source: model.Source{Via: "proxy"},
+			From: "shop@shop.test", To: []string{"ann@client.example", "other@victim.example"}, BCC: []string{"audit@shop.test"},
+			Subject: "Your receipt", Text: "Thanks, Ann",
+			Body: `{"personalizations":[{"to":[{"email":"ann@client.example"},{"email":"other@victim.example"}]}],"subject":"Your receipt"}`})
+		code, a := release(t, h, api.ID, "ann@client.example", withToken)
+		if code != http.StatusOK {
+			t.Fatalf("%d %+v", code, a)
+		}
+		got := m.deliveries()
+		d := got[len(got)-1]
+		if strings.Contains(d.data, "personalizations") || strings.Contains(d.data, "audit@shop.test") {
+			t.Errorf("sent the API request, not an email:\n%s", d.data)
+		}
+		for _, want := range []string{"From: shop@shop.test\r\n", "Subject: Your receipt\r\n", "Thanks, Ann", "X-Echo-Release: " + api.ID} {
+			if !strings.Contains(d.data, want) {
+				t.Errorf("message has no %q:\n%s", want, d.data)
+			}
+		}
+	})
 }
 
 func TestReleaseNeverLeaksTheLogin(t *testing.T) {
