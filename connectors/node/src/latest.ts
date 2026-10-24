@@ -66,8 +66,8 @@ const units: Record<string, number> = { ns: 1e-6, us: 1e-3, 'µs': 1e-3, 'μs': 
 
 /**
  * waitMs is the same wait in milliseconds, for the client's own timeout.
- * It reads Go durations the way Echo does, compound ones ("1m30s")
- * included, and throws on anything else: guessing a shorter wait would make
+ * It reads Go durations the way Echo does (compound ones such as "1m30s"
+ * too) and throws on anything else: guessing a shorter wait would make
  * the client give up while Echo is still waiting.
  */
 export function waitMs(wait: string | number | undefined): number {

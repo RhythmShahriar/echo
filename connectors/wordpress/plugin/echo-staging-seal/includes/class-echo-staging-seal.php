@@ -192,7 +192,7 @@ final class Echo_Staging_Seal {
 
 	/**
 	 * Whether a token can be saved as typed: printable ASCII without
-	 * spaces, as Echo's own tokens are, and at most 512 characters.
+	 * spaces (as Echo's own tokens are) and at most 512 characters.
 	 */
 	public static function valid_token( string $token ): bool {
 		return 1 === preg_match( '/^[\x21-\x7E]{1,512}$/D', $token );
