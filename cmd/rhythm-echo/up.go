@@ -129,6 +129,7 @@ func cmdUp(s *session) int {
 		stack.push(func(context.Context) { _ = pl.Close() })
 	}
 
+	began := time.Now()
 	inbox, err := openInbox(store)
 	if err != nil {
 		return s.fail(err)
@@ -258,7 +259,9 @@ func cmdUp(s *session) int {
 			return s.fail(err)
 		}
 	}
-	tally := report.Tally(liveRun(inbox, cfg.Mode, checks))
+	// Only what this session caught: a kept inbox (--store) also holds
+	// what earlier sessions did.
+	tally := report.Tally(liveRun(inbox, cfg.Mode, checks, catcher.Filter{Since: began}))
 	stack.run()
 	if !s.o.quiet {
 		fmt.Fprintf(s.stderr, "\nStopped. Captured %s this session.\n", tally)
@@ -692,13 +695,13 @@ func ifaceOf(ip net.IP, ifaces []netIface) string {
 	return ""
 }
 
-// liveRun groups the inbox into actions (by run and action, "Live" for
-// messages outside any action) with each message's content checks, so the
-// HTML report can show it.
-func liveRun(in *catcher.Inbox, mode string, checks check.Options) *model.Run {
+// liveRun groups the inbox's messages that match f into actions (by run
+// and action, "Live" for messages outside any action) with each
+// message's content checks, so the HTML report can show it.
+func liveRun(in *catcher.Inbox, mode string, checks check.Options, f catcher.Filter) *model.Run {
 	r := &model.Run{Schema: model.Schema, Tool: "rhythm-echo", Version: version, Mode: mode, Started: time.Now()}
 	at := map[string]int{}
-	for _, m := range in.List(catcher.Filter{}) {
+	for _, m := range in.List(f) {
 		key, label := "live", "Live (not tied to an action)"
 		if m.Action != "" {
 			key, label = m.Run+"/"+m.Action, m.Action
@@ -725,5 +728,5 @@ func liveRun(in *catcher.Inbox, mode string, checks check.Options) *model.Run {
 func liveReport(w http.ResponseWriter, _ *http.Request, in *catcher.Inbox, mode string, checks check.Options) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src * data:; frame-src 'self' data:")
-	_ = report.HTML(w, report.Result{Run: liveRun(in, mode, checks)})
+	_ = report.HTML(w, report.Result{Run: liveRun(in, mode, checks, catcher.Filter{})})
 }

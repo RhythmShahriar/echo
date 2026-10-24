@@ -573,3 +573,45 @@ func TestSpamScorerWhileReading(t *testing.T) {
 		}
 	}
 }
+
+// TestUpRefusesAStoreInUse: a second up on the same --store folder exits
+// 3 naming the first, which keeps running.
+func TestUpRefusesAStoreInUse(t *testing.T) {
+	upEnv(t)
+	dir := filepath.Join(t.TempDir(), "inbox")
+	ports := wiringPorts(t, 2)
+	_, _, stop := startUp(t, "--listen", ports[0], "--smtp", "off", "--store", dir)
+	defer stop()
+	code, _, errOut := runCLI(t, "up", "--listen", ports[1], "--smtp", "off", "--store", dir)
+	want := fmt.Sprintf("rhythm echo: keeping the inbox in %s (--store): open inbox: another Echo (PID %d) keeps its inbox in %s; stop it first, or give this one a folder of its own",
+		dir, os.Getpid(), dir)
+	if code != exitError || !strings.Contains(errOut, want) {
+		t.Errorf("exit %d: %s\nwant %s", code, errOut, want)
+	}
+	if code, _ := apiCall(t, http.MethodGet, "http://"+ports[0]+"/v1/health", "", ""); code != http.StatusOK {
+		t.Errorf("the first up: %d", code)
+	}
+}
+
+// TestUpStopCountsThisSession: with --store, the stop line counts what
+// this session caught, not what earlier sessions left in the inbox.
+func TestUpStopCountsThisSession(t *testing.T) {
+	upEnv(t)
+	dir := filepath.Join(t.TempDir(), "inbox")
+	api := wiringPorts(t, 1)[0]
+	_, errOut, stop := startUp(t, "--listen", api, "--smtp", "off", "--store", dir)
+	for _, s := range []string{"One", "Two"} {
+		if code, body := apiCall(t, http.MethodPost, "http://"+api+"/v1/capture", "", emailCapture(s)); code != http.StatusOK {
+			t.Fatalf("capture: %d %s", code, body)
+		}
+	}
+	stop()
+	if !strings.Contains(errOut.String(), "Stopped. Captured 2 emails this session.") {
+		t.Errorf("first session: %s", errOut)
+	}
+	_, errOut, stop = startUp(t, "--listen", api, "--smtp", "off", "--store", dir)
+	stop()
+	if !strings.Contains(errOut.String(), "Stopped. Captured no messages this session.") {
+		t.Errorf("second session: %s", errOut)
+	}
+}
