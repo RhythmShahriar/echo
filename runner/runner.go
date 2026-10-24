@@ -25,6 +25,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/RhythmShahriar/echo/catcher"
 	"github.com/RhythmShahriar/echo/check"
 	"github.com/RhythmShahriar/echo/client"
 	"github.com/RhythmShahriar/echo/config"
@@ -111,7 +112,7 @@ func Run(ctx context.Context, o Options) (*model.Run, error) {
 		if ctx.Err() != nil {
 			break
 		}
-		act := runAction(ctx, o, run.ID, a, fake, opts)
+		act := runAction(ctx, o, run, a, fake, opts)
 		run.Actions = append(run.Actions, act)
 		if o.Hooks.Action != nil {
 			o.Hooks.Action(&run.Actions[len(run.Actions)-1], i+1, len(actions))
@@ -128,10 +129,15 @@ func ActionID(name string) string {
 
 var nonWord = regexp.MustCompile(`[^a-z0-9]+`)
 
-func runAction(ctx context.Context, o Options, runID string, a config.Action, fake *fakeData, opts check.Options) model.Action {
+func runAction(ctx context.Context, o Options, run *model.Run, a config.Action, fake *fakeData, opts check.Options) model.Action {
 	cfg := o.Config
-	act := model.Action{ID: ActionID(a.Name), Label: a.Name}
+	runID := run.ID
+	act := model.Action{ID: ActionID(a.Name), Label: a.Name, Kind: kind(a)}
 	start := time.Now()
+	if err := refuse(a, run.Mode); err != nil {
+		act.Error = err.Error()
+		return act
+	}
 	runValue := client.RunValue(runID, act.ID)
 	_ = o.Client.Begin(ctx, runID, act.ID)
 	defer func() { _ = o.Client.End(context.WithoutCancel(ctx)) }()
@@ -139,13 +145,10 @@ func runAction(ctx context.Context, o Options, runID string, a config.Action, fa
 	var err error
 	switch {
 	case a.HTTP != nil:
-		act.Kind = "http"
 		err = doHTTP(ctx, o, a, runValue, fake)
 	case a.Command != "":
-		act.Kind = "command"
 		err = command(ctx, fake.expand(a.Command), runValue, a.Env)
 	case a.Replay != nil:
-		act.Kind = "replay"
 		if o.Replay == nil {
 			err = fmt.Errorf("replay isn't available in this build")
 		} else {
@@ -174,6 +177,29 @@ func runAction(ctx context.Context, o Options, runID string, a config.Action, fa
 	act.Issues = append(act.Issues, expectations(a.Expect, msgs)...)
 	act.Duration = float64(time.Since(start).Milliseconds())
 	return act
+}
+
+func kind(a config.Action) string {
+	switch {
+	case a.HTTP != nil:
+		return "http"
+	case a.Command != "":
+		return "command"
+	case a.Replay != nil:
+		return "replay"
+	}
+	return ""
+}
+
+// refuse stops an action that must not run, before anything is sent.
+// A replay outside seal mode would let the site's reactions (order
+// emails, SMS, CRM calls) reach real people, so it's refused the way
+// `rhythm echo replay` refuses it.
+func refuse(a config.Action, mode string) error {
+	if a.Replay != nil && mode != catcher.Seal {
+		return fmt.Errorf("Echo is in %s mode; replays only run sealed, so the site's reactions can't reach anyone (rhythm echo up --seal)", mode) //nolint:staticcheck // "Echo" is a name, so it stays capitalized
+	}
+	return nil
 }
 
 // expectations reports an action that sent fewer messages than its

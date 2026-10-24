@@ -159,3 +159,43 @@ func TestExpectationsCoverEveryChannel(t *testing.T) {
 		t.Error("no expect, no issues")
 	}
 }
+
+// TestReplayOnlySealed: a replay action under observe would make the
+// site send real order emails, so it's refused before anything is sent.
+func TestReplayOnlySealed(t *testing.T) {
+	for _, mode := range []string{catcher.Observe, catcher.Seal} {
+		srv := httptest.NewServer(catcher.NewServer(catcher.NewInbox(10), catcher.Config{Mode: mode}))
+		var hits atomic.Int32
+		target := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { hits.Add(1) }))
+		cfg := config.Default()
+		cfg.Site = target.URL
+		cfg.Quiet, cfg.Timeout = config.Duration{Duration: 50 * time.Millisecond}, config.Duration{Duration: time.Second}
+		cfg.Actions = []config.Action{{Name: "Paid", Replay: &config.ReplayAction{Event: "payment_intent.succeeded", To: "/hook"}}}
+		replay := func(ctx context.Context, _ config.ReplayAction, to, _ string) error {
+			req, _ := http.NewRequestWithContext(ctx, http.MethodPost, to, nil)
+			resp, err := http.DefaultClient.Do(req)
+			if err == nil {
+				_ = resp.Body.Close()
+			}
+			return err
+		}
+		run, err := Run(context.Background(), Options{Config: cfg, Client: client.New(srv.URL, ""), Replay: replay})
+		srv.Close()
+		target.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+		got := run.Actions[0]
+		switch mode {
+		case catcher.Observe:
+			want := "Echo is in observe mode; replays only run sealed, so the site's reactions can't reach anyone (rhythm echo up --seal)"
+			if got.Error != want || hits.Load() != 0 || got.Kind != "replay" {
+				t.Errorf("observe: error %q, %d requests", got.Error, hits.Load())
+			}
+		case catcher.Seal:
+			if got.Error != "" || hits.Load() != 1 {
+				t.Errorf("seal: error %q, %d requests", got.Error, hits.Load())
+			}
+		}
+	}
+}
