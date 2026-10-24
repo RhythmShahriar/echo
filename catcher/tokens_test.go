@@ -166,3 +166,18 @@ func TestWriteTokensPassProtect(t *testing.T) {
 		}
 	}
 }
+
+// TestWriteTokenBeginIsNeverExclusive: one site's exclusive begin would
+// hold back every other site's actions, so a write token's isn't.
+func TestWriteTokenBeginIsNeverExclusive(t *testing.T) {
+	s := NewServer(NewInbox(10), Config{ReadToken: "reader", WriteTokens: map[string]string{"wa": "client-a", "wb": "client-b"}})
+	srv := httptest.NewServer(s)
+	defer srv.Close()
+	if code, body := call(t, http.MethodPost, srv.URL+"/v1/actions/begin", "wa", `{"run":"r1","action":"a","exclusive":true}`); code != http.StatusOK {
+		t.Fatalf("client-a's begin: %d %s", code, body)
+	}
+	code, body := call(t, http.MethodPost, srv.URL+"/v1/actions/begin", "wb", `{"run":"r2","action":"b","timeout":"200ms"}`)
+	if code != http.StatusOK {
+		t.Errorf("client-b waited on client-a's exclusive begin: %d %s", code, body)
+	}
+}

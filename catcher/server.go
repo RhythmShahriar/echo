@@ -847,9 +847,12 @@ func (s *Server) begin(w http.ResponseWriter, r *http.Request) {
 		}
 		ttl = min(d, MaxLeaseTTL)
 	}
+	// One site's write token may not hold back every other site's
+	// actions: its begin is never exclusive.
+	exclusive := b.Exclusive && requestSite(r) == ""
 	ctx, cancel := context.WithTimeout(r.Context(), timeout)
 	defer cancel()
-	lease, err := s.Inbox.beginScope(ctx, ScopeOptions{Run: cutName(b.Run), Action: cutName(b.Action), Exclusive: b.Exclusive, TTL: ttl}, caller(r))
+	lease, err := s.Inbox.beginScope(ctx, ScopeOptions{Run: cutName(b.Run), Action: cutName(b.Action), Exclusive: exclusive, TTL: ttl}, caller(r))
 	if err != nil {
 		http.Error(w, fmt.Sprintf("begin: waited %s: %v; end the actions in the way (POST /v1/actions/end) or retry with a longer timeout", timeout, err),
 			http.StatusConflict)
