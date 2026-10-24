@@ -167,3 +167,51 @@ func TestMaskedHookURLsPair(t *testing.T) {
 		t.Errorf("another hook is another message:\n%s", got)
 	}
 }
+
+func TestNewActionsAreReported(t *testing.T) {
+	old := model.Action{ID: "a", Label: "Contact form", Messages: []model.Message{email("admin@shop.com", "New lead", "x")}}
+	added := model.Action{ID: "b", Label: "Newsletter form", Messages: []model.Message{email("admin@shop.com", "New subscriber", "y")}}
+	c := Compare(run(old), run(old, added), "", "", "test")
+	got := titles(c.Changes)
+	if !strings.Contains(got, "new: Email to admin@shop.com is now sent") || len(c.Changes[0].Actions) != 1 || c.Changes[0].Actions[0] != "Newsletter form" {
+		t.Errorf("a new action's messages are new:\n%s", got)
+	}
+	if strings.Join(c.Warnings, "\n") != "1 action isn't in the snapshot; what it sent is listed as new" {
+		t.Errorf("warnings = %q", c.Warnings)
+	}
+	c = Compare(run(old, added, model.Action{ID: "c"}), run(), "", "", "test")
+	if strings.Join(c.Warnings, "\n") != "3 actions from the snapshot weren't run this time" {
+		t.Errorf("warnings = %q", c.Warnings)
+	}
+	c = Compare(run(old, added), run(added), "", "", "test")
+	if strings.Join(c.Warnings, "\n") != "1 action from the snapshot wasn't run this time" {
+		t.Errorf("warnings = %q", c.Warnings)
+	}
+}
+
+func TestSentMoreOrFewerTimes(t *testing.T) {
+	m := email("admin@shop.com", "New order #1042", "x")
+	more := Messages([]model.Message{m}, []model.Message{m, m})
+	if got := titles(more); got != `changed: Email to admin@shop.com ("New order #") is sent more times` ||
+		more[0].Before != "1 time" || more[0].After != "2 times" {
+		t.Errorf("a duplicate send:\n%s %+v", got, more)
+	}
+	fewer := Messages([]model.Message{m, m, m}, []model.Message{m})
+	if got := titles(fewer); got != `changed: Email to admin@shop.com ("New order #") is sent fewer times` ||
+		fewer[0].Before != "3 times" || fewer[0].After != "1 time" {
+		t.Errorf("fewer sends:\n%s %+v", got, fewer)
+	}
+}
+
+func TestSubjectChangesKeepTheirCase(t *testing.T) {
+	b := email("admin@shop.com", "Your Order #1042 at Shop", "x")
+	a := email("admin@shop.com", "Your ORDER #1043 is ready", "x")
+	cs := Messages([]model.Message{b}, []model.Message{a})
+	if len(cs) != 1 || cs[0].Before != "Your Order # at Shop" || cs[0].After != "Your ORDER # is ready" {
+		t.Errorf("subject change = %+v", cs)
+	}
+	a.Subject = "YOUR ORDER #1043 AT SHOP"
+	if cs := Messages([]model.Message{b}, []model.Message{a}); len(cs) != 0 {
+		t.Errorf("case alone isn't a change: %+v", cs)
+	}
+}

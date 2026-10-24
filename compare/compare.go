@@ -1,8 +1,9 @@
 // Package compare diffs two runs: for each action that's in both, it
 // matches the messages sent before and after, and reports the ones that
 // stopped (BROKE), appeared (NEW), changed (who they go to, the subject,
-// the text, the fields of a payload) or problems that went away (FIXED).
-// The same change across many actions is one line.
+// the text, the fields of a payload, how many times) or problems that went
+// away (FIXED). What an action new since the snapshot sends is NEW. The
+// same change across many actions is one line.
 package compare
 
 import (
@@ -30,6 +31,10 @@ func Compare(before, after *model.Run, beforeDir, afterDir, version string) *mod
 	for _, a := range after.Actions {
 		b := before.Action(a.ID)
 		if b == nil {
+			// Not in the snapshot: everything it sends is new.
+			for _, c := range Messages(nil, a.Messages) {
+				g.add(c, a.Label)
+			}
 			continue
 		}
 		out.Actions++
@@ -76,7 +81,14 @@ func Messages(before, after []model.Message) []model.Change {
 		case len(lost) > 0 && len(a) > 0 && !distinct(lost, pairs):
 			out = append(out, model.Change{Class: model.Changed, Check: "message/fewer", Channel: lost[0].Channel,
 				Title:  fmt.Sprintf("%s is sent fewer times", capitalize(label(lost[0], multi))),
-				Before: fmt.Sprint(len(b)), After: fmt.Sprint(len(a))})
+				Before: times(len(b)), After: times(len(a))})
+		case len(added) > 0 && len(b) > 0 && !distinct(added, pairs):
+			// The same message again: a duplicate send (a hook firing twice).
+			out = append(out, model.Change{Class: model.Changed, Check: "message/more", Channel: added[0].Channel,
+				Title:  fmt.Sprintf("%s is sent more times", capitalize(label(added[0], multi))),
+				Fix:    "Something now sends it again: check for a hook or plugin that fires twice.",
+				Before: times(len(b)), After: times(len(a))})
+			added = nil
 		default:
 			for _, m := range lost {
 				out = append(out, model.Change{Class: model.Broke, Check: "message/missing", Channel: m.Channel,
@@ -129,10 +141,11 @@ func pair(b, a []model.Message) (pairs [][2]model.Message, lost, added []model.M
 
 func pairKey(m model.Message) string { return template(m.Subject) + "|" + m.Event }
 
-// distinct reports whether the lost messages differ from the ones still
-// sent; when they don't, the same message is simply sent fewer times.
-func distinct(lost []model.Message, pairs [][2]model.Message) bool {
-	for _, l := range lost {
+// distinct reports whether the unpaired messages (lost or added) differ
+// from the ones sent in both runs; when they don't, the same message is
+// simply sent fewer or more times.
+func distinct(unpaired []model.Message, pairs [][2]model.Message) bool {
+	for _, l := range unpaired {
 		same := false
 		for _, p := range pairs {
 			if pairKey(p[0]) == pairKey(l) {
@@ -152,7 +165,7 @@ func distinct(lost []model.Message, pairs [][2]model.Message) bool {
 func label(m model.Message, multi bool) string {
 	l := identityLabel(m)
 	if multi && strings.TrimSpace(m.Subject) != "" {
-		l += fmt.Sprintf(" (%q)", strings.TrimSpace(digits.ReplaceAllString(m.Subject, "#")))
+		l += fmt.Sprintf(" (%q)", display(m.Subject))
 	}
 	return l
 }
@@ -171,8 +184,8 @@ func content(b, a model.Message) []model.Change {
 		return out
 	}
 	if b.Channel == model.Email {
-		if bt, at := template(b.Subject), template(a.Subject); bt != at {
-			ch("message/subject", what+": subject changed", bt, at, "")
+		if template(b.Subject) != template(a.Subject) {
+			ch("message/subject", what+": subject changed", display(b.Subject), display(a.Subject), "")
 		}
 		if bf, af := roles(b.From), roles(a.From); bf != af {
 			ch("message/from", what+": sender changed", bf, af, "A new From address may fail SPF/DKIM/DMARC alignment; check it with: rhythm echo check <domain>")
@@ -283,7 +296,7 @@ func byIdentity(ms []model.Message) map[string][]model.Message {
 var (
 	testAddr   = regexp.MustCompile(`(?i)(?:soundcheck|echo)-test(\+[^@\s,]*)?@[^\s,>]+`)
 	testPhone  = regexp.MustCompile(`\+1555\d{7}|\+15005550\d{3}`)
-	digits     = regexp.MustCompile(`\d+`)
+	digits     = regexp.MustCompile(`#?\d+`) // "#1042" reads "#", not "##"
 	space      = regexp.MustCompile(`\s+`)
 	tags       = regexp.MustCompile(`<[^>]+>`)
 	idSegment  = regexp.MustCompile(`^(\d+|[0-9a-f]{8,}|[0-9a-f-]{36}|[A-Za-z0-9_-]{20,})$`)
@@ -300,15 +313,22 @@ func roles(s string) string {
 	return s
 }
 
-// template makes a subject comparable: numbers and test data vary per run.
-func template(s string) string {
-	s = roles(s)
+// template makes a subject comparable: numbers and test data vary per
+// run, and case doesn't matter. It's a key; show display instead.
+func template(s string) string { return strings.ToLower(display(s)) }
+
+// display is a subject as sent, with what varies per run (numbers, test
+// data) replaced so the same change across actions reads as one.
+func display(s string) string {
+	s = strings.TrimSpace(s)
+	s = testAddr.ReplaceAllString(s, "the test submitter")
+	s = testPhone.ReplaceAllString(s, "the test number")
 	s = testAddrName.ReplaceAllString(s, "{name}")
 	return space.ReplaceAllString(digits.ReplaceAllString(s, "#"), " ")
 }
 
 // testAddrName matches Soundcheck's fake names ("soundcheck-test 3f2a").
-var testAddrName = regexp.MustCompile(`(?:soundcheck|echo)-test[\w -]*`)
+var testAddrName = regexp.MustCompile(`(?i)(?:soundcheck|echo)-test[\w -]*`)
 
 func text(m model.Message) string {
 	if strings.TrimSpace(m.Text) != "" {
@@ -463,16 +483,40 @@ func mismatch(before, after *model.Run) []string {
 	if before.Mode != after.Mode {
 		w = append(w, fmt.Sprintf("the snapshot ran in %s mode and this run in %s mode", before.Mode, after.Mode))
 	}
-	missing := 0
+	missing, added := 0, 0
 	for _, a := range before.Actions {
 		if after.Action(a.ID) == nil {
 			missing++
 		}
 	}
-	if missing > 0 {
+	for _, a := range after.Actions {
+		if before.Action(a.ID) == nil {
+			added++
+		}
+	}
+	switch missing {
+	case 0:
+	case 1:
+		w = append(w, "1 action from the snapshot wasn't run this time")
+	default:
 		w = append(w, fmt.Sprintf("%d actions from the snapshot weren't run this time", missing))
 	}
+	switch added {
+	case 0:
+	case 1:
+		w = append(w, "1 action isn't in the snapshot; what it sent is listed as new")
+	default:
+		w = append(w, fmt.Sprintf("%d actions aren't in the snapshot; what they sent is listed as new", added))
+	}
 	return w
+}
+
+// times is a count for before/after: "1 time", "3 times".
+func times(n int) string {
+	if n == 1 {
+		return "1 time"
+	}
+	return fmt.Sprintf("%d times", n)
 }
 
 func keys(m map[string][]model.Message) []string {
