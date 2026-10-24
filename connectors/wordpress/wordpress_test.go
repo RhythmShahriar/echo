@@ -1,0 +1,167 @@
+package wordpress
+
+import (
+	"encoding/json"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+	"testing"
+)
+
+func site(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "wp-content", "plugins"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "wp-config.php"), []byte("<?php\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return dir
+}
+
+func TestInstallWritesPluginAndSettings(t *testing.T) {
+	dir := site(t)
+	s := Settings{URL: "http://host.docker.internal:8025", Token: `t'o\k`, Mode: "seal", Force: true}
+	if err := Install(dir, s); err != nil {
+		t.Fatal(err)
+	}
+	got, err := os.ReadFile(filepath.Join(dir, "wp-content", PluginPath))
+	if err != nil || string(got) != string(Plugin()) {
+		t.Fatalf("plugin not written: %v", err)
+	}
+	if fi, _ := os.Stat(filepath.Join(dir, "wp-content", PluginPath)); fi.Mode().Perm() != 0o644 {
+		t.Errorf("plugin mode = %v, want 0644 so the web server can read it", fi.Mode().Perm())
+	}
+	settings := filepath.Join(dir, "wp-content", SettingsPath)
+	if !Installed(dir) {
+		t.Error("Installed = false")
+	}
+	// The settings file must be PHP that returns exactly s.
+	if php, err := exec.LookPath("php"); err == nil {
+		out, err := exec.Command(php, "-r", `echo json_encode(include $argv[1]);`, settings).CombinedOutput()
+		if err != nil {
+			t.Fatalf("php: %v\n%s", err, out)
+		}
+		var m map[string]any
+		if err := json.Unmarshal(out, &m); err != nil {
+			t.Fatalf("settings: %s", out)
+		}
+		if m["url"] != s.URL || m["token"] != s.Token || m["mode"] != "seal" || m["force"] != true {
+			t.Errorf("settings = %v", m)
+		}
+	}
+
+	// Reinstalling with no settings drops the file.
+	if err := Install(filepath.Join(dir, "wp-content"), Settings{}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(settings); !os.IsNotExist(err) {
+		t.Errorf("settings left behind: %v", err)
+	}
+
+	if err := Uninstall(dir); err != nil {
+		t.Fatal(err)
+	}
+	if Installed(dir) {
+		t.Error("still installed")
+	}
+	if err := Uninstall(dir); !IsNotInstalled(err) {
+		t.Errorf("second uninstall: %v", err)
+	}
+}
+
+func TestInstallLeavesForeignFilesAlone(t *testing.T) {
+	dir := site(t)
+	path := filepath.Join(dir, "wp-content", PluginPath)
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte("<?php // someone else's\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := Install(dir, Settings{}); err == nil {
+		t.Error("overwrote a file Echo didn't write")
+	}
+	if err := Uninstall(dir); err == nil {
+		t.Error("removed a file Echo didn't write")
+	}
+}
+
+func TestContentDir(t *testing.T) {
+	if _, err := ContentDir(t.TempDir()); err == nil {
+		t.Error("an empty directory isn't WordPress")
+	}
+	dir := site(t)
+	for _, d := range []string{dir, filepath.Join(dir, "wp-content")} {
+		got, err := ContentDir(d)
+		if err != nil || got != filepath.Join(dir, "wp-content") {
+			t.Errorf("ContentDir(%s) = %s, %v", d, got, err)
+		}
+	}
+}
+
+func TestSettingsRejectUnknownMode(t *testing.T) {
+	if _, err := SettingsPHP(Settings{Mode: "loud"}); err == nil {
+		t.Error("accepted mode loud")
+	}
+	if err := Install(site(t), Settings{Mode: "loud"}); err == nil {
+		t.Error("installed with mode loud")
+	}
+}
+
+func TestPHPIsValid(t *testing.T) {
+	php, err := exec.LookPath("php")
+	if err != nil {
+		t.Skip("php not installed")
+	}
+	dir := t.TempDir()
+	script, err := Script(Settings{URL: "http://echo:8025", Token: "abc"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, src := range map[string]string{"echo.php": string(Plugin()), "install.php": script, "uninstall.php": UninstallScript()} {
+		p := filepath.Join(dir, name)
+		if err := os.WriteFile(p, []byte(src), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if out, err := exec.Command(php, "-l", p).CombinedOutput(); err != nil {
+			t.Errorf("%s: %s", name, out)
+		}
+	}
+}
+
+// The install script, run against a fake WordPress, writes both files.
+func TestScriptInstalls(t *testing.T) {
+	php, err := exec.LookPath("php")
+	if err != nil {
+		t.Skip("php not installed")
+	}
+	dir := t.TempDir()
+	mu := filepath.Join(dir, "mu-plugins")
+	script, err := Script(Settings{URL: "http://echo:8025"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Strip "<?php" and run the body with WPMU_PLUGIN_DIR defined, as WP-CLI would.
+	body := strings.TrimPrefix(script, "<?php\n")
+	code := "define('WPMU_PLUGIN_DIR', $argv[1]);\n" + body
+	if out, err := exec.Command(php, "-r", code, mu).CombinedOutput(); err != nil {
+		t.Fatalf("%v: %s", err, out)
+	}
+	got, err := os.ReadFile(filepath.Join(mu, "rhythm-echo.php"))
+	if err != nil || string(got) != string(Plugin()) {
+		t.Fatalf("plugin: %v", err)
+	}
+	if b, err := os.ReadFile(filepath.Join(mu, "rhythm-echo", "settings.php")); err != nil || !strings.Contains(string(b), "http://echo:8025") {
+		t.Fatalf("settings: %v %s", err, b)
+	}
+	un := strings.TrimPrefix(UninstallScript(), "<?php\n")
+	if out, err := exec.Command(php, "-r", "define('WPMU_PLUGIN_DIR', $argv[1]);\n"+un, mu).CombinedOutput(); err != nil {
+		t.Fatalf("%v: %s", err, out)
+	}
+	if _, err := os.Stat(filepath.Join(mu, "rhythm-echo.php")); !os.IsNotExist(err) {
+		t.Error("uninstall script left the plugin")
+	}
+}

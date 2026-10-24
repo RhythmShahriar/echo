@@ -1,0 +1,15 @@
+# PHPStan for the mu-plugin, level 6 with WordPress stubs. In a throwaway
+# directory with phpstan/phpstan, szepeviktor/phpstan-wordpress and
+# phpstan/extension-installer installed (composer:2), run:
+#   docker run --rm -v "$PWD:/app" -v <this dir>:/src:ro -w /app php:8.3-cli \
+#     vendor/bin/phpstan analyse -c /src/phpstan.neon.dist
+parameters:
+  level: 6
+  phpVersion: 70400
+  # Hook callbacks get whatever other plugins pass, whatever the docblock
+  # says, so the defensive type checks stay.
+  treatPhpDocTypesAsCertain: false
+  bootstrapFiles:
+    - testdata/phpstan-bootstrap.php
+  paths:
+    - echo.php
