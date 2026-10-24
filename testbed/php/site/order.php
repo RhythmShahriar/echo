@@ -1,4 +1,7 @@
 <?php
+// Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+// SPDX-License-Identifier: MIT
+
 // Takes a wholesale order and emails the confirmation with mail().
 //
 // Broken state (testbed/scenarios.yaml):

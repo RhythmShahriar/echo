@@ -1,4 +1,7 @@
 #!/bin/sh
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
 # Builds the testbed's Next.js app into testbed/runtime/next, reusing the
 # Node connector's own fixture app (connectors/node/fixtures/next-app: its
 # package.json, lockfile, next.config.mjs with withEcho, instrumentation.ts)

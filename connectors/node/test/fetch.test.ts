@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+// SPDX-License-Identifier: MIT
+
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import http from 'node:http';

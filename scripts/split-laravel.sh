@@ -1,4 +1,7 @@
 #!/bin/sh
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
 # Publishes connectors/laravel to its own repository, which Packagist reads
 # as rhythmsh/echo-laravel: the subtree's history goes to master, and the
 # given version tag (e.g. v1.0.0) is created there too.

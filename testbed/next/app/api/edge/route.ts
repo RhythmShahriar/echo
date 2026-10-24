@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+// SPDX-License-Identifier: MIT
+
 // An Edge route: tells the team about a new signup in Slack. Echo's fetch
 // hook works in the Edge runtime too.
 import { slackHook } from '../../fake';

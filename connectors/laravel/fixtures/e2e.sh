@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
 # End-to-end test of the Laravel connector against Echo's real catcher.
 #
 # It runs the catcher on the host (GOWORK=off go run ./fixtures/catcher),

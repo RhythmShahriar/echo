@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+// SPDX-License-Identifier: MIT
+
 // Process-wide state. It lives on globalThis under a registered symbol, not
 // in module scope, because one process can load this package twice: the ESM
 // build through `node --import @rhythmsh/echo/register` and the CJS build

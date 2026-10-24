@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+// SPDX-License-Identifier: MIT
+
 // Package compare diffs two runs: for each action that's in both, it
 // matches the messages sent before and after, and reports the ones that
 // stopped (BROKE), appeared (NEW), changed (who they go to, the subject,

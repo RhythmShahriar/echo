@@ -1,4 +1,6 @@
 <?php
+// Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+// SPDX-License-Identifier: MIT
 
 // The end-to-end fixture's one action: an order is placed. It sends a
 // Mailable, texts the customer through Twilio's API and queues a

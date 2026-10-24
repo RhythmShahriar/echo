@@ -1,4 +1,7 @@
 #!/bin/sh
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
 # Builds the testbed's Laravel app into testbed/runtime/laravel, the way the
 # connector's own end-to-end test does (connectors/laravel/fixtures/e2e.sh):
 # a stock laravel/laravel, rhythmsh/echo-laravel from a path repository

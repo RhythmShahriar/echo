@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+// SPDX-License-Identifier: MIT
+
 import { defineConfig } from 'vitest/config';
 
 // Safety net: test workers start with every outbound request routed to a

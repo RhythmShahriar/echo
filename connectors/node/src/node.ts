@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+// SPDX-License-Identifier: MIT
+
 // Everything that needs Node built-ins: the http/https hook, Nodemailer and
 // the Next.js request lookup on the Node runtime. Kept apart so the Edge
 // bundle of `@rhythmsh/echo/next` never reaches it.

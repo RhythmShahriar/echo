@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+// SPDX-License-Identifier: MIT
+
 // Builds dist/esm and dist/cjs with tsc alone. TypeScript decides a file's
 // output format from the nearest package.json "type" (module: nodenext), so
 // the CJS build compiles a copy of src/ that sits under a "commonjs"

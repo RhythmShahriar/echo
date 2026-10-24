@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+// SPDX-License-Identifier: MIT
+
 // Package recognize turns an outbound HTTP request into a message: it
 // works out the channel (SMS, chat, webhook…), the provider and the
 // recipients and content, and says what a sealed staging site should be

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+// SPDX-License-Identifier: MIT
+
 // A tiny Echo for tests: POST /v1/capture records the capture and answers
 // like the real catcher (seal: fake HTTP and email; observe: allow), unless
 // a test sets its own decide().

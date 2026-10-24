@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+// SPDX-License-Identifier: MIT
+
 // Tying each capture to the action that caused it. Echo's browser and
 // `echo run` send X-Echo-Run: <run>/<action> (header or cookie) with the
 // request that triggers the work; the connector copies it into every capture

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+// SPDX-License-Identifier: MIT
+
 // Command catcher runs Echo's real capture API on its own, for the Node
 // connector's end-to-end test: the fixture Next.js app posts captures to it
 // and the test reads them back from /v1/messages.

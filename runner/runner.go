@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+// SPDX-License-Identifier: MIT
+
 // Package runner runs a project's actions against a running Echo: for
 // each one it triggers the site (an HTTP request, a command, a replayed
 // webhook), lets queued senders catch up, waits until the site falls

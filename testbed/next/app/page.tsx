@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+// SPDX-License-Identifier: MIT
+
 // The testbed's Next.js app: Bean & Leaf accounts. POST /api/signup with
 // name, email and phone; GET /api/edge sends the team a Slack alert.
 export default function Home() {

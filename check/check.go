@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+// SPDX-License-Identifier: MIT
+
 // Package check finds problems in captured messages: placeholders that
 // were never filled in, PHP errors printed into an email, links to a
 // development machine, SMS that cost several parts, webhooks that fail.

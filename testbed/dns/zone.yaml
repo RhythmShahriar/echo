@@ -1,3 +1,6 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
 # The fixture DNS the benchmark serves on 127.0.0.1:18870 (bench/dns.go) for
 # the deliverability scenarios: `rhythm-echo check <domain> --resolver
 # 127.0.0.1:18870` resolves only these names, and never the real ones.

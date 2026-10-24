@@ -1,4 +1,6 @@
 <?php
+// Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+// SPDX-License-Identifier: MIT
 
 // A fake Echo for the tests, run with `php -S 127.0.0.1:PORT echo-server.php`.
 // It speaks the capture protocol: captures are appended to

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+// SPDX-License-Identifier: MIT
+
 // Package wordpress installs Echo's WordPress connector: one mu-plugin,
 // embedded in the binary, that reports every wp_mail() and wp_remote_*()
 // call to Echo and obeys its seal. It can be written into a WordPress tree

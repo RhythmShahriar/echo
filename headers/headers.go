@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+// SPDX-License-Identifier: MIT
+
 // Package headers analyzes a received email's headers: what the receiving
 // server concluded about SPF, DKIM and DMARC, how the message is signed,
 // which service sent it and the path it took. The inferred sender feeds

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+// SPDX-License-Identifier: MIT
+
 //go:build docker
 
 // The connector inside a real WordPress: wordpress:php8.2-apache and

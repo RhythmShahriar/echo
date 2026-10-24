@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+// SPDX-License-Identifier: MIT
+
 // Package report renders Echo's results: a live line per captured
 // message (`rhythm echo watch`), the terminal summary of a run or a
 // comparison, plain text for logs and screen readers, JSON, Markdown,

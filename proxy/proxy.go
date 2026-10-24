@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+// SPDX-License-Identifier: MIT
+
 // Package proxy is Echo's HTTP(S) proxy: the bridge for apps and SDKs
 // that send without going through a connector's hooks (the Twilio and
 // Stripe PHP SDKs call cURL directly, Python and Go read HTTPS_PROXY).

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+// SPDX-License-Identifier: MIT
+
 // The real provider SDKs, sealed. Requests go to the real provider hosts,
 // so each one must be answered by Echo without a connection: vitest.config.ts
 // routes anything that escapes to a dead proxy, which would fail the test.

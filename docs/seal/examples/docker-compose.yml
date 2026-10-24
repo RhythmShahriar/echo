@@ -1,3 +1,6 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
 # Hard seal for a Docker Compose staging site: the app has no route to
 # the internet, only to Echo. Echo records every email and request, fakes
 # provider answers (seal mode) and is the only service with a way out.

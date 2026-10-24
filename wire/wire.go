@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+// SPDX-License-Identifier: MIT
+
 // Package wire is the small JSON protocol between Echo and the connectors
 // inside a site (the WordPress mu-plugin, the Laravel package, the Node
 // package): a connector reports each email and each outbound HTTP

@@ -1,4 +1,6 @@
 <?php
+// Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+// SPDX-License-Identifier: MIT
 
 // Rhythm Echo connector. Every key can be set from the environment, so a
 // staging box needs no published config file.

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+// SPDX-License-Identifier: MIT
+
 // The JSON protocol between Echo and connectors, mirrored from Echo's
 // wire/wire.go. Keep the two in step: Echo rejects captures from a newer
 // wire version.

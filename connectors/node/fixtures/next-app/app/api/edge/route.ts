@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+// SPDX-License-Identifier: MIT
+
 // An Edge route: the fetch hook works in the Edge runtime too.
 import { slackHook } from '../../fake';
 

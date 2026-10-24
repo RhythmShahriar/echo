@@ -1,4 +1,7 @@
 <?php
+// Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+// SPDX-License-Identifier: MIT
+
 /**
  * Plugin Name: Testbed Shop SMS
  * Description: An "SMS order alerts" add-on: texts the shop owner about every new order through its bundled Twilio client, which uses raw cURL like the Twilio PHP SDK, so the WordPress HTTP API (and Echo's pre_http_request hook) never sees it. Echo catches it through its proxy.

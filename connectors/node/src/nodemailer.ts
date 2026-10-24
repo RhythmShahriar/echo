@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+// SPDX-License-Identifier: MIT
+
 // The Nodemailer hook. Node only.
 //
 // It patches sendMail on the transporter class (Mailer.prototype) rather

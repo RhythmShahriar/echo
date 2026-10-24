@@ -1,4 +1,7 @@
 #!/bin/sh
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
 # Seeds the testbed WordPress: install, the fixture plugins, the owner's
 # address. Run by `make up` inside the wp container (as www-data); does
 # nothing if the site is installed.

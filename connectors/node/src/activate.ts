@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+// SPDX-License-Identifier: MIT
+
 // Turning the connector on: configuration, the production guard and the
 // one status line. Shared by the Node and Next.js entry points; safe on Edge.
 

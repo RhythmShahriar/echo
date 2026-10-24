@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+// SPDX-License-Identifier: MIT
+
 // A Node route handler that sends what a signup typically sends: a Resend
 // email, a Twilio SMS and a Nodemailer email.
 import nodemailer from 'nodemailer';

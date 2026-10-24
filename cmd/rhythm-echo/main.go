@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+// SPDX-License-Identifier: MIT
+
 // rhythm-echo is the Echo binary, normally run as `rhythm echo`.
 package main
 

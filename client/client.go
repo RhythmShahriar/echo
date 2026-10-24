@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+// SPDX-License-Identifier: MIT
+
 // Package client talks to a running Echo (`rhythm echo up`) over its HTTP
 // API. Soundcheck uses it to tie form submits to the messages they send,
 // and Echo's own commands use it to list, wait for and clear messages.

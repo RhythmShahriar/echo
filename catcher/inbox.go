@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+// SPDX-License-Identifier: MIT
+
 // Package catcher is Echo's running side: an inbox of captured messages,
 // the HTTP API connectors and tools talk to, the seal policy that decides
 // what may leave, and the SMTP sink.

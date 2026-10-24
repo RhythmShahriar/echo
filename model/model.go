@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+// SPDX-License-Identifier: MIT
+
 // Package model holds what Echo records: the messages a site sends
 // (email, SMS, webhooks, chat alerts, analytics and payment calls), the
 // actions that made it send them, and the issues and changes found when

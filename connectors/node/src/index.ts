@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+// SPDX-License-Identifier: MIT
+
 // @rhythmsh/echo for Node: Express, Fastify, Nest, scripts and workers.
 // Next.js apps use @rhythmsh/echo/next from instrumentation.ts instead.
 

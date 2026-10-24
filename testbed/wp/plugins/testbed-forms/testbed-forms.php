@@ -1,4 +1,7 @@
 <?php
+// Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+// SPDX-License-Identifier: MIT
+
 /**
  * Plugin Name: Testbed Forms
  * Description: A contact form like Contact Form 7 or WPForms. On submit it emails the site owner, sends the visitor an autoresponder and posts the lead to a Zapier catch hook. POST /wp-json/testbed-forms/v1/contact with name, email and message.

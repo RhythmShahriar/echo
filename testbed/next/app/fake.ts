@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+// SPDX-License-Identifier: MIT
+
 // Fake, well-formed credentials, assembled at runtime so no key-shaped
 // literal sits in the source.
 export const resendKey = ['re', '_', 'testbedtestbed'].join('');

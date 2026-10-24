@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+// SPDX-License-Identifier: MIT
+
 // The fetch hook, for Node and the Edge runtime. It wraps globalThis.fetch
 // once, at register(); Next.js patches fetch lazily on top of whatever
 // globalThis.fetch is by then, so its cache sits above this wrapper and

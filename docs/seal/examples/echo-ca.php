@@ -1,4 +1,7 @@
 <?php
+// Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+// SPDX-License-Identifier: MIT
+
 /**
  * Plugin Name: Echo CA for staging
  * Description: Makes wp_remote_* trust Echo's CA, so HTTPS through Echo's proxy verifies.

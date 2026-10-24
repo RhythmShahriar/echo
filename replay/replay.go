@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+// SPDX-License-Identifier: MIT
+
 // Package replay sends signed test webhooks (Stripe, Standard Webhooks,
 // GitHub, WooCommerce, generic HMAC) to a staging site, so Echo can capture
 // what the site sends in response: "payment_intent.succeeded → order email

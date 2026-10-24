@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+// SPDX-License-Identifier: MIT
+
 // Command catcher runs Echo's real catcher (capture API and SMTP sink) for
 // the Laravel connector's end-to-end test, without the rhythm-echo CLI:
 //

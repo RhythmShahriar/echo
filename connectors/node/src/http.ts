@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+// SPDX-License-Identifier: MIT
+
 // The http and https hook, for SDKs that skip fetch: axios (Twilio,
 // SendGrid, Postmark), got, older clients. Node only.
 //

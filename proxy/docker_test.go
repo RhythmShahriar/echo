@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+// SPDX-License-Identifier: MIT
+
 //go:build docker
 
 // Tests with clients in Docker. Run with: go test -tags docker ./proxy

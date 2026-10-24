@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+// SPDX-License-Identifier: MIT
+
 // Talking to Echo. Every capture goes through send(), which never throws:
 // null means "no decision", and each hook turns that into fail-closed or
 // fail-open depending on the last mode Echo reported.

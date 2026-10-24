@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+// SPDX-License-Identifier: MIT
+
 export const metadata = { title: 'Bean & Leaf accounts' };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

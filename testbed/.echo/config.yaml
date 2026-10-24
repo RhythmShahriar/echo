@@ -1,3 +1,6 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
 # Echo settings for the testbed: what `rhythm-echo up`, `snapshot` and
 # `compare` use when run from testbed/ (or with --config testbed/.echo/config.yaml).
 # The benchmark runs each scenario's actions with --action.

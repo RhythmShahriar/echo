@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+// SPDX-License-Identifier: MIT
+
 // The built package, loaded the ways an app loads it: `node --import`
 // (ESM), `node -r` (CJS), and both at once (one shared set of hooks).
 // Run `npm run build` first; `npm test` does.

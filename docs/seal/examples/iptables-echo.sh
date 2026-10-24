@@ -1,4 +1,7 @@
 #!/bin/sh
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
 # Hard seal for a staging VM with iptables (no nftables): egress deny
 # with Echo as the only way out. Same policy as nftables-echo.nft.
 #

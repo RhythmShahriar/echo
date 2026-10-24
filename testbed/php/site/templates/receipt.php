@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+// SPDX-License-Identifier: MIT
+
 Hello <?php echo $name; ?>,
 
 Thanks for your wholesale order <?php echo $order; ?> for <?php echo $company; ?>.

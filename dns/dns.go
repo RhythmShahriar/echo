@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+// SPDX-License-Identifier: MIT
+
 // Package dns checks a domain's mail deliverability records (SPF, DKIM,
 // DMARC, MX, MTA-STS, TLS-RPT and BIMI) without sending anything. Every
 // lookup goes through a Resolver, so checks run against fixture zones in

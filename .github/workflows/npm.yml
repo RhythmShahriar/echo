@@ -1,3 +1,6 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
 # Publishes the Node connector (connectors/node) to npm as @rhythmsh/echo
 # when a version tag is pushed, with provenance. Needs the NPM_TOKEN
 # repository secret (an npm granular token with write access), until npm

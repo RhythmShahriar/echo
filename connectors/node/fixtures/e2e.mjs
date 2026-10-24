@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+// SPDX-License-Identifier: MIT
+
 // End-to-end: the packed package in a real Next.js app, against Echo's real
 // Go catcher, sealed. Every provider request goes to its real hostname, so
 // next start runs with all other egress routed to a dead proxy: a request

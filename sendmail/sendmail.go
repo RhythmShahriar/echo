@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+// SPDX-License-Identifier: MIT
+
 // Package sendmail is a sendmail-compatible shim: `rhythm-echo sendmail`
 // reads a message on stdin, like /usr/sbin/sendmail, and hands it to Echo
 // instead of delivering it. PHP's mail() (through sendmail_path), cron,

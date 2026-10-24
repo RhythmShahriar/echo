@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+// SPDX-License-Identifier: MIT
+
 // Package config loads Echo's project settings from .echo/config.yaml:
 // how the catcher behaves (seal or observe, what may be reached), what
 // counts as staging and production, and the actions `snapshot` and

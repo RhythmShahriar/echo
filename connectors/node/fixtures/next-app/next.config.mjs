@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+// SPDX-License-Identifier: MIT
+
 import { withEcho } from '@rhythmsh/echo/next';
 
 /** @type {import('next').NextConfig} */

@@ -1,4 +1,7 @@
 <?php
+// Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+// SPDX-License-Identifier: MIT
+
 /**
  * Plugin Name: Testbed Stripe Gateway
  * Description: The inbound half of a Stripe gateway: POST /wp-json/testbed-stripe/v1/webhook verifies the Stripe-Signature header with the endpoint's signing secret and, on payment_intent.succeeded, emails the customer that their payment was received.

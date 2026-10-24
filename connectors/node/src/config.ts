@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+// SPDX-License-Identifier: MIT
+
 // Configuration comes from the environment only, so the same build works
 // in development, on a staging server and on a Vercel preview.
 
