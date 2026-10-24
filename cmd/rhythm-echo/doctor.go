@@ -13,10 +13,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/lipgloss"
+
 	"github.com/RhythmShahriar/echo/client"
 	"github.com/RhythmShahriar/echo/connectors/wordpress"
 	"github.com/RhythmShahriar/echo/sendmail"
 	"github.com/RhythmShahriar/echo/wire"
+	"github.com/RhythmShahriar/rhythm/kit/ui"
 )
 
 // cmdDoctor checks every capture layer end to end: Echo is up, the site's
@@ -24,9 +27,9 @@ import (
 // It never sends anything real: canaries go to .invalid addresses.
 func cmdDoctor(s *session) int {
 	ok, fails := 0, 0
-	pass := func(label, detail string) { ok++; s.view.Step("✓ "+label, detail) }
-	fail := func(label, detail string) { fails++; s.view.Step("✗ "+label, detail) }
-	note := func(label, detail string) { s.view.Step("· "+label, detail) }
+	pass := func(label, detail string) { ok++; s.doctorLine(doctorOK, label, detail) }
+	fail := func(label, detail string) { fails++; s.doctorLine(doctorFail, label, detail) }
+	note := func(label, detail string) { s.doctorLine(doctorNote, label, detail) }
 	s.view.Header(version, "doctor")
 
 	h, err := s.echo.Health(s.ctx)
@@ -122,6 +125,27 @@ func cmdDoctor(s *session) int {
 	}
 	_, _ = s.echo.Clear(context.WithoutCancel(s.ctx), client.Filter{Run: run})
 	return s.doctorEnd(ok, fails)
+}
+
+// How a doctor check turned out: a glyph on a terminal, a word in --plain.
+type doctorResult struct{ glyph, word, color string }
+
+var (
+	doctorOK   = doctorResult{"✓", "ok", ui.Ok}
+	doctorFail = doctorResult{"✗", "FAIL", ui.Danger}
+	doctorNote = doctorResult{"·", "note", ui.Muted}
+)
+
+func (s *session) doctorLine(r doctorResult, label, detail string) {
+	if s.o.quiet && r != doctorFail {
+		return
+	}
+	if s.plain {
+		fmt.Fprintf(s.stdout, "%-4s  %s: %s\n", r.word, label, detail)
+		return
+	}
+	mark := lipgloss.NewStyle().Foreground(lipgloss.Color(r.color)).Bold(true).Render(r.glyph)
+	fmt.Fprintf(s.stdout, "  %s %s %s\n", mark, lipgloss.NewStyle().Bold(true).Width(13).Render(label), detail)
 }
 
 func (s *session) doctorEnd(ok, fails int) int {

@@ -55,6 +55,7 @@ type session struct {
 	ctx            context.Context
 	stop           func()
 	tty, live      bool
+	plain          bool // no color, boxes or glyphs: --plain, or not a terminal
 	view           *report.Pretty
 	notice         <-chan string
 }
@@ -63,8 +64,8 @@ func (p *plan) begin(stdout, stderr io.Writer) *session {
 	s := &session{plan: p, stdout: stdout, stderr: stderr}
 	s.ctx, s.stop = signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	s.tty = cli.IsTerminal(stdout)
-	plain := p.o.plain || !s.tty
-	if plain || p.o.noColor {
+	s.plain = p.o.plain || !s.tty
+	if s.plain || p.o.noColor {
 		lipgloss.SetColorProfile(termenv.Ascii)
 	}
 	s.live = p.format == "" || p.o.output != ""
@@ -72,7 +73,7 @@ func (p *plan) begin(stdout, stderr io.Writer) *session {
 	if !s.live {
 		out = io.Discard
 	}
-	s.view = report.NewPretty(out, stderr, report.PrettyOptions{Plain: plain, Quiet: p.o.quiet, Verbose: p.o.verbose})
+	s.view = report.NewPretty(out, stderr, report.PrettyOptions{Plain: s.plain, Quiet: p.o.quiet, Verbose: p.o.verbose})
 	return s
 }
 
