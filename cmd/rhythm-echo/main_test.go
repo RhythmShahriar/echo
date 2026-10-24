@@ -609,3 +609,55 @@ func TestTokenFlagWarns(t *testing.T) {
 		t.Error("help must steer --token to RHYTHM_ECHO_TOKEN")
 	}
 }
+
+// Ctrl+C during doctor's flush check must return at once, even when the
+// flush command started a child that keeps the output pipe open.
+func TestDoctorFlushCancels(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("uses sleep")
+	}
+	t.Chdir(t.TempDir())
+	srv := httptest.NewServer(catcher.NewServer(catcher.NewInbox(10), catcher.Config{Version: "test"}))
+	defer srv.Close()
+	if err := os.MkdirAll(".echo", 0o700); err != nil {
+		t.Fatal(err)
+	}
+	// "; echo done" keeps sh from exec'ing sleep, so sleep is a child.
+	if err := os.WriteFile(config.Path(), []byte("smtp: \"off\"\nflush: [\"sleep 25; echo done\"]\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	p, err := parse([]string{"--url", srv.URL, "--plain"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out, errb bytes.Buffer
+	s := p.begin(&out, &errb)
+	defer s.stop()
+	ctx, cancel := context.WithCancel(s.ctx)
+	s.ctx = ctx
+	time.AfterFunc(200*time.Millisecond, cancel)
+	start := time.Now()
+	code := cmdDoctor(s)
+	if took := time.Since(start); took > 3*time.Second {
+		t.Errorf("doctor took %s after cancel, want under 3s", took)
+	}
+	if code != exitCanceled || !strings.Contains(errb.String(), "canceled") {
+		t.Errorf("exit %d, stderr %q; want %d and canceled", code, errb.String(), exitCanceled)
+	}
+}
+
+func TestDoctorFlushRuns(t *testing.T) {
+	t.Chdir(t.TempDir())
+	srv := httptest.NewServer(catcher.NewServer(catcher.NewInbox(10), catcher.Config{Version: "test"}))
+	defer srv.Close()
+	if err := os.MkdirAll(".echo", 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(config.Path(), []byte("smtp: \"off\"\nflush: [\"echo ok\", \"exit 3\"]\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	code, out, _ := runCLI(t, "doctor", "--url", srv.URL, "--plain")
+	if code != exitFindings || !strings.Contains(out, "ok    Flush: echo ok") || !strings.Contains(out, `FAIL  Flush: "exit 3"`) {
+		t.Errorf("exit %d\n%s", code, out)
+	}
+}

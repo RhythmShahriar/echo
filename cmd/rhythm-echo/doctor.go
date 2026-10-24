@@ -13,6 +13,7 @@ import (
 	"net/smtp"
 	"os"
 	"os/exec"
+	"runtime"
 	"strings"
 	"time"
 
@@ -107,6 +108,7 @@ func cmdDoctor(s *session) int {
 	// Laravel connector, when run from a Laravel project.
 	if _, err := os.Stat("artisan"); err == nil {
 		cmd := exec.CommandContext(s.ctx, "php", "artisan", "echo:canary", "--json")
+		cmd.WaitDelay = shellWaitDelay
 		cmd.Env = append(os.Environ(), "RHYTHM_ECHO_RUN="+run+"/laravel")
 		if out, err := cmd.CombinedOutput(); err != nil {
 			fail("Laravel", strings.TrimSpace(lastLine(string(out))))
@@ -119,15 +121,40 @@ func cmdDoctor(s *session) int {
 
 	// Flush commands.
 	for _, f := range s.cfg.Flush {
-		cmd := exec.CommandContext(s.ctx, "sh", "-c", f) //nolint:gosec // the user's configured command
-		if out, err := cmd.CombinedOutput(); err != nil {
+		out, err := shell(s.ctx, f).CombinedOutput()
+		switch {
+		case s.ctx.Err() != nil:
+			_, _ = s.echo.Clear(context.WithoutCancel(s.ctx), client.Filter{Run: run})
+			return s.fail(s.ctx.Err())
+		case err != nil:
 			fail("Flush", fmt.Sprintf("%q: %v %s", f, err, strings.TrimSpace(lastLine(string(out)))))
-		} else {
+		default:
 			pass("Flush", f)
 		}
 	}
 	_, _ = s.echo.Clear(context.WithoutCancel(s.ctx), client.Filter{Run: run})
 	return s.doctorEnd(ok, fails)
+}
+
+// shellWaitDelay is how long a canceled command's output may stay open.
+const shellWaitDelay = 2 * time.Second
+
+// shell runs line in the platform's shell: sh -c, or cmd /C on Windows,
+// which has no sh. Canceling ctx kills the shell, but a child it started
+// (sleep, wp cron) can live on and hold the output pipe open, so Wait
+// would block until that child exits. WaitDelay closes the pipe instead,
+// so Ctrl+C returns within two seconds.
+//
+// This stands in for runner.Shell, which kills the whole process group,
+// until that is released.
+func shell(ctx context.Context, line string) *exec.Cmd {
+	name, flag := "sh", "-c"
+	if runtime.GOOS == "windows" {
+		name, flag = "cmd", "/C"
+	}
+	cmd := exec.CommandContext(ctx, name, flag, line) //nolint:gosec // the user's configured command
+	cmd.WaitDelay = shellWaitDelay
+	return cmd
 }
 
 // How a doctor check turned out: a glyph on a terminal, a word in --plain.
