@@ -23,6 +23,17 @@ jobs:
         # rhysd/actionlint:1.7.7, by digest so a moved tag can't change the check.
         run: docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint@sha256:887a259a5a534f3c4f36cb02dca341673c6089431057242cdc931e9f133147e9 -color
 
+  shellcheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: shellcheck
+        # koalaman/shellcheck:v0.10.0, by digest so a moved tag can't change the check.
+        run: |
+          mapfile -t files < <(.github/scripts/shell-files.sh)
+          docker run --rm --network none -v "$PWD:/repo:ro" -w /repo \
+            koalaman/shellcheck@sha256:2097951f02e735b613f4a34de20c40f937a6c8f18ecb170612c88c34517221fb "${files[@]}"
+
   # The connectors' own suites, on every pull request (go test doesn't run them).
   connectors-node:
     strategy:

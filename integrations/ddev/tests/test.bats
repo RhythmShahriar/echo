@@ -8,6 +8,10 @@
 # ECHO_TEST_IMAGE runs another image than the published one, such as one
 # built from this checkout (see the ddev job in .github/workflows/ci.yml).
 
+# bats runs each @test as a function, which shellcheck can't see, so it
+# takes the tests after a helper's return for unreachable code.
+# shellcheck disable=SC2317
+
 setup() {
   set -eu -o pipefail
 
@@ -19,10 +23,12 @@ setup() {
   bats_load_library bats-file
   bats_load_library bats-support
 
-  export DIR="$(cd "$(dirname "${BATS_TEST_FILENAME}")/.." >/dev/null 2>&1 && pwd)"
+  DIR="$(cd "$(dirname "${BATS_TEST_FILENAME}")/.." >/dev/null 2>&1 && pwd)"
+  export DIR
   export PROJNAME="test-ddev-echo"
   mkdir -p "${HOME}/tmp"
-  export TESTDIR="$(mktemp -d "${HOME}/tmp/${PROJNAME}.XXXXXX")"
+  TESTDIR="$(mktemp -d "${HOME}/tmp/${PROJNAME}.XXXXXX")"
+  export TESTDIR
   export DDEV_NONINTERACTIVE=true
   export DDEV_NO_INSTRUMENTATION=true
   export CI=true
