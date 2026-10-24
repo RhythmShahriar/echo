@@ -1363,7 +1363,7 @@ func TestDoctorNamesMailpit(t *testing.T) {
 		http.NotFound(w, r)
 	}))
 	code, out, _ := runCLI(t, "doctor", "--url", mailpit.URL, "--plain")
-	if code != exitFindings || !strings.Contains(out, mailpit.URL+" is Mailpit, not Echo; start Echo on a free port") {
+	if code != exitError || !strings.Contains(out, mailpit.URL+" is Mailpit, not Echo; start Echo on a free port") {
 		t.Errorf("doctor against Mailpit's API: %d\n%s", code, out)
 	}
 
@@ -1815,7 +1815,7 @@ func TestEveryCommandWritesTheEnvelope(t *testing.T) {
 	if len(checks) == 0 || checks[0].Name != "Echo" || checks[0].Status != "ok" || !env.Complete {
 		t.Errorf("doctor --json: %+v", checks)
 	}
-	env = cli(kindDoctor, &checks, exitFindings, "doctor", "--url", "http://127.0.0.1:20479", "--json")
+	env = cli(kindDoctor, &checks, exitError, "doctor", "--url", "http://127.0.0.1:20479", "--json")
 	if env.Summary.Errors != 1 || env.Verdict != verdictError || env.Complete || checks[0].Status != "error" {
 		t.Errorf("doctor --json with no Echo: %+v %s %+v", env.Summary, env.Verdict, checks)
 	}

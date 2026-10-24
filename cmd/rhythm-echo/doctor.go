@@ -144,14 +144,19 @@ func (d *doctor) add(r doctorResult, label, detail string) {
 }
 
 // end prints the tally (or writes the checks with --json) and picks the
-// exit code.
+// exit code. An Echo that can't be reached exits 3, as the help says:
+// doctor couldn't check the rest, which isn't the same as a failed check.
 func (d *doctor) end() int {
 	if d.s.o.json {
 		if err := writeEnvelope(d.s.stdout, kindDoctor, doctorChecks{Checks: d.checks, Stopped: d.stopped}); err != nil {
 			return d.s.fail(err)
 		}
 	}
-	return d.s.doctorEnd(d.ok, d.fails)
+	code := d.s.doctorEnd(d.ok, d.fails)
+	if d.stopped {
+		return exitError
+	}
+	return code
 }
 
 // smtp sends a canary through the SMTP sink at addr. When it doesn't

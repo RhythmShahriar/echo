@@ -142,7 +142,7 @@ func TestDoctorChecksEchoAndSMTP(t *testing.T) {
 	if code != 0 || !strings.Contains(out, "ok    SMTP: ") || strings.ContainsAny(out, "✓✗·") || !strings.Contains(out, "0 failed") {
 		t.Fatalf("doctor: %d\n%s\n%s", code, out, errOut)
 	}
-	if code, out, _ := runCLI(t, "doctor", "--url", "http://127.0.0.1:1", "--plain"); code != exitFindings || !strings.Contains(out, "FAIL  Echo: ") {
+	if code, out, _ := runCLI(t, "doctor", "--url", "http://127.0.0.1:1", "--plain"); code != exitError || !strings.Contains(out, "FAIL  Echo: ") {
 		t.Errorf("doctor without Echo: %d\n%s", code, out)
 	}
 	_ = os.WriteFile(config.Path(), []byte("smtp: \"off\"\n"), 0o600)
