@@ -728,6 +728,36 @@ func TestWatchShowsStatusChangesAndIssues(t *testing.T) {
 	}
 }
 
+// TestWatchShowsWhatArrivedWhileItStarted: a terminal that doesn't
+// answer lipgloss's color query holds watch up for seconds before its
+// first line. A message captured in that time, after the command began,
+// still shows.
+func TestWatchShowsWhatArrivedWhileItStarted(t *testing.T) {
+	t.Chdir(t.TempDir())
+	in := catcher.NewInbox(100)
+	srv := httptest.NewServer(catcher.NewServer(in, catcher.Config{Version: "test"}))
+	defer srv.Close()
+	watch, _ := lookup("watch")
+	p, err := parse(watch, []string{"--url", srv.URL, "--plain"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(10 * time.Millisecond)
+	in.Add(model.Message{Channel: model.Email, To: []string{"ann@shop.test"}, Subject: "Sent while watch started", Status: model.Faked})
+	out, errb := &syncBuffer{}, &syncBuffer{}
+	s := p.begin(out, errb)
+	ctx, cancel := context.WithCancel(context.Background())
+	s.ctx = ctx
+	done := make(chan int)
+	go func() { done <- cmdWatch(s) }()
+	defer func() {
+		cancel()
+		<-done
+		s.stop()
+	}()
+	waitFor(t, func() bool { return strings.Contains(out.String(), "Sent while watch started") }, "the message sent while watch started")
+}
+
 func TestStatusLRUForgetsTheOldest(t *testing.T) {
 	c := newStatusLRU(2)
 	c.put("a", model.Faked)

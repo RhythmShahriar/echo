@@ -26,6 +26,7 @@ import (
 
 	"github.com/RhythmShahriar/echo/check"
 	"github.com/RhythmShahriar/echo/client"
+	"github.com/RhythmShahriar/echo/cmd/rhythm-echo/internal/started"
 	"github.com/RhythmShahriar/echo/compare"
 	"github.com/RhythmShahriar/echo/config"
 	"github.com/RhythmShahriar/echo/dns"
@@ -583,7 +584,13 @@ func cmdWatch(s *session) int {
 	}
 	w := &watcher{s: s, status: newStatusLRU(watchMemory), enc: json.NewEncoder(s.stdout), opts: s.checks}
 	w.enc.SetEscapeHTML(false)
-	start := time.Now().UTC()
+	// From when the command began: a terminal that doesn't answer the
+	// color query Bubble Tea sends as it initializes holds the process up
+	// for seconds before main runs. What arrived meanwhile must still show.
+	start := s.began.UTC()
+	if started.At.Before(start) {
+		start = started.At.UTC()
+	}
 	if s.o.since > 0 {
 		start = start.Add(-s.o.since)
 	}

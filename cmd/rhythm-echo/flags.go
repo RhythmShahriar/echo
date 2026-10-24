@@ -171,6 +171,7 @@ type plan struct {
 	o       options
 	args    []string
 	cfg     config.Config
+	began   time.Time     // when the command started, before anything could hold it up
 	checks  check.Options // what the config expects of every message: its site, rules: and checks:
 	cfgPath string        // the config file read, absolute; "" when there is none and the defaults apply
 	notes   []string      // said on stderr before the command runs
@@ -180,7 +181,7 @@ type plan struct {
 }
 
 func parse(c cmdSpec, args []string) (*plan, error) {
-	p := &plan{}
+	p := &plan{began: time.Now()}
 	o := &p.o
 	fs := flagSet(o)
 	if c.accepts("timeout") {
