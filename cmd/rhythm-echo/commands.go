@@ -1029,12 +1029,20 @@ type snapshotEntry struct {
 	Latest   bool      `json:"latest"` // the snapshot compare uses when none is named
 }
 
-// doctorCheck is one line of doctor --json.
+// doctorCheck is one line of doctor --json. Detail says what to do
+// about a failed check.
 type doctorCheck struct {
 	Name   string `json:"name"`
 	Status string `json:"status"` // ok, warning or error
 	Detail string `json:"detail,omitempty"`
-	Fix    string `json:"fix,omitempty"`
+}
+
+// doctorChecks is what doctor --json writes: the checks, and whether
+// doctor stopped early (Echo couldn't be reached, so nothing else was
+// checked), which makes the envelope incomplete.
+type doctorChecks struct {
+	Checks  []doctorCheck
+	Stopped bool
 }
 
 // replayData is replay --json's data.
@@ -1096,8 +1104,9 @@ func newEnvelope(kind jsonKind, v any) envelope {
 		e.Data = t
 	case []snapshotEntry:
 		e.Data = nonNil(t)
-	case []doctorCheck:
-		for _, c := range t {
+	case doctorChecks:
+		e.Complete = !t.Stopped
+		for _, c := range t.Checks {
 			switch c.Status {
 			case string(model.Error):
 				e.Summary.Errors++
@@ -1105,7 +1114,7 @@ func newEnvelope(kind jsonKind, v any) envelope {
 				e.Summary.Warnings++
 			}
 		}
-		e.Data = nonNil(t)
+		e.Data = nonNil(t.Checks)
 	}
 	if len(issues) > 0 {
 		n := report.Counts(issues)

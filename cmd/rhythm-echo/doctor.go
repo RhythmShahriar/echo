@@ -57,6 +57,7 @@ func cmdDoctor(s *session) int {
 		} else {
 			d.fail("Echo", err.Error())
 		}
+		d.stopped = true
 		return d.end()
 	}
 	d.pass("Echo", fmt.Sprintf("%s mode at %s, %d providers recognized", h.Mode, s.echo.URL, len(h.Providers)))
@@ -130,6 +131,7 @@ type doctor struct {
 	run       string // the run ID canaries are tagged with
 	ok, fails int
 	checks    []doctorCheck // for --json
+	stopped   bool          // Echo couldn't be reached, so nothing else was checked
 }
 
 func (d *doctor) pass(label, detail string) { d.ok++; d.add(doctorOK, label, detail) }
@@ -145,7 +147,7 @@ func (d *doctor) add(r doctorResult, label, detail string) {
 // exit code.
 func (d *doctor) end() int {
 	if d.s.o.json {
-		if err := writeEnvelope(d.s.stdout, kindDoctor, d.checks); err != nil {
+		if err := writeEnvelope(d.s.stdout, kindDoctor, doctorChecks{Checks: d.checks, Stopped: d.stopped}); err != nil {
 			return d.s.fail(err)
 		}
 	}

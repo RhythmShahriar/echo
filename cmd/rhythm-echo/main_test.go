@@ -1741,11 +1741,11 @@ func TestEveryCommandWritesTheEnvelope(t *testing.T) {
 
 	var checks []doctorCheck
 	env = cli(kindDoctor, &checks, exitOK, "doctor", "--url", echo.URL, "--json")
-	if len(checks) == 0 || checks[0].Name != "Echo" || checks[0].Status != "ok" {
+	if len(checks) == 0 || checks[0].Name != "Echo" || checks[0].Status != "ok" || !env.Complete {
 		t.Errorf("doctor --json: %+v", checks)
 	}
 	env = cli(kindDoctor, &checks, exitFindings, "doctor", "--url", "http://127.0.0.1:20479", "--json")
-	if env.Summary.Errors != 1 || env.Verdict != verdictFindings || checks[0].Status != "error" {
+	if env.Summary.Errors != 1 || env.Verdict != verdictError || env.Complete || checks[0].Status != "error" {
 		t.Errorf("doctor --json with no Echo: %+v %s %+v", env.Summary, env.Verdict, checks)
 	}
 
