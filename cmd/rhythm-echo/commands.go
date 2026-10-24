@@ -240,8 +240,8 @@ func failedActions(r *model.Run) (failed, total int) {
 
 // junitFailOn is the threshold the JUnit report marks failures at. The
 // report package doesn't know "none": for a comparison any unknown class
-// fails nothing, but for a run it would fail every issue, so a run gets
-// the default instead.
+// fails nothing. For a run it would fail every issue, so a run gets the
+// default instead.
 func (s *session) junitFailOn(res report.Result) string {
 	if s.o.failOn == failOnNone && !res.Compared() {
 		return ""
@@ -282,7 +282,7 @@ func cmdSnapshot(s *session) int {
 		return s.fail(err)
 	}
 	// A site that was down would replace a good baseline with one where
-	// nothing was sent, and the next compare would pass.
+	// nothing was sent and the next compare would pass.
 	if failed, total := failedActions(run); total > 0 && failed == total {
 		if !s.o.force {
 			s.allFailed = "not saved: every action failed; fix the site or pass --force"
@@ -412,7 +412,7 @@ func cmdReport(s *session) int {
 }
 
 // cmdWatch prints messages as they arrive at a running Echo, the
-// problems found in each, and a line when one changes status (an
+// problems found in each and a line when one changes status (an
 // observed request gets its answer, a check blocks it). With --json it
 // writes one JSON object per line instead: {"type": "message" or
 // "update", "message": {...}}.
@@ -439,7 +439,7 @@ func cmdWatch(s *session) int {
 		// Status changes keep a message's time, so each poll asks again
 		// for the last few minutes: that's where updates happen. Asking
 		// for one more message than last time returns as soon as a new
-		// one arrives, and after a second otherwise, to show updates.
+		// one arrives and after a second otherwise, to show updates.
 		since := newest.Add(-watchWindow)
 		if since.Before(start) {
 			since = start
@@ -469,7 +469,7 @@ const (
 	watchWindow = 2 * time.Minute // how far back watch looks for status changes
 )
 
-// watcher prints each message once, and again as an update when its
+// watcher prints each message once and again as an update when its
 // status changes.
 type watcher struct {
 	s      *session

@@ -156,9 +156,8 @@ internal Docker network or behind a firewall, with Echo as its only way out.
 }
 
 // sendmailLines says how to point PHP's mail() at the shim. The shim
-// finds a sink on 127.0.0.1:1025 by itself, but php-fpm runs
-// sendmail_path with a bare environment, so any other address goes in
-// the command: PHP runs it through sh -c, which takes the VAR=value
+// finds a sink on 127.0.0.1:1025 by itself. php-fpm runs sendmail_path
+// with a bare environment, so any other address goes in the command: PHP runs it through sh -c, which takes the VAR=value
 // prefix. Windows has no sh, so there the variable is set on its own.
 func sendmailLines(smtpAddr, bin, goos string, needsToken bool) string {
 	const pad = "                    "

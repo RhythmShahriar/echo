@@ -39,7 +39,7 @@ func TestPHPMail(t *testing.T) {
 	_, _ = rand.Read(b)
 	script := `$ok = mail('Ann <ann@example.test>', 'Your order #42', "Thanks!\n.\nSee you.", ` +
 		`['From' => 'shop@example.test', 'Bcc' => 'audit@example.test', 'X-Echo-Run' => 'r7/checkout']); echo $ok ? "sent" : "failed";`
-	// The sink's address in PHP's environment, and in sendmail_path itself
+	// The sink's address in PHP's environment and in sendmail_path itself
 	// the way install generic prints it (quoted, as in php.ini): PHP
 	// runs it through sh -c.
 	for i, args := range [][]string{
