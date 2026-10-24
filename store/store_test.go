@@ -137,3 +137,87 @@ func TestExcludeFromGitSkipsIgnoredFolders(t *testing.T) {
 		t.Errorf("an ignored folder mustn't add exclude lines:\n%s", data)
 	}
 }
+
+func take(t *testing.T, s Store, name string, at time.Time) {
+	t.Helper()
+	dir, err := s.NewDir(Incoming, name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := SaveRun(dir, &model.Run{Schema: model.Schema, Name: name, Started: at}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Promote(dir, name); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetLatest(name); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestDeletedLatestFallsBackToNewest(t *testing.T) {
+	s := Store{Root: filepath.Join(t.TempDir(), ".echo")}
+	start := time.Date(2026, 10, 1, 9, 0, 0, 0, time.UTC)
+	take(t, s, "zebra", start)                        // oldest, though it sorts last
+	take(t, s, "before-update", start.Add(time.Hour)) // newest of the two that stay
+	take(t, s, "latest", start.Add(2*time.Hour))
+
+	// Removed behind the store's back (as `snapshots delete` did): the
+	// stale LATEST falls back to the newest remaining snapshot.
+	if err := os.RemoveAll(filepath.Join(s.Root, "snapshots", "latest")); err != nil {
+		t.Fatal(err)
+	}
+	if dir, err := s.Snapshot(""); err != nil || filepath.Base(dir) != "before-update" {
+		t.Fatalf("after deleting the latest: %s, %v", dir, err)
+	}
+	if b, _ := os.ReadFile(filepath.Join(s.Root, "snapshots", "LATEST")); strings.TrimSpace(string(b)) != "before-update" {
+		t.Errorf("LATEST = %q", b)
+	}
+
+	if err := s.Delete("before-update"); err != nil {
+		t.Fatal(err)
+	}
+	if dir, err := s.Snapshot(""); err != nil || filepath.Base(dir) != "zebra" {
+		t.Fatalf("after Delete: %s, %v", dir, err)
+	}
+	if err := s.Delete("zebra"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Snapshot(""); err == nil || !strings.Contains(err.Error(), "no snapshot yet") {
+		t.Errorf("no snapshots left: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(s.Root, "snapshots", "LATEST")); !os.IsNotExist(err) {
+		t.Errorf("LATEST outlived the last snapshot: %v", err)
+	}
+	if err := s.Delete("nope"); err == nil {
+		t.Error("deleting a missing snapshot must fail")
+	}
+}
+
+func TestFailedSnapshotLeavesNothing(t *testing.T) {
+	s := Store{Root: filepath.Join(t.TempDir(), ".echo")}
+	if err := os.MkdirAll(filepath.Join(s.Root, Incoming), 0o750); err != nil { // left by an older version
+		t.Fatal(err)
+	}
+	dir, err := s.NewDir(Incoming, "broken")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := SaveRun(dir, &model.Run{Schema: model.Schema}); err != nil {
+		t.Fatal(err)
+	}
+	if names, _ := s.Snapshots(); len(names) != 0 {
+		t.Errorf("an unfinished snapshot is listed: %v", names)
+	}
+	_ = os.RemoveAll(dir) // what the command does when the snapshot fails
+	var left []string
+	_ = filepath.WalkDir(s.Root, func(p string, d os.DirEntry, _ error) error {
+		if p != s.Root && filepath.Base(p) != "snapshots" {
+			left = append(left, p)
+		}
+		return nil
+	})
+	if len(left) != 0 {
+		t.Errorf("left behind: %v", left)
+	}
+}

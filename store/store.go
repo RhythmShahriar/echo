@@ -20,7 +20,9 @@ import (
 )
 
 // Incoming holds a snapshot while it's being taken, so a failed or
-// canceled snapshot never replaces a good one with the same name.
+// canceled snapshot never replaces a good one with the same name. Its
+// folders sit next to the snapshots, hidden (snapshots/.incoming-<name>),
+// so removing one leaves nothing behind.
 const Incoming = ".incoming"
 
 // Store is a .echo folder.
@@ -34,13 +36,17 @@ func ValidName(name string) bool { return safeName.MatchString(name) }
 // Stamp is the default name for snapshots and runs.
 func Stamp(t time.Time) string { return t.Format("2006-01-02T15-04-05") }
 
-// NewDir creates kind/name (kind is "snapshots" or "runs") and returns it.
-// An existing snapshot with the same name is replaced.
+// NewDir creates kind/name (kind is "snapshots", "runs" or Incoming) and
+// returns it. An existing folder with the same name is replaced.
 func (s Store) NewDir(kind, name string) (string, error) {
 	if !ValidName(name) {
 		return "", fmt.Errorf("%q isn't a valid name: use letters, digits, dots, dashes and underscores", name)
 	}
 	dir := filepath.Join(s.Root, kind, name)
+	if kind == Incoming {
+		_ = os.Remove(filepath.Join(s.Root, Incoming)) // an empty one left by older versions
+		dir = filepath.Join(s.Root, "snapshots", Incoming+"-"+name)
+	}
 	if err := os.RemoveAll(dir); err != nil {
 		return "", err
 	}
@@ -110,18 +116,29 @@ func (s Store) Promote(dir, name string) (string, error) {
 
 // SetLatest records name as the snapshot compare uses by default.
 func (s Store) SetLatest(name string) error {
-	return cache.WriteFile(filepath.Join(s.Root, "snapshots", "LATEST"), []byte(name+"\n"))
+	return cache.WriteFile(s.latestFile(), []byte(name+"\n"))
 }
 
+func (s Store) latestFile() string { return filepath.Join(s.Root, "snapshots", "LATEST") }
+
 // Snapshot returns the directory of a named snapshot, or of the latest
-// one when name is empty.
+// one when name is empty. When the latest was deleted, the newest
+// remaining snapshot becomes the latest.
 func (s Store) Snapshot(name string) (string, error) {
 	if name == "" {
-		b, err := os.ReadFile(filepath.Join(s.Root, "snapshots", "LATEST"))
-		if err != nil {
-			return "", errors.New("no snapshot yet; take one first: rhythm echo snapshot")
-		}
+		b, _ := os.ReadFile(s.latestFile())
 		name = strings.TrimSpace(string(b))
+		if name == "" || !s.exists(name) {
+			newest, err := s.newest()
+			if err != nil {
+				return "", err
+			}
+			if newest == "" {
+				return "", errors.New("no snapshot yet; take one first: rhythm echo snapshot")
+			}
+			name = newest
+			_ = s.SetLatest(name)
+		}
 	}
 	if !ValidName(name) {
 		return "", fmt.Errorf("%q isn't a valid snapshot name", name)
@@ -133,7 +150,58 @@ func (s Store) Snapshot(name string) (string, error) {
 	return dir, nil
 }
 
-// Snapshots lists snapshot names, oldest first.
+// Delete removes a snapshot. When it was the latest, the newest remaining
+// one becomes the latest.
+func (s Store) Delete(name string) error {
+	dir, err := s.Snapshot(name)
+	if err != nil {
+		return err
+	}
+	if err := os.RemoveAll(dir); err != nil {
+		return err
+	}
+	if b, _ := os.ReadFile(s.latestFile()); strings.TrimSpace(string(b)) != name {
+		return nil
+	}
+	newest, err := s.newest()
+	if err != nil {
+		return err
+	}
+	if newest == "" {
+		return os.Remove(s.latestFile())
+	}
+	return s.SetLatest(newest)
+}
+
+func (s Store) exists(name string) bool {
+	if !ValidName(name) {
+		return false
+	}
+	_, err := os.Stat(filepath.Join(s.Root, "snapshots", name, "run.json")) //nolint:gosec // name passed ValidName above
+	return err == nil
+}
+
+// newest returns the most recently taken snapshot, or "" when there's
+// none. Names don't sort by time ("before-update"), so it reads them.
+func (s Store) newest() (string, error) {
+	names, err := s.Snapshots()
+	if err != nil {
+		return "", err
+	}
+	best, bestAt := "", time.Time{}
+	for _, n := range names {
+		r, err := LoadRun(filepath.Join(s.Root, "snapshots", n))
+		if err != nil {
+			continue
+		}
+		if best == "" || !r.Started.Before(bestAt) {
+			best, bestAt = n, r.Started
+		}
+	}
+	return best, nil
+}
+
+// Snapshots lists snapshot names, sorted by name.
 func (s Store) Snapshots() ([]string, error) {
 	return s.list("snapshots")
 }
@@ -154,7 +222,7 @@ func (s Store) list(kind string) ([]string, error) {
 	}
 	var names []string
 	for _, e := range entries {
-		if e.IsDir() {
+		if e.IsDir() && !strings.HasPrefix(e.Name(), ".") { // .incoming-* are unfinished
 			names = append(names, e.Name())
 		}
 	}
