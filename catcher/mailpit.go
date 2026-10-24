@@ -75,7 +75,7 @@ func (s *Server) isRead(id string) bool {
 	return s.pit.read[id]
 }
 
-// setRead marks the emails ms read or unread, and forgets flags of
+// setRead marks the emails ms read or unread. It forgets flags of
 // messages the inbox no longer has once they pile up.
 func (s *Server) setRead(ms []model.Message, read bool) {
 	s.pit.mu.Lock()
@@ -640,7 +640,7 @@ func splitMailpit(s string) ([]pitWord, error) {
 
 // mailpitQuery reads a Mailpit search into a test on messages. It takes
 // Mailpit's syntax: words that must all match, "quoted phrases", ! or -
-// before a word to exclude, and the fields to:, from:, cc:, bcc:,
+// before a word to exclude plus the fields to:, from:, cc:, bcc:,
 // reply-to:, addressed:, subject:, message-id:, tag:, is:read, is:unread,
 // is:tagged, has:attachment, has:inline, larger:, smaller:, before: and
 // after:, plus Echo's site:, action:, provider:, check: and has:issue.

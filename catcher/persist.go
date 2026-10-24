@@ -27,8 +27,8 @@ const DefaultKeep = 10000
 // InboxOptions configures OpenInbox.
 type InboxOptions struct {
 	// Dir is the folder the inbox is kept in, created owner-only (0700)
-	// when missing. Messages are masked before they're stored, but they
-	// still name real people and sites.
+	// when missing. Messages are masked before they're stored yet still
+	// name real people and sites.
 	Dir string
 	// Keep is the most messages kept; default DefaultKeep.
 	Keep int
@@ -64,9 +64,9 @@ type line struct {
 // journal is a persisted inbox: append-only JSON Lines files named
 // 000001.jsonl, 000002.jsonl and so on, oldest first. Every change is a
 // new record (an update writes the whole message again) so a write never
-// touches what's already on disk, and a crash can cost at most the record
+// touches what's already on disk. A crash can cost at most the record
 // being written: a torn last line, cut off on the next open. Once a file
-// reaches segmentSize the next one starts, and when the files hold more
+// reaches segmentSize the next one starts. When the files hold more
 // than twice what the messages need they're compacted into one.
 type journal struct {
 	dir         string
@@ -79,8 +79,8 @@ type journal struct {
 	err         error // the first write that failed; nothing is written after it
 }
 
-// OpenInbox opens the inbox kept in o.Dir, or starts one there, and
-// rebuilds it from what an earlier Echo wrote. Close it when done. A file
+// OpenInbox opens the inbox kept in o.Dir (starting one there when there
+// is none) and rebuilds it from what an earlier Echo wrote. Close it when done. A file
 // that's damaged other than in its last line is an error rather than
 // lost silently.
 func OpenInbox(o InboxOptions) (*Inbox, error) {
@@ -102,7 +102,7 @@ func OpenInbox(o InboxOptions) (*Inbox, error) {
 	}
 	in.mu.Lock()
 	in.j = j
-	in.evict() // the caps may be lower than the last Echo's, and time has passed
+	in.evict() // the caps may be lower than the last Echo's; time has passed too
 	if j.err == nil && j.total > 2*j.live+j.segmentSize {
 		in.compact()
 	}
@@ -405,7 +405,7 @@ func (in *Inbox) replay(j *journal) error {
 var errBadRecord = errors.New("not an inbox record")
 
 // readSegment calls fn with every record of the file at name and its
-// size, and returns how many bytes of the file hold records. In the
+// size. It returns how many bytes of the file hold records. In the
 // newest file (last), a torn final line is cut off; in any file, a final
 // line that doesn't read is skipped. A bad line anywhere else is an
 // error.

@@ -131,7 +131,7 @@ func TestBeginScopeGivesUp(t *testing.T) {
 	defer cancel()
 	_, err := in.BeginScope(ctx, ScopeOptions{Run: "run-x", Exclusive: true})
 	if be, ok := errors.AsType[*BusyError](err); !ok || err.Error() !=
-		"an exclusive action waits for every open one to end, and run-a/signup, run-b are still open" || !be.Exclusive {
+		"an exclusive action waits for every open one to end: run-a/signup, run-b are still open" || !be.Exclusive {
 		t.Fatalf("err = %v", err)
 	}
 	if in.queued != 0 {

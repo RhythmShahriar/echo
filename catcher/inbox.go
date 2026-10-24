@@ -110,7 +110,7 @@ func (in *Inbox) Bytes() int64 {
 }
 
 // evict drops the oldest messages until both caps hold, always keeping
-// the newest one, and every message older than keepFor. Called with in.mu
+// the newest one. It also drops every message older than keepFor. Called with in.mu
 // held.
 func (in *Inbox) evict() {
 	n := 0
@@ -199,7 +199,7 @@ type ScopeOptions struct {
 	// Exclusive waits until no other action is open, then keeps new ones
 	// from opening until it ends: everything captured meanwhile is its
 	// own, even untagged SMTP mail. Shared actions (the default) may
-	// overlap each other, and untagged mail is then ambiguous.
+	// overlap each other; untagged mail is then ambiguous.
 	Exclusive bool
 }
 
@@ -216,10 +216,13 @@ func (e *BusyError) Error() string {
 	case e.Holder != "":
 		return e.Holder + " holds Echo exclusively"
 	case e.Exclusive:
-		return "an exclusive action waits for every open one to end, and " + strings.Join(e.Open, ", ") + " " +
-			map[bool]string{true: "is", false: "are"}[len(e.Open) == 1] + " still open"
+		verb := " are"
+		if len(e.Open) == 1 {
+			verb = " is"
+		}
+		return "an exclusive action waits for every open one to end: " + strings.Join(e.Open, ", ") + verb + " still open"
 	}
-	return "an exclusive action is waiting to begin, and new actions wait behind it"
+	return "an exclusive action is waiting to begin; new actions wait behind it"
 }
 
 // BeginScope opens an action as Begin does, waiting while other actions

@@ -93,7 +93,7 @@ func TestSplitTokens(t *testing.T) {
 		t.Errorf("after phase on its own message: %d", code)
 	}
 
-	// The read token reads every site, and site: picks one.
+	// The read token reads every site; site: picks one.
 	list := func(q string) []model.Message {
 		t.Helper()
 		code, body := call(t, http.MethodGet, srv.URL+"/v1/messages?q="+url.QueryEscape(q), "reader", "")

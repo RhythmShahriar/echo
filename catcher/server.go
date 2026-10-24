@@ -275,7 +275,7 @@ func (s *Server) capture(w http.ResponseWriter, r *http.Request) {
 func (s *Server) Capture(c wire.Capture) (wire.Decision, error) { return s.captureFor(c, "") }
 
 // captureFor is Capture for a site's write token: site marks what's
-// captured, and an after phase only updates that site's own messages.
+// captured; an after phase only updates that site's own messages.
 func (s *Server) captureFor(c wire.Capture, site string) (wire.Decision, error) {
 	if c.Version > wire.Version {
 		return wire.Decision{}, errors.New("this connector is newer than Echo; run: rhythm update")
@@ -738,13 +738,13 @@ type actionBody struct {
 	Run    string `json:"run"`
 	Action string `json:"action"`
 	Lease  string `json:"lease,omitempty"`
-	// Exclusive and Timeout are begin's: an exclusive action, and how
+	// Exclusive and Timeout are begin's: an exclusive action plus how
 	// long to wait for other actions to let it open (a Go duration).
 	Exclusive bool   `json:"exclusive,omitempty"`
 	Timeout   string `json:"timeout,omitempty"`
 }
 
-// How long begin waits for other actions by default, and at most.
+// How long begin waits for other actions by default and at most.
 const (
 	beginWait    = 30 * time.Second
 	maxBeginWait = time.Minute
