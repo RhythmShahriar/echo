@@ -13,8 +13,10 @@ package image
 import (
 	"bytes"
 	"crypto/rand"
+	"crypto/x509"
 	"encoding/hex"
 	"encoding/json"
+	"encoding/pem"
 	"io"
 	"net"
 	"net/http"
@@ -134,6 +136,33 @@ func start(t *testing.T, tag string, run []string, args ...string) string {
 	}
 }
 
+// stateDir is where the image keeps Echo's state: the proxy's CA is in
+// its ca folder (proxy.DefaultCADir under the nonroot user's home).
+const stateDir = "/home/nonroot/.config/rhythm/echo"
+
+// caSerial fetches the proxy's CA certificate from /ca.pem and returns
+// its serial number.
+func caSerial(t *testing.T) string {
+	t.Helper()
+	var pemBytes []byte
+	for i := 0; i < 50 && !bytes.HasPrefix(pemBytes, []byte("-----BEGIN CERTIFICATE-----")); i++ {
+		time.Sleep(100 * time.Millisecond)
+		if resp, err := http.Get("http://127.0.0.1:" + proxyPort + "/ca.pem"); err == nil {
+			pemBytes, _ = io.ReadAll(resp.Body)
+			_ = resp.Body.Close()
+		}
+	}
+	block, _ := pem.Decode(pemBytes)
+	if block == nil {
+		t.Fatalf("no CA certificate at /ca.pem: %q", pemBytes)
+	}
+	cert, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return cert.SerialNumber.String()
+}
+
 func send(t *testing.T, auth smtp.Auth, subject string) {
 	t.Helper()
 	err := smtp.SendMail("127.0.0.1:"+smtpPort, auth, "shop@shop.test", []string{"ann@example.com", "audit@shop.test"}, []byte(testMail(subject)))
@@ -197,23 +226,19 @@ func TestImage(t *testing.T) {
 	})
 
 	// A new named volume on the state folder is writable by nonroot: the
-	// proxy's CA is created in it and served.
+	// proxy's CA is created in it and served. A new container on the same
+	// volume keeps the CA (the same serial), so trust survives.
 	t.Run("state volume", func(t *testing.T) {
 		vol := "rhythm-echo-test-" + random()
 		t.Cleanup(func() { _ = exec.Command("docker", "volume", "rm", "-f", vol).Run() })
-		start(t, tag, []string{"-e", "RHYTHM_ECHO_TOKEN=tok", "-p", "127.0.0.1:" + proxyPort + ":8026",
-			"-v", vol + ":/home/nonroot/.cache/rhythm/echo"},
-			"--listen=0.0.0.0:8025", "--smtp=0.0.0.0:1025", "--proxy=0.0.0.0:8026", "--mitm")
-		var pem []byte
-		for i := 0; i < 50 && !bytes.HasPrefix(pem, []byte("-----BEGIN CERTIFICATE-----")); i++ {
-			time.Sleep(100 * time.Millisecond)
-			if resp, err := http.Get("http://127.0.0.1:" + proxyPort + "/ca.pem"); err == nil {
-				pem, _ = io.ReadAll(resp.Body)
-				_ = resp.Body.Close()
-			}
-		}
-		if !bytes.HasPrefix(pem, []byte("-----BEGIN CERTIFICATE-----")) {
-			t.Fatalf("no CA certificate at /ca.pem: %q", pem)
+		run := []string{"-e", "RHYTHM_ECHO_TOKEN=tok", "-p", "127.0.0.1:" + proxyPort + ":8026", "-v", vol + ":" + stateDir}
+		args := []string{"--listen=0.0.0.0:8025", "--smtp=0.0.0.0:1025", "--proxy=0.0.0.0:8026", "--mitm"}
+		first := start(t, tag, run, args...)
+		before := caSerial(t)
+		docker(t, "rm", "-f", first)
+		start(t, tag, run, args...)
+		if after := caSerial(t); after != before {
+			t.Errorf("a new container on the volume made a new CA: serial %s, was %s", after, before)
 		}
 	})
 
@@ -225,5 +250,30 @@ func TestImage(t *testing.T) {
 		start(t, tag, nil)
 		send(t, nil, "Welcome to the shop")
 		checkParity(t, "http://127.0.0.1:"+apiPort, "", "Welcome to the shop")
+	})
+
+	// A connector in another container names Echo by its service name, as
+	// DDEV, Lando and Compose do: http://echo:8025 with no token. The
+	// second container is the same image running Echo's sendmail
+	// stand-in (it posts a capture to RHYTHM_ECHO_URL) and then ls.
+	t.Run("second container", func(t *testing.T) {
+		if !privateNetwork(t, bin) {
+			t.Skip("this Echo has no up --private-network yet")
+		}
+		network := "rhythm-echo-test-" + random()
+		docker(t, "network", "create", network)
+		t.Cleanup(func() { _ = exec.Command("docker", "network", "rm", network).Run() })
+		start(t, tag, []string{"--network", network, "--network-alias", "echo"})
+		client := []string{"run", "--rm", "-i", "--network", network, "-e", "RHYTHM_ECHO_URL=http://echo:8025",
+			"--entrypoint", "/usr/local/bin/rhythm-echo", tag}
+		post := exec.Command("docker", append(client, "sendmail", "-t", "-i")...) //nolint:gosec // the image this test built
+		post.Stdin = strings.NewReader(testMail("From the web container"))
+		if out, err := post.CombinedOutput(); err != nil {
+			t.Fatalf("sendmail from a second container: %v\n%s", err, out)
+		}
+		ls := docker(t, append(client, "ls", "--url", "http://echo:8025", "--plain")...)
+		if !strings.Contains(ls, "From the web container") {
+			t.Errorf("ls from a second container doesn't list the capture:\n%s", ls)
+		}
 	})
 }

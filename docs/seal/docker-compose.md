@@ -43,7 +43,10 @@ or to use an image built from a checkout.
   It listens on `0.0.0.0` inside its container, so it requires the token,
   which it reads from `RHYTHM_ECHO_TOKEN`. The CA, including its private
   key, is kept in the `echo-state` volume (mounted at
-  `/home/nonroot/.cache/rhythm/echo`), so trust survives restarts.
+  `/home/nonroot/.config/rhythm/echo`), so trust survives restarts. An
+  older Compose file mounted it at `/home/nonroot/.cache/rhythm/echo`:
+  move the mount, or Echo moves the CA out of the volume on its next
+  start and makes a new one each time the container is recreated.
 - **`echo-ca`** is a one-shot job. It copies the CA *certificate* from
   `http://echo:8026/ca.pem` into the `echo-ca` volume, which the app mounts
   read-only at `/echo-ca/ca.pem`. The key is never shared.

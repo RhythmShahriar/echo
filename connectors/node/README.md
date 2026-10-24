@@ -221,13 +221,13 @@ rhythm echo up --proxy 127.0.0.1:8026 --mitm
 NODE_USE_ENV_PROXY=1 HTTPS_PROXY=http://127.0.0.1:8026 NODE_EXTRA_CA_CERTS="$(rhythm echo ca)" next start
 ```
 
-`rhythm echo ca` prints the path of Echo's CA certificate, creating it on first use (`rhythm echo ca --pem` prints the certificate itself, to copy into a container). It lives in the user's cache folder:
+`rhythm echo ca` prints the path of Echo's CA certificate, creating it on first use (`rhythm echo ca --pem` prints the certificate itself, to copy into a container). It lives in the user's config folder:
 
 | OS | Path |
 |---|---|
-| Linux | `~/.cache/rhythm/echo/ca/ca.pem` (or `$XDG_CACHE_HOME/rhythm/echo/ca/ca.pem`) |
-| macOS | `~/Library/Caches/rhythm/echo/ca/ca.pem` |
-| Windows | `%LocalAppData%\rhythm\echo\ca\ca.pem` |
+| Linux | `~/.config/rhythm/echo/ca/ca.pem` (or `$XDG_CONFIG_HOME/rhythm/echo/ca/ca.pem`) |
+| macOS | `~/Library/Application Support/rhythm/echo/ca/ca.pem` |
+| Windows | `%AppData%\rhythm\echo\ca\ca.pem` |
 
 `NODE_USE_ENV_PROXY` covers `fetch` from Node 22.21 and 24.0 and `http`/`https` from Node 22.21 and 24.5.
 

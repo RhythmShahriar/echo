@@ -27,11 +27,16 @@ ARG TARGETPLATFORM
 COPY $TARGETPLATFORM/rhythm-echo /usr/local/bin/rhythm-echo
 
 # Runs as nonroot (65532). Echo keeps its proxy CA (with the private key) in
-# /home/nonroot/.cache/rhythm/echo; mount a volume there to keep it across
-# restarts. WORKDIR makes that folder owned by nonroot, so a new volume
-# mounted on it is writable too (there is no shell here to mkdir with).
+# /home/nonroot/.config/rhythm/echo/ca; mount a volume on
+# /home/nonroot/.config/rhythm/echo to keep it across restarts. WORKDIR
+# makes that folder owned by nonroot, so a new volume mounted on it is
+# writable too (there is no shell here to mkdir with).
+#
+# Without a token, --private-network also lets another container name Echo
+# by its service name or IP address (http://echo:8025). A router's name,
+# such as <project>.ddev.site, needs --hostname or RHYTHM_ECHO_HOSTNAMES.
 USER nonroot:nonroot
-WORKDIR /home/nonroot/.cache/rhythm/echo
+WORKDIR /home/nonroot/.config/rhythm/echo
 WORKDIR /home/nonroot
 EXPOSE 8025 1025
 ENTRYPOINT ["/usr/local/bin/rhythm-echo", "up"]

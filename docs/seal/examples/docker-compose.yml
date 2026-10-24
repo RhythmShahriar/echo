@@ -46,7 +46,7 @@ services:
     environment:
       RHYTHM_ECHO_TOKEN: ${RHYTHM_ECHO_TOKEN} # from the environment, so it isn't in the process list
     volumes:
-      - echo-state:/home/nonroot/.cache/rhythm/echo
+      - echo-state:/home/nonroot/.config/rhythm/echo
     command:
       - --seal
       - --listen=0.0.0.0:8025
