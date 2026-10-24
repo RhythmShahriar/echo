@@ -41,12 +41,12 @@ import (
 
 const keepRuns = 20
 
-// command parses flags and runs fn, turning errors into exit codes.
-func command(fn func(*session) int, args []string, stdout, stderr io.Writer) int {
-	p, err := parse(args)
+// command parses c's flags and runs fn, turning errors into exit codes.
+func command(c cmdSpec, fn func(*session) int, args []string, stdout, stderr io.Writer) int {
+	p, err := parse(c, args)
 	if err != nil {
 		if errors.Is(err, flag.ErrHelp) {
-			usage(stdout)
+			commandHelp(stdout, c)
 			return exitOK
 		}
 		fmt.Fprintln(stderr, "rhythm echo:", err)
@@ -250,14 +250,34 @@ func (s *session) junitFailOn(res report.Result) string {
 	return s.o.failOn
 }
 
+// checkFailOn reads --fail-on in any case and, when it isn't given,
+// sets the default: broke for a comparison, error otherwise, as the
+// GitHub Action does.
 func (s *session) checkFailOn(compared bool) error {
-	if s.o.failOn == "" || s.o.failOn == failOnNone {
+	s.o.failOn = strings.ToLower(strings.TrimSpace(s.o.failOn))
+	switch s.o.failOn {
+	case "":
+		s.o.failOn = defaultFailOn(compared)
+		return nil
+	case failOnNone:
 		return nil
 	}
-	if err := report.ValidFailOn(s.o.failOn, compared); err != nil {
-		return cli.UsageError{Msg: err.Error()}
+	if report.ValidFailOn(s.o.failOn, compared) != nil {
+		if compared {
+			return cli.Usagef("--fail-on %q: want none, broke, new or changed", s.o.failOn)
+		}
+		return cli.Usagef("--fail-on %q: want none, error, warning or notice (or broke, new, changed when comparing)", s.o.failOn)
 	}
 	return nil
+}
+
+// defaultFailOn is the --fail-on level when none is given. It stands
+// in for report.DefaultFailOn until that is released.
+func defaultFailOn(compared bool) string {
+	if compared {
+		return model.Broke
+	}
+	return string(model.Error)
 }
 
 func cmdSnapshot(s *session) int {
@@ -608,6 +628,11 @@ func cmdClear(s *session) int {
 }
 
 func cmdSnapshots(args []string, stdout, stderr io.Writer) int {
+	if len(args) > 0 && (args[0] == "-h" || args[0] == "--help") {
+		c, _ := lookup("snapshots")
+		commandHelp(stdout, c)
+		return exitOK
+	}
 	st := store.Store{Root: config.Dir}
 	if len(args) == 2 && (args[0] == "delete" || args[0] == "rm") {
 		if _, err := st.Snapshot(args[1]); err != nil {

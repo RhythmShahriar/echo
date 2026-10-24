@@ -53,52 +53,86 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	}
 	switch args[0] {
 	case "-h", "--help", "help":
+		if len(args) > 1 {
+			return help(args[1], stdin, stdout, stderr)
+		}
 		usage(stdout)
 		return exitOK
 	case "-v", "--version", "version":
 		fmt.Fprintln(stdout, "rhythm-echo", version)
 		return exitOK
-	case "up", "start":
-		return command(cmdUp, args[1:], stdout, stderr)
-	case "snapshot", "snap":
-		return command(cmdSnapshot, args[1:], stdout, stderr)
-	case "compare", "cmp":
-		return command(cmdCompare, args[1:], stdout, stderr)
+	}
+	c, ok := lookup(args[0])
+	if !ok {
+		return unknownCommand(args[0], stderr)
+	}
+	switch c.name {
+	case "up":
+		return command(c, cmdUp, args[1:], stdout, stderr)
+	case "snapshot":
+		return command(c, cmdSnapshot, args[1:], stdout, stderr)
+	case "compare":
+		return command(c, cmdCompare, args[1:], stdout, stderr)
 	case "run":
-		return command(cmdRun, args[1:], stdout, stderr)
+		return command(c, cmdRun, args[1:], stdout, stderr)
 	case "report":
-		return command(cmdReport, args[1:], stdout, stderr)
-	case "watch", "tail":
-		return command(cmdWatch, args[1:], stdout, stderr)
-	case "ls", "list":
-		return command(cmdList, args[1:], stdout, stderr)
+		return command(c, cmdReport, args[1:], stdout, stderr)
+	case "watch":
+		return command(c, cmdWatch, args[1:], stdout, stderr)
+	case "ls":
+		return command(c, cmdList, args[1:], stdout, stderr)
 	case "show":
-		return command(cmdShow, args[1:], stdout, stderr)
+		return command(c, cmdShow, args[1:], stdout, stderr)
 	case "clear":
-		return command(cmdClear, args[1:], stdout, stderr)
+		return command(c, cmdClear, args[1:], stdout, stderr)
+	case "doctor":
+		return command(c, cmdDoctor, args[1:], stdout, stderr)
+	case "check":
+		return command(c, cmdCheck, args[1:], stdout, stderr)
+	case "headers":
+		return command(c, cmdHeaders, args[1:], stdout, stderr)
+	case "replay":
+		return command(c, cmdReplay, args[1:], stdout, stderr)
 	case "snapshots":
 		return cmdSnapshots(args[1:], stdout, stderr)
 	case "init":
 		return cmdInit(args[1:], stdout, stderr)
 	case "install":
 		return cmdInstall(args[1:], stdout, stderr)
-	case "doctor":
-		return command(cmdDoctor, args[1:], stdout, stderr)
-	case "check":
-		return command(cmdCheck, args[1:], stdout, stderr)
-	case "headers":
-		return command(cmdHeaders, args[1:], stdout, stderr)
-	case "replay":
-		return command(cmdReplay, args[1:], stdout, stderr)
 	case "ca":
 		return cmdCA(args[1:], stdout, stderr)
 	case "sendmail":
 		return cmdSendmail(args[1:], stdin, stderr)
-	case "update":
-		return cmdUpdate(args[1:], stdout, stderr)
 	}
-	fmt.Fprintf(stderr, "rhythm echo: unknown command %q\n\n", args[0])
-	usage(stderr)
+	return cmdUpdate(args[1:], stdout, stderr)
+}
+
+// help prints one command's help: rhythm echo help compare.
+func help(name string, stdin io.Reader, stdout, stderr io.Writer) int {
+	c, ok := lookup(name)
+	if !ok {
+		return unknownCommand(name, stderr)
+	}
+	if c.own {
+		if c.name == "sendmail" {
+			fmt.Fprintf(stdout, "rhythm echo sendmail: %s\n\nUsage:\n  rhythm echo %s\n", c.about, c.use)
+			return exitOK
+		}
+		return run([]string{c.name, "--help"}, stdin, stdout, stderr)
+	}
+	commandHelp(stdout, c)
+	return exitOK
+}
+
+// unknownCommand names the command meant, when one is close, rather
+// than print the whole help.
+func unknownCommand(name string, stderr io.Writer) int {
+	msg := fmt.Sprintf("rhythm echo: unknown command %q", name)
+	if s := suggestCommand(name); s != "" {
+		msg += "; did you mean " + s + "?"
+	}
+	fmt.Fprintln(stderr, msg)
+	fmt.Fprintln(stderr, "rhythm echo help lists every command.")
 	return exitUsage
 }
 
@@ -107,6 +141,8 @@ func usage(w io.Writer) {
 	fmt.Fprint(w, `Is your site still saying what it should? Capture every email, SMS, webhook
 and API call a site sends, seal staging so nothing reaches real people, and
 compare what each action sends before and after a change.
+
+rhythm echo and rhythm-echo are the same command: the rhythm CLI runs this binary.
 
 Usage:
   rhythm echo                            pick what to do (on a terminal)
@@ -129,8 +165,7 @@ Usage:
   rhythm echo ca [--pem]                 print the proxy's CA certificate path (--pem: the certificate)
   rhythm echo sendmail [-t] [-i] [-f from] [rcpt…]
                                          sendmail stand-in for sendmail_path; reads the message on stdin
-  rhythm echo update                     nothing to refresh; kept for rhythm update
-  rhythm echo help | version
+  rhythm echo help [command] | version   this help, one command's, or the version
 
 Catcher (up):
       --seal                 nothing leaves; Echo answers for every service (default)
@@ -171,11 +206,11 @@ Output:
       --plain                no color, boxes or glyphs (screen readers, logs)
       --no-color             no color
   -v, --verbose              show every message
-      --fail-on <level>      exit 1 on changes at or above broke, new or changed;
-                             for run, snapshot, check and headers: issues at or
-                             above error, warning or notice. run, snapshot and
-                             compare also exit 1 when an action fails; none turns
-                             both off
+      --fail-on <level>      exit 1 at or above this level. compare: changes at broke
+                             (the default), new or changed. run, snapshot, check and
+                             headers: issues at error (the default), warning or
+                             notice. run, snapshot and compare also exit 1 when an
+                             action fails; none turns both off
 
 Actions (snapshot, compare, run):
       --config <file>        settings (default .echo/config.yaml)
@@ -217,6 +252,8 @@ Exit codes (as in Tuner and Soundcheck):
        answered, a file or network error
   130  interrupted
   sendmail exits with sendmail's codes instead (sysexits: 64 usage, 69 Echo unreachable…)
+
+Each command takes only the flags it reads; rhythm echo <command> --help lists them.
 
 Examples:
   rhythm echo up                                   # seal this machine's staging sites

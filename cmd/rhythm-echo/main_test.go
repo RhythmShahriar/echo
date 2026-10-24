@@ -16,9 +16,11 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -147,7 +149,8 @@ func TestSnapshotCompareThroughTheCLI(t *testing.T) {
 			t.Errorf("missing %q:\n%s", want, all)
 		}
 	}
-	if code, out, _ := runCLI(t, "report", "--md"); code != 0 || !strings.Contains(out, "## ♪ Echo") {
+	// The comparison has a BROKE change, which --fail-on's default fails on.
+	if code, out, _ := runCLI(t, "report", "--md"); code != exitFindings || !strings.Contains(out, "## ♪ Echo") {
 		t.Errorf("report --md: %d\n%s", code, out)
 	}
 	if code, out, _ := runCLI(t, "snapshots"); code != 0 || !strings.Contains(out, "(latest)") {
@@ -304,6 +307,177 @@ func TestHelpListsEveryFlag(t *testing.T) {
 	}
 }
 
+// TestCommandHelpListsItsFlags checks each command's --help against what
+// it accepts: every flag it reads is listed and every flag listed is one
+// it reads.
+func TestCommandHelpListsItsFlags(t *testing.T) {
+	fs := flagSet(&options{})
+	long := regexp.MustCompile(`--[a-z][a-z-]*`)
+	for _, c := range commands {
+		if c.own || c.hidden {
+			continue
+		}
+		code, out, _ := runCLI(t, c.name, "--help")
+		if code != exitOK || !strings.HasPrefix(out, "rhythm echo "+c.name+": ") {
+			t.Errorf("%s --help: %d\n%s", c.name, code, out)
+			continue
+		}
+		listed := out
+		if i := strings.Index(out, "\nFlags:\n"); i >= 0 {
+			listed = out[i:]
+		} else if len(c.flags) > 0 {
+			t.Errorf("%s --help has no Flags section", c.name)
+		}
+		for _, f := range c.flags {
+			if fs.Lookup(f.name) == nil || flagDocs[f.name].left == "" {
+				t.Errorf("%s reads --%s, which isn't a flag with help", c.name, f.name)
+			}
+			if !strings.Contains(listed, "--"+f.name+" ") && !strings.Contains(listed, "--"+f.name+"\n") {
+				t.Errorf("%s --help doesn't list --%s", c.name, f.name)
+			}
+		}
+		for _, f := range long.FindAllString(listed, -1) {
+			if !c.accepts(strings.TrimPrefix(f, "--")) {
+				t.Errorf("%s --help lists %s, which it rejects", c.name, f)
+			}
+		}
+	}
+}
+
+func TestCompareHelpIsShort(t *testing.T) {
+	code, out, _ := runCLI(t, "compare", "--help")
+	if code != exitOK || strings.Count(out, "\n") > 35 || !strings.Contains(out, "--snapshot <name>") || !strings.Contains(out, "broke (the default)") {
+		t.Errorf("compare --help: %d\n%s", code, out)
+	}
+	for _, other := range []string{"--seal", "--resolver", "--channel", "Examples:"} {
+		if strings.Contains(out, other) {
+			t.Errorf("compare --help lists %s:\n%s", other, out)
+		}
+	}
+	if _, viaHelp, _ := runCLI(t, "help", "cmp"); viaHelp != out {
+		t.Errorf("help cmp differs from compare --help:\n%s", viaHelp)
+	}
+	if code, out, _ := runCLI(t, "help", "install"); code != exitOK || !strings.Contains(out, "stacks: wordpress") {
+		t.Errorf("help install: %d\n%s", code, out)
+	}
+}
+
+func TestCommandAndFlagSuggestions(t *testing.T) {
+	t.Chdir(t.TempDir())
+	for _, tc := range []struct {
+		args []string
+		want string
+	}{
+		{[]string{"cmopare"}, `unknown command "cmopare"; did you mean compare?`},
+		{[]string{"snapshto"}, "did you mean snapshot?"},
+		{[]string{"frobnicate"}, `unknown command "frobnicate"` + "\n"},
+		{[]string{"help", "cmopare"}, "did you mean compare?"},
+		{[]string{"compare", "--snapshto", "x"}, "unknown flag --snapshto; did you mean --snapshot?"},
+		{[]string{"ls", "--chanel", "sms"}, "did you mean --channel?"},
+		{[]string{"compare", "--fial-on", "broke"}, "did you mean --fail-on?"},
+		{[]string{"compare", "--fail-on"}, "--fail-on needs a value"},
+		{[]string{"ls", "--since", "abc"}, `--since "abc": want a duration like 10m or 5s`},
+		{[]string{"run", "--json=maybe"}, `--json "maybe": want true or false`},
+		{[]string{"install", "laravel", "--tokn", "x"}, "unknown flag --tokn; did you mean --token?"},
+	} {
+		code, out, errOut := runCLI(t, tc.args...)
+		if code != exitUsage || !strings.Contains(errOut, tc.want) {
+			t.Errorf("%v: exit %d, stderr %q; want 2 and %q", tc.args, code, errOut, tc.want)
+		}
+		// A typo gets a line rather than the whole help. Flags keep
+		// their two dashes.
+		if strings.Contains(out+errOut, "Usage:") || regexp.MustCompile(`(^|[ :])-[a-z]{2,}`).MatchString(errOut) {
+			t.Errorf("%v:\n%s%s", tc.args, out, errOut)
+		}
+	}
+	if s := suggestCommand("xy"); s != "" {
+		t.Errorf("xy is close to nothing, got %q", s)
+	}
+}
+
+func TestUnusedFlagsAreRejected(t *testing.T) {
+	t.Chdir(t.TempDir())
+	for _, tc := range []struct {
+		args []string
+		want string
+	}{
+		{[]string{"ls", "--fail-on", "broke"}, "--fail-on has no effect on ls"},
+		{[]string{"ls", "--snapshot", "foo", "--fail-on", "broke", "--wait", "3s"}, "--fail-on, --snapshot and --wait have no effect on ls"},
+		{[]string{"list", "-o", "x.json"}, "--output has no effect on ls"},
+		{[]string{"watch", "--action", "Sign up"}, "--action has no effect on watch"},
+		{[]string{"check", "shop.test", "--url", "http://127.0.0.1:1"}, "--url has no effect on check"},
+		{[]string{"report", "--config", "x.yaml"}, "--config has no effect on report"},
+		{[]string{"up", "--fail-on", "none"}, "--fail-on has no effect on up"},
+		{[]string{"doctor", "--json"}, "--json has no effect on doctor"},
+	} {
+		code, out, errOut := runCLI(t, tc.args...)
+		if code != exitUsage || !strings.Contains(errOut, tc.want) {
+			t.Errorf("%v: exit %d, stderr %q; want 2 and %q", tc.args, code, errOut, tc.want)
+		}
+		if out != "" {
+			t.Errorf("%v printed before refusing:\n%s", tc.args, out)
+		}
+	}
+}
+
+func TestHelpHeaderAndHiddenUpdate(t *testing.T) {
+	_, out, _ := runCLI(t, "help")
+	if !strings.Contains(out, "rhythm echo and rhythm-echo are the same command") {
+		t.Errorf("help doesn't say the two names are one command:\n%s", out)
+	}
+	if strings.Contains(out, "rhythm echo update") {
+		t.Error("help lists update, which does nothing")
+	}
+	if code, out, _ := runCLI(t, "update"); code != exitOK || out == "" {
+		t.Error("update must still succeed for rhythm update")
+	}
+}
+
+// TestFailOnDefault: without --fail-on, compare fails on BROKE, the
+// GitHub Action's default; none turns it off, in any case.
+func TestFailOnDefault(t *testing.T) {
+	t.Chdir(t.TempDir())
+	srv := httptest.NewServer(catcher.NewServer(catcher.NewInbox(100), catcher.Config{Version: "test"}))
+	defer srv.Close()
+	echo := client.New(srv.URL, "")
+	var send atomic.Bool
+	send.Store(true)
+	shop := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if send.Load() {
+			_, _ = echo.Capture(r.Context(), wire.Capture{Kind: "email", Run: r.Header.Get(wire.RunHeader), Source: wire.Source{Via: "test"},
+				Email: &wire.Email{To: []string{"owner@shop.test"}, Subject: "New order", Text: "Order 1 placed."}})
+		}
+	}))
+	defer shop.Close()
+	writeConfig(t, "site: "+shop.URL+"\nquiet: 200ms\ntimeout: 2s\nactions:\n  - name: Order\n    http: {method: POST, url: /order}\n")
+	if code, out, errOut := runCLI(t, "snapshot", "--url", srv.URL, "--plain", "--name", "base"); code != exitOK {
+		t.Fatalf("snapshot: %d\n%s\n%s", code, out, errOut)
+	}
+	if code, out, _ := runCLI(t, "compare", "--url", srv.URL, "--plain"); code != exitOK {
+		t.Errorf("unchanged compare: %d\n%s", code, out)
+	}
+	send.Store(false) // the owner's notification stopped: BROKE
+	if code, out, _ := runCLI(t, "compare", "--url", srv.URL, "--plain"); code != exitFindings || !strings.Contains(out, "BROKE") {
+		t.Errorf("default compare with a BROKE change: %d\n%s", code, out)
+	}
+	for _, none := range []string{"none", "NONE", "None"} {
+		if code, _, errOut := runCLI(t, "compare", "--url", srv.URL, "--plain", "--fail-on", none); code != exitOK {
+			t.Errorf("--fail-on %s: %d %s", none, code, errOut)
+		}
+	}
+	if code, _, _ := runCLI(t, "compare", "--url", srv.URL, "--plain", "--fail-on", "Broke"); code != exitFindings {
+		t.Errorf("--fail-on Broke: %d", code)
+	}
+	if code, _, errOut := runCLI(t, "compare", "--url", srv.URL, "--fail-on", "error"); code != exitUsage ||
+		!strings.Contains(errOut, `--fail-on "error": want none, broke, new or changed`) {
+		t.Errorf("--fail-on error on compare: %d %q", code, errOut)
+	}
+	// The JUnit report marks the same: BROKE is a failure by default.
+	if _, out, _ := runCLI(t, "report", "--junit"); !strings.Contains(out, "<failure") {
+		t.Errorf("report --junit has no failure for BROKE:\n%s", out)
+	}
+}
+
 func TestPicker(t *testing.T) {
 	// Not a terminal: the usage, never a prompt.
 	if code, out, _ := runCLI(t); code != 0 || !strings.Contains(out, "Usage:") {
@@ -397,8 +571,9 @@ func TestFailedActionsFailTheRun(t *testing.T) {
 		!strings.Contains(out, "<testsuites") {
 		t.Errorf("compare --fail-on none --junit: exit %d\n%s\n%s", code, out, errOut)
 	}
-	// report shows a saved result again; it doesn't rerun the actions.
-	if code, _, errOut := runCLI(t, "report", "--plain"); code != exitOK {
+	// report shows a saved result again; it doesn't rerun the actions,
+	// so it exits 1 for the BROKE changes rather than 3.
+	if code, _, errOut := runCLI(t, "report", "--plain"); code != exitFindings {
 		t.Errorf("report of a failed run: exit %d %s", code, errOut)
 	}
 }
@@ -480,7 +655,8 @@ func startWatch(t *testing.T, args ...string) (*catcher.Inbox, *syncBuffer) {
 	in := catcher.NewInbox(100)
 	srv := httptest.NewServer(catcher.NewServer(in, catcher.Config{Version: "test"}))
 	t.Cleanup(srv.Close)
-	p, err := parse(append([]string{"--url", srv.URL, "--plain"}, args...))
+	watch, _ := lookup("watch")
+	p, err := parse(watch, append([]string{"--url", srv.URL, "--plain"}, args...))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -595,17 +771,18 @@ func TestListSince(t *testing.T) {
 func TestTokenFlagWarns(t *testing.T) {
 	t.Chdir(t.TempDir())
 	t.Setenv("RHYTHM_ECHO_TOKEN", "")
-	if _, _, errOut := runCLI(t, "report", "--token", "s3cret"); !strings.Contains(errOut, tokenFlagWarning) {
+	dead := "http://127.0.0.1:1"
+	if _, _, errOut := runCLI(t, "ls", "--url", dead, "--token", "s3cret"); !strings.Contains(errOut, tokenFlagWarning) {
 		t.Errorf("--token: no warning in %q", errOut)
 	}
-	if _, _, errOut := runCLI(t, "report", "--token", "s3cret", "-q"); strings.Contains(errOut, "RHYTHM_ECHO_TOKEN") {
+	if _, _, errOut := runCLI(t, "ls", "--url", dead, "--token", "s3cret", "-q"); strings.Contains(errOut, "RHYTHM_ECHO_TOKEN") {
 		t.Errorf("-q must hide the warning: %q", errOut)
 	}
 	if _, _, errOut := runCLI(t, "install", "laravel", "--token", "s3cret"); !strings.Contains(errOut, tokenFlagWarning) {
 		t.Errorf("install --token: no warning in %q", errOut)
 	}
 	t.Setenv("RHYTHM_ECHO_TOKEN", "s3cret")
-	for _, args := range [][]string{{"report"}, {"install", "laravel"}} {
+	for _, args := range [][]string{{"ls", "--url", dead}, {"install", "laravel"}} {
 		if _, _, errOut := runCLI(t, args...); strings.Contains(errOut, "RHYTHM_ECHO_TOKEN") {
 			t.Errorf("%v with the env var: unexpected warning %q", args, errOut)
 		}
@@ -631,7 +808,8 @@ func TestDoctorFlushCancels(t *testing.T) {
 	if err := os.WriteFile(config.Path(), []byte("smtp: \"off\"\nflush: [\"sleep 25; echo done\"]\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	p, err := parse([]string{"--url", srv.URL, "--plain"})
+	doctor, _ := lookup("doctor")
+	p, err := parse(doctor, []string{"--url", srv.URL, "--plain"})
 	if err != nil {
 		t.Fatal(err)
 	}

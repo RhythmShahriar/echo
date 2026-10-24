@@ -125,6 +125,10 @@ func TestDoctorChecksEchoAndSMTP(t *testing.T) {
 	if code, out, _ := runCLI(t, "doctor", "--url", "http://127.0.0.1:1", "--plain"); code != exitFindings || !strings.Contains(out, "FAIL  Echo: ") {
 		t.Errorf("doctor without Echo: %d\n%s", code, out)
 	}
+	_ = os.WriteFile(config.Path(), []byte("smtp: \"off\"\n"), 0o600)
+	if code, out, _ := runCLI(t, "doctor", "--url", api.URL, "--plain"); code != 0 || !strings.Contains(out, "1 check passed, 0 failed.") {
+		t.Errorf("doctor, one check: %d\n%s", code, out)
+	}
 }
 
 func TestDoctorFailsOnAProductionSite(t *testing.T) {

@@ -26,8 +26,9 @@ import (
 )
 
 func TestHeadersCommand(t *testing.T) {
+	// PHP mail() fails DMARC, an error, which --fail-on's default fails on.
 	code, out, errOut := runCLI(t, "headers", "../../headers/testdata/phpmail.eml", "--plain")
-	if code != 0 || !strings.Contains(out, "PHP") {
+	if code != exitFindings || !strings.Contains(out, "PHP") {
 		t.Fatalf("headers: %d\n%s\n%s", code, out, errOut)
 	}
 	code, out, _ = runCLI(t, "headers", "../../headers/testdata/sendgrid.eml", "--json")
@@ -174,7 +175,7 @@ func TestCheckAndHeadersOptions(t *testing.T) {
 		t.Errorf("unknown provider: %d %q", code, errOut)
 	}
 	addr, n := nxdomain(t)
-	code, out, errOut := runCLI(t, "check", "shop.test", "--provider", "ses", "--resolver", addr, "--plain")
+	code, out, errOut := runCLI(t, "check", "shop.test", "--provider", "ses", "--resolver", addr, "--plain", "--fail-on", "none")
 	if code != 0 || !strings.Contains(out, "Sender: Amazon SES") || !strings.Contains(out, "Records: no mail records found") || n.Load() == 0 {
 		t.Errorf("check: %d, %d queries\n%s\n%s", code, n.Load(), out, errOut)
 	}
@@ -182,7 +183,7 @@ func TestCheckAndHeadersOptions(t *testing.T) {
 		t.Errorf("issue lines still carry the records summary:\n%s", out)
 	}
 	before := n.Load()
-	code, out, errOut = runCLI(t, "headers", "../../headers/testdata/sendgrid.eml", "--check", "--resolver", addr, "--plain")
+	code, out, errOut = runCLI(t, "headers", "../../headers/testdata/sendgrid.eml", "--check", "--resolver", addr, "--plain", "--fail-on", "NONE")
 	if code != 0 || n.Load() == before {
 		t.Errorf("headers --check ignored --resolver: %d, %d queries\n%s\n%s", code, n.Load()-before, out, errOut)
 	}

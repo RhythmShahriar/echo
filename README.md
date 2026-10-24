@@ -114,7 +114,7 @@ rhythm echo compare --open                       # what changed, in a report
 | Check the contact form still emails the office | `rhythm soundcheck compare staging.shop.test --echo` |
 | Replay a Stripe payment and see the order email | `rhythm echo replay payment_intent.succeeded --to /?wc-api=wc_stripe` |
 | Check SPF, DKIM and DMARC for the sender you use | `rhythm echo check shop.com --from-mail received.eml` |
-| Fail CI when a message stops being sent | `rhythm echo compare --fail-on broke` |
+| Fail CI when a message stops being sent | `rhythm echo compare` (exits 1 on BROKE by default; `--fail-on new` is stricter) |
 | Stream what the site sends into a script | `rhythm echo watch --json` (one JSON object per line) |
 
 ## What it catches
