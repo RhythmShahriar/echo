@@ -287,3 +287,30 @@ func TestFailedActionsAreNeverTheSame(t *testing.T) {
 		t.Errorf("working at both ends:\n%s", titles(c.Changes))
 	}
 }
+
+// TestSilentConnectorIsNoted: an action whose mail came from the site's
+// connector sends nothing at all now. Besides the lost messages, the
+// comparison says a connector that can't reach Echo is the likely cause.
+// An action that still sends something, or whose mail never came from a
+// connector, gets no such note.
+func TestSilentConnectorIsNoted(t *testing.T) {
+	m := email("admin@shop.com", "New lead", "x")
+	m.Source = model.Source{Via: "wordpress", Hook: "wp_mail"}
+	plain := email("ops@shop.com", "Report", "y")
+	plain.Source = model.Source{Via: "smtp"}
+	before := run(model.Action{ID: "a", Label: "Contact form", Messages: []model.Message{m, m}},
+		model.Action{ID: "b", Label: "Nightly report", Messages: []model.Message{plain}})
+	c := Compare(before, run(model.Action{ID: "a", Label: "Contact form"}, model.Action{ID: "b", Label: "Nightly report"}), "", "", "test")
+	want := "Contact form: nothing arrived this time from the site's wordpress connector, which sent 2 messages in the snapshot. " +
+		"A connector that can't reach Echo blocks every send while sealed: check the site reaches Echo with rhythm echo doctor"
+	if strings.Join(c.Warnings, "\n") != want {
+		t.Errorf("warnings = %q", c.Warnings)
+	}
+	if c.Count(model.Broke) == 0 {
+		t.Error("the lost messages are no longer BROKE")
+	}
+	c = Compare(before, run(model.Action{ID: "a", Label: "Contact form", Messages: []model.Message{m}}, model.Action{ID: "b", Label: "Nightly report"}), "", "", "test")
+	if len(c.Warnings) != 0 {
+		t.Errorf("the connector still sends, yet warnings = %q", c.Warnings)
+	}
+}

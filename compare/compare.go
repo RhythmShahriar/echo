@@ -596,6 +596,46 @@ func Sort(cs []model.Change) {
 	})
 }
 
+// connectorVias are the connectors that run inside the site. Sealed and
+// unable to reach Echo, each blocks every send, so Echo hears nothing.
+var connectorVias = []string{"wordpress", "laravel", "node"}
+
+// silentConnectors notes each action that sent nothing at all this time
+// although a connector in the site sent its mail in the snapshot. Echo
+// can't tell that from a site that stopped sending, but a connector that
+// can't reach Echo is the likelier cause when every message is gone.
+func silentConnectors(before, after *model.Run) []string {
+	var w []string
+	for _, b := range before.Actions {
+		a := after.Action(b.ID)
+		if a == nil || a.Error != "" || len(a.Messages) > 0 {
+			continue
+		}
+		var via string
+		for _, m := range b.Messages {
+			if slices.Contains(connectorVias, m.Source.Via) {
+				via = m.Source.Via
+				break
+			}
+		}
+		if via == "" {
+			continue
+		}
+		w = append(w, fmt.Sprintf("%s: nothing arrived this time from the site's %s connector, which sent %s in the snapshot. "+
+			"A connector that can't reach Echo blocks every send while sealed: check the site reaches Echo with rhythm echo doctor",
+			b.Label, via, nMessages(len(b.Messages))))
+	}
+	return w
+}
+
+// nMessages is n messages, in words.
+func nMessages(n int) string {
+	if n == 1 {
+		return "1 message"
+	}
+	return fmt.Sprintf("%d messages", n)
+}
+
 func mismatch(before, after *model.Run) []string {
 	var w []string
 	if before.Mode != after.Mode {
@@ -612,6 +652,7 @@ func mismatch(before, after *model.Run) []string {
 			added++
 		}
 	}
+	w = append(w, silentConnectors(before, after)...)
 	switch missing {
 	case 0:
 	case 1:
