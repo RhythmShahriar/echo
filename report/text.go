@@ -143,16 +143,18 @@ type junitFailure struct {
 }
 
 // JUnit writes one suite per change class (or per action, for a run).
-// Cases at or above failOn fail; without failOn, BROKE and NEW (or errors
-// and failed actions) fail.
-func JUnit(w io.Writer, r Result, failOn string) error {
+// Cases at or above failOn fail, and so does a failed action; with "none"
+// nothing fails. "" means DefaultFailOn: BROKE for a comparison, errors
+// for a run. Like FailOn it takes a Threshold or a plain string.
+func JUnit[T ~string](w io.Writer, r Result, failOn T) error {
+	t := Threshold(strings.ToLower(strings.TrimSpace(string(failOn))))
+	if t == "" {
+		t = DefaultFailOn(r.Compared())
+	}
 	out := junitSuites{Name: "echo", Time: r.Run.Duration / 1000}
 	stamp := r.Run.Started.UTC().Format(time.RFC3339)
 	if r.Compared() {
-		limit := slices.Index(model.Classes, failOn)
-		if failOn == "" {
-			limit = slices.Index(model.Classes, model.New)
-		}
+		limit := slices.Index(model.Classes, string(t)) // -1 for none: nothing fails
 		for i, class := range model.Classes {
 			s := junitSuite{Name: "echo." + class, Timestamp: stamp}
 			for _, ch := range r.Comparison.Changes {
@@ -172,14 +174,11 @@ func JUnit(w io.Writer, r Result, failOn string) error {
 			out.Suites = append(out.Suites, s)
 		}
 	} else {
-		limit := model.Level(failOn).Rank()
-		if failOn == "" {
-			limit = model.Error.Rank()
-		}
+		limit := t.levelRank()
 		for _, a := range r.Run.Actions {
 			s := junitSuite{Name: "echo." + a.ID, Timestamp: stamp}
 			tc := junitCase{Name: Safe(a.Label) + " sends its messages", Classname: "echo.action", Out: Tally(&model.Run{Actions: []model.Action{a}})}
-			if a.Error != "" {
+			if a.Error != "" && t != FailNone {
 				tc.Failure, tc.Out = &junitFailure{Message: Safe(a.Error), Type: "action"}, ""
 				s.Failures++
 			}

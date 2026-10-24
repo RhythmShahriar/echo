@@ -150,7 +150,7 @@ func TestMachineFormats(t *testing.T) {
 		t.Fatal(err)
 	}
 	var s junitSuites
-	if xml.Unmarshal(buf.Bytes(), &s) != nil || s.Failures != 2 || s.Tests != 4 {
+	if xml.Unmarshal(buf.Bytes(), &s) != nil || s.Failures != 1 || s.Tests != 4 { // the default: BROKE only
 		t.Errorf("junit: %d failures of %d", s.Failures, s.Tests)
 	}
 	buf.Reset()

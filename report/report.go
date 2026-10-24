@@ -48,16 +48,19 @@ var channelGlyph = map[model.Channel]string{
 // FailOn reports whether r should fail a build at threshold: a change
 // class (broke, new, changed) for comparisons, an issue level for runs.
 // An action that failed fails at every threshold but "none": what it sent
-// was never checked.
-func FailOn(r Result, threshold string) bool {
-	if threshold == "" || threshold == "none" {
+// was never checked. The threshold should come from ParseFailOn; a plain
+// string is still accepted (in any case) for callers that pass the flag
+// as typed, and "" never fails.
+func FailOn[T ~string](r Result, threshold T) bool {
+	t := Threshold(strings.ToLower(strings.TrimSpace(string(threshold))))
+	if t == "" || t == FailNone {
 		return false
 	}
 	if failed, _ := failedActions(r.Run); failed > 0 {
 		return true
 	}
 	if r.Compared() {
-		limit := slices.Index(model.Classes, threshold)
+		limit := slices.Index(model.Classes, string(t))
 		for _, c := range r.Comparison.Changes {
 			if i := slices.Index(model.Classes, c.Class); i >= 0 && i <= limit && c.Class != model.Fixed {
 				return true
@@ -65,7 +68,7 @@ func FailOn(r Result, threshold string) bool {
 		}
 		return false
 	}
-	limit := model.Level(threshold).Rank()
+	limit := t.levelRank()
 	for _, i := range Issues(r.Run) {
 		if i.Level.Rank() <= limit {
 			return true
@@ -95,18 +98,60 @@ func failedActions(run *model.Run) (failed, total int) {
 	return failed, len(run.Actions)
 }
 
-// ValidFailOn checks a --fail-on value.
-func ValidFailOn(threshold string, compared bool) error {
+// Threshold is a parsed --fail-on value: "none", a change class (broke,
+// new, changed) for comparisons or an issue level (error, warning,
+// notice) for runs. ParseFailOn makes one.
+type Threshold string
+
+// FailNone never fails a build, whatever was found.
+const FailNone Threshold = "none"
+
+// levelRank is the issue rank at or above which a run fails: -1, so
+// nothing fails, for none or a value that isn't a level.
+func (t Threshold) levelRank() int {
+	if !slices.Contains(Levels, model.Level(t)) {
+		return -1
+	}
+	return model.Level(t).Rank()
+}
+
+// DefaultFailOn is the threshold when --fail-on isn't given, the same as
+// the GitHub Action's: broke for a comparison, error for a run.
+func DefaultFailOn(compared bool) Threshold {
 	if compared {
-		if !slices.Contains(model.Classes[:3], threshold) {
-			return fmt.Errorf("--fail-on %q: want broke, new or changed", threshold)
-		}
-		return nil
+		return Threshold(model.Broke)
 	}
-	if !slices.Contains(Levels, model.Level(threshold)) {
-		return fmt.Errorf("--fail-on %q: want error, warning or notice (or broke, new, changed when comparing)", threshold)
+	return Threshold(model.Error)
+}
+
+// ParseFailOn reads a --fail-on value in any case. "" gives the default.
+// A class only fits a comparison and a level only fits a run, and the
+// error for either mistake or an unknown word lists what fits.
+func ParseFailOn(s string, compared bool) (Threshold, error) {
+	t := strings.ToLower(strings.TrimSpace(s))
+	classes := []string{model.Broke, model.New, model.Changed}
+	levels := []string{string(model.Error), string(model.Warning), string(model.Notice)}
+	switch {
+	case t == "":
+		return DefaultFailOn(compared), nil
+	case t == string(FailNone):
+		return FailNone, nil
+	case compared && slices.Contains(classes, t), !compared && slices.Contains(levels, t):
+		return Threshold(t), nil
+	case compared && slices.Contains(levels, t):
+		return "", fmt.Errorf("--fail-on %s is for runs; when comparing use broke, new, changed or none", t)
+	case !compared && slices.Contains(classes, t):
+		return "", fmt.Errorf("--fail-on %s is for comparisons; for a run use error, warning, notice or none", t)
 	}
-	return nil
+	return "", fmt.Errorf("--fail-on %q: want none, broke, new or changed when comparing, or none, error, warning or notice for a run", s)
+}
+
+// ValidFailOn checks a --fail-on value. It is ParseFailOn without the
+// result, kept for callers that only validate; unlike before, "none" and
+// any case are accepted.
+func ValidFailOn(threshold string, compared bool) error {
+	_, err := ParseFailOn(threshold, compared)
+	return err
 }
 
 // Issues returns a run's issues with the same problem in several actions
