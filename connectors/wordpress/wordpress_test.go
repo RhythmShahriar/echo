@@ -4,6 +4,7 @@
 package wordpress
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"os"
 	"os/exec"
@@ -231,5 +232,86 @@ func TestPHPStan(t *testing.T) {
 	out, err := exec.Command(phpstan, "analyze", "--no-progress", "--memory-limit=1G", "-c", "phpstan.neon.dist").CombinedOutput()
 	if err != nil {
 		t.Fatalf("phpstan: %v\n%s", err, out)
+	}
+}
+
+// callPHP runs one Rhythm_Echo method through testdata/call-harness.php and
+// decodes its JSON result into out.
+func callPHP(t *testing.T, setup, method string, out any, args ...any) {
+	t.Helper()
+	php, err := exec.LookPath("php")
+	if err != nil {
+		t.Skip("php not installed")
+	}
+	if args == nil {
+		args = []any{}
+	}
+	a, err := json.Marshal(args)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := exec.Command(php, "testdata/call-harness.php", "echo.php", setup, method, string(a)).CombinedOutput()
+	if err != nil {
+		t.Fatalf("%s: %v\n%s", method, err, b)
+	}
+	if err := json.Unmarshal(b, out); err != nil {
+		t.Fatalf("%s: not JSON: %s", method, b)
+	}
+}
+
+func TestMaskHeader(t *testing.T) {
+	const secret = "Zq9TOPSECRETvalue77abcdefghijkl"
+	basic := func(s string) string { return "Basic " + base64.StdEncoding.EncodeToString([]byte(s)) }
+	for _, tc := range []struct{ name, value, want string }{
+		{"X-Auth-Token", secret, "•••••"},
+		{"x-amz-security-token", secret, "•••••"},
+		{"Private-Token", secret, "•••••"},
+		{"X-Goog-Api-Key", secret, "•••••"},
+		{"X-Shopify-Access-Token", secret, "•••••"},
+		{"X-WC-Webhook-Signature", secret, "•••••"},
+		{"X-Session-Id", secret, "•••••"},
+		{"X-Db-Password", secret, "•••••"},
+		{"Cookie", "sid=" + secret, "•••••"},
+		{"X-Client-Credential", secret, "•••••"},
+		{"X-Auth-Token", "", ""},
+		{"Authorization", "Bearer " + secret, "Bearer •••••"},
+		{"Authorization", "Bearer sk_test_" + secret, "Bearer sk_test_•••••"},
+		{"Authorization", basic("sk_live_" + secret + ":"), "Basic sk_live_•••••"},
+		{"Authorization", basic("user:" + secret), "Basic •••••"},
+		{"Proxy-Authorization", secret, "•••••"},
+		// negative fixtures: kept as they are
+		{"X-Request-Id", "req-1234567890abcdef", "req-1234567890abcdef"},
+		{"Content-Type", "application/json", "application/json"},
+		{"X-Echo-Run", "r1/checkout.NhOp3HY0JQ76wSoPnn3sZg", "r1/checkout.NhOp3HY0JQ76wSoPnn3sZg"},
+	} {
+		var got string
+		callPHP(t, `{}`, "mask_header", &got, tc.name, tc.value)
+		if got != tc.want {
+			t.Errorf("mask_header(%q, %q) = %q, want %q", tc.name, tc.value, got, tc.want)
+		}
+		// Beyond the scheme and a Stripe mode prefix, at most 4 characters show.
+		shown := strings.ReplaceAll(got, "•", "")
+		for _, p := range []string{"Bearer ", "Basic ", "sk_test_", "sk_live_"} {
+			shown = strings.TrimPrefix(shown, p)
+		}
+		if tc.want != tc.value && len(shown) > 4 {
+			t.Errorf("mask_header(%q) shows more than 4 characters: %q", tc.name, got)
+		}
+	}
+}
+
+// Email headers are masked by the same rule as request headers.
+func TestMaskMailHeaders(t *testing.T) {
+	var got struct {
+		Headers map[string]string `json:"headers"`
+	}
+	callPHP(t, `{}`, "email_from_atts", &got, map[string]any{
+		"to":      "ann@example.test",
+		"subject": "Hi",
+		"message": "Hello",
+		"headers": []string{"X-Auth-Token: Zq9TOPSECRETvalue77", "X-Request-Id: req-1"},
+	})
+	if got.Headers["X-Auth-Token"] != "•••••" || got.Headers["X-Request-Id"] != "req-1" {
+		t.Errorf("headers = %v", got.Headers)
 	}
 }

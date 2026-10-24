@@ -126,7 +126,7 @@ If Echo can't be reached while the site is sealed, outbound requests fail as net
 
 The connector never captures requests to Echo itself or to loopback. Calls to the site's own host are captured and reported with `source.host`. Echo lets them through and records them as sent. The site's host comes only from configuration (`RHYTHM_ECHO_SITE`, `VERCEL_URL`, `VERCEL_BRANCH_URL`, `NEXT_PUBLIC_SITE_URL` or the `site` option), never from the incoming request's `Host` or `X-Forwarded-Host`, which a visitor can set to a provider's host. With none configured, every outbound call is treated as a call to someone else.
 
-It masks credentials before they leave the process, keeping only the scheme: `authorization` becomes `Bearer •••••`, and API-key and token headers are masked too. Echo then redacts secrets in bodies.
+It masks credentials before they leave the process. Any header whose name contains `token`, `secret`, `key`, `auth`, `signature`, `session`, `password`, `cookie` or `credential` (any case) is masked whole: `x-auth-token` becomes `•••••` while `x-request-id` is kept. `authorization` keeps only its scheme (`Bearer •••••`). A Stripe key keeps its mode prefix (`Bearer sk_test_•••••`), which holds no secret and tells Echo whether it may fake the call. Echo then redacts secrets in bodies.
 
 ### Run IDs (`X-Echo-Run`)
 

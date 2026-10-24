@@ -57,7 +57,7 @@ class HttpTest extends TestCase
         $this->assertSame('before', $c[0]['phase']);
         $this->assertSame('POST', $c[0]['http']['method']);
         $this->assertStringContainsString('Body=Your+code+is+123456', $c[0]['http']['body']);
-        $this->assertSame('•••••', $c[0]['http']['headers']['Authorization']);
+        $this->assertSame('Basic •••••', $c[0]['http']['headers']['Authorization']);
         $this->assertSame('http', $c[0]['source']['hook']);
     }
 

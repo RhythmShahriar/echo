@@ -43,7 +43,7 @@ Everything can be set from the environment. If you want the file, run `php artis
 | Vonage SMS notifications | `vonage.http_client` points at the container's Guzzle client, unless you set your own | yes, when `guzzle` is on |
 | `new GuzzleHttp\Client()`, raw cURL, SDKs with their own HTTP stack (the Twilio and Stripe PHP SDKs, AWS SDK) | not hooked | **no**: use Echo's proxy, see below |
 
-**Captures.** An email capture carries from, to, cc, bcc, reply-to, subject, text, HTML, headers and the full MIME, with the mailer name in `source.plugin`. An HTTP capture carries the method, URL, headers and the first 256 KiB of the body, with the calling package in `source.plugin` when one can be found. Credential headers (`Authorization`, `Cookie`, `X-Api-Key` and others) are masked before anything leaves the app. Echo redacts secrets in bodies.
+**Captures.** An email capture carries from, to, cc, bcc, reply-to, subject, text, HTML, headers and the full MIME, with the mailer name in `source.plugin`. An HTTP capture carries the method, URL, headers and the first 256 KiB of the body, with the calling package in `source.plugin` when one can be found. Credential headers are masked before anything leaves the app: any header whose name contains `token`, `secret`, `key`, `auth`, `signature`, `session`, `password`, `cookie` or `credential` (any case), so `X-Auth-Token` becomes `•••••` while `X-Request-Id` is kept. `Authorization` keeps only its scheme (`Bearer •••••`). A Stripe key keeps its mode prefix (`Bearer sk_test_•••••`), which holds no secret and tells Echo whether it may fake the call. Echo redacts secrets in bodies.
 
 **HTTP decisions.** Echo answers each request before it's sent:
 - `fake`: the app gets Echo's response, and nothing is sent.

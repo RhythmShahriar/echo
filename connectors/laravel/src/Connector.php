@@ -17,11 +17,17 @@ class Connector
     /** Hidden Context key: hidden so the run never lands in log lines. */
     public const CONTEXT_KEY = 'rhythm_echo.run';
 
-    /** Header names whose values are credentials, masked before sending. */
-    private const SECRET_HEADERS = [
-        'authorization', 'proxy-authorization', 'cookie', 'set-cookie', 'x-api-key', 'api-key',
-        'x-auth-token', 'x-postmark-server-token', 'x-echo-token', 'x-vonage-signature',
-    ];
+    /**
+     * Header names whose whole value is a credential. The same rule as
+     * Echo's catcher, so a header let through here is not stored raw there.
+     */
+    private const SECRET_HEADER = '/token|secret|key|auth|signature|session|password|cookie|credential/i';
+
+    /**
+     * A Stripe key's mode prefix. It carries no secret and is what Echo
+     * reads to fake a test-mode payment call or refuse a live one.
+     */
+    private const KEY_MODE = '/^[spr]k_(?:live|test)_/';
 
     private ?string $reason = null;
 
@@ -164,10 +170,47 @@ class Connector
         $out = [];
         foreach ($headers as $name => $value) {
             $value = is_array($value) ? implode(', ', $value) : (string) $value;
-            $out[(string) $name] = in_array(strtolower((string) $name), self::SECRET_HEADERS, true) ? '•••••' : $value;
+            $out[(string) $name] = self::maskHeader((string) $name, $value);
         }
 
         return $out;
+    }
+
+    /**
+     * One header's value as a capture may carry it. Authorization keeps
+     * its scheme. Basic is decoded so the user name (a Stripe key
+     * there) keeps its mode prefix.
+     */
+    public static function maskHeader(string $name, string $value): string
+    {
+        if ($value === '' || ! preg_match(self::SECRET_HEADER, $name)) {
+            return $value;
+        }
+        if (! preg_match('/^(?:proxy-)?authorization$/i', $name)
+            || ! preg_match('/^([A-Za-z][A-Za-z0-9-]*)\s+(\S+)$/', trim($value), $m)) {
+            return self::mask($value);
+        }
+        if (strtolower($m[1]) === 'basic') {
+            $plain = base64_decode($m[2], true);
+            if ($plain !== false && str_contains($plain, ':')) {
+                return $m[1].' '.self::mask(explode(':', $plain, 2)[0]);
+            }
+        }
+
+        return $m[1].' '.self::mask($m[2]);
+    }
+
+    /**
+     * Hides a credential whole. Only a Stripe key's mode prefix stays
+     * ("sk_test_•••••"); an empty value stays empty.
+     */
+    public static function mask(string $value): string
+    {
+        if ($value === '') {
+            return '';
+        }
+
+        return (preg_match(self::KEY_MODE, $value, $m) ? $m[0] : '').'•••••';
     }
 
     /**

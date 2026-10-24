@@ -66,6 +66,9 @@ final class Rhythm_Echo {
 	/** Bytes of request or response body reported to Echo. */
 	const MAX_BODY = 2097152;
 
+	/** Header names whose whole value is a credential, as Echo's catcher has it. */
+	const SECRET_HEADER = '/token|secret|key|auth|signature|session|password|cookie|credential/i';
+
 	/** The canary address and URL `rhythm echo doctor` expects to see caught. */
 	const CANARY_EMAIL = 'canary@echo.invalid';
 	const CANARY_URL   = 'https://canary.echo.invalid/';
@@ -694,44 +697,42 @@ final class Rhythm_Echo {
 	}
 
 	// ---------------------------------------------------------------------
-	// Masking: captures never carry raw credentials. Like Echo's own
-	// masking, a few leading characters stay so the kind of key shows
-	// (sk_live_ vs sk_test_ decides whether a payment call may be faked).
+	// Masking: captures never carry raw credentials. A masked value keeps
+	// nothing but a Stripe key's mode prefix (sk_live_ vs sk_test_ decides
+	// whether a payment call may be faked), which carries no secret.
 
-	public static function mask( string $v, int $keep = 8 ): string {
-		$len  = function_exists( 'mb_strlen' ) ? mb_strlen( $v ) : strlen( $v );
-		$keep = min( $keep, intdiv( $len, 3 ) );
-		$head = function_exists( 'mb_substr' ) ? mb_substr( $v, 0, $keep ) : substr( $v, 0, $keep );
-		return $head . "\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}";
+	public static function mask( string $v ): string {
+		if ( '' === $v ) {
+			return '';
+		}
+		$mode = preg_match( '/^[spr]k_(?:live|test)_/', $v, $m ) ? $m[0] : '';
+		return $mode . "\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}";
 	}
 
 	private static function secret_name( string $name ): bool {
 		return 1 === preg_match( '/(passw(or)?d|secret|token|api[_-]?key|apikey|auth[_-]?key|access[_-]?key|^key$|^authorization$|^cookie$)/i', $name );
 	}
 
+	/**
+	 * A header's value as a capture may carry it. Authorization keeps its
+	 * scheme. Basic is decoded so the user name (a Stripe key there)
+	 * keeps its mode prefix.
+	 */
 	private static function mask_header( string $name, string $value ): string {
-		$lower = strtolower( $name );
-		if ( 'x-echo-run' === $lower || 'content-type' === $lower ) {
+		if ( '' === $value || 1 !== preg_match( self::SECRET_HEADER, $name ) ) {
 			return $value;
 		}
-		if ( 'authorization' === $lower || 'proxy-authorization' === $lower ) {
-			if ( preg_match( '/^(basic)\s+(\S+)$/i', $value, $m ) ) {
-				$plain = base64_decode( $m[2], true ); // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions
-				if ( false !== $plain && false !== strpos( $plain, ':' ) ) {
-					list( $user, $pass ) = explode( ':', $plain, 2 );
-					return $m[1] . ' ' . base64_encode( self::mask( $user ) . ':' . ( '' === $pass ? '' : self::mask( $pass, 0 ) ) ); // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions
-				}
-				return $m[1] . ' ' . self::mask( $m[2], 0 );
-			}
-			if ( preg_match( '/^([A-Za-z][A-Za-z0-9-]*)\s+(\S+)$/', $value, $m ) ) {
-				return $m[1] . ' ' . self::mask( $m[2] );
-			}
+		$lower = strtolower( $name );
+		if ( ( 'authorization' !== $lower && 'proxy-authorization' !== $lower ) || ! preg_match( '/^([A-Za-z][A-Za-z0-9-]*)\s+(\S+)$/', trim( $value ), $m ) ) {
 			return self::mask( $value );
 		}
-		if ( self::secret_name( $lower ) ) {
-			return self::mask( $value );
+		if ( 'basic' === strtolower( $m[1] ) ) {
+			$plain = base64_decode( $m[2], true ); // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions
+			if ( false !== $plain && false !== strpos( $plain, ':' ) ) {
+				return $m[1] . ' ' . self::mask( explode( ':', $plain, 2 )[0] );
+			}
 		}
-		return $value;
+		return $m[1] . ' ' . self::mask( $m[2] );
 	}
 
 	private static function mask_url( string $url ): string {
@@ -1136,7 +1137,7 @@ final class Rhythm_Echo {
 		};
 		$headers = array();
 		foreach ( $mailer->getCustomHeaders() as $h ) {
-			$headers[ (string) $h[0] ] = (string) $h[1];
+			$headers[ (string) $h[0] ] = self::mask_header( (string) $h[0], (string) $h[1] );
 		}
 		$headers['From']         = '' !== $mailer->FromName ? sprintf( '%s <%s>', $mailer->FromName, $mailer->From ) : $mailer->From;
 		$headers['Content-Type'] = $mailer->ContentType . ( '' !== $mailer->CharSet && false === strpos( $mailer->ContentType, 'multipart/' ) ? '; charset=' . $mailer->CharSet : '' );
@@ -1231,7 +1232,10 @@ final class Rhythm_Echo {
 		$type   = (string) apply_filters( 'wp_mail_content_type', null !== $parsed['content_type'] ? $parsed['content_type'] : 'text/plain' );
 		$body   = (string) ( $atts['message'] ?? '' );
 		$files  = array_map( 'basename', self::list_of( $atts['attachments'] ?? array(), "\n" ) );
-		$hdrs   = $parsed['headers'];
+		$hdrs   = array();
+		foreach ( $parsed['headers'] as $name => $value ) {
+			$hdrs[ $name ] = self::mask_header( (string) $name, (string) $value );
+		}
 		if ( $files ) {
 			$hdrs['X-Echo-Attachments'] = implode( ', ', $files );
 		}

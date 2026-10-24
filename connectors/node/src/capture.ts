@@ -37,13 +37,46 @@ export function isLoopback(h: string): boolean {
   return h === 'localhost' || h.endsWith('.localhost') || h === '::1' || /^127\.\d+\.\d+\.\d+$/.test(h) || h === '0.0.0.0';
 }
 
-const secretHeader = /^(authorization|proxy-authorization|cookie|x-api-key|api-key|x-auth-token|x-postmark-server-token|x-postmark-account-token|x-echo-token)$/;
-const secretish = /(secret|token|password|passwd|api[-_]?key)/i;
+/**
+ * Header names whose whole value is a credential. The same rule as Echo's
+ * catcher, so a header the connector lets through is not stored raw there
+ * either.
+ */
+const secretHeader = /token|secret|key|auth|signature|session|password|cookie|credential/i;
 
-/** mask keeps the first few characters of a credential, like Echo's kit/secrets Mask. */
-export function mask(v: string, keep = 0): string {
-  const k = Math.min(keep, Math.floor(v.length / 3));
-  return v.slice(0, k) + '•••••';
+/**
+ * A Stripe key's mode prefix. It carries no secret and is what Echo reads
+ * to decide whether a payment call may be faked (test) or must be refused
+ * (live), so it stays.
+ */
+const keyMode = /^[spr]k_(?:live|test)_/;
+
+/**
+ * mask hides a credential whole. Only a Stripe key's mode prefix stays
+ * ("sk_test_•••••"); an empty value stays empty.
+ */
+export function mask(v: string): string {
+  if (v === '') return '';
+  return (keyMode.exec(v)?.[0] ?? '') + '•••••';
+}
+
+/**
+ * maskHeader returns a header's value as a capture may carry it. An
+ * Authorization header keeps its scheme. A Basic one is decoded so
+ * the user name (a Stripe key there) can keep its mode prefix.
+ */
+export function maskHeader(name: string, v: string): string {
+  if (v === '' || !secretHeader.test(name)) return v;
+  const m = /^([A-Za-z][A-Za-z0-9-]*)\s+(\S+)$/.exec(v.trim());
+  if (!m || !/^(proxy-)?authorization$/i.test(name)) return mask(v);
+  const scheme = m[1]!;
+  const cred = m[2]!;
+  if (scheme.toLowerCase() === 'basic') {
+    const plain = Buffer.from(cred, 'base64').toString('utf8');
+    const colon = plain.indexOf(':');
+    return `${scheme} ${mask(colon >= 0 ? plain.slice(0, colon) : cred)}`;
+  }
+  return `${scheme} ${mask(cred)}`;
 }
 
 /** maskHeaders lowercases names and hides credentials before they leave the process. */
@@ -51,14 +84,7 @@ export function maskHeaders(h: Iterable<[string, string]>): Record<string, strin
   const out: Record<string, string> = {};
   for (const [k0, v] of h) {
     const k = k0.toLowerCase();
-    if (k === 'authorization' || k === 'proxy-authorization') {
-      const sp = v.indexOf(' ');
-      out[k] = sp > 0 ? `${v.slice(0, sp)} ${mask(v.slice(sp + 1))}` : mask(v);
-    } else if (secretHeader.test(k) || secretish.test(k)) {
-      out[k] = mask(v);
-    } else {
-      out[k] = v;
-    }
+    out[k] = maskHeader(k, v);
   }
   return out;
 }
