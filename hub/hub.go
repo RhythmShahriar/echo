@@ -2,18 +2,20 @@
 // SPDX-License-Identifier: MIT
 
 // Package hub is Echo for agencies: one catcher that many staging sites
-// send to, with what each site sent kept apart and kept across restarts,
-// and a scheduler that runs every site's update window (an --after
-// command such as "wp plugin update --all") and compares what each site
-// sends before and after.
+// send to, which keeps what each site sent apart and across restarts.
+// Its scheduler runs every site's update window (an --after command such
+// as "wp plugin update --all") and compares what each site sends before
+// and after.
 //
 //	rhythm echo hub --store /srv/echo --sites sites.yaml --listen 0.0.0.0:8025 --tls-self-signed
 //	rhythm echo schedule "Tue 02:00" --store /srv/echo --sites all --after "wp plugin update --all"
 //
 // Each site posts with its own write token, which can only add captures;
 // reading needs the hub's read token, which sees every site and can filter
-// by one (GET /v1/messages?site=client-a). The inbox is an append-only
-// JSON Lines file in the store. TLS keeps the tokens off the wire in clear.
+// by one (GET /v1/messages?site=client-a). Action markers are kept per
+// site, so one site's run never claims another's mail. The inbox is an
+// append-only JSON Lines file in the store. TLS keeps the tokens off the
+// wire in clear.
 package hub
 
 import (
@@ -53,12 +55,21 @@ type Hub struct {
 
 	mu     sync.Mutex
 	siteOf map[string]string // message ID to site ID
+	marks  map[string]mark   // the action in progress, by site ("" for every site)
 
 	// Captures run one at a time with cur set to the sending site, so the
 	// inbox callback (which has only the message) knows whose it is.
 	capture sync.Mutex
 	cur     string
 }
+
+// SiteHeader names the site an action marker from the read token is for.
+// Without it the marker applies to every site, as on a plain catcher.
+const SiteHeader = "X-Echo-Site"
+
+// mark is an action in progress (POST /v1/actions/begin): untagged mail
+// from its site is attributed to it.
+type mark struct{ run, action string }
 
 // New opens the hub's store, loads the inbox kept there and returns the
 // hub. Close it to flush the inbox file.
@@ -69,7 +80,7 @@ func New(o Options) (*Hub, error) {
 	if o.Keep <= 0 {
 		o.Keep = 10000
 	}
-	h := &Hub{o: o, Inbox: catcher.NewInbox(o.Keep), siteOf: map[string]string{}}
+	h := &Hub{o: o, Inbox: catcher.NewInbox(o.Keep), siteOf: map[string]string{}, marks: map[string]mark{}}
 	p, recs, err := openPersister(o.Store, o.Keep)
 	if err != nil {
 		return nil, err
@@ -129,13 +140,52 @@ func (h *Hub) compact() {
 	h.persist.rewrite(recs)
 }
 
-// as runs fn as a capture from site.
+// as runs fn as a capture from site. The inbox's action in progress is
+// set to the site's own for the length of fn, so one site's marker never
+// tags another site's mail.
 func (h *Hub) as(site string, fn func() error) error {
 	h.capture.Lock()
 	defer h.capture.Unlock()
 	h.cur = site
-	defer func() { h.cur = "" }()
+	h.mu.Lock()
+	m, ok := h.marks[site]
+	if !ok {
+		m = h.marks[""]
+	}
+	h.mu.Unlock()
+	h.Inbox.Begin(m.run, m.action)
+	defer func() { h.cur = ""; h.Inbox.End() }()
 	return fn()
+}
+
+// action serves POST /v1/actions/begin and /end for site ("" for every
+// site). The hub keeps the markers itself instead of the catcher, which
+// has one for everyone.
+func (h *Hub) action(site string, w http.ResponseWriter, r *http.Request) {
+	var m mark
+	if r.URL.Path == "/v1/actions/begin" {
+		var b struct {
+			Run    string `json:"run"`
+			Action string `json:"action"`
+		}
+		if err := json.NewDecoder(io.LimitReader(r.Body, 1<<16)).Decode(&b); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		m = mark{b.Run, b.Action}
+	}
+	h.mu.Lock()
+	if m == (mark{}) {
+		delete(h.marks, site)
+	} else {
+		h.marks[site] = m
+	}
+	h.mu.Unlock()
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func isAction(r *http.Request) bool {
+	return r.Method == http.MethodPost && (r.URL.Path == "/v1/actions/begin" || r.URL.Path == "/v1/actions/end")
 }
 
 // tokenSite returns who token belongs to: "read" for the read token, a
@@ -168,14 +218,15 @@ func (h *Hub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// write serves a site's write token: captures, the action markers and
-// health, nothing that reads.
+// write serves a site's write token: captures, the site's own action
+// markers and health, nothing that reads.
 func (h *Hub) write(site string, w http.ResponseWriter, r *http.Request) {
 	switch {
 	case r.Method == http.MethodPost && r.URL.Path == "/v1/capture":
 		h.captureHTTP(site, w, r)
-	case r.Method == http.MethodGet && r.URL.Path == "/v1/health",
-		r.Method == http.MethodPost && (r.URL.Path == "/v1/actions/begin" || r.URL.Path == "/v1/actions/end"):
+	case isAction(r):
+		h.action(site, w, r)
+	case r.Method == http.MethodGet && r.URL.Path == "/v1/health":
 		h.srv.ServeHTTP(w, r)
 	default:
 		http.Error(w, "a site's write token can only send captures; reading needs the hub's read token", http.StatusForbidden)
@@ -216,6 +267,13 @@ func (h *Hub) read(w http.ResponseWriter, r *http.Request) {
 		h.list(w, r)
 	case r.Method == http.MethodGet && r.URL.Path == "/v1/sites":
 		h.sites(w)
+	case isAction(r):
+		site := r.Header.Get(SiteHeader)
+		if _, ok := h.o.Sites.Site(site); site != "" && !ok {
+			http.Error(w, fmt.Sprintf("no site %q", site), http.StatusNotFound)
+			return
+		}
+		h.action(site, w, r)
 	case r.Method == http.MethodDelete:
 		h.srv.ServeHTTP(w, r)
 		h.compact() // deleted messages stay deleted after a restart

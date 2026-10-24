@@ -175,16 +175,12 @@ func RunWindow(ctx context.Context, o WindowOptions) []Result {
 	if o.Log == nil {
 		o.Log = io.Discard
 	}
-	echo := client.New(o.URL, o.Token)
-	if o.HTTP != nil {
-		echo.HTTP = o.HTTP
-	}
 	var out []Result
 	for _, site := range o.Sites {
 		if ctx.Err() != nil {
 			break
 		}
-		r := window(ctx, o, echo, site)
+		r := window(ctx, o, siteClient(o, site.ID), site)
 		out = append(out, r)
 		line := r.Verdict
 		if r.Error != "" {
@@ -196,6 +192,36 @@ func RunWindow(ctx context.Context, o WindowOptions) []Result {
 		fmt.Fprintf(o.Log, "%s: %s\n", site.ID, line)
 	}
 	return out
+}
+
+// siteClient talks to the hub with the read token, naming site in every
+// request so the hub keeps the run's action markers to that site's mail.
+func siteClient(o WindowOptions, site string) *client.Client {
+	echo := client.New(o.URL, o.Token)
+	hc := echo.HTTP // the client's own, with its timeout
+	if o.HTTP != nil {
+		hc = o.HTTP
+	}
+	base := hc.Transport
+	if base == nil {
+		base = http.DefaultTransport
+	}
+	named := *hc
+	named.Transport = siteTransport{base: base, site: site}
+	echo.HTTP = &named
+	return echo
+}
+
+// siteTransport sets SiteHeader on each request.
+type siteTransport struct {
+	base http.RoundTripper
+	site string
+}
+
+func (t siteTransport) RoundTrip(r *http.Request) (*http.Response, error) {
+	r = r.Clone(r.Context())
+	r.Header.Set(SiteHeader, t.site)
+	return t.base.RoundTrip(r)
 }
 
 func window(ctx context.Context, o WindowOptions, echo *client.Client, site *Site) Result {

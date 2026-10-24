@@ -192,6 +192,81 @@ func TestTokensAndSites(t *testing.T) {
 	}
 }
 
+// TestActionMarkersPerSite checks that an action marker tags only its own
+// site's untagged mail, from a write token or from the read token with
+// the site named.
+func TestActionMarkersPerSite(t *testing.T) {
+	h := newHub(t, t.TempDir())
+	defer func() { _ = h.Close() }()
+	read, a, b := tokens["READ"], tokens["TOKEN_A"], tokens["TOKEN_B"]
+	serve := func(method, path, token, site, body string) int {
+		req := httptest.NewRequest(method, path, strings.NewReader(body))
+		req.Header.Set(wire.TokenHeader, token)
+		if site != "" {
+			req.Header.Set(SiteHeader, site)
+		}
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		return rec.Code
+	}
+	captured := func(token, subject string) model.Message {
+		t.Helper()
+		req := httptest.NewRequest(http.MethodPost, "/v1/capture", strings.NewReader(emailCapture(subject, "ann@example.com")))
+		req.Header.Set(wire.TokenHeader, token)
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		var d wire.Decision
+		if err := json.Unmarshal(rec.Body.Bytes(), &d); err != nil || rec.Code != http.StatusOK {
+			t.Fatalf("capture %q: %d %s", subject, rec.Code, rec.Body)
+		}
+		m, _ := h.Inbox.Get(d.ID)
+		return m
+	}
+	begin := func(run string) string { return `{"run":"` + run + `","action":"contact"}` }
+
+	if code := serve(http.MethodPost, "/v1/actions/begin", a, "", begin("run-a")); code != http.StatusNoContent {
+		t.Fatalf("site A begin: %d", code)
+	}
+	if m := captured(b, "B during A's action"); m.Run != "" {
+		t.Errorf("site B's mail went to site A's run %q", m.Run)
+	}
+	if m := captured(a, "A during its action"); m.Run != "run-a" || m.Action != "contact" {
+		t.Errorf("site A's mail: run %q action %q", m.Run, m.Action)
+	}
+	if code := serve(http.MethodPost, "/v1/actions/end", a, "", ""); code != http.StatusNoContent {
+		t.Fatalf("site A end: %d", code)
+	}
+	if m := captured(a, "A after"); m.Run != "" {
+		t.Errorf("after end: run %q", m.Run)
+	}
+
+	// The read token names the site, as RunWindow does.
+	if code := serve(http.MethodPost, "/v1/actions/begin", read, "client-b", begin("window-b")); code != http.StatusNoContent {
+		t.Fatalf("read begin: %d", code)
+	}
+	if m := captured(a, "A during B's window"); m.Run != "" {
+		t.Errorf("site A's mail went to site B's window %q", m.Run)
+	}
+	if m := captured(b, "B during its window"); m.Run != "window-b" {
+		t.Errorf("site B's mail: run %q", m.Run)
+	}
+	_ = serve(http.MethodPost, "/v1/actions/end", read, "client-b", "")
+	if code := serve(http.MethodPost, "/v1/actions/begin", read, "client-z", begin("x")); code != http.StatusNotFound {
+		t.Errorf("unknown site: %d", code)
+	}
+
+	// Without a site, the read token's marker is for every site, as on a
+	// plain catcher.
+	_ = serve(http.MethodPost, "/v1/actions/begin", read, "", begin("all"))
+	if m := captured(a, "A, all"); m.Run != "all" {
+		t.Errorf("site A without a site marker: run %q", m.Run)
+	}
+	_ = serve(http.MethodPost, "/v1/actions/end", read, "", "")
+	if m := captured(b, "B, none"); m.Run != "" {
+		t.Errorf("after the read end: run %q", m.Run)
+	}
+}
+
 func TestSMTPSites(t *testing.T) {
 	h := newHub(t, t.TempDir())
 	defer func() { _ = h.Close() }()
