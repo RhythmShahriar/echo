@@ -98,6 +98,19 @@ func LoadSites(path string, getenv func(string) string) (*Sites, error) {
 	return &s, nil
 }
 
+// ReadToken is the read token, from the variable read_token_env names.
+func (s *Sites) ReadToken() string { return s.readToken }
+
+// WriteTokens maps each site's write token to its ID, the way
+// catcher.Config.WriteTokens takes them.
+func (s *Sites) WriteTokens() map[string]string {
+	out := make(map[string]string, len(s.Sites))
+	for _, site := range s.Sites {
+		out[site.token] = site.ID
+	}
+	return out
+}
+
 // Site returns the site with id.
 func (s *Sites) Site(id string) (*Site, bool) {
 	for i := range s.Sites {

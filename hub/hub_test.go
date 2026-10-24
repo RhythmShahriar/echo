@@ -410,6 +410,9 @@ func TestLoadSites(t *testing.T) {
 				if got := s.Sites[0].ProjectDir(); got != filepath.Join(dir, "a") {
 					t.Errorf("project dir %q", got)
 				}
+				if s.ReadToken() != tc.env["READ"] || s.WriteTokens()[tc.env["TOKEN_A"]] != "a" || len(s.WriteTokens()) != 1 {
+					t.Errorf("tokens: read %q, write %v", s.ReadToken(), s.WriteTokens())
+				}
 				return
 			}
 			if err == nil || !strings.Contains(err.Error(), tc.want) {

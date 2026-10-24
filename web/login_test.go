@@ -195,3 +195,16 @@ func TestLoginThrottlesGuessing(t *testing.T) {
 		t.Errorf("right password a minute later: %d", w.Code)
 	}
 }
+
+func TestSessionNamesTheViewer(t *testing.T) {
+	l, h := viewerApp(t)
+	r := httptest.NewRequest(http.MethodPost, "/v1/messages/m1/release", nil)
+	if user, ok := l.Session(r); ok || user != "" {
+		t.Errorf("no cookie: %q %v", user, ok)
+	}
+	_, c := signIn(t, h, "client", "correct horse", "/")
+	r.AddCookie(c)
+	if user, ok := l.Session(r); !ok || user != "client" {
+		t.Errorf("signed in: %q %v", user, ok)
+	}
+}

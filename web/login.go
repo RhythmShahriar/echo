@@ -127,6 +127,16 @@ func (l *Login) valid(r *http.Request) bool {
 	return ok
 }
 
+// Session returns the user name when r carries a valid sign-in session,
+// for a route outside Guard that a signed-in viewer may use (releasing a
+// message through the relay checks this itself).
+func (l *Login) Session(r *http.Request) (string, bool) {
+	if !l.valid(r) {
+		return "", false
+	}
+	return l.name, true
+}
+
 func (l *Login) end(r *http.Request) {
 	if c, err := r.Cookie(SessionCookie); err == nil {
 		l.mu.Lock()
