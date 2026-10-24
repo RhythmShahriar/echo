@@ -67,8 +67,14 @@ func Compare(before, after *model.Run, beforeDir, afterDir, version string) *mod
 			}
 			continue
 		}
-		for _, c := range Messages(b.Messages, a.Messages) {
+		cs, cut := messages(b.Messages, a.Messages)
+		for _, c := range cs {
 			g.add(c, a.Label)
+		}
+		for _, n := range cut {
+			if !slices.Contains(notes, n) {
+				notes = append(notes, n)
+			}
 		}
 		for _, c := range Issues(b.Issues, a.Issues) {
 			g.add(c, a.Label)
@@ -88,7 +94,12 @@ const ActionFailed = "run/action-failed"
 
 // Messages diffs the messages one action sent in two runs.
 func Messages(before, after []model.Message) []model.Change {
-	var out []model.Change
+	cs, _ := messages(before, after)
+	return cs
+}
+
+// messages is Messages, plus notes on what couldn't be compared.
+func messages(before, after []model.Message) (out []model.Change, notes []string) {
 	bs, as := byIdentity(before), byIdentity(after)
 	ids := keys(bs)
 	for _, id := range keys(as) {
@@ -101,87 +112,100 @@ func Messages(before, after []model.Message) []model.Change {
 		// Several messages to the same place (a welcome and an account
 		// email to one address) are told apart by their subject.
 		multi := len(b) > 1 || len(a) > 1
-		pairs, lost, added := pair(b, a)
+		pairs, lost, added, paired := pair(b, a)
 		for _, p := range pairs {
-			out = append(out, content(p[0], p[1])...)
+			cs, note := content(p[0], p[1])
+			out = append(out, cs...)
+			if note != "" && !slices.Contains(notes, note) {
+				notes = append(notes, note)
+			}
 		}
 		switch {
-		case len(lost) > 0 && len(a) > 0 && !distinct(lost, pairs):
+		case len(lost) > 0 && len(a) > 0 && !distinct(lost, paired):
 			out = append(out, model.Change{Class: model.Changed, Check: "message/fewer", Channel: lost[0].Channel,
-				Title:  fmt.Sprintf("%s is sent fewer times", capitalize(label(lost[0], multi))),
+				Title:  fmt.Sprintf("%s is sent fewer times", capitalize(label(lost[0].Message, multi))),
 				Before: times(len(b)), After: times(len(a))})
-		case len(added) > 0 && len(b) > 0 && !distinct(added, pairs):
+		case len(added) > 0 && len(b) > 0 && !distinct(added, paired):
 			// The same message again: a duplicate send (a hook firing twice).
 			out = append(out, model.Change{Class: model.Changed, Check: "message/more", Channel: added[0].Channel,
-				Title:  fmt.Sprintf("%s is sent more times", capitalize(label(added[0], multi))),
+				Title:  fmt.Sprintf("%s is sent more times", capitalize(label(added[0].Message, multi))),
 				Fix:    "Something now sends it again: check for a hook or plugin that fires twice.",
 				Before: times(len(b)), After: times(len(a))})
 			added = nil
 		default:
 			for _, m := range lost {
 				out = append(out, model.Change{Class: model.Broke, Check: "message/missing", Channel: m.Channel,
-					Title:  fmt.Sprintf("%s is no longer sent", capitalize(label(m, multi))),
+					Title:  fmt.Sprintf("%s is no longer sent", capitalize(label(m.Message, multi))),
 					Fix:    "Something in the change stopped this message: check the plugin or code that sends it, and its settings.",
 					Before: "sent", After: "not sent"})
 			}
 		}
 		for _, m := range added {
 			out = append(out, model.Change{Class: model.New, Check: "message/new", Channel: m.Channel,
-				Title: fmt.Sprintf("%s is now sent", capitalize(label(m, multi))), Detail: preview(m)})
+				Title: fmt.Sprintf("%s is now sent", capitalize(label(m.Message, multi))), Detail: preview(m.Message)})
 		}
 	}
-	return out
+	return out, notes
+}
+
+// keyed is a message with its pairKey, worked out once: it runs several
+// regular expressions over the subject.
+type keyed struct {
+	model.Message
+	key string
 }
 
 // pair matches the messages of one identity across runs: the same subject
 // (or event) first, then whatever is left in order, so a changed subject
-// reads as a change rather than one message lost and another new.
-func pair(b, a []model.Message) (pairs [][2]model.Message, lost, added []model.Message) {
+// reads as a change rather than one message lost and another new. paired
+// holds the keys of the messages from b that were paired.
+func pair(b, a []model.Message) (pairs [][2]model.Message, lost, added []keyed, paired map[string]bool) {
+	// Where each key is in a, in order, so every message is looked up once.
+	at := map[string][]int{}
+	ka := make([]keyed, len(a))
+	for i, m := range a {
+		ka[i] = keyed{m, keyOf(m)}
+		at[ka[i].key] = append(at[ka[i].key], i)
+	}
 	used := make([]bool, len(a))
-	var rest []model.Message
+	paired = map[string]bool{}
+	var rest []keyed
 	for _, m := range b {
-		found := -1
-		for i, n := range a {
-			if !used[i] && pairKey(m) == pairKey(n) {
-				found = i
-				break
-			}
-		}
-		if found >= 0 {
-			used[found] = true
-			pairs = append(pairs, [2]model.Message{m, a[found]})
+		k := keyed{m, keyOf(m)}
+		if idx := at[k.key]; len(idx) > 0 {
+			at[k.key] = idx[1:]
+			used[idx[0]] = true
+			paired[k.key] = true
+			pairs = append(pairs, [2]model.Message{m, a[idx[0]]})
 		} else {
-			rest = append(rest, m)
+			rest = append(rest, k)
 		}
 	}
-	var left []model.Message
-	for i, n := range a {
+	var left []keyed
+	for i, n := range ka {
 		if !used[i] {
 			left = append(left, n)
 		}
 	}
 	for len(rest) > 0 && len(left) > 0 {
-		pairs = append(pairs, [2]model.Message{rest[0], left[0]})
+		pairs = append(pairs, [2]model.Message{rest[0].Message, left[0].Message})
+		paired[rest[0].key] = true
 		rest, left = rest[1:], left[1:]
 	}
-	return pairs, rest, left
+	return pairs, rest, left, paired
 }
 
 func pairKey(m model.Message) string { return template(m.Subject) + "|" + m.Event }
 
+// keyOf is pairKey; a test counts its calls.
+var keyOf = pairKey
+
 // distinct reports whether the unpaired messages (lost or added) differ
 // from the ones sent in both runs; when they don't, the same message is
 // simply sent fewer or more times.
-func distinct(unpaired []model.Message, pairs [][2]model.Message) bool {
+func distinct(unpaired []keyed, paired map[string]bool) bool {
 	for _, l := range unpaired {
-		same := false
-		for _, p := range pairs {
-			if pairKey(p[0]) == pairKey(l) {
-				same = true
-				break
-			}
-		}
-		if !same {
+		if !paired[l.key] {
 			return true
 		}
 	}
@@ -198,9 +222,18 @@ func label(m model.Message, multi bool) string {
 	return l
 }
 
-// content compares two matched messages.
-func content(b, a model.Message) []model.Change {
-	var out []model.Change
+// truncatedMark ends a field the catcher cut to its size cap (MaxBody,
+// 256 KiB by default).
+const truncatedMark = "…(truncated)"
+
+// truncated reports whether a message's payload was cut, so its fields
+// can't be compared: a cut body is usually no longer valid JSON, and
+// would read as every field lost.
+func truncated(m model.Message) bool { return strings.HasSuffix(m.Body, truncatedMark) }
+
+// content compares two matched messages. note says what couldn't be
+// compared.
+func content(b, a model.Message) (out []model.Change, note string) {
 	what := capitalize(identityLabel(a))
 	ch := func(check, title, before, after, fix string) {
 		out = append(out, model.Change{Class: model.Changed, Check: check, Channel: a.Channel, Title: title, Before: before, After: after, Fix: fix})
@@ -209,7 +242,7 @@ func content(b, a model.Message) []model.Change {
 		out = append(out, model.Change{Class: model.Broke, Check: "message/failing", Channel: a.Channel,
 			Title: fmt.Sprintf("%s now fails", what), Before: string(b.Status), After: string(a.Status), Detail: a.Error,
 			Fix: "The site tried to send it and the send failed: check the sender's credentials and settings."})
-		return out
+		return out, ""
 	}
 	if b.Channel == model.Email {
 		if template(b.Subject) != template(a.Subject) {
@@ -231,6 +264,9 @@ func content(b, a model.Message) []model.Change {
 	if b.Event != a.Event && b.Event != "" {
 		ch("message/event", what+": event changed", b.Event, a.Event, "")
 	}
+	if truncated(b) || truncated(a) {
+		return out, what + ": payload too large to compare fields (cut at 256 KiB)"
+	}
 	bk, ak := fields(b.Body), fields(a.Body)
 	if len(bk) > 0 || len(ak) > 0 {
 		lost, added := diffSets(bk, ak)
@@ -243,7 +279,7 @@ func content(b, a model.Message) []model.Change {
 			ch("message/fields-added", what+": payload has new fields", "", strings.Join(limit(added, 12), ", "), "")
 		}
 	}
-	return out
+	return out, ""
 }
 
 // Issues diffs issues by key, as Soundcheck does: a new error is BROKE,
@@ -454,18 +490,26 @@ func walk(v any, prefix string, out *[]string) {
 	}
 }
 
+// diffSets returns what is only in a (lost) and only in b (added). Both
+// must be sorted without duplicates, as fields returns them: one merge
+// pass then does it in linear time, where looking each key up in the other
+// list took seconds for a large payload.
 func diffSets(a, b []string) (lost, added []string) {
-	for _, x := range a {
-		if !slices.Contains(b, x) {
-			lost = append(lost, x)
+	i, j := 0, 0
+	for i < len(a) && j < len(b) {
+		switch {
+		case a[i] == b[j]:
+			i++
+			j++
+		case a[i] < b[j]:
+			lost = append(lost, a[i])
+			i++
+		default:
+			added = append(added, b[j])
+			j++
 		}
 	}
-	for _, x := range b {
-		if !slices.Contains(a, x) {
-			added = append(added, x)
-		}
-	}
-	return lost, added
+	return append(lost, a[i:]...), append(added, b[j:]...)
 }
 
 func ok(m model.Message) bool { return m.Status != model.Failed && m.Status != model.Blocked }
