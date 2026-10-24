@@ -200,3 +200,25 @@ func TestEndWithoutLeaseClosesOldest(t *testing.T) {
 		t.Errorf("End() closes the oldest: %+v", m)
 	}
 }
+
+func TestOldStyleEndTreatsLoopbackAsOneCaller(t *testing.T) {
+	s := NewServer(NewInbox(10), Config{})
+	send := func(path, from, body string) int {
+		r := httptest.NewRequest(http.MethodPost, path, strings.NewReader(body))
+		r.RemoteAddr, r.Host = from, "127.0.0.1:20380"
+		w := httptest.NewRecorder()
+		s.ServeHTTP(w, r)
+		return w.Code
+	}
+	if code := send("/v1/actions/begin", "127.0.0.1:50100", `{"run":"old","action":"a1"}`); code != http.StatusOK {
+		t.Fatalf("begin: %d", code)
+	}
+	other := s.Inbox.begin("r2", "checkout", "192.0.2.7")
+	defer s.Inbox.End(other)
+	if code := send("/v1/actions/end", "[::1]:50101", ""); code != http.StatusNoContent {
+		t.Fatalf("end: %d", code)
+	}
+	if m := s.Inbox.Add(model.Message{}); m.Run != "r2" {
+		t.Errorf("an end over ::1 closes the action begun over 127.0.0.1: %+v", m)
+	}
+}

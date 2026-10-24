@@ -876,12 +876,18 @@ func (s *Server) renew(w http.ResponseWriter, r *http.Request) {
 }
 
 // caller is the address a request came from, without the port: each
-// request may come over a new connection.
+// request may come over a new connection. Every loopback address is one
+// caller: "localhost" may reach Echo over 127.0.0.1 for begin and ::1
+// for end.
 func caller(r *http.Request) string {
-	if host, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
-		return host
+	host := r.RemoteAddr
+	if h, _, err := net.SplitHostPort(host); err == nil {
+		host = h
 	}
-	return r.RemoteAddr
+	if ip := net.ParseIP(host); ip != nil && ip.IsLoopback() {
+		return "loopback"
+	}
+	return host
 }
 
 func duration(v string, def, limit time.Duration) time.Duration {
