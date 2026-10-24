@@ -224,10 +224,10 @@ func TestScheduleMain(t *testing.T) {
 			t.Errorf("%q: %d %q, want 2 and %q", tc.args, code, errb, tc.want)
 		}
 	}
-	// No hub is listening: each site fails to compare and --once exits 1
-	// after waiting until Tuesday 02:00.
+	// No hub is listening: each site fails to compare, so --once exits 3
+	// (couldn't run) after waiting until Tuesday 02:00.
 	code, out, errb := run("Tue 02:00", "--once", "--store", dir, "--after", "true", "--file", sitesFile, "--url", "http://127.0.0.1:20519")
-	if code != 1 || waited != 64*time.Hour {
+	if code != 3 || waited != 64*time.Hour {
 		t.Errorf("--once: code %d, waited %s\n%s%s", code, waited, out, errb)
 	}
 	if !strings.Contains(errb, "Next window: Tue 27 Oct 02:00 UTC (in 64h0m0s)") || !strings.Contains(out, "client-a: couldn't compare") {
@@ -270,6 +270,26 @@ func TestAfterHidesTokens(t *testing.T) {
 	for _, want := range []string{"KEEP_ME=visible", "RHYTHM_ECHO_SITE=client-a", "RHYTHM_ECHO_URL=http://" + hubAddr} {
 		if !strings.Contains(out, want) {
 			t.Errorf("the update has no %s:\n%s", want, out)
+		}
+	}
+}
+
+// TestWindowCode: a window where no site could be compared couldn't run
+// (3), which is not the same as a site that broke (1).
+func TestWindowCode(t *testing.T) {
+	for _, c := range []struct {
+		results []Result
+		want    int
+	}{
+		{nil, 0},
+		{[]Result{{Site: "a"}, {Site: "b"}}, 0},
+		{[]Result{{Site: "a", Counts: map[string]int{"broke": 1}}, {Site: "b"}}, 1},
+		{[]Result{{Site: "a", AfterError: "exit status 1"}}, 1},
+		{[]Result{{Site: "a", Error: "connection refused"}, {Site: "b", Error: "connection refused"}}, 3},
+		{[]Result{{Site: "a", Error: "connection refused"}, {Site: "b"}}, 1},
+	} {
+		if got := windowCode(c.results); got != c.want {
+			t.Errorf("%+v: %d, want %d", c.results, got, c.want)
 		}
 	}
 }

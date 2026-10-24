@@ -328,15 +328,28 @@ func scheduleMain(ctx context.Context, args []string, stdout, stderr io.Writer, 
 			return 130
 		}
 		if *runNow || *once {
-			code := 0
-			for _, r := range results {
-				if r.Broke() {
-					code = 1
-				}
-			}
-			return code
+			return windowCode(results)
 		}
 	}
+}
+
+// windowCode is the exit code of one window: 3 when no site could be
+// compared at all (the hub didn't answer, say), else 1 when a site broke
+// or its update failed, else 0.
+func windowCode(results []Result) int {
+	code, compared := 0, false
+	for _, r := range results {
+		if r.Error == "" {
+			compared = true
+		}
+		if r.Broke() {
+			code = 1
+		}
+	}
+	if len(results) > 0 && !compared {
+		return 3
+	}
+	return code
 }
 
 // hubClient returns an HTTP client that trusts ca, or the hub's own
