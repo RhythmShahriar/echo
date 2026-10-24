@@ -24,13 +24,17 @@ func alive(pid int) bool {
 }
 
 // zombie reports whether pid has exited and waits for its parent to reap
-// it. Only Linux says so, through /proc; elsewhere it reports false.
+// it, or is being torn down. Only Linux says so, through /proc; elsewhere
+// it reports false.
 func zombie(pid int) bool {
+	if _, err := os.Stat("/proc/self/stat"); err != nil {
+		return false
+	}
 	b, err := os.ReadFile("/proc/" + strconv.Itoa(pid) + "/stat")
 	if err != nil {
-		return false
+		return true // gone between kill -0 and the read
 	}
 	// The state follows the command name, which is in parentheses.
 	_, rest, ok := strings.Cut(string(b), ") ")
-	return ok && strings.HasPrefix(rest, "Z")
+	return ok && (strings.HasPrefix(rest, "Z") || strings.HasPrefix(rest, "X"))
 }

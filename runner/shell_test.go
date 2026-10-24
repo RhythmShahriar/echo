@@ -61,11 +61,11 @@ func TestCommandCanceledStopsChildren(t *testing.T) {
 		t.Errorf("command returned %v after cancel, want under 3s", d)
 	}
 	// The kill is asynchronous; give the system a moment to reap.
-	for deadline := time.Now().Add(2 * time.Second); alive(pid) && time.Now().Before(deadline); {
-		time.Sleep(50 * time.Millisecond)
-	}
-	if alive(pid) {
-		t.Errorf("child %d is still running after cancel", pid)
+	for deadline := time.Now().Add(2 * time.Second); alive(pid); time.Sleep(50 * time.Millisecond) {
+		if time.Now().After(deadline) {
+			t.Errorf("child %d is still running after cancel", pid)
+			break
+		}
 	}
 }
 
