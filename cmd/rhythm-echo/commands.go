@@ -740,8 +740,7 @@ func cmdList(s *session) int {
 		fmt.Fprintln(s.stderr, "No messages captured yet.")
 	}
 	for _, m := range ms {
-		fmt.Fprintf(s.stdout, "%s  ", m.ID)
-		s.view.Message(m)
+		s.view.ListedMessage(m.ID, m)
 	}
 	return exitOK
 }

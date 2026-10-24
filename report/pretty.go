@@ -121,27 +121,7 @@ func (p *Pretty) Log(msg string) {
 // Message prints one captured message as a line: time, channel, where it
 // went, what it said and what Echo did with it.
 func (p *Pretty) Message(m model.Message) {
-	to := strings.Join(m.To, ", ")
-	if to == "" {
-		to = hostOf(m.URL)
-	}
-	what := m.Subject
-	if what == "" {
-		what = firstLine(m.Text)
-	}
-	if what == "" && m.Event != "" {
-		what = m.Event
-	}
-	if what == "" && m.Method != "" {
-		what = m.Method
-		if !strings.Contains(to, "/") { // the path isn't shown yet
-			what += " " + pathOf(m.URL)
-		}
-	}
-	// Everything here comes from the site: make it safe to print.
-	to, what = Safe(to), Safe(what)
-	kind := Safe(check.Kind(m)) // the destination is shown next to it
-	files := attachmentList(m)
+	kind, to, what, files := messageParts(m)
 	if p.o.Plain {
 		fmt.Fprintf(p.w, "%s %s to %s: %s [%s]\n", m.At.Local().Format("15:04:05"), kind, to, what, m.Status)
 		if files != "" {
@@ -159,6 +139,50 @@ func (p *Pretty) Message(m model.Message) {
 	}
 	if m.Error != "" && p.o.Verbose {
 		fmt.Fprintln(p.w, muted.Render("            "+Safe(m.Error)))
+	}
+}
+
+// messageParts are what a message line shows, safe to print: its kind,
+// where it went, what it says and the files it attaches.
+func messageParts(m model.Message) (kind, to, what, files string) {
+	to = strings.Join(m.To, ", ")
+	if to == "" {
+		to = hostOf(m.URL)
+	}
+	what = m.Subject
+	if what == "" {
+		what = firstLine(m.Text)
+	}
+	if what == "" && m.Event != "" {
+		what = m.Event
+	}
+	if what == "" && m.Method != "" {
+		what = m.Method
+		if !strings.Contains(to, "/") { // the path isn't shown yet
+			what += " " + pathOf(m.URL)
+		}
+	}
+	// Everything here comes from the site: make it safe to print.
+	return Safe(check.Kind(m)), Safe(to), Safe(what), attachmentList(m) // the destination is shown next to the kind
+}
+
+// ListedMessage prints one line of rhythm echo ls: the message's ID, then
+// what Message shows, narrower, so the line stays under 100 columns. Plain
+// output is Message's with the ID in front.
+func (p *Pretty) ListedMessage(id string, m model.Message) {
+	if p.o.Plain {
+		fmt.Fprintf(p.w, "%s  ", id)
+		p.Message(m)
+		return
+	}
+	kind, to, what, files := messageParts(m)
+	glyph := channelGlyph[m.Channel]
+	head := fmt.Sprintf("%s  %s  %s %s", id, muted.Render(m.At.Local().Format("15:04:05")), ui.Brand.Render(glyph), bold.Render(ui.Truncate(kind, 14)))
+	status := lipgloss.NewStyle().Foreground(statusColor(m.Status)).Render(string(m.Status))
+	body := ui.Pad(ui.Truncate("→ "+to, 24), 24) + "  " + muted.Render(ui.Truncate(what, 22))
+	fmt.Fprintln(p.w, ui.Pad(head, len(id)+29)+body+"  "+status)
+	if files != "" {
+		fmt.Fprintln(p.w, muted.Render(strings.Repeat(" ", len(id)+2)+"attaches "+ui.Truncate(files, 99-len(id)-11)))
 	}
 }
 
