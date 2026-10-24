@@ -26,15 +26,27 @@ inputs:
     required: false
     default: ""
   seal:
-    description: Seal (nothing leaves) or observe (send for real).
+    description: >
+      "true" seals Echo: nothing leaves, Echo answers for every service. "false" observes:
+      everything is recorded and sent for real.
     required: false
-    default: "seal"
+    default: "true"
   listen:
-    description: API address. Use 0.0.0.0:8025 when the site runs in a service container (a token is generated).
+    description: >
+      API address. Use 0.0.0.0:8025 when the site runs in a service container; a token is
+      then generated (the token output) and the url output is the runner's address.
     required: false
     default: 127.0.0.1:8025
+  smtp:
+    description: >
+      SMTP sink address, or "off". Use 0.0.0.0:1025 for a site in a service container; it then
+      asks for the token as the SMTP password (any username).
+    required: false
+    default: 127.0.0.1:1025
   args:
-    description: Extra flags for the command, e.g. "--action 'Contact form'".
+    description: >
+      Extra flags for the command, split like a shell would (quotes group words) but never run
+      through one, e.g. "--action 'Contact form' --verbose".
     required: false
     default: ""
   version:
@@ -48,13 +60,21 @@ inputs:
 
 outputs:
   url:
-    description: Where Echo listens (for RHYTHM_ECHO_URL in the site under test).
+    description: >
+      Echo's API as the site under test reaches it, for its RHYTHM_ECHO_URL: the runner's address
+      when listen is 0.0.0.0, so a service container can reach it. Later steps on the runner get
+      RHYTHM_ECHO_URL (on loopback) and RHYTHM_ECHO_TOKEN in their environment.
     value: ${{ steps.up.outputs.url }}
+  smtp:
+    description: The SMTP sink as the site reaches it (host:port), empty when off.
+    value: ${{ steps.up.outputs.smtp }}
   token:
     description: The token connectors must send when Echo listens beyond loopback.
     value: ${{ steps.up.outputs.token }}
   exit-code:
-    description: The command's exit code (0 ok, 1 --fail-on hit, 2 usage error, 3 couldn't run).
+    description: >
+      The command's exit code: 0 ok, 1 --fail-on hit, 2 usage error (flags or .echo/config.yaml),
+      3 couldn't run, 130 interrupted.
     value: ${{ steps.check.outputs.exit-code }}
   report:
     description: Path of the standalone HTML report.
@@ -92,23 +112,53 @@ runs:
       env:
         SEAL: ${{ inputs.seal }}
         LISTEN: ${{ inputs.listen }}
+        SMTP: ${{ inputs.smtp }}
       run: |
         set -euo pipefail
-        flag=--seal
-        [ "$SEAL" = observe ] && flag=--observe
+        case "$SEAL" in
+          true|seal) flag=--seal ;;
+          false|observe) flag=--observe ;;
+          *) echo "::error::seal must be true or false, not $SEAL"; exit 2 ;;
+        esac
+        # host_of prints the host of host:port, without IPv6 brackets.
+        host_of() { local h=${1%:*}; h=${h#[}; echo "${h%]}"; }
+        loopback() { case "$(host_of "$1")" in 127.*|localhost|::1) return 0 ;; *) return 1 ;; esac; }
         token=""
-        case "$LISTEN" in 127.*|localhost*) ;; *) token=$(head -c 24 /dev/urandom | od -An -tx1 | tr -d ' \n'); echo "::add-mask::$token" ;; esac
-        RHYTHM_ECHO_TOKEN="$token" nohup rhythm-echo up "$flag" --listen "$LISTEN" --plain > "$RUNNER_TEMP/echo.log" 2>&1 &
+        if ! loopback "$LISTEN" || { [ "$SMTP" != off ] && ! loopback "$SMTP"; }; then
+          token=$(head -c 24 /dev/urandom | od -An -tx1 | tr -d ' \n')
+          echo "::add-mask::$token"
+        fi
+        RHYTHM_ECHO_TOKEN="$token" nohup rhythm-echo up "$flag" --listen "$LISTEN" --smtp "$SMTP" --plain > "$RUNNER_TEMP/echo.log" 2>&1 &
         echo $! > "$RUNNER_TEMP/echo.pid"
-        port=${LISTEN##*:}
+        # local: how steps on the runner reach Echo. site: how the site does,
+        # which for a wildcard listen is the runner's own address.
+        runner_ip=$( (hostname -I 2>/dev/null || ipconfig getifaddr en0 2>/dev/null || echo 127.0.0.1) | awk '{print $1}')
+        addr() {
+          local h port=${1##*:}
+          h=$(host_of "$1")
+          case "$h" in
+            0.0.0.0|::|"") if [ "$2" = local ]; then h=127.0.0.1; else h=$runner_ip; fi ;;
+          esac
+          case "$h" in *:*) h="[$h]" ;; esac
+          echo "$h:$port"
+        }
+        local_url="http://$(addr "$LISTEN" local)"
         for _ in $(seq 1 50); do
-          curl -fsS -H "X-Echo-Token: $token" "http://127.0.0.1:$port/v1/health" >/dev/null 2>&1 && break
+          curl -fsS -H "X-Echo-Token: $token" "$local_url/v1/health" >/dev/null 2>&1 && break
           sleep 0.2
         done
-        curl -fsS -H "X-Echo-Token: $token" "http://127.0.0.1:$port/v1/health"
-        echo "url=http://127.0.0.1:$port" >> "$GITHUB_OUTPUT"
-        echo "token=$token" >> "$GITHUB_OUTPUT"
-        echo "RHYTHM_ECHO_URL=http://127.0.0.1:$port" >> "$GITHUB_ENV"
+        if ! curl -fsS -H "X-Echo-Token: $token" "$local_url/v1/health"; then
+          cat "$RUNNER_TEMP/echo.log"
+          echo "::error::Echo didn't start at $local_url"
+          exit 3
+        fi
+        echo
+        {
+          echo "url=http://$(addr "$LISTEN" site)"
+          if [ "$SMTP" = off ]; then echo "smtp="; else echo "smtp=$(addr "$SMTP" site)"; fi
+          echo "token=$token"
+        } >> "$GITHUB_OUTPUT"
+        echo "RHYTHM_ECHO_URL=$local_url" >> "$GITHUB_ENV"
         [ -z "$token" ] || echo "RHYTHM_ECHO_TOKEN=$token" >> "$GITHUB_ENV"
 
     - name: Run Echo
@@ -128,15 +178,19 @@ runs:
         fi
         fail=()
         [ "$level" = none ] || fail=(--fail-on "$level")
-        # shellcheck disable=SC2206 # ARGS is a flag string to split
-        extra=($ARGS)
+        # Split ARGS like a shell (quotes group words) without running it:
+        # xargs only parses quotes.
+        extra=()
+        if [ -n "$ARGS" ]; then
+          while IFS= read -r a; do extra+=("$a"); done < <(printf '%s' "$ARGS" | xargs -n1 printf '%s\n')
+        fi
         case "$MODE" in
           snapshot) cmd=(rhythm-echo snapshot --name "$NAME") ;;
           compare)  cmd=(rhythm-echo compare) ;;
           run)      cmd=(rhythm-echo run) ;;
           *) echo "::error::unknown mode $MODE"; exit 2 ;;
         esac
-        "${cmd[@]}" "${fail[@]}" "${extra[@]}" --plain
+        "${cmd[@]}" ${fail[@]+"${fail[@]}"} ${extra[@]+"${extra[@]}"} --plain
         code=$?
         echo "exit-code=$code" >> "$GITHUB_OUTPUT"
         [ "$code" -ge 2 ] && exit "$code"
@@ -144,9 +198,9 @@ runs:
         [ "$MODE" = snapshot ] && which=("$NAME")
         out="$RUNNER_TEMP/echo-report"
         mkdir -p "$out"
-        rhythm-echo report "${which[@]}" --md >> "$GITHUB_STEP_SUMMARY" || true
-        rhythm-echo report "${which[@]}" "${fail[@]}" --junit -o "$out/echo-junit.xml" -q || true
-        rhythm-echo report "${which[@]}" --html -o "$out/echo-report.html" -q || true
+        rhythm-echo report ${which[@]+"${which[@]}"} --md >> "$GITHUB_STEP_SUMMARY" || true
+        rhythm-echo report ${which[@]+"${which[@]}"} ${fail[@]+"${fail[@]}"} --junit -o "$out/echo-junit.xml" -q || true
+        rhythm-echo report ${which[@]+"${which[@]}"} --html -o "$out/echo-report.html" -q || true
         echo "report=$out/echo-report.html" >> "$GITHUB_OUTPUT"
         exit 0
 
