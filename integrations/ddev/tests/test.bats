@@ -98,6 +98,38 @@ teardown() {
   health_checks
 }
 
+@test "with a token" {
+  set -eu -o pipefail
+  run ddev add-on get "${DIR}"
+  assert_success
+  use_test_image
+  run ddev dotenv set .ddev/.env.echo --rhythm-echo-token=change-me
+  assert_success
+  run ddev restart -y
+  assert_success
+
+  # The API wants the token.
+  run ddev exec curl -s -o /dev/null -w '%{http_code}' http://echo:8025/api/v1/messages
+  assert_output "401"
+  run ddev exec curl -sf -H 'X-Echo-Token: change-me' http://echo:8025/v1/health
+  assert_success
+
+  # SMTP straight to Echo works with the token as the password (the
+  # README's advice). Without it, Echo refuses.
+  printf 'From: shop@shop.test\r\nTo: ann@example.com\r\nSubject: Token mail\r\n\r\nHi.\r\n' >"${TESTDIR}/token.eml"
+  run ddev exec curl -s smtp://echo:1025 --mail-from shop@shop.test --mail-rcpt ann@example.com -T token.eml
+  assert_failure
+  run ddev exec curl -sf smtp://echo:1025 --user echo:change-me --mail-from shop@shop.test --mail-rcpt ann@example.com -T token.eml
+  assert_success
+  for _ in $(seq 1 30); do
+    if ddev exec curl -sf -H 'X-Echo-Token: change-me' http://echo:8025/api/v1/messages | grep -q '"Subject":"Token mail"'; then
+      return 0
+    fi
+    sleep 1
+  done
+  return 1
+}
+
 # bats test_tags=release
 @test "install from release" {
   set -eu -o pipefail

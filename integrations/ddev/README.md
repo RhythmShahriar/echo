@@ -45,6 +45,15 @@ ddev config --web-environment-add=RHYTHM_ECHO_URL=http://echo:8025,RHYTHM_ECHO_T
 ddev dotenv set .ddev/.env.echo --rhythm-echo-token=change-me
 ```
 
+With a token, Echo's SMTP sink wants it as the password. Mailpit's relay
+can't give it: Mailpit logs in with Go's PLAIN login, which won't
+send a password to a host other than localhost without TLS. So `mail()`
+and SMTP to `localhost:1025` then stop at Mailpit. Point the app's mailer
+at Echo instead, with any username and the token as the password (in
+Laravel: `MAIL_HOST=echo`, `MAIL_PORT=1025`, `MAIL_USERNAME=echo`,
+`MAIL_PASSWORD=change-me`), or leave the token unset on DDEV's private
+network.
+
 ## Another image
 
 ```sh
