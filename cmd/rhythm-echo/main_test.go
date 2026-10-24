@@ -1166,6 +1166,9 @@ func TestCommandsRunInTheProjectFolder(t *testing.T) {
 // command says so and runs on the defaults, so its flush never runs and
 // the token isn't sent to its listen: address.
 func TestPlantedConfigIsNotUsed(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("no Unix modes: Windows trusts every folder")
+	}
 	root := t.TempDir()
 	t.Setenv("HOME", filepath.Join(root, "home"))
 	shared := filepath.Join(root, "shared")
