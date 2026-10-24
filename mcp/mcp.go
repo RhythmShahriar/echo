@@ -129,7 +129,10 @@ func (s *Server) Serve(ctx context.Context, r io.Reader, w io.Writer) error {
 				defer wg.Done()
 				var answers []response
 				for _, raw := range batch {
-					if resp, ok := s.handle(ctx, raw, running); ok {
+					reqCtx, done := running.register(ctx, raw)
+					resp, ok := s.handle(reqCtx, raw, running)
+					done()
+					if ok {
 						answers = append(answers, resp)
 					}
 				}
@@ -140,10 +143,14 @@ func (s *Server) Serve(ctx context.Context, r io.Reader, w io.Writer) error {
 			continue
 		}
 		raw := slices.Clone(line)
+		// Registered here, before the next line is read, so a cancel
+		// notification that follows always finds the request.
+		reqCtx, done := running.register(ctx, raw)
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			if resp, ok := s.handle(ctx, raw, running); ok {
+			defer done()
+			if resp, ok := s.handle(reqCtx, raw, running); ok {
 				out.send(resp)
 			}
 		}()
@@ -154,8 +161,9 @@ func (s *Server) Serve(ctx context.Context, r io.Reader, w io.Writer) error {
 	return nil
 }
 
-// handle answers one message. It reports false for a notification, which
-// gets no answer.
+// handle answers one message, in ctx: the caller has registered a
+// request with running (see register), so a cancel can stop it. It
+// reports false for a notification, which gets no answer.
 func (s *Server) handle(ctx context.Context, raw json.RawMessage, running *inflight) (response, bool) {
 	var req request
 	if err := json.Unmarshal(raw, &req); err != nil {
@@ -179,8 +187,6 @@ func (s *Server) handle(ctx context.Context, raw json.RawMessage, running *infli
 		}
 		return response{}, false // notifications/initialized and the rest need nothing
 	}
-	ctx, done := running.add(ctx, req.ID)
-	defer done()
 	result, err := s.dispatch(ctx, req)
 	resp := response{JSONRPC: "2.0", ID: req.ID, Result: result}
 	if err != nil {
@@ -276,6 +282,18 @@ func (f *inflight) add(ctx context.Context, id json.RawMessage) (context.Context
 		f.mu.Unlock()
 		cancel()
 	}
+}
+
+// register adds raw to the running requests when it is a request with an
+// ID, and returns the context it runs in and what removes it again.
+func (f *inflight) register(ctx context.Context, raw json.RawMessage) (context.Context, func()) {
+	var head struct {
+		ID json.RawMessage `json:"id"`
+	}
+	if json.Unmarshal(raw, &head) != nil || len(head.ID) == 0 || string(head.ID) == "null" {
+		return ctx, func() {}
+	}
+	return f.add(ctx, head.ID)
 }
 
 func (f *inflight) cancel(id json.RawMessage) {
