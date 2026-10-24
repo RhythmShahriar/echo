@@ -15,7 +15,7 @@ import { createRequire } from 'node:module';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-import { guessPackage } from './capture.js';
+import { guessPackage, maskHeader } from './capture.js';
 import { send, sealed } from './client.js';
 import { currentContext } from './run.js';
 import { state, warnOnce } from './state.js';
@@ -163,6 +163,7 @@ export function toEmail(m: MailData): Email {
     if (typeof v === 'string') headers[k] = v;
     else if (Array.isArray(v)) headers[k] = v.map(String).join(', ');
     else if (v && typeof v === 'object' && 'value' in v) headers[k] = String((v as { value: unknown }).value);
+    if (k in headers) headers[k] = maskHeader(k, headers[k]!);
   }
   const replyTo = list(m.replyTo);
   return {

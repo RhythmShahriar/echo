@@ -6,6 +6,7 @@ import nodemailer from 'nodemailer';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { register, withEchoRun } from '../src/index.js';
+import { toEmail } from '../src/nodemailer.js';
 import { fakeEcho, silent, type FakeEcho } from './helpers.js';
 
 const require = createRequire(import.meta.url);
@@ -51,6 +52,11 @@ const message = {
 };
 
 describe('nodemailer', () => {
+  it('masks credential headers by name', () => {
+    const e = toEmail({ headers: { 'X-Auth-Token': 'Zq9TOPSECRETvalue77', 'X-Request-Id': 'req-1' } });
+    expect(e.headers).toEqual({ 'X-Auth-Token': '•••••', 'X-Request-Id': 'req-1' });
+  });
+
   it('announces the hook', () => {
     expect(log.lines.join('\n')).toContain('nodemailer');
   });
