@@ -723,11 +723,26 @@ func (r *rig) browse(t *testing.T, c *http.Client, method, u string, form url.Va
 }
 
 // install rewrites the connector's settings in the mounted mu-plugins,
-// pointed at the test's Echo with its token.
+// pointed at the test's Echo with its token, and waits until the site
+// runs with them.
 func (r *rig) install(t *testing.T, s Settings) {
 	t.Helper()
 	s.URL, s.Token = r.echoURL, token
 	r.write(t, s)
+	// opcache keeps the old settings file for a while (revalidate_freq),
+	// longer than the sleep in write on a slow disk: ask the site.
+	deadline := time.Now().Add(15 * time.Second)
+	for {
+		status, b := r.do(t, http.MethodGet, r.wpURL+"/?rest_route=/"+PingRoute, map[string]string{"X-Echo-Token": token})
+		var ping map[string]any
+		if status == http.StatusOK && json.Unmarshal(b, &ping) == nil && ping["proxy"] == s.Proxy && ping["site_id"] == s.SiteID {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("the site still runs with other settings than %+v: HTTP %d %.300s", s, status, b)
+		}
+		time.Sleep(250 * time.Millisecond)
+	}
 }
 
 // write installs exactly s.
