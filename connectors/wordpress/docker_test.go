@@ -684,7 +684,7 @@ func testPlugin(t *testing.T, r *rig) {
 	}
 
 	// uninstall.php removes the settings, every user's last output and the
-	// remembered wire version, and leaves other transients alone.
+	// remembered wire version but leaves other transients alone.
 	r.wp(t, nil, "transient", "set", "echo_staging_seal_output_99", "x", "3600")
 	r.wp(t, nil, "transient", "set", "rhythm_echo_wire_0123", "1", "3600")
 	r.wp(t, nil, "transient", "set", "someone_else", "kept", "3600")
