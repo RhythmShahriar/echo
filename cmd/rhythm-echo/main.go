@@ -367,7 +367,7 @@ Agency report (report --site <id> --store <the hub's store>; rhythm echo schedul
 
 Checks (checks; rules: and checks: in .echo/config.yaml add and tune them):
       --test                 try each of the config's rules on its fixtures; exit 1 when
-                             one fails
+                             one fails (every other command then stops with exit 2)
 
 Exit codes (as in Tuner and Soundcheck):
   0    ok

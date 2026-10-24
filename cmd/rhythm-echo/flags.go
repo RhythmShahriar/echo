@@ -177,9 +177,12 @@ type plan struct {
 	checks  check.Options // what the config expects of every message: its site, rules: and checks:
 	cfgPath string        // the config file read, absolute; "" when there is none and the defaults apply
 	notes   []string      // said on stderr before the command runs
-	format  string
-	st      store.Store
-	echo    *client.Client
+	// fixtures is the config's failing rule fixture, which only checks
+	// reads past (config.ErrFixtures); nil otherwise.
+	fixtures error
+	format   string
+	st       store.Store
+	echo     *client.Client
 }
 
 func parse(c cmdSpec, args []string) (*plan, error) {
@@ -232,7 +235,9 @@ func parse(c cmdSpec, args []string) (*plan, error) {
 			p.notes = append(p.notes, fmt.Sprintf("using %s; its flush and command actions run in %s", path, p.projectDir()))
 		}
 	}
-	if p.cfg, err = loadConfig(path); err != nil {
+	if p.cfg, err = loadConfig(path); errors.Is(err, config.ErrFixtures) && c.name == "checks" {
+		p.fixtures = err // checks reports it; its config is complete
+	} else if err != nil {
 		return nil, cli.UsageError{Msg: err.Error()}
 	}
 	switch {

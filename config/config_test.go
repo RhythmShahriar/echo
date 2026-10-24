@@ -4,6 +4,7 @@
 package config
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -260,6 +261,23 @@ func TestErrorsNameTheLine(t *testing.T) {
 		if err != nil && strings.Contains(err.Error(), "secret") {
 			t.Errorf("%q: the error quotes a password: %v", in, err)
 		}
+	}
+}
+
+// TestFixturesFailLast: a failing fixture is config.ErrFixtures with
+// the config complete, so checks --test can read it, while any other
+// problem still wins.
+func TestFixturesFailLast(t *testing.T) {
+	c, err := Load(write(t, "rules:\n  - id: a\n    match: x\n    fixtures: {match: [y]}\nchecks:\n  a: error\n"))
+	if !errors.Is(err, ErrFixtures) || len(c.Rules) != 1 || c.Checks["a"] != "error" {
+		t.Errorf("fixtures: %v, %+v", err, c)
+	}
+	if err == nil || !strings.Contains(err.Error(), `line 4: rule "a": fixtures: doesn't match "y", which it should`) {
+		t.Errorf("message: %v", err)
+	}
+	_, err = Load(write(t, "rules:\n  - id: a\n    match: x\n    fixtures: {match: [y]}\nmode: loud\n"))
+	if err == nil || errors.Is(err, ErrFixtures) || !strings.Contains(err.Error(), "mode") {
+		t.Errorf("another problem must come first: %v", err)
 	}
 }
 

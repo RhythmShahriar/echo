@@ -207,18 +207,21 @@ func WriteFixtures(w io.Writer, cs []Custom) (bool, error) {
 			return false, err
 		}
 	}
-	rules := "rules"
+	rules, fx := "rules", "fixtures"
 	if len(cs) == 1 {
 		rules = "rule"
+	}
+	if fixtures == 1 {
+		fx = "fixture"
 	}
 	var err error
 	switch {
 	case len(cs) == 0:
 		_, err = fmt.Fprintln(w, "No custom rules in .echo/config.yaml (add them under rules:).")
 	case failed == 0:
-		_, err = fmt.Fprintf(w, "%d %s, %d fixtures, all pass.\n", len(cs), rules, fixtures)
+		_, err = fmt.Fprintf(w, "%d %s, %d %s, all pass.\n", len(cs), rules, fixtures, fx)
 	default:
-		_, err = fmt.Fprintf(w, "%d %s, %d fixtures, %d failed.\n", len(cs), rules, fixtures, failed)
+		_, err = fmt.Fprintf(w, "%d %s, %d %s, %d failed.\n", len(cs), rules, fixtures, fx, failed)
 	}
 	return failed == 0, err
 }

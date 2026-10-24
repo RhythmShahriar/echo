@@ -424,6 +424,9 @@ func (c Config) Validate() error {
 		}
 	}
 	rules := map[string]bool{}
+	// A rule that fails its fixtures is reported after every other
+	// problem, so rhythm echo checks --test can still read the config.
+	var fixtures error
 	for i, r := range c.Rules {
 		at := c.at("rules", i)
 		switch {
@@ -447,8 +450,8 @@ func (c Config) Validate() error {
 		if _, builtin := check.Lookup(r.ID); builtin {
 			return fmt.Errorf("%srule %q: that is a built-in check; give the rule its own id", at, r.ID)
 		}
-		if err := r.testFixtures(); err != nil {
-			return fmt.Errorf("%srule %q: %w", c.at("rules", i, "fixtures"), r.ID, err)
+		if err := r.testFixtures(); err != nil && fixtures == nil {
+			fixtures = fixtureError{fmt.Errorf("%srule %q: %w", c.at("rules", i, "fixtures"), r.ID, err)}
 		}
 		rules[r.ID] = true
 	}
@@ -486,8 +489,19 @@ func (c Config) Validate() error {
 			}
 		}
 	}
-	return nil
+	return fixtures
 }
+
+// ErrFixtures is what Load and Validate return, wrapped, when the
+// config's only problem is a rule that fails its fixtures. The config
+// that comes back with it is complete, so rhythm echo checks --test can
+// show each fixture. Every other command stops on it.
+var ErrFixtures = errors.New("a rule fails its fixtures")
+
+// fixtureError keeps the rule's own message and is ErrFixtures.
+type fixtureError struct{ error }
+
+func (e fixtureError) Unwrap() []error { return []error{e.error, ErrFixtures} }
 
 // The longest timeout and quiet Echo's wait API honors. It cuts longer
 // values short without saying so, so Validate refuses them instead.

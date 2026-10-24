@@ -30,4 +30,17 @@ func TestChecksCommand(t *testing.T) {
 	if code, out, _ := runCLI(t, "checks", "--test"); code != exitFindings || !strings.Contains(out, "2 failed") {
 		t.Errorf("checks --test with a rule without fixtures: %d\n%s", code, out)
 	}
+	// A failing fixture: checks --test shows its table and exits 1,
+	// checks lists the rules and says which fails, the rest exit 2.
+	writeConfig(t, "rules:\n  - id: brand/old-phone\n    match: \"0800 123 456\"\n    fixtures: {match: [\"Call 0800 123 457\"], no_match: [\"Call 0800 999 000\"]}\n")
+	if code, out, _ := runCLI(t, "checks", "--test"); code != exitFindings || !strings.Contains(out, "1 rule, 2 fixtures, 1 failed.") {
+		t.Errorf("checks --test with a failing fixture: %d\n%s", code, out)
+	}
+	if code, out, errOut := runCLI(t, "checks"); code != exitFindings || !strings.Contains(out, "brand/old-phone") ||
+		!strings.Contains(errOut, `rule "brand/old-phone": fixtures: doesn't match "Call 0800 123 457"`) {
+		t.Errorf("checks with a failing fixture: %d\n%s\n%s", code, out, errOut)
+	}
+	if code, _, errOut := runCLI(t, "ls"); code != exitUsage || !strings.Contains(errOut, "fixtures: doesn't match") {
+		t.Errorf("ls with a failing fixture: %d %s", code, errOut)
+	}
 }

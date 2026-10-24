@@ -12,7 +12,9 @@ import (
 
 // cmdChecks lists every check, the config's own rules: after the
 // built-in ones; with --test it tries each rule on its fixtures and exits
-// 1 when one fails.
+// 1 when one fails. A failing fixture stops every other command with exit
+// 2 (config.ErrFixtures), so checks reads past it: plain checks lists the
+// rules, says which one fails and exits 1 too.
 func cmdChecks(s *session) int {
 	if len(s.args) > 0 {
 		return s.fail(usageErr("checks takes no arguments; --test tries the config's rules"))
@@ -32,6 +34,10 @@ func cmdChecks(s *session) int {
 	}
 	if len(s.cfg.Checks) > 0 && !s.o.quiet {
 		fmt.Fprintf(s.stdout, "\n%s sets the level of %s under checks:.\n", s.configName(), plural(len(s.cfg.Checks), "check"))
+	}
+	if s.fixtures != nil {
+		fmt.Fprintf(s.stderr, "rhythm echo: %v\n  rhythm echo checks --test shows every fixture; other commands refuse the config until it passes\n", s.fixtures)
+		return exitFindings
 	}
 	return exitOK
 }
