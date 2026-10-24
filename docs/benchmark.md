@@ -45,11 +45,11 @@ Run on 2026-10-24 with rhythm-echo dev (linux/amd64); the run took 4m42s.
 ### Lost messages
 
 **s01 The contact form stops emailing the shop owner** (wordpress, action “Contact form”, seal mode, 14 s). Broken state: the 2.0 update reset “Notify the site owner” to off (wp/plugins/testbed-forms).
-Echo: BROKE message/missing: Email to owner@shop.example.com is no longer sent (sent → not sent). Also reported: BROKE expect/email: Sent fewer emails than expected.
+Echo: BROKE message/missing: Email to owner@shop.example.com is no longer sent (sent → not sent). Also reported: BROKE expect/unmet: Sent fewer emails than expected.
 Mailpit: the inbox has 1 email instead of 2; Mailpit keeps no baseline, so nothing says one is missing.
 
 **s02 The contact form's autoresponder is lost** (wordpress, action “Contact form”, seal mode, 14 s). Broken state: the same update switched the autoresponder off (wp/plugins/testbed-forms).
-Echo: BROKE message/missing: Email to the test submitter is no longer sent (sent → not sent). Also reported: BROKE expect/email: Sent fewer emails than expected.
+Echo: BROKE message/missing: Email to the test submitter is no longer sent (sent → not sent). Also reported: BROKE expect/unmet: Sent fewer emails than expected.
 Mailpit: the inbox has 1 email instead of 2; Mailpit keeps no baseline, so nothing says one is missing.
 
 **s03 The owner's order SMS is gone after a plugin update** (wordpress, action “Checkout”, seal mode, 14 s). Broken state: SMS add-on 3.0 listens on a hook the shop never fires; its Twilio client is raw cURL, caught through Echo's proxy (wp/plugins/testbed-shop-sms).
