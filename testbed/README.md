@@ -111,10 +111,10 @@ make -C testbed down
 For each scenario, the harness in [`bench/`](bench/) does the following, in `testbed/bench/work/<id>/`:
 
 1. runs the manifest's `reset` commands (drain what an earlier broken flush left queued), sets the good state and starts Echo in the scenario's mode
-2. runs `rhythm-echo snapshot --config testbed/.echo/config.yaml --action "<action>" --name good --json -o good.json`
+2. runs `rhythm-echo snapshot --config testbed/.echo/config.yaml --action "<action>" --name good --fail-on none --json -o good.json`
 3. breaks the scenario
-4. runs `rhythm-echo compare --config … --action "<action>" --snapshot good --json -o compare.json`
-5. for `dns:` scenarios, runs `rhythm-echo check` on the From domains in each state (see above) and adds the difference to the comparison
+4. runs `rhythm-echo compare --config … --action "<action>" --snapshot good --fail-on none --json -o compare.json` and reads the comparison from the envelope's `data`
+5. for `dns:` scenarios, runs `rhythm-echo check --fail-on none` on the From domains in each state (see above) and adds the difference to the comparison
 6. passes when the comparison has a change matching one of the scenario's `expect` entries
 
 Echo's commands get `TESTBED` (for the config's commands), `RHYTHM_ECHO_URL`, `RHYTHM_ECHO_TOKEN`, `XDG_CACHE_HOME` (the testbed's proxy CA) and `TESTBED_STRIPE_SECRET` (the Stripe test endpoint's signing secret, which `testbed-stripe.php` also builds). To run the actions by hand, start `make echo` and, from `testbed/`, set those variables the same way (see `bench/echo.go`).

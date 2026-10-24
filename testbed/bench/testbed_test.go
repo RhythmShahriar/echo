@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -114,6 +115,126 @@ func TestFixtureDNS(t *testing.T) {
 	}
 }
 
+// buildEcho builds the binary under test from the module the testbed
+// folder dir is in.
+func buildEcho(t *testing.T, dir string) string {
+	t.Helper()
+	bin := filepath.Join(t.TempDir(), "rhythm-echo")
+	goBin, err := exec.LookPath("go")
+	if err != nil {
+		goBin = "/usr/local/go/bin/go"
+	}
+	build := exec.Command(goBin, "build", "-o", bin, "./cmd/rhythm-echo") //nolint:noctx,gosec // building the binary under test
+	build.Dir, build.Env = filepath.Dir(dir), append(os.Environ(), "GOWORK=off")
+	if out, err := build.CombinedOutput(); err != nil {
+		t.Fatalf("go build: %v: %s", err, out)
+	}
+	return bin
+}
+
+// TestReadsEchoJSON feeds readComparison and checkIssues what the binary
+// under test writes with --json, so the benchmark follows its output. It
+// needs no testbed: Echo runs on 127.0.0.1:22300-22302 with one command
+// action that sends an email through the sendmail stand-in and stops
+// sending it.
+func TestReadsEchoJSON(t *testing.T) {
+	if testing.Short() {
+		t.Skip("builds and starts Echo")
+	}
+	const api, smtp, dnsAddr = "127.0.0.1:22300", "127.0.0.1:22301", "127.0.0.1:22302"
+	dir, _ := testbedDir(t)
+	bin := buildEcho(t, dir)
+	wd := t.TempDir()
+	env := append(os.Environ(), "RHYTHM_ECHO_URL=http://"+api, "RHYTHM_ECHO_TOKEN=", "RHYTHM_ECHO_SMTP=")
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+
+	up := exec.CommandContext(ctx, bin, "up", "--seal", "--listen", api, "--smtp", smtp, "--plain") //nolint:gosec // the binary this test built
+	up.Dir, up.Env = wd, env
+	var log strings.Builder
+	up.Stdout, up.Stderr = &log, &log
+	if err := up.Start(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = up.Process.Kill(); _ = up.Wait() })
+	for i := 0; ; i++ {
+		resp, err := http.Get("http://" + api + "/v1/health") //nolint:noctx // the Echo this test started
+		if err == nil {
+			_ = resp.Body.Close()
+			break
+		}
+		if i == 100 {
+			t.Fatalf("rhythm-echo up didn't answer: %v\n%s", err, log.String())
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	config := func(cmd string) {
+		t.Helper()
+		yaml := "actions:\n  - name: Welcome\n    command: " + strconv.Quote(cmd) + "\n"
+		if err := os.MkdirAll(filepath.Join(wd, ".echo"), 0o750); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(wd, ".echo", "config.yaml"), []byte(yaml), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	echo := func(args ...string) string {
+		t.Helper()
+		out, err := command(ctx, time.Minute, wd, env, bin, args...)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return out
+	}
+	config(`printf 'From: shop@shop.example.com\nTo: ann@shop.test\nSubject: Welcome\n\nHi Ann\n' | '` + bin + `' sendmail -t`)
+	echo("snapshot", "--name", "good", "--fail-on", "none", "--json", "-o", "good.json")
+	good, err := store.LoadRun(filepath.Join(wd, ".echo", "snapshots", "good"))
+	if err != nil || len(good.Actions) != 1 || len(good.Actions[0].Messages) != 1 {
+		t.Fatalf("the good snapshot: %v %+v", err, good)
+	}
+	config("true")
+	echo("compare", "--snapshot", "good", "--fail-on", "none", "--json", "-o", "compare.json")
+	c, err := readComparison(filepath.Join(wd, "compare.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.Actions != 1 || c.Count(model.Broke) == 0 || c.After.Dir == "" {
+		t.Errorf("readComparison: %d actions, %d broke, after %q", c.Actions, c.Count(model.Broke), c.After.Dir)
+	}
+	if _, err := store.LoadRun(under(wd, c.After.Dir)); err != nil {
+		t.Errorf("the compared run: %v", err)
+	}
+	if fromDomains(good)[0] != "shop.example.com" {
+		t.Errorf("fromDomains: %v", fromDomains(good))
+	}
+
+	// s18 broken: SPF needs more than 10 lookups, which check reports.
+	zone, err := LoadZone(filepath.Join(dir, "dns", "zone.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	state := t.TempDir()
+	if err := os.WriteFile(filepath.Join(state, "s18"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	srv := &DNSServer{Zone: zone, State: state}
+	if err := srv.Start(dnsAddr); err != nil {
+		t.Fatal(err)
+	}
+	defer srv.Close()
+	issues, err := checkIssues([]byte(echo("check", "shop.example.com", "--fail-on", "none", "--json", "--resolver", dnsAddr)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.ContainsFunc(issues, func(i model.Issue) bool { return i.Check == "dns/spf" }) {
+		t.Errorf("checkIssues: no SPF issue in %+v", issues)
+	}
+	if _, err := readComparison(filepath.Join(wd, "good.json")); err == nil {
+		t.Error("readComparison read a run as a comparison")
+	}
+}
+
 // TestGoodStateIsClean runs every action in the testbed's Echo config with
 // every scenario good, through the CLI as a user would and checks that
 // each sent what it should and nothing is above a notice: a caught
@@ -127,16 +248,7 @@ func TestGoodStateIsClean(t *testing.T) {
 		}
 		_ = resp.Body.Close()
 	}
-	bin := filepath.Join(t.TempDir(), "rhythm-echo")
-	goBin, err := exec.LookPath("go")
-	if err != nil {
-		goBin = "/usr/local/go/bin/go"
-	}
-	build := exec.Command(goBin, "build", "-o", bin, "./cmd/rhythm-echo") //nolint:noctx,gosec // building the binary under test
-	build.Dir, build.Env = filepath.Dir(dir), append(os.Environ(), "GOWORK=off")
-	if out, err := build.CombinedOutput(); err != nil {
-		t.Fatalf("go build: %v: %s", err, out)
-	}
+	bin := buildEcho(t, dir)
 	if err := Toggle(dir, "all", "good"); err != nil {
 		t.Fatal(err)
 	}
@@ -148,7 +260,7 @@ func TestGoodStateIsClean(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer e.Stop()
-	if _, err := e.Run(ctx, 4*time.Minute, work, "snapshot", "--config", e.Config(), "--name", "clean", "--json", "-o", "clean.json"); err != nil {
+	if _, err := e.Run(ctx, 4*time.Minute, work, "snapshot", "--config", e.Config(), "--name", "clean", "--fail-on", "none", "--json", "-o", "clean.json"); err != nil {
 		t.Fatal(err)
 	}
 	r, err := store.LoadRun(filepath.Join(work, ".echo", "snapshots", "clean"))

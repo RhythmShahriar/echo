@@ -19,6 +19,7 @@
 package main
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -226,8 +227,11 @@ func benchScenario(ctx context.Context, o options, e *Echo, dir string, m *Manif
 		}
 	}
 
+	// --fail-on none: the exit code says only whether the command worked.
+	// A good state with error issues, or a compare that finds changes,
+	// isn't a failure here; Evaluate judges what was found.
 	if _, err := e.Run(ctx, o.timeout, wd, "snapshot", "--config", e.Config(), "--action", s.Action,
-		"--name", "good", "--json", "-o", "good.json"); err != nil {
+		"--name", "good", "--fail-on", "none", "--json", "-o", "good.json"); err != nil {
 		return fail("snapshot: %v", err)
 	}
 	good, err := store.LoadRun(filepath.Join(wd, ".echo", "snapshots", "good"))
@@ -245,7 +249,7 @@ func benchScenario(ctx context.Context, o options, e *Echo, dir string, m *Manif
 		return fail("%v", err)
 	}
 	_, cerr := e.Run(ctx, o.timeout, wd, "compare", "--config", e.Config(), "--action", s.Action,
-		"--snapshot", "good", "--json", "-o", "compare.json")
+		"--snapshot", "good", "--fail-on", "none", "--json", "-o", "compare.json")
 	cmp, err := readComparison(filepath.Join(wd, "compare.json"))
 	switch {
 	case err != nil && cerr != nil:
@@ -309,18 +313,48 @@ func echoBinary(ctx context.Context, bin string) (string, string, error) {
 	return abs, strings.TrimSpace(out), nil
 }
 
-// readComparison reads `compare --json` output.
+// readComparison reads the file `compare --json -o` writes: the
+// comparison is the envelope's data, beside the compared run's actions,
+// and the number of actions compared is in its summary. A bare
+// comparison, as Echo wrote before the envelope, is read too.
 func readComparison(path string) (*model.Comparison, error) {
 	data, err := os.ReadFile(path) //nolint:gosec // our own output
 	if err != nil {
 		return nil, err
 	}
-	var c model.Comparison
-	if err := json.Unmarshal(data, &c); err != nil {
+	var env struct {
+		Kind    string                `json:"kind"`
+		Summary struct{ Actions int } `json:"summary"`
+		Data    json.RawMessage       `json:"data"`
+	}
+	if err := json.Unmarshal(data, &env); err != nil {
 		return nil, err
 	}
-	if c.Schema == "" {
+	if env.Data == nil {
+		var c model.Comparison
+		if err := json.Unmarshal(data, &c); err != nil {
+			return nil, err
+		}
+		if c.Schema == "" {
+			return nil, errors.New("no comparison in the JSON output")
+		}
+		return &c, nil
+	}
+	if env.Kind != "comparison" {
+		return nil, fmt.Errorf("the JSON output holds a %s, not a comparison", cmp.Or(env.Kind, "result of no kind"))
+	}
+	// "actions" in the data is the run's actions; it hides the count.
+	var d struct {
+		model.Comparison
+		Actions []model.Action `json:"actions"`
+	}
+	if err := json.Unmarshal(env.Data, &d); err != nil {
+		return nil, err
+	}
+	if d.Schema == "" {
 		return nil, errors.New("no comparison in the JSON output")
 	}
+	c := d.Comparison
+	c.Actions = env.Summary.Actions
 	return &c, nil
 }

@@ -48,7 +48,7 @@ func fromDomains(r *model.Run) []string {
 func checkDomains(ctx context.Context, e *Echo, timeout time.Duration, dir, state string, d *DNS, domains []string) ([]model.Issue, error) {
 	var all []model.Issue
 	for _, dom := range domains {
-		args := []string{"check", dom, "--json", "--resolver", DNSAddr}
+		args := []string{"check", dom, "--fail-on", "none", "--json", "--resolver", DNSAddr}
 		if d.Provider != "" {
 			args = append(args, "--provider", d.Provider)
 		}
@@ -62,18 +62,40 @@ func checkDomains(ctx context.Context, e *Echo, timeout time.Duration, dir, stat
 		if err := os.WriteFile(filepath.Join(dir, "check-"+state+"-"+dom+".json"), []byte(out), 0o600); err != nil {
 			return nil, err
 		}
-		var rep struct {
-			Issues []model.Issue `json:"issues"`
-		}
-		if err := json.Unmarshal([]byte(out), &rep); err != nil {
+		issues, err := checkIssues([]byte(out))
+		if err != nil {
 			return nil, fmt.Errorf("check %s: %w", dom, err)
 		}
-		for _, i := range rep.Issues {
+		for _, i := range issues {
 			i.Detail = dom + ": " + i.Detail
 			all = append(all, i)
 		}
 	}
 	return all, nil
+}
+
+// checkIssues reads the issues in `check --json` output: the DNS report
+// is the envelope's data. A bare report, as Echo wrote before the
+// envelope, is read too.
+func checkIssues(out []byte) ([]model.Issue, error) {
+	type report struct {
+		Issues []model.Issue `json:"issues"`
+	}
+	var env struct {
+		Kind string  `json:"kind"`
+		Data *report `json:"data"`
+		report
+	}
+	if err := json.Unmarshal(out, &env); err != nil {
+		return nil, err
+	}
+	if env.Data == nil {
+		return env.Issues, nil
+	}
+	if env.Kind != "check" {
+		return nil, fmt.Errorf("the JSON output holds a %s, not a DNS report", env.Kind)
+	}
+	return env.Data.Issues, nil
 }
 
 // checkRun runs the deliverability checks on the domains a run's emails

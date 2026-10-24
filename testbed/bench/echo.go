@@ -10,6 +10,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"os/exec"
@@ -135,20 +136,22 @@ func (e *Echo) Shell(ctx context.Context, timeout time.Duration, line string) er
 	return err
 }
 
-// command runs name with args in dir and returns its combined output.
+// command runs name with args in dir and returns its standard output,
+// which --json keeps apart from the notes on standard error. A failure's
+// error ends with what both said.
 func command(ctx context.Context, timeout time.Duration, dir string, env []string, name string, args ...string) (string, error) {
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, name, args...) //nolint:gosec // the benchmark runs the tools it was asked to
 	cmd.Dir, cmd.Env = dir, env
-	var out bytes.Buffer
-	cmd.Stdout, cmd.Stderr = &out, &out
+	var stdout, both bytes.Buffer
+	cmd.Stdout, cmd.Stderr = io.MultiWriter(&stdout, &both), &both
 	if err := cmd.Run(); err != nil {
-		tail := strings.TrimSpace(out.String())
+		tail := strings.TrimSpace(both.String())
 		if len(tail) > 400 {
 			tail = "…" + tail[len(tail)-400:]
 		}
-		return out.String(), fmt.Errorf("%s %s: %w: %s", filepath.Base(name), strings.Join(args, " "), err, tail)
+		return stdout.String(), fmt.Errorf("%s %s: %w: %s", filepath.Base(name), strings.Join(args, " "), err, tail)
 	}
-	return out.String(), nil
+	return stdout.String(), nil
 }
