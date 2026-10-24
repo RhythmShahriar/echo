@@ -222,7 +222,9 @@ func parse(c cmdSpec, args []string) (*plan, error) {
 		}
 	}
 	p.cfgPath = path
-	if runsCommands[c.name] && o.configPath == "" && path != "" && !o.quiet {
+	// snapshot --export and --import run no actions, so where they would
+	// run doesn't matter.
+	if runsCommands[c.name] && o.configPath == "" && path != "" && !o.quiet && o.export == "" && o.importFile == "" {
 		if wd, err := os.Getwd(); err == nil && p.projectDir() != wd {
 			p.notes = append(p.notes, fmt.Sprintf("using %s; its flush and command actions run in %s", path, p.projectDir()))
 		}
@@ -292,7 +294,7 @@ func parse(c cmdSpec, args []string) (*plan, error) {
 		return nil, cli.Usagef("--channel %q: use one of %s", o.channel, joinChannels())
 	}
 	if o.since < 0 {
-		return nil, cli.Usagef("--since %s: give how long ago, e.g. 10m", o.since)
+		return nil, cli.Usagef("--since %s: give how long ago, e.g. 10m", shortDuration(o.since))
 	}
 	if o.name != "" && !snapshotName(o.name) {
 		return nil, cli.Usagef("--name %q: use letters, digits, dots, dashes and underscores (LATEST is taken)", o.name)

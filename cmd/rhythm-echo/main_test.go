@@ -756,7 +756,7 @@ func TestListSince(t *testing.T) {
 	if decodeEnvelope(t, []byte(out), kindMessages, &ms); code != 0 || len(ms) != 1 || ms[0].Subject != "New" {
 		t.Errorf("ls --since 10m: %d %s\n%s", code, errOut, out)
 	}
-	if code, _, errOut := runCLI(t, "ls", "--since", "-5m"); code != exitUsage || !strings.Contains(errOut, "--since") {
+	if code, _, errOut := runCLI(t, "ls", "--since", "-5m"); code != exitUsage || !strings.Contains(errOut, "rhythm echo: --since -5m: give how long ago, e.g. 10m") {
 		t.Errorf("negative --since: %d %q", code, errOut)
 	}
 }
@@ -1143,6 +1143,14 @@ func TestCommandsRunInTheProjectFolder(t *testing.T) {
 	// -q keeps the note out; from the project folder there is none.
 	if _, _, errOut := runCLI(t, "run", "--url", srv.URL, "-q"); strings.Contains(errOut, "using ") {
 		t.Errorf("run -q said %q", errOut)
+	}
+	// snapshot --export and --import run no actions, so they don't say
+	// where those would run.
+	if code, _, errOut := runCLI(t, "snapshot", "--url", srv.URL, "--name", "base", "-q"); code != exitOK {
+		t.Fatalf("snapshot: %d %s", code, errOut)
+	}
+	if code, out, errOut := runCLI(t, "snapshot", "--export", "-"); code != exitOK || out == "" || strings.Contains(errOut, "using ") {
+		t.Errorf("snapshot --export - from a subfolder: %d %q", code, errOut)
 	}
 	t.Chdir(proj)
 	if _, _, errOut := runCLI(t, "run", "--url", srv.URL, "--plain"); strings.Contains(errOut, "using ") {
