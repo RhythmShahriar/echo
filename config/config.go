@@ -13,80 +13,281 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"maps"
+	"net/url"
 	"os"
+	"path"
 	"path/filepath"
+	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/RhythmShahriar/echo/model"
 )
 
 // Dir is the project folder Echo keeps its settings, snapshots and runs in.
 const Dir = ".echo"
 
+// Config is .echo/config.yaml. Load fills the defaults in.
 type Config struct {
-	Site            string   `yaml:"site"`             // base URL relative actions use, e.g. https://staging.shop.test
-	Mode            string   `yaml:"mode"`             // seal (default) or observe
-	Listen          string   `yaml:"listen"`           // API address, default 127.0.0.1:8025
-	SMTP            string   `yaml:"smtp"`             // SMTP sink address, default 127.0.0.1:1025; "off" disables
-	Proxy           string   `yaml:"proxy"`            // HTTP(S) proxy address, default off; e.g. 127.0.0.1:8026
-	MITM            bool     `yaml:"mitm"`             // decrypt HTTPS through the proxy (needs Echo's CA trusted)
-	Allow           []string `yaml:"allow"`            // hosts reachable even when sealed: ["api.stripe.com", "*.sandbox.paypal.com"]
-	AllowRecipients []string `yaml:"allow_recipients"` // addresses or numbers that may really be messaged in observe mode
-	Staging         []string `yaml:"staging"`          // URL prefixes that are staging: replay only sends to these (and local addresses)
-	Production      []string `yaml:"production"`       // URL prefixes that are live sites: actions refuse them
-	Flush           []string `yaml:"flush"`            // commands run after each action so async senders send now
-	Quiet           Duration `yaml:"quiet"`            // how long nothing must arrive before an action counts as done; default 2s
-	Timeout         Duration `yaml:"timeout"`          // longest wait per action; default 30s
-	Actions         []Action `yaml:"actions"`
+	Site            string           `yaml:"site,omitempty"`             // base URL relative actions use, e.g. https://staging.shop.test
+	Mode            string           `yaml:"mode,omitempty"`             // seal (default) or observe
+	Listen          string           `yaml:"listen,omitempty"`           // API address, default 127.0.0.1:8025
+	SMTP            string           `yaml:"smtp,omitempty"`             // SMTP sink address, default 127.0.0.1:1025; "off" disables
+	Proxy           string           `yaml:"proxy,omitempty"`            // HTTP(S) proxy address, default off; e.g. 127.0.0.1:8026
+	MITM            bool             `yaml:"mitm,omitempty"`             // decrypt HTTPS through the proxy (needs Echo's CA trusted)
+	Allow           []string         `yaml:"allow,omitempty"`            // hosts reachable even when sealed: ["api.stripe.com", "*.sandbox.paypal.com"]
+	AllowRecipients []string         `yaml:"allow_recipients,omitempty"` // addresses or numbers that may really be messaged in observe mode
+	Staging         []string         `yaml:"staging,omitempty"`          // URL prefixes that are staging: replay only sends to these (and local addresses)
+	Production      []string         `yaml:"production,omitempty"`       // URL prefixes that are live sites: actions refuse them
+	Flush           []string         `yaml:"flush,omitempty"`            // commands run after each action so async senders send now
+	Quiet           Duration         `yaml:"quiet,omitempty"`            // how long nothing must arrive before an action counts as done; default 2s
+	Timeout         Duration         `yaml:"timeout,omitempty"`          // longest wait per action; default 30s
+	Checks          map[string]Level `yaml:"checks,omitempty"`           // per check ID: off, notice, warning, error, broke or changed
+	Rules           []Rule           `yaml:"rules,omitempty"`            // project checks: text that must never be sent
+	Inbox           *Inbox           `yaml:"inbox,omitempty"`            // where `up` keeps captures; default in memory
+	Relay           *Relay           `yaml:"relay,omitempty"`            // releasing a caught email to a real inbox, for client sign-off
+	Hub             *Reserved        `yaml:"hub,omitempty"`              // reserved for the agency hub; accepted and not read yet
+	Actions         []Action         `yaml:"actions,omitempty"`
+
+	lines positions // where each key was in the file, for error messages
 }
 
 // Action is something that makes the site send messages. Exactly one of
 // HTTP, Command or Replay is set.
 type Action struct {
-	Name    string            `yaml:"name"`
-	HTTP    *HTTPAction       `yaml:"http"`
-	Command string            `yaml:"command"` // run with sh -c; RHYTHM_ECHO_RUN is set
-	Replay  *ReplayAction     `yaml:"replay"`
-	Env     map[string]string `yaml:"env"`
-	Expect  *Expect           `yaml:"expect"` // optional: fail the action unless these were sent
+	Name     string            `yaml:"name,omitempty"`
+	HTTP     *HTTPAction       `yaml:"http,omitempty"`
+	Command  string            `yaml:"command,omitempty"` // run with sh -c; RHYTHM_ECHO_RUN is set
+	Replay   *ReplayAction     `yaml:"replay,omitempty"`
+	Env      map[string]string `yaml:"env,omitempty"`
+	Expect   Expect            `yaml:"expect,omitempty"`   // optional: fail the action unless these were sent
+	Ignore   []string          `yaml:"ignore,omitempty"`   // fields, headers or recipients compare leaves out (globs)
+	Quiet    *Duration         `yaml:"quiet,omitempty"`    // overrides the global quiet for this action
+	Parallel *bool             `yaml:"parallel,omitempty"` // false: never run beside another action; default true
 }
 
 type HTTPAction struct {
-	Method  string            `yaml:"method"`
-	URL     string            `yaml:"url"` // absolute, or relative to site
-	Headers map[string]string `yaml:"headers"`
-	Form    map[string]string `yaml:"form"` // sent as application/x-www-form-urlencoded
-	JSON    any               `yaml:"json"` // sent as application/json
-	Body    string            `yaml:"body"`
+	Method  string            `yaml:"method,omitempty"`
+	URL     string            `yaml:"url,omitempty"` // absolute, or relative to site
+	Headers map[string]string `yaml:"headers,omitempty"`
+	Form    map[string]string `yaml:"form,omitempty"` // sent as application/x-www-form-urlencoded
+	JSON    any               `yaml:"json,omitempty"` // sent as application/json
+	Body    string            `yaml:"body,omitempty"`
 }
 
 type ReplayAction struct {
-	Event  string            `yaml:"event"` // e.g. payment_intent.succeeded, or a path to a JSON file
-	To     string            `yaml:"to"`    // absolute, or relative to site
-	Set    map[string]string `yaml:"set"`   // field overrides: data.object.amount: 1999
-	Secret string            `yaml:"secret_env"`
+	Event  string            `yaml:"event,omitempty"` // e.g. payment_intent.succeeded, or a path to a JSON file
+	To     string            `yaml:"to,omitempty"`    // absolute, or relative to site
+	Set    map[string]string `yaml:"set,omitempty"`   // field overrides: data.object.amount: 1999
+	Secret string            `yaml:"secret_env,omitempty"`
 }
 
-// Expect lists messages an action must send.
-type Expect struct {
-	Email   int `yaml:"email"`
-	SMS     int `yaml:"sms"`
-	Webhook int `yaml:"webhook"`
-	Chat    int `yaml:"chat"`
+// Expect lists what an action must send, by channel: a count
+// (email: 2) or counts per event (analytics: {purchase: 1}), matched on
+// the message's event.
+type Expect map[model.Channel]Count
+
+// Count is one channel's expectation: N messages of any kind, or Events
+// by name.
+type Count struct {
+	N      int
+	Events map[string]int
 }
 
-// Duration reads "2s" style values.
+// Total is how many messages the expectation asks for.
+func (c Count) Total() int {
+	n := c.N
+	for _, v := range c.Events {
+		n += v
+	}
+	return n
+}
+
+// Total is how many messages every channel's expectation asks for.
+func (e Expect) Total() int {
+	n := 0
+	for _, c := range e {
+		n += c.Total()
+	}
+	return n
+}
+
+// UnmarshalYAML reads {email: 2, analytics: {purchase: 1}}, naming the
+// line of an unknown channel or a bad count.
+func (e *Expect) UnmarshalYAML(n *yaml.Node) error {
+	if n.Kind != yaml.MappingNode {
+		return fmt.Errorf("line %d: expect wants channels and counts, like {email: 2}", n.Line)
+	}
+	out := Expect{}
+	for i := 0; i+1 < len(n.Content); i += 2 {
+		k, v := n.Content[i], n.Content[i+1]
+		ch := model.Channel(k.Value)
+		if !slices.Contains(model.Channels, ch) {
+			return fmt.Errorf("line %d: expect: %q isn't a channel; use %s", k.Line, k.Value, channelList())
+		}
+		if _, dup := out[ch]; dup {
+			return fmt.Errorf("line %d: expect: %s is listed twice", k.Line, k.Value)
+		}
+		var c Count
+		switch v.Kind {
+		case yaml.ScalarNode:
+			if err := v.Decode(&c.N); err != nil || c.N < 0 {
+				return fmt.Errorf("line %d: expect: %s wants a count like 1, or events like {purchase: 1}", v.Line, k.Value)
+			}
+		case yaml.MappingNode:
+			c.Events = map[string]int{}
+			for j := 0; j+1 < len(v.Content); j += 2 {
+				ek, ev := v.Content[j], v.Content[j+1]
+				var cnt int
+				if err := ev.Decode(&cnt); err != nil || cnt < 0 || ek.Value == "" {
+					return fmt.Errorf("line %d: expect: %s: %q wants a count like 1", ev.Line, k.Value, ek.Value)
+				}
+				c.Events[ek.Value] = cnt
+			}
+		default:
+			return fmt.Errorf("line %d: expect: %s wants a count like 1, or events like {purchase: 1}", v.Line, k.Value)
+		}
+		out[ch] = c
+	}
+	*e = out
+	return nil
+}
+
+// MarshalYAML writes the shape UnmarshalYAML reads.
+func (c Count) MarshalYAML() (any, error) {
+	if c.Events != nil {
+		return c.Events, nil
+	}
+	return c.N, nil
+}
+
+func channelList() string {
+	var names []string
+	for _, c := range model.Channels {
+		names = append(names, string(c))
+	}
+	return strings.Join(names, ", ")
+}
+
+// Level is how much a check counts, set per check ID under checks: an
+// issue level (notice, warning, error), a comparison class (broke,
+// changed) or off to drop it.
+type Level string
+
+const (
+	Off     Level = "off"
+	Notice  Level = "notice"
+	Warning Level = "warning"
+	Error   Level = "error"
+	Broke   Level = "broke"
+	Changed Level = "changed"
+)
+
+// Levels lists every level checks: accepts.
+var Levels = []Level{Off, Notice, Warning, Error, Broke, Changed}
+
+// ruleLevels are the levels a custom rule's issue can have.
+var ruleLevels = []Level{Notice, Warning, Error}
+
+// Rule is a project check: a message on one of Channels (all when empty)
+// whose subject or visible text contains Match, or matches Regex, gets an
+// issue with Level and Message. Match is literal and case-sensitive; use
+// a regex with (?i) to ignore case.
+type Rule struct {
+	ID       string          `yaml:"id,omitempty"` // e.g. brand/old-phone
+	Channels []model.Channel `yaml:"channels,omitempty"`
+	Match    string          `yaml:"match,omitempty"`
+	Regex    string          `yaml:"regex,omitempty"`
+	Level    Level           `yaml:"level,omitempty"`   // notice, warning (default) or error
+	Message  string          `yaml:"message,omitempty"` // the issue's title; default "Matched <id>"
+	Fixtures *RuleFixtures   `yaml:"fixtures,omitempty"`
+}
+
+// RuleFixtures are texts a rule must and must not match, so a rule is
+// tested like the built-in checks.
+type RuleFixtures struct {
+	Match   []string `yaml:"match,omitempty"`
+	NoMatch []string `yaml:"no_match,omitempty"`
+}
+
+// Pattern compiles the rule's match or regex.
+func (r Rule) Pattern() (*regexp.Regexp, error) {
+	if r.Regex != "" {
+		return regexp.Compile(r.Regex)
+	}
+	return regexp.Compile(regexp.QuoteMeta(r.Match))
+}
+
+// Inbox is where `up` keeps what it catches.
+type Inbox struct {
+	Store   string   `yaml:"store,omitempty"`    // "memory" (default) or a folder for a persistent inbox, e.g. .echo/inbox
+	Keep    int      `yaml:"keep,omitempty"`     // most messages kept; 0 means the built-in default
+	KeepFor Duration `yaml:"keep_for,omitempty"` // drop messages older than this, e.g. 14d; 0 keeps them
+}
+
+// Relay sends a caught email on to a real inbox, only to Allow.
+type Relay struct {
+	URL   string   `yaml:"url,omitempty"`   // smtp://user:pass@host:587 (or smtps://); the --relay flag can give it instead
+	Allow []string `yaml:"allow,omitempty"` // recipient globs, e.g. ["*@client-a.com"]
+}
+
+// Reserved holds a key Echo accepts so configs written for a newer
+// feature still load, but doesn't read yet.
+type Reserved struct{ node yaml.Node }
+
+// Node is the key's YAML as written.
+func (r *Reserved) Node() *yaml.Node { return &r.node }
+
+func (r *Reserved) UnmarshalYAML(n *yaml.Node) error {
+	r.node = *n
+	return nil
+}
+
+// MarshalYAML writes the key back as it was read.
+func (r Reserved) MarshalYAML() (any, error) { return &r.node, nil }
+
+// Duration reads "2s" style values, and days as "14d".
 type Duration struct{ time.Duration }
 
 func (d *Duration) UnmarshalYAML(n *yaml.Node) error {
-	v, err := time.ParseDuration(n.Value)
+	v, err := parseDuration(n.Value)
 	if err != nil {
 		return fmt.Errorf("line %d: %q isn't a duration like 2s", n.Line, n.Value)
 	}
 	d.Duration = v
 	return nil
+}
+
+// MarshalYAML writes the duration the way UnmarshalYAML reads it.
+func (d Duration) MarshalYAML() (any, error) { return d.String(), nil }
+
+var days = regexp.MustCompile(`^(\d+)d(.*)$`)
+
+// parseDuration is time.ParseDuration plus a leading day count ("14d",
+// "1d12h"), since retention is set in days.
+func parseDuration(s string) (time.Duration, error) {
+	m := days.FindStringSubmatch(strings.TrimSpace(s))
+	if m == nil {
+		return time.ParseDuration(s)
+	}
+	n, err := strconv.Atoi(m[1])
+	if err != nil || n > 100000 {
+		return 0, fmt.Errorf("%q: too many days", s)
+	}
+	d := time.Duration(n) * 24 * time.Hour
+	if m[2] != "" {
+		rest, err := time.ParseDuration(m[2])
+		if err != nil {
+			return 0, err
+		}
+		d += rest
+	}
+	return d, nil
 }
 
 // Default returns the settings used when there's no config file.
@@ -111,13 +312,21 @@ func Load(path string) (Config, error) {
 	if err := dec.Decode(&c); err != nil && !errors.Is(err, io.EOF) {
 		return c, fmt.Errorf("%s: %w", path, err)
 	}
-	return c, c.Validate()
+	var root yaml.Node
+	if yaml.Unmarshal(data, &root) == nil {
+		c.lines = index(&root)
+	}
+	if err := c.Validate(); err != nil {
+		return c, fmt.Errorf("%s: %w", path, err)
+	}
+	return c, nil
 }
 
-// Validate checks values a user could get wrong.
+// Validate checks values a user could get wrong. When c came from Load,
+// errors name the line.
 func (c Config) Validate() error {
 	if c.Mode != "seal" && c.Mode != "observe" {
-		return fmt.Errorf("mode: %q isn't seal or observe", c.Mode)
+		return fmt.Errorf("%smode: %q isn't seal or observe", c.at("mode"), c.Mode)
 	}
 	seen := map[string]bool{}
 	for i, a := range c.Actions {
@@ -131,21 +340,146 @@ func (c Config) Validate() error {
 		if a.Replay != nil {
 			n++
 		}
+		at := c.at("actions", i)
 		switch {
 		case strings.TrimSpace(a.Name) == "":
-			return fmt.Errorf("actions[%d]: needs a name", i)
+			return fmt.Errorf("%sactions[%d]: needs a name", at, i)
 		case n != 1:
-			return fmt.Errorf("action %q: set exactly one of http, command or replay", a.Name)
+			return fmt.Errorf("%saction %q: set exactly one of http, command or replay", at, a.Name)
 		case seen[a.Name]:
-			return fmt.Errorf("action %q is listed twice", a.Name)
+			return fmt.Errorf("%saction %q is listed twice", at, a.Name)
 		case a.HTTP != nil && a.HTTP.URL == "":
-			return fmt.Errorf("action %q: http needs a url", a.Name)
+			return fmt.Errorf("%saction %q: http needs a url", at, a.Name)
 		case a.Replay != nil && (a.Replay.Event == "" || a.Replay.To == ""):
-			return fmt.Errorf("action %q: replay needs event and to", a.Name)
+			return fmt.Errorf("%saction %q: replay needs event and to", at, a.Name)
+		}
+		for j, g := range a.Ignore {
+			if err := glob(g); err != nil {
+				return fmt.Errorf("%saction %q: ignore: %w", c.at("actions", i, "ignore", j), a.Name, err)
+			}
 		}
 		seen[a.Name] = true
 	}
+	ids := slices.Sorted(maps.Keys(c.Checks))
+	for _, id := range ids {
+		if l := c.Checks[id]; !slices.Contains(Levels, l) {
+			return fmt.Errorf("%schecks: %s: %q isn't %s", c.at("checks", id), id, l, orList(Levels))
+		}
+	}
+	rules := map[string]bool{}
+	for i, r := range c.Rules {
+		at := c.at("rules", i)
+		switch {
+		case strings.TrimSpace(r.ID) == "" || strings.ContainsAny(r.ID, " \t"):
+			return fmt.Errorf("%srules[%d]: needs an id without spaces, like brand/old-phone", at, i)
+		case rules[r.ID]:
+			return fmt.Errorf("%srule %q is listed twice", at, r.ID)
+		case (r.Match == "") == (r.Regex == ""):
+			return fmt.Errorf("%srule %q: set exactly one of match or regex", at, r.ID)
+		case r.Level != "" && !slices.Contains(ruleLevels, r.Level):
+			return fmt.Errorf("%srule %q: level %q isn't %s", c.at("rules", i, "level"), r.ID, r.Level, orList(ruleLevels))
+		}
+		if _, err := r.Pattern(); err != nil {
+			return fmt.Errorf("%srule %q: regex: %w", c.at("rules", i, "regex"), r.ID, err)
+		}
+		for j, ch := range r.Channels {
+			if !slices.Contains(model.Channels, ch) {
+				return fmt.Errorf("%srule %q: %q isn't a channel; use %s", c.at("rules", i, "channels", j), r.ID, ch, channelList())
+			}
+		}
+		rules[r.ID] = true
+	}
+	if c.Inbox != nil {
+		switch {
+		case c.Inbox.Keep < 0:
+			return fmt.Errorf("%sinbox: keep can't be negative", c.at("inbox", "keep"))
+		case c.Inbox.KeepFor.Duration < 0:
+			return fmt.Errorf("%sinbox: keep_for can't be negative", c.at("inbox", "keep_for"))
+		}
+	}
+	if c.Relay != nil {
+		if c.Relay.URL != "" {
+			// The URL holds a password, so it's never quoted back.
+			u, err := url.Parse(c.Relay.URL)
+			if err != nil || (u.Scheme != "smtp" && u.Scheme != "smtps") || u.Hostname() == "" {
+				return fmt.Errorf("%srelay: url wants smtp://user:pass@host:587 or smtps://…", c.at("relay", "url"))
+			}
+		}
+		for j, g := range c.Relay.Allow {
+			if err := glob(g); err != nil {
+				return fmt.Errorf("%srelay: allow: %w", c.at("relay", "allow", j), err)
+			}
+		}
+	}
 	return nil
+}
+
+// glob checks an ignore or allow pattern: *, ? and [ ] as in path.Match.
+func glob(g string) error {
+	if strings.TrimSpace(g) == "" {
+		return errors.New("an empty pattern matches nothing")
+	}
+	if _, err := path.Match(g, ""); err != nil {
+		return fmt.Errorf("%q isn't a valid pattern (unclosed [ or a trailing \\)", g)
+	}
+	return nil
+}
+
+func orList(levels []Level) string {
+	s := make([]string, len(levels))
+	for i, l := range levels {
+		s[i] = string(l)
+	}
+	return strings.Join(s[:len(s)-1], ", ") + " or " + s[len(s)-1]
+}
+
+// positions maps a key path (top-level key, then keys and list indexes)
+// to its line in the file.
+type positions map[string]int
+
+func key(path ...any) string {
+	parts := make([]string, len(path))
+	for i, p := range path {
+		parts[i] = fmt.Sprint(p)
+	}
+	return strings.Join(parts, "\x00")
+}
+
+// index records the line of every mapping key and list item under root.
+func index(root *yaml.Node) positions {
+	p := positions{}
+	var walk func(n *yaml.Node, path []any)
+	walk = func(n *yaml.Node, path []any) {
+		switch n.Kind {
+		case yaml.DocumentNode:
+			for _, c := range n.Content {
+				walk(c, path)
+			}
+		case yaml.MappingNode:
+			for i := 0; i+1 < len(n.Content); i += 2 {
+				sub := append(slices.Clip(path), any(n.Content[i].Value))
+				p[key(sub...)] = n.Content[i].Line
+				walk(n.Content[i+1], sub)
+			}
+		case yaml.SequenceNode:
+			for i, c := range n.Content {
+				sub := append(slices.Clip(path), any(i))
+				p[key(sub...)] = c.Line
+				walk(c, sub)
+			}
+		}
+	}
+	walk(root, nil)
+	return p
+}
+
+// at returns "line N: " for the key at path, or "" when c didn't come
+// from a file.
+func (c Config) at(path ...any) string {
+	if n, ok := c.lines[key(path...)]; ok {
+		return fmt.Sprintf("line %d: ", n)
+	}
+	return ""
 }
 
 // IsProduction reports whether url is a live site.

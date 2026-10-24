@@ -70,7 +70,7 @@ func TestSnapshotThenCompare(t *testing.T) {
 	cfg.Timeout = config.Duration{Duration: 5 * time.Second}
 	cfg.Actions = []config.Action{
 		{Name: "Contact form", HTTP: &config.HTTPAction{URL: "/contact", Form: map[string]string{
-			"name": "${fake:name}", "email": "${fake:email}", "message": "Hello"}}, Expect: &config.Expect{Email: 2}},
+			"name": "${fake:name}", "email": "${fake:email}", "message": "Hello"}}, Expect: config.Expect{model.Email: {N: 2}}},
 		{Name: "Nightly report", Command: `curl -s -X POST ` + srv.URL + `/v1/capture -d "{\"v\":1,\"kind\":\"email\",\"run\":\"$RHYTHM_ECHO_RUN\",\"source\":{\"via\":\"test\"},\"email\":{\"to\":[\"ops@shop.test\"],\"subject\":\"Nightly report\",\"text\":\"All good\"}}" >/dev/null`},
 	}
 	ctx := context.Background()
@@ -140,5 +140,22 @@ func TestSelect(t *testing.T) {
 	if _, err := Select(cfg, []string{"Checkout", "nope"}); !errors.Is(err, ErrUnknownAction) || !strings.Contains(err.Error(), `"nope"`) ||
 		!strings.Contains(err.Error(), "Contact form, Checkout, Reset") {
 		t.Errorf("unknown action: %v", err)
+	}
+}
+
+func TestExpectationsCoverEveryChannel(t *testing.T) {
+	msgs := []model.Message{{Channel: model.Email}, {Channel: model.Analytics, Event: "purchase"}}
+	e := config.Expect{model.Email: {N: 1}, model.Analytics: {Events: map[string]int{"purchase": 1, "add_to_cart": 1}}, model.Push: {N: 1}}
+	var got []string
+	for _, i := range expectations(e, msgs) {
+		got = append(got, i.Check+": "+i.Title+" ("+i.Detail+")")
+	}
+	want := "expect/analytics: Sent fewer analytics events than expected (expected 2, got 1)\n" +
+		"expect/push: Sent fewer push notifications than expected (expected 1, got 0)"
+	if strings.Join(got, "\n") != want {
+		t.Errorf("got:\n%s", strings.Join(got, "\n"))
+	}
+	if len(expectations(nil, msgs)) != 0 {
+		t.Error("no expect, no issues")
 	}
 }

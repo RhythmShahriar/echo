@@ -160,10 +160,7 @@ func runAction(ctx context.Context, o Options, runID string, a config.Action, fa
 			o.Hooks.Log(fmt.Sprintf("flush %q: %v", f, ferr))
 		}
 	}
-	want := 0
-	if a.Expect != nil {
-		want = a.Expect.Email + a.Expect.SMS + a.Expect.Webhook + a.Expect.Chat
-	}
+	want := a.Expect.Total()
 	wctx, cancel := context.WithTimeout(ctx, cfg.Timeout.Duration)
 	msgs, werr := o.Client.Wait(wctx, client.Filter{Run: runID, Action: act.ID}, want, cfg.Quiet.Duration, cfg.Timeout.Duration)
 	cancel()
@@ -181,29 +178,46 @@ func runAction(ctx context.Context, o Options, runID string, a config.Action, fa
 
 // expectations reports an action that sent fewer messages than its
 // config says it must.
-func expectations(e *config.Expect, msgs []model.Message) []model.Issue {
-	if e == nil {
-		return nil
-	}
+func expectations(e config.Expect, msgs []model.Message) []model.Issue {
 	count := map[model.Channel]int{}
 	for _, m := range msgs {
 		count[m.Channel]++
 	}
 	var out []model.Issue
-	for _, w := range []struct {
-		ch   model.Channel
-		n    int
-		noun string
-	}{{model.Email, e.Email, "emails"}, {model.SMS, e.SMS, "SMS"}, {model.Webhook, e.Webhook, "webhooks"}, {model.Chat, e.Chat, "chat messages"}} {
-		if w.n > 0 && count[w.ch] < w.n {
-			i := model.Issue{Check: "expect/" + string(w.ch), Level: model.Error, Title: fmt.Sprintf("Sent fewer %s than expected", w.noun),
-				Detail: fmt.Sprintf("expected %d, got %d", w.n, count[w.ch]),
+	for _, ch := range model.Channels {
+		n := e[ch].Total()
+		if n > 0 && count[ch] < n {
+			i := model.Issue{Check: "expect/" + string(ch), Level: model.Error, Title: fmt.Sprintf("Sent fewer %s than expected", noun(ch)),
+				Detail: fmt.Sprintf("expected %d, got %d", n, count[ch]),
 				Fix:    "Check the settings of whatever sends them, or update expect in .echo/config.yaml if the change is intended."}
 			i.Identify()
 			out = append(out, i)
 		}
 	}
 	return out
+}
+
+// noun names a channel's messages in a sentence.
+func noun(ch model.Channel) string {
+	switch ch {
+	case model.Email:
+		return "emails"
+	case model.SMS:
+		return "SMS"
+	case model.WhatsApp:
+		return "WhatsApp messages"
+	case model.Chat:
+		return "chat messages"
+	case model.Webhook:
+		return "webhooks"
+	case model.Analytics:
+		return "analytics events"
+	case model.Payment:
+		return "payment calls"
+	case model.Push:
+		return "push notifications"
+	}
+	return string(ch) + " messages"
 }
 
 func doHTTP(ctx context.Context, o Options, a config.Action, runValue string, fake *fakeData) error {
