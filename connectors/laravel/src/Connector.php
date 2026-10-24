@@ -31,6 +31,9 @@ class Connector
 
     private ?string $reason = null;
 
+    /** Whether an ignored X-Echo-Run was logged already. */
+    private bool $runLogged = false;
+
     public function __construct(
         private readonly Application $app,
         private readonly EchoClient $client,
@@ -83,9 +86,11 @@ class Connector
 
     /**
      * The "<run>/<action>" the current work belongs to: the X-Echo-Run
-     * header or cookie of the request (put into Context by TrackRun), the
-     * Context a queued job carried over from that request, or else
-     * RHYTHM_ECHO_RUN, which Echo sets on commands it runs.
+     * header or cookie of the request (checked and put into Context by
+     * TrackRun), the Context a queued job carried over from that request,
+     * or else RHYTHM_ECHO_RUN, which Echo sets on commands it runs. A
+     * visitor cannot set the environment, so it is taken as given, without
+     * a signature if Echo added one.
      */
     public function run(): string
     {
@@ -94,7 +99,52 @@ class Connector
             return $ctx;
         }
 
-        return self::cleanRun(Env::get(Wire::RUN_ENV));
+        return Wire::splitSignature(self::cleanRun(Env::get(Wire::RUN_ENV)))[0];
+    }
+
+    /**
+     * Whether a request's X-Echo-Run counts. A visitor can send one too and
+     * add messages to a baseline or drop them from one, so it must be signed
+     * with the token when one is set, or else come straight from this
+     * machine (loopback, no forwarding headers). Returns "<run>/<action>"
+     * without the signature, or "" for a value that does not count, logged
+     * once.
+     */
+    public function acceptRun(string $value, string $remote, bool $forwarded): string
+    {
+        $token = (string) ($this->config['token'] ?? '');
+        [$run, $action, $ok] = Wire::verifyRun($token, $value);
+        if ($run === '') {
+            $this->runIgnored('ignored an X-Echo-Run whose signature does not verify ('.($token !== '' ? 'not signed with this token' : 'RHYTHM_ECHO_TOKEN is not set here').')');
+
+            return '';
+        }
+        if ($ok) {
+            return "{$run}/{$action}";
+        }
+        if ($token !== '') {
+            $this->runIgnored('ignored an unsigned X-Echo-Run: with RHYTHM_ECHO_TOKEN set, only runs Echo signed with it count');
+
+            return '';
+        }
+        if (! $forwarded && ($remote === '::1' || preg_match('/^(::ffff:)?127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/i', $remote))) {
+            return "{$run}/{$action}";
+        }
+        $this->runIgnored(sprintf(
+            'ignored an X-Echo-Run from %s%s: without RHYTHM_ECHO_TOKEN only a direct call from this machine may set the run (set the same token here and in Echo)',
+            $remote !== '' ? $remote : 'an unknown address', $forwarded ? ' behind a proxy' : '',
+        ));
+
+        return '';
+    }
+
+    private function runIgnored(string $message): void
+    {
+        if ($this->runLogged) {
+            return;
+        }
+        $this->runLogged = true;
+        $this->app->make('log')->warning('Rhythm Echo: '.$message);
     }
 
     /** Stores the run for this request and every job it queues. */

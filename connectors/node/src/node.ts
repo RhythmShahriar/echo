@@ -8,6 +8,7 @@
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { AsyncLocalStorage } from 'node:async_hooks';
+import { createHmac } from 'node:crypto';
 
 import { installHTTP } from './http.js';
 import { installNodemailer } from './nodemailer.js';
@@ -18,6 +19,8 @@ import { state, type Context } from './state.js';
 export function installNode(): Promise<number> {
   const s = state();
   s.als ??= new AsyncLocalStorage<Context>();
+  // Node 18 has no global Web Crypto, so run signatures use node:crypto.
+  s.hmac ??= (key, msg) => createHmac('sha256', key).update(msg).digest();
   installHTTP();
   return installNodemailer().catch(() => 0);
 }

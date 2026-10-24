@@ -27,10 +27,12 @@
  *   from http_api_debug with their response. The site's own host is never
  *   reported (cron and Action Scheduler loopbacks).
  * - Runs: the X-Echo-Run header or cookie of the request that caused a send
- *   ties it to an action, then RHYTHM_ECHO_RUN in the environment (WP-CLI,
- *   cron and queue flushes Echo runs), then a run stored with the scheduled
- *   cron event or Action Scheduler action when it was queued. Anything else
- *   falls in Echo's open action window.
+ *   ties it to an action, then a run stored with the scheduled cron event or
+ *   Action Scheduler action when it was queued, then RHYTHM_ECHO_RUN in the
+ *   environment (WP-CLI, cron and queue flushes Echo runs). A request's
+ *   value counts only when signed with the token (Echo signs it when a token
+ *   is set) or, with no token, when it came straight from loopback with no
+ *   forwarding headers. Anything else falls in Echo's open action window.
  * - Fail closed: if Echo can't be reached while sealed, nothing is sent and
  *   the reason goes to the PHP error log.
  * - Production: on a production site (wp_get_environment_type(), which is
@@ -93,6 +95,12 @@ final class Rhythm_Echo {
 
 	/** @var string|null the run stored with the cron event or queued action running now */
 	private static $context_run = null;
+
+	/** @var string|null this request's accepted X-Echo-Run, once checked */
+	private static $request_run = null;
+
+	/** @var bool an ignored X-Echo-Run was logged already */
+	private static $run_logged = false;
 
 	/** @var array<string, string> request key → capture ID, for the after phase */
 	private static $pending = array();
@@ -323,19 +331,21 @@ final class Rhythm_Echo {
 
 	/**
 	 * The "<run>/<action>" this send belongs to: the triggering request's
-	 * header, its cookie, the environment, then the scheduled work's run.
+	 * header or cookie (once checked), the scheduled work's run, then the
+	 * environment.
 	 */
 	public static function run(): string {
+		if ( null === self::$request_run ) {
+			self::$request_run = self::request_run();
+		}
 		$candidates = array(
-			isset( $_SERVER['HTTP_X_ECHO_RUN'] ) ? (string) $_SERVER['HTTP_X_ECHO_RUN'] : '', // phpcs:ignore WordPress.Security.ValidatedSanitizedInput
-			isset( $_COOKIE['X-Echo-Run'] ) ? (string) $_COOKIE['X-Echo-Run'] : '', // phpcs:ignore WordPress.Security.ValidatedSanitizedInput
+			self::$request_run,
 			// A queued job's own run beats the environment's: a flush for
 			// action B must not claim jobs that action A queued.
 			(string) self::$context_run,
-			(string) getenv( 'RHYTHM_ECHO_RUN' ),
+			self::trusted_run( (string) getenv( 'RHYTHM_ECHO_RUN' ) ),
 		);
 		foreach ( $candidates as $v ) {
-			$v = self::clean_run( $v );
 			if ( '' !== $v ) {
 				return $v;
 			}
@@ -346,6 +356,115 @@ final class Rhythm_Echo {
 	private static function clean_run( string $v ): string {
 		$v = trim( (string) preg_replace( '/[\x00-\x1f\x7f]/', '', $v ) );
 		return strlen( $v ) > 512 ? '' : $v;
+	}
+
+	/**
+	 * The run this request's X-Echo-Run header (else cookie) names, if it
+	 * counts. A visitor can send one too and add messages to a baseline or
+	 * drop them from one, so see accept_run().
+	 */
+	private static function request_run(): string {
+		$header = self::clean_run( isset( $_SERVER['HTTP_X_ECHO_RUN'] ) ? (string) $_SERVER['HTTP_X_ECHO_RUN'] : '' ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput
+		$value  = '' !== $header ? $header : self::clean_run( isset( $_COOKIE['X-Echo-Run'] ) ? (string) $_COOKIE['X-Echo-Run'] : '' ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput
+		if ( '' === $value ) {
+			return '';
+		}
+		$forwarded = isset( $_SERVER['HTTP_X_FORWARDED_FOR'] ) || isset( $_SERVER['HTTP_FORWARDED'] ) || isset( $_SERVER['HTTP_X_REAL_IP'] );
+		$remote    = isset( $_SERVER['REMOTE_ADDR'] ) ? (string) $_SERVER['REMOTE_ADDR'] : ''; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput
+		return self::accept_run( $value, $remote, $forwarded );
+	}
+
+	/**
+	 * Whether a request's X-Echo-Run counts: signed with the token when one
+	 * is set, else sent straight from this machine (loopback, no forwarding
+	 * headers). Returns "<run>/<action>" without the signature, or "" for a
+	 * value that does not count, logged once.
+	 */
+	public static function accept_run( string $value, string $remote, bool $forwarded ): string {
+		$token                      = self::config()['token'];
+		list( $run, $action, $ok ) = self::verify_run( $token, $value );
+		if ( '' === $run ) {
+			self::run_ignored( 'ignored an X-Echo-Run whose signature does not verify (' . ( '' !== $token ? 'not signed with this token' : 'no token is set here' ) . ')' );
+			return '';
+		}
+		if ( $ok ) {
+			return $run . '/' . $action;
+		}
+		if ( '' !== $token ) {
+			self::run_ignored( 'ignored an unsigned X-Echo-Run: with a token set, only runs Echo signed with it count' );
+			return '';
+		}
+		if ( ! $forwarded && self::loopback_addr( $remote ) ) {
+			return $run . '/' . $action;
+		}
+		self::run_ignored( sprintf( 'ignored an X-Echo-Run from %s%s: without a token only a direct call from this machine may set the run (set the same token here and in Echo)', '' !== $remote ? $remote : 'an unknown address', $forwarded ? ' behind a proxy' : '' ) );
+		return '';
+	}
+
+	private static function run_ignored( string $message ): void {
+		if ( ! self::$run_logged ) {
+			self::$run_logged = true;
+			error_log( 'Rhythm Echo: ' . $message ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions
+		}
+	}
+
+	/**
+	 * A run Echo's runner gave in RHYTHM_ECHO_RUN, which a visitor cannot
+	 * set. A signature, if Echo added one, is dropped from the run captures
+	 * carry.
+	 */
+	private static function trusted_run( string $v ): string {
+		$v   = self::clean_run( $v );
+		$dot = strrpos( $v, '.' );
+		return false !== $dot && 1 === preg_match( '/^[A-Za-z0-9_-]{22}$/', substr( $v, $dot + 1 ) ) ? substr( $v, 0, $dot ) : $v;
+	}
+
+	/**
+	 * Port of Echo's wire.VerifyRun: the run and action of a value and
+	 * whether it carries a valid signature for the token. An unsigned value
+	 * keeps its run and action with ok false; a signature that does not
+	 * verify gives nothing.
+	 *
+	 * @return array{0: string, 1: string, 2: bool}
+	 */
+	public static function verify_run( string $token, string $value ): array {
+		$v   = $value;
+		$sig = '';
+		$dot = strrpos( $value, '.' );
+		// The signature's shape tells it from an action with a dot in it (order.paid).
+		if ( false !== $dot && 1 === preg_match( '/^[A-Za-z0-9_-]{22}$/', substr( $value, $dot + 1 ) ) ) {
+			$v   = substr( $value, 0, $dot );
+			$sig = substr( $value, $dot + 1 );
+		}
+		$slash = strpos( $v, '/' );
+		if ( false === $slash || 0 === $slash ) {
+			return array( '', '', false );
+		}
+		$run    = substr( $v, 0, $slash );
+		$action = substr( $v, $slash + 1 );
+		if ( '' === $sig ) {
+			return array( $run, $action, false );
+		}
+		if ( '' === $token || ! hash_equals( self::run_sig( $token, $v ), $sig ) ) {
+			return array( '', '', false );
+		}
+		return array( $run, $action, true );
+	}
+
+	/**
+	 * Port of Echo's wire.SignRun for "<run>/<action>": unsigned without a token.
+	 */
+	public static function sign_run( string $token, string $run ): string {
+		return '' === $token ? $run : $run . '.' . self::run_sig( $token, $run );
+	}
+
+	/** The first 16 bytes of HMAC-SHA256(token, v) in unpadded base64url. */
+	private static function run_sig( string $token, string $v ): string {
+		return rtrim( strtr( base64_encode( substr( hash_hmac( 'sha256', $v, $token, true ), 0, 16 ) ), '+/', '-_' ), '=' ); // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions
+	}
+
+	private static function loopback_addr( string $ip ): bool {
+		return '::1' === $ip || 1 === preg_match( '/^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/', $ip ) || 1 === preg_match( '/^::ffff:127\./i', $ip );
 	}
 
 	/**
@@ -480,7 +599,8 @@ final class Rhythm_Echo {
 		}
 		$run = self::run();
 		if ( '' !== $run && self::own_host( (string) $url ) && is_array( $args['headers'] ?? null ) && ! isset( $args['headers']['X-Echo-Run'] ) ) {
-			$args['headers']['X-Echo-Run'] = $run;
+			// Signed again, so the site's own request accepts it.
+			$args['headers']['X-Echo-Run'] = self::sign_run( self::config()['token'], $run );
 		}
 		return $args;
 	}
@@ -1536,8 +1656,7 @@ final class Rhythm_Echo {
 				return false;
 			}
 		}
-		$ip = isset( $_SERVER['REMOTE_ADDR'] ) ? (string) $_SERVER['REMOTE_ADDR'] : ''; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput
-		return '::1' === $ip || 1 === preg_match( '/^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/', $ip ) || 1 === preg_match( '/^::ffff:127\./i', $ip );
+		return self::loopback_addr( isset( $_SERVER['REMOTE_ADDR'] ) ? (string) $_SERVER['REMOTE_ADDR'] : '' ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput
 	}
 
 	/**

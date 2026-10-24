@@ -5,6 +5,7 @@
 // like the real catcher (seal: fake HTTP and email; observe: allow; a call
 // to the reported source.host: allow), unless a test sets its own decide().
 
+import { createHmac } from 'node:crypto';
 import http from 'node:http';
 import type { AddressInfo } from 'node:net';
 
@@ -103,3 +104,11 @@ export function silent(): { info: (m: string) => void; warn: (m: string) => void
 
 export const befores = (c: Capture) => c.kind === 'http' && c.phase === 'before';
 export const afters = (c: Capture) => c.kind === 'http' && c.phase === 'after';
+
+/** signRun signs "<run>/<action>" the way Echo's wire.SignRun does. */
+export function signRun(token: string, value: string): string {
+  return `${value}.${createHmac('sha256', token).update(value).digest().subarray(0, 16).toString('base64url')}`;
+}
+
+/** loopback is a request from this machine, as withEchoRun sees an Express or Node request. */
+export const loopback = { remoteAddress: '127.0.0.1' };

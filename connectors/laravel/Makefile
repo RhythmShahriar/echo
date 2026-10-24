@@ -1,5 +1,8 @@
 # Everything runs in Docker: composer:2 to install, php:8.3-cli to run.
-DOCKER   := docker run --rm -u $(shell id -u):$(shell id -g) -e COMPOSER_HOME=/tmp/composer -v $(CURDIR):/app -w /app
+# Echo's shared test vectors sit outside this folder: mount them when present.
+CONFORMANCE := $(wildcard $(abspath $(CURDIR)/../../conformance))
+DOCKER   := docker run --rm -u $(shell id -u):$(shell id -g) -e COMPOSER_HOME=/tmp/composer -v $(CURDIR):/app -w /app \
+	$(if $(CONFORMANCE),-v $(CONFORMANCE):/conformance:ro -e ECHO_CONFORMANCE=/conformance)
 COMPOSER := $(DOCKER) composer:2 composer
 PHP      := $(DOCKER) php:8.3-cli php
 

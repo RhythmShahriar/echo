@@ -38,9 +38,17 @@ import (
 
 	"github.com/RhythmShahriar/echo/catcher"
 	"github.com/RhythmShahriar/echo/model"
+	"github.com/RhythmShahriar/echo/wire"
 )
 
 const token = "docker-test-token"
+
+// signed is "<run>/<action>" as Echo sends it with the token set: the
+// connector ignores an unsigned X-Echo-Run then.
+func signed(v string) string {
+	run, action, _ := strings.Cut(v, "/")
+	return wire.SignRun(token, run, action)
+}
 
 // rig is the running stack.
 type rig struct {
@@ -78,7 +86,7 @@ func TestDockerWordPress(t *testing.T) {
 
 	t.Run("sealed sends are captured and faked", func(t *testing.T) {
 		s := r.seal()
-		out := r.get(t, "all", map[string]string{"X-Echo-Run": "run1/contact-form"})
+		out := r.get(t, "all", map[string]string{"X-Echo-Run": signed("run1/contact-form")})
 		if out["carry_on"] != true || out["mail"] != true {
 			t.Fatalf("site didn't carry on: %v", out)
 		}
@@ -149,7 +157,7 @@ func TestDockerWordPress(t *testing.T) {
 
 	t.Run("observe sends for real and reports after", func(t *testing.T) {
 		s := r.observe()
-		out := r.get(t, "webhook", map[string]string{"X-Echo-Run": "run2/order"})
+		out := r.get(t, "webhook", map[string]string{"X-Echo-Run": signed("run2/order")})
 		if out["code"] != 200.0 || out["body"] != `{"received":true}` {
 			t.Fatalf("observed webhook = %v", out)
 		}
@@ -190,21 +198,31 @@ func TestDockerWordPress(t *testing.T) {
 
 	t.Run("run from header beats cookie", func(t *testing.T) {
 		s := r.seal()
-		r.get(t, "twilio", map[string]string{"X-Echo-Run": "hdr/a", "Cookie": "X-Echo-Run=cookie/b"})
-		r.get(t, "twilio", map[string]string{"Cookie": "X-Echo-Run=cookie/b"})
+		r.get(t, "twilio", map[string]string{"X-Echo-Run": signed("hdr/a"), "Cookie": "X-Echo-Run=" + signed("cookie/b")})
+		r.get(t, "twilio", map[string]string{"Cookie": "X-Echo-Run=" + signed("cookie/b")})
 		msgs := s.Inbox.List(catcher.Filter{})
 		if len(msgs) != 2 || msgs[0].Run != "hdr" || msgs[1].Run != "cookie" || msgs[1].Action != "b" {
 			t.Fatalf("runs = %+v", runs(msgs))
 		}
 	})
 
+	t.Run("an unsigned or tampered run is ignored", func(t *testing.T) {
+		s := r.seal()
+		r.get(t, "twilio", map[string]string{"X-Echo-Run": "visitor/a"})
+		r.get(t, "twilio", map[string]string{"X-Echo-Run": strings.Replace(signed("run9/a"), "run9", "run8", 1)})
+		msgs := s.Inbox.List(catcher.Filter{})
+		if len(msgs) != 2 || msgs[0].Run != "" || msgs[1].Run != "" {
+			t.Fatalf("runs = %+v", runs(msgs))
+		}
+	})
+
 	t.Run("cron carries the run it was scheduled with", func(t *testing.T) {
 		s := r.seal()
-		r.get(t, "schedule", map[string]string{"X-Echo-Run": "cronrun/schedule"})
+		r.get(t, "schedule", map[string]string{"X-Echo-Run": signed("cronrun/schedule")})
 		r.wp(t, nil, "cron", "event", "run", "echo_fixture_cron")
 		// The stored run beats the environment: a flush for another action
 		// must not claim a job this one queued.
-		r.get(t, "schedule", map[string]string{"X-Echo-Run": "cronrun/schedule"})
+		r.get(t, "schedule", map[string]string{"X-Echo-Run": signed("cronrun/schedule")})
 		r.wp(t, []string{"RHYTHM_ECHO_RUN=envrun/flush"}, "cron", "event", "run", "echo_fixture_cron")
 		msgs := s.Inbox.List(catcher.Filter{Channel: model.Email})
 		if len(msgs) != 2 || msgs[0].Run != "cronrun" || msgs[0].Action != "schedule" || msgs[1].Run != "cronrun" || msgs[1].Action != "schedule" {
@@ -214,7 +232,7 @@ func TestDockerWordPress(t *testing.T) {
 
 	t.Run("action scheduler jobs carry their run", func(t *testing.T) {
 		s := r.seal()
-		r.get(t, "as_enqueue", map[string]string{"X-Echo-Run": "asrun/checkout"})
+		r.get(t, "as_enqueue", map[string]string{"X-Echo-Run": signed("asrun/checkout")})
 		r.wp(t, nil, "eval", "echo json_encode( echo_fixture_as_run() );")
 		msgs := s.Inbox.List(catcher.Filter{})
 		if len(msgs) != 1 || msgs[0].Run != "asrun" || msgs[0].Action != "checkout" || msgs[0].Event != "order.updated" {
@@ -276,7 +294,7 @@ func TestDockerWordPress(t *testing.T) {
 			ping["echo"].(map[string]any)["reachable"] != true || ping["echo"].(map[string]any)["mode"] != "seal" {
 			t.Errorf("ping = %v", ping)
 		}
-		c := r.rest(t, "canary", map[string]string{"X-Echo-Run": "doc/canary"})
+		c := r.rest(t, "canary", map[string]string{"X-Echo-Run": signed("doc/canary")})
 		if c["email"].(map[string]any)["sent"] != true || c["http"].(map[string]any)["status"] != 200.0 {
 			t.Errorf("canary = %v", c)
 		}

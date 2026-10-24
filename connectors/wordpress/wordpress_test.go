@@ -6,6 +6,7 @@ package wordpress
 import (
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -235,9 +236,9 @@ func TestPHPStan(t *testing.T) {
 	}
 }
 
-// callPHP runs one Rhythm_Echo method through testdata/call-harness.php and
-// decodes its JSON result into out.
-func callPHP(t *testing.T, setup, method string, out any, args ...any) {
+// callPHP runs one Rhythm_Echo method through testdata/call-harness.php,
+// decodes its JSON result into out and returns what PHP logged.
+func callPHP(t *testing.T, setup, method string, out any, args ...any) (logged string) {
 	t.Helper()
 	php, err := exec.LookPath("php")
 	if err != nil {
@@ -250,13 +251,17 @@ func callPHP(t *testing.T, setup, method string, out any, args ...any) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	b, err := exec.Command(php, "testdata/call-harness.php", "echo.php", setup, method, string(a)).CombinedOutput()
+	var stderr strings.Builder
+	cmd := exec.Command(php, "testdata/call-harness.php", "echo.php", setup, method, string(a))
+	cmd.Stderr = &stderr
+	b, err := cmd.Output()
 	if err != nil {
-		t.Fatalf("%s: %v\n%s", method, err, b)
+		t.Fatalf("%s: %v\n%s%s", method, err, b, stderr.String())
 	}
 	if err := json.Unmarshal(b, out); err != nil {
 		t.Fatalf("%s: not JSON: %s", method, b)
 	}
+	return stderr.String()
 }
 
 func TestMaskHeader(t *testing.T) {
@@ -313,5 +318,90 @@ func TestMaskMailHeaders(t *testing.T) {
 	})
 	if got.Headers["X-Auth-Token"] != "•••••" || got.Headers["X-Request-Id"] != "req-1" {
 		t.Errorf("headers = %v", got.Headers)
+	}
+}
+
+// runVectors is conformance/testdata/run-signature.json, shared with Echo's
+// wire package and the Node and Laravel connectors.
+type runVectors struct {
+	Verify []struct {
+		Name, Token, Value, Run, Action string
+		OK                              bool
+	}
+	Accept []struct {
+		Name, Token, Value, Remote, Run string
+		Forwarded                       bool
+	}
+}
+
+func loadRunVectors(t *testing.T) runVectors {
+	t.Helper()
+	b, err := os.ReadFile("../../conformance/testdata/run-signature.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var v runVectors
+	if err := json.Unmarshal(b, &v); err != nil {
+		t.Fatal(err)
+	}
+	return v
+}
+
+func TestVerifyRun(t *testing.T) {
+	for _, v := range loadRunVectors(t).Verify {
+		var got []any
+		callPHP(t, `{}`, "verify_run", &got, v.Token, v.Value)
+		if want := []any{v.Run, v.Action, v.OK}; fmt.Sprint(got) != fmt.Sprint(want) {
+			t.Errorf("%s: verify_run = %v, want %v", v.Name, got, want)
+		}
+		if v.OK {
+			var signed string
+			callPHP(t, `{}`, "sign_run", &signed, v.Token, v.Run+"/"+v.Action)
+			if signed != v.Value {
+				t.Errorf("%s: sign_run = %q, want %q", v.Name, signed, v.Value)
+			}
+		}
+	}
+}
+
+func TestAcceptRun(t *testing.T) {
+	for _, v := range loadRunVectors(t).Accept {
+		setup, _ := json.Marshal(map[string]any{"token": v.Token})
+		var got string
+		callPHP(t, string(setup), "accept_run", &got, v.Value, v.Remote, v.Forwarded)
+		if got != v.Run {
+			t.Errorf("%s: accept_run = %q, want %q", v.Name, got, v.Run)
+		}
+	}
+}
+
+// TestRequestRun reads the run the way a request brings it: header first,
+// then cookie, checked against REMOTE_ADDR and the forwarding headers.
+func TestRequestRun(t *testing.T) {
+	signed := "r1/checkout.NhOp3HY0JQ76wSoPnn3sZg"
+	for _, tc := range []struct{ name, setup, want string }{
+		{"signed header", `{"token":"secret","server":{"REMOTE_ADDR":"203.0.113.9","HTTP_X_ECHO_RUN":"` + signed + `"}}`, "r1/checkout"},
+		{"signed cookie", `{"token":"secret","server":{"REMOTE_ADDR":"203.0.113.9"},"cookie":{"X-Echo-Run":"` + signed + `"}}`, "r1/checkout"},
+		{"tampered header", `{"token":"secret","server":{"REMOTE_ADDR":"127.0.0.1","HTTP_X_ECHO_RUN":"r1/refund.NhOp3HY0JQ76wSoPnn3sZg"}}`, ""},
+		{"unsigned from a public IP", `{"token":"","server":{"REMOTE_ADDR":"203.0.113.9","HTTP_X_ECHO_RUN":"r1/checkout"}}`, ""},
+		{"unsigned from loopback", `{"token":"","server":{"REMOTE_ADDR":"127.0.0.1","HTTP_X_ECHO_RUN":"r1/checkout"}}`, "r1/checkout"},
+		{"unsigned from loopback via a proxy", `{"token":"","server":{"REMOTE_ADDR":"127.0.0.1","HTTP_X_FORWARDED_FOR":"203.0.113.9","HTTP_X_ECHO_RUN":"r1/checkout"}}`, ""},
+		{"environment is trusted", `{"token":"secret","getenv":{"RHYTHM_ECHO_RUN":"env1/cron"}}`, "env1/cron"},
+		{"environment loses its signature", `{"token":"secret","getenv":{"RHYTHM_ECHO_RUN":"` + signed + `"}}`, "r1/checkout"},
+	} {
+		var got string
+		callPHP(t, tc.setup, "run", &got)
+		if got != tc.want {
+			t.Errorf("%s: run = %q, want %q", tc.name, got, tc.want)
+		}
+	}
+}
+
+// An ignored value is logged once per request.
+func TestRequestRunLogsOnce(t *testing.T) {
+	var got string
+	logged := callPHP(t, `{"token":"secret"}`, "accept_run,accept_run", &got, "r1/checkout", "127.0.0.1", false)
+	if n := strings.Count(logged, "Rhythm Echo: ignored an unsigned X-Echo-Run: with a token set, only runs Echo signed with it count"); n != 1 {
+		t.Errorf("logged %d times:\n%s", n, logged)
 	}
 }

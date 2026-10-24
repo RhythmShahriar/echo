@@ -5,6 +5,7 @@ package wire
 
 import (
 	"encoding/json"
+	"os"
 	"testing"
 )
 
@@ -122,5 +123,37 @@ func TestCaptureNewFields(t *testing.T) {
 	b, _ := json.Marshal(c)
 	if string(b) != in {
 		t.Errorf("round trip =\n%s\nwant\n%s", b, in)
+	}
+}
+
+// TestVerifyRunConformance checks VerifyRun against the vectors the PHP
+// and Node connectors test their ports with.
+func TestVerifyRunConformance(t *testing.T) {
+	b, err := os.ReadFile("../conformance/testdata/run-signature.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var f struct {
+		Verify []struct {
+			Name, Token, Value, Run, Action string
+			OK                              bool
+		}
+	}
+	if err := json.Unmarshal(b, &f); err != nil {
+		t.Fatal(err)
+	}
+	if len(f.Verify) == 0 {
+		t.Fatal("no verify vectors")
+	}
+	for _, v := range f.Verify {
+		run, action, ok := VerifyRun(v.Token, v.Value)
+		if run != v.Run || action != v.Action || ok != v.OK {
+			t.Errorf("%s: VerifyRun(%q, %q) = %q, %q, %v; want %q, %q, %v", v.Name, v.Token, v.Value, run, action, ok, v.Run, v.Action, v.OK)
+		}
+		if v.OK {
+			if got := SignRun(v.Token, run, action); got != v.Value {
+				t.Errorf("%s: SignRun = %q, want %q", v.Name, got, v.Value)
+			}
+		}
 	}
 }

@@ -17,7 +17,8 @@ use Symfony\Component\HttpFoundation\Response;
  * jobs keep the run without the connector touching the queue.
  *
  * It runs before EncryptCookies, so the cookie is still the raw value
- * Echo's browser set.
+ * Echo's browser set. The value counts only as Connector::acceptRun()
+ * says: signed with the token, or sent straight from this machine.
  */
 final class TrackRun
 {
@@ -31,6 +32,12 @@ final class TrackRun
             $run = Connector::cleanRun($request->headers->get(Wire::RUN_HEADER));
             if ($run === '') {
                 $run = Connector::cleanRun($request->cookies->get(Wire::RUN_HEADER));
+            }
+            if ($run !== '') {
+                // REMOTE_ADDR as PHP saw it, not getClientIp(), which trusts
+                // whatever proxies the app trusts.
+                $forwarded = $request->headers->has('X-Forwarded-For') || $request->headers->has('Forwarded') || $request->headers->has('X-Real-IP');
+                $run = $this->echo->acceptRun($run, (string) $request->server('REMOTE_ADDR'), $forwarded);
             }
             if ($run !== '') {
                 $this->echo->remember($run);

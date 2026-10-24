@@ -136,6 +136,13 @@ Echo's browser and `rhythm echo run` send `X-Echo-Run: <run>/<action>` as a head
 2. in Next.js, the current request: route handlers, server actions and dynamic pages, on both the Node and Edge runtimes
 3. `RHYTHM_ECHO_RUN`
 
+A visitor can send `X-Echo-Run` too and add messages to a baseline or drop them from one, so a value from a request counts only when Echo vouches for it:
+
+- with `RHYTHM_ECHO_TOKEN` set, the value must carry Echo's signature (`<run>/<action>.<signature>`, which Echo adds when it has the same token). Unsigned or tampered values are ignored.
+- without a token, the value counts only on a request straight from this machine: a loopback peer (`req.socket.remoteAddress` is 127.0.0.0/8 or ::1) and no `X-Forwarded-For`, `Forwarded` or `X-Real-IP` header. A Fetch `Request` and Next.js give no peer address and `next start` adds `X-Forwarded-For`, so Next.js apps need the token for runs.
+
+An ignored value is logged once through the logger, for example `[rhythm-echo] ignored an unsigned X-Echo-Run: with RHYTHM_ECHO_TOKEN set, only runs Echo signed with it count`. A string passed to `withEchoRun()` and `RHYTHM_ECHO_RUN` are taken as given (a signature, if any, is dropped): pass the request itself, not `runFromHeaders(req.headers)`, so the value is checked.
+
 On Node, the connector reads Next.js's request store directly rather than calling `headers()`, so a page that is being prerendered never turns dynamic because of it.
 
 | Where the code runs | Run found via |

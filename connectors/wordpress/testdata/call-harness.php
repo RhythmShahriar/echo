@@ -6,8 +6,10 @@
 // methods (private ones too) and prints the result as JSON.
 // wordpress_test.go runs it with the host's php.
 //
-//   php call-harness.php <plugin> <setup JSON> <method> <args JSON>
+//   php call-harness.php <plugin> <setup JSON> <method[,method...]> <args JSON>
 //
+// Several methods are called in turn with the same arguments; the last
+// one's result is printed.
 // The setup may set "env" (wp_get_environment_type, default development),
 // "token" (RHYTHM_ECHO_TOKEN), "server" ($_SERVER entries), "cookie"
 // ($_COOKIE entries) and "getenv" (process environment).
@@ -57,6 +59,10 @@ function network_home_url() {
 
 require $plugin;
 
-$m = new ReflectionMethod( 'Rhythm_Echo', $method );
-$m->setAccessible( true );
-echo json_encode( $m->invokeArgs( null, (array) json_decode( $args, true ) ), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE );
+$result = null;
+foreach ( explode( ',', $method ) as $name ) {
+	$m = new ReflectionMethod( 'Rhythm_Echo', $name );
+	$m->setAccessible( true );
+	$result = $m->invokeArgs( null, (array) json_decode( $args, true ) );
+}
+echo json_encode( $result, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE );

@@ -8,7 +8,7 @@ import type { AddressInfo } from 'node:net';
 
 import { echoMiddleware, flush, register, withEchoRun } from '../src/index.js';
 import { state } from '../src/state.js';
-import { afters, befores, fakeEcho, silent, target, type FakeEcho, type Target } from './helpers.js';
+import { afters, befores, fakeEcho, signRun, silent, target, type FakeEcho, type Target } from './helpers.js';
 
 let echo: FakeEcho;
 let api: Target;
@@ -162,22 +162,33 @@ describe('request bodies', () => {
 
 describe('runs', () => {
   it('carries X-Echo-Run from the incoming request', async () => {
-    await withEchoRun({ headers: { 'x-echo-run': 'run7/signup' } }, async () => {
+    await withEchoRun({ headers: { 'x-echo-run': signRun('tok-123', 'run7/signup') } }, async () => {
       await new Promise((r) => setTimeout(r, 5)); // survives awaits
       await fetch(`${api.url}/a`);
     });
-    await withEchoRun({ headers: { cookie: 'theme=dark; X-Echo-Run=run7%2Fcheckout' } }, () => fetch(`${api.url}/b`));
-    await withEchoRun(new Request('http://site.test/', { headers: { 'X-Echo-Run': 'run7/fetch-req' } }), () => fetch(`${api.url}/c`));
+    const cookie = `theme=dark; X-Echo-Run=${encodeURIComponent(signRun('tok-123', 'run7/checkout'))}`;
+    await withEchoRun({ headers: { cookie } }, () => fetch(`${api.url}/b`));
+    const req = new Request('http://site.test/', { headers: { 'X-Echo-Run': signRun('tok-123', 'run7/fetch-req') } });
+    await withEchoRun(req, () => fetch(`${api.url}/c`));
     await withEchoRun('run7/explicit', () => fetch(`${api.url}/d`));
     const got = await echo.waitFor(befores, 4);
     expect(got.map((c) => c.run)).toEqual(['run7/signup', 'run7/checkout', 'run7/fetch-req', 'run7/explicit']);
+  });
+
+  it('ignores an unsigned or tampered X-Echo-Run when a token is set', async () => {
+    const tampered = signRun('tok-123', 'run8/checkout').replace('run8/checkout', 'run8/refund');
+    await withEchoRun({ headers: { 'x-echo-run': 'run8/unsigned' }, socket: { remoteAddress: '127.0.0.1' } }, () => fetch(`${api.url}/u`));
+    await withEchoRun({ headers: { 'x-echo-run': tampered } }, () => fetch(`${api.url}/t`));
+    await withEchoRun({ headers: { 'x-echo-run': signRun('other', 'run8/checkout') } }, () => fetch(`${api.url}/w`));
+    const got = await echo.waitFor(befores, 3);
+    expect(got.map((c) => c.run)).toEqual([undefined, undefined, undefined]);
   });
 
   it('falls back to RHYTHM_ECHO_RUN, after the request scope', async () => {
     process.env.RHYTHM_ECHO_RUN = 'envrun/cron';
     try {
       await fetch(`${api.url}/e`);
-      await withEchoRun({ headers: { 'x-echo-run': 'req/wins' } }, () => fetch(`${api.url}/f`));
+      await withEchoRun({ headers: { 'x-echo-run': signRun('tok-123', 'req/wins') } }, () => fetch(`${api.url}/f`));
       await withEchoRun({ headers: {} }, () => fetch(`${api.url}/g`));
       const got = await echo.waitFor(befores, 3);
       expect(got.map((c) => c.run)).toEqual(['envrun/cron', 'req/wins', 'envrun/cron']);
@@ -198,7 +209,7 @@ describe('runs', () => {
     await new Promise<void>((r) => site.listen(0, '127.0.0.1', r));
     try {
       const port = (site.address() as AddressInfo).port;
-      await (await fetch(`http://127.0.0.1:${port}/signup`, { headers: { 'x-echo-run': 'mw/signup' } })).text();
+      await (await fetch(`http://127.0.0.1:${port}/signup`, { headers: { 'x-echo-run': signRun('tok-123', 'mw/signup') } })).text();
       const [c] = await echo.waitFor((c) => befores(c) && c.http!.url.endsWith('/from-middleware'));
       expect(c!.run).toBe('mw/signup');
       // no site configured: the request's Host is not taken as the site

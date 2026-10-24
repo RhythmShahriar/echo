@@ -12,7 +12,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { siteHost } from '../src/capture.js';
 import { flush, register, withEchoRun } from '../src/index.js';
-import { afters, befores, fakeEcho, silent, target, type FakeEcho, type Target } from './helpers.js';
+import { afters, befores, fakeEcho, loopback, silent, target, type FakeEcho, type Target } from './helpers.js';
 
 let echo: FakeEcho;
 let shop: Target;
@@ -68,7 +68,7 @@ function getShop(path: string): Promise<{ status: number; body: string }> {
 
 describe('the site host', () => {
   it('ignores a forged X-Forwarded-Host: the provider call is captured and faked', async () => {
-    const forged = { headers: { host: 'api.sendgrid.com', 'x-forwarded-host': 'api.sendgrid.com', 'x-echo-run': 'r1/contact' } };
+    const forged = { headers: { host: 'api.sendgrid.com', 'x-forwarded-host': 'api.sendgrid.com', 'x-echo-run': 'r1/contact' }, socket: loopback };
     const res = await withEchoRun(forged, () =>
       fetch('https://api.sendgrid.com/v3/mail/send', { method: 'POST', body: '{"personalizations":[]}' }),
     );
@@ -78,7 +78,7 @@ describe('the site host', () => {
   });
 
   it('lets calls to the configured site through and records them as sent', async () => {
-    const res = await withEchoRun({ headers: { 'x-echo-run': 'r1/self' } }, () => getShop('/wp-cron'));
+    const res = await withEchoRun({ headers: { 'x-echo-run': 'r1/self' }, socket: loopback }, () => getShop('/wp-cron'));
     expect(res.status).toBe(201);
     expect(shop.requests).toHaveLength(1);
     const [before] = await echo.waitFor(befores);

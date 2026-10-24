@@ -79,6 +79,13 @@ Echo ties every message to the action that caused it, such as "Contact form on /
 3. the [Context](https://laravel.com/docs/context) a queued job carried over from that request
 4. the `RHYTHM_ECHO_RUN` environment variable, which Echo sets on the artisan commands it runs
 
+A visitor can send `X-Echo-Run` too and add messages to a baseline or drop them from one, so the header and cookie count only when Echo vouches for them:
+
+- with `RHYTHM_ECHO_TOKEN` set, the value must carry Echo's signature (`<run>/<action>.<signature>`, which Echo adds when it has the same token). Unsigned or tampered values are ignored.
+- without a token, the value counts only on a request straight from this machine: `REMOTE_ADDR` is loopback (127.0.0.0/8 or ::1) and there is no `X-Forwarded-For`, `Forwarded` or `X-Real-IP` header. Behind a reverse proxy or Docker's port mapping, set a token.
+
+An ignored value is logged once as a warning, for example `Rhythm Echo: ignored an unsigned X-Echo-Run: with RHYTHM_ECHO_TOKEN set, only runs Echo signed with it count`. `RHYTHM_ECHO_RUN` is always taken as given: a visitor cannot set it.
+
 A global middleware stores the run as a *hidden* Context value, so it never appears in log lines. Laravel serialises Context into every job queued during the request and restores it in the worker. Queued mail, queued notifications and jobs therefore keep the run without any change to your code.
 
 ## Queues
