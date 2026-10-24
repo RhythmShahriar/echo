@@ -33,7 +33,7 @@ func TestCommandCanceledStopsChildren(t *testing.T) {
 	pidFile := filepath.Join(t.TempDir(), "pid")
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
-	go func() { done <- command(ctx, longCommand(pidFile), "r/a", nil) }()
+	go func() { done <- command(ctx, "", longCommand(pidFile), "r/a", nil) }()
 
 	pid := 0
 	for deadline := time.Now().Add(10 * time.Second); pid == 0 && time.Now().Before(deadline); {

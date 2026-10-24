@@ -15,6 +15,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -372,4 +373,53 @@ func TestZeroWaitsUseDefaults(t *testing.T) {
 	if err != nil || run.Actions[0].Error != "" {
 		t.Errorf("timeout 0: %v %+v", err, run)
 	}
+}
+
+// TestDirIsTheProjectFolder: command and flush actions run in Options.Dir
+// and a relative replay event file is read from it, wherever the runner
+// itself runs (the hub's schedule, the MCP server).
+func TestDirIsTheProjectFolder(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("sh scripts")
+	}
+	srv := httptest.NewServer(catcher.NewServer(catcher.NewInbox(10), catcher.Config{}))
+	defer srv.Close()
+	proj := t.TempDir()
+	if err := os.WriteFile(filepath.Join(proj, "send.sh"), []byte("#!/bin/sh\npwd > ran-in\n"), 0o755); err != nil { //nolint:gosec // a test script
+		t.Fatal(err)
+	}
+	cfg := config.Default()
+	cfg.Site = "http://shop.test"
+	cfg.Quiet, cfg.Timeout = config.Duration{Duration: 20 * time.Millisecond}, config.Duration{Duration: time.Second}
+	cfg.Flush = []string{"pwd > flushed-in"}
+	cfg.Actions = []config.Action{{Name: "Send", Command: "./send.sh"},
+		{Name: "Paid", Replay: &config.ReplayAction{Event: "hooks/paid.json", To: "/hook"}}}
+	var event string
+	replay := func(_ context.Context, a config.ReplayAction, _, _ string) error { event = a.Event; return nil }
+	t.Chdir(t.TempDir()) // somewhere else
+	run, err := Run(context.Background(), Options{Config: cfg, Client: client.New(srv.URL, ""), Replay: replay, Dir: proj})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if e := run.Actions[0].Error; e != "" {
+		t.Fatalf("./send.sh: %s", e)
+	}
+	for _, f := range []string{"ran-in", "flushed-in"} {
+		b, err := os.ReadFile(filepath.Join(proj, f))
+		if got, _ := filepath.EvalSymlinks(strings.TrimSpace(string(b))); err != nil || got != mustEval(t, proj) {
+			t.Errorf("%s: %q %v, want %s", f, b, err, proj)
+		}
+	}
+	if event != filepath.Join(proj, "hooks", "paid.json") {
+		t.Errorf("replay event %q, want it in the project", event)
+	}
+}
+
+func mustEval(t *testing.T, p string) string {
+	t.Helper()
+	r, err := filepath.EvalSymlinks(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return r
 }

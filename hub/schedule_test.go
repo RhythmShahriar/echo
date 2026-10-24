@@ -6,11 +6,13 @@ package hub
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -125,7 +127,7 @@ func TestRunWindow(t *testing.T) {
 	}
 	cfgB := "site: http://" + shopBAddr + "\nquiet: 150ms\ntimeout: 5s\nactions:\n  - name: Checkout\n    http:\n      url: /order\n      form: {email: ann@example.com}\n  - name: Refund\n    replay:\n      event: charge.refunded\n      to: /hook\n"
 	var replayed []string
-	Replay = func(config.Config) runner.Replayer {
+	Replay = func(config.Config, string, string) runner.Replayer {
 		return func(_ context.Context, a config.ReplayAction, to, _ string) error {
 			replayed = append(replayed, a.Event+" "+to)
 			return nil
@@ -291,5 +293,114 @@ func TestWindowCode(t *testing.T) {
 		if got := windowCode(c.results); got != c.want {
 			t.Errorf("%+v: %d, want %d", c.results, got, c.want)
 		}
+	}
+}
+
+// TestWindowFollowsTheSiteConfig: a window runs a site's command and
+// flush actions in the site's project folder (a relative ./send.sh) and
+// compares with its checks: levels and each action's ignore:, as
+// rhythm echo compare does. client-a turns off the checks its update
+// trips and ignores the order's date; client-b, with the same shop and no
+// tuning, breaks.
+func TestWindowFollowsTheSiteConfig(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("sh scripts")
+	}
+	const (
+		hub   = "127.0.0.1:21342"
+		shopA = "127.0.0.1:21340"
+		shopB = "127.0.0.1:21341"
+	)
+	sitesDir := t.TempDir()
+	yaml := "read_token_env: READ\nsites:\n  - id: client-a\n    token_env: TOKEN_A\n    config: a/.echo/config.yaml\n" +
+		"  - id: client-b\n    token_env: TOKEN_B\n    config: b/.echo/config.yaml\n"
+	if err := os.WriteFile(filepath.Join(sitesDir, "sites.yaml"), []byte(yaml), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	sites, err := LoadSites(filepath.Join(sitesDir, "sites.yaml"), getenv)
+	if err != nil {
+		t.Fatal(err)
+	}
+	store := t.TempDir()
+	h, err := New(Options{Store: store, Sites: sites, Version: "test"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = h.Close() }()
+	listen(t, hub, h)
+	var calls atomic.Int32
+	dated := func(addr, token, dir string) {
+		c := client.New("http://"+hub, token)
+		listen(t, addr, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			to := "ann@example.com"
+			if _, err := os.Stat(filepath.Join(dir, "broken")); err == nil {
+				to = "owner@shop.test"
+			}
+			run, src := r.Header.Get(wire.RunHeader), wire.Source{Via: "wordpress"}
+			_, err := c.Capture(r.Context(), wire.Capture{Kind: "email", Run: run, Source: src,
+				Email: &wire.Email{From: "shop@shop.test", To: []string{to}, Subject: "Order received", Text: "Thanks"}})
+			if err == nil {
+				body := fmt.Sprintf(`{"order":{"id":7,"date":"2026-10-%02d"}}`, 1+calls.Add(1))
+				_, err = c.Capture(r.Context(), wire.Capture{Kind: "http", Phase: wire.Before, Run: run, Source: src,
+					HTTP: &wire.HTTP{Method: "POST", URL: "https://hooks.zapier.com/hooks/catch/1/x/",
+						Headers: map[string]string{"Content-Type": "application/json"}, Body: body}})
+			}
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+			}
+		}))
+	}
+	tuning := map[string]string{
+		"a": "checks:\n  message/missing: off\n  message/new: off\n",
+		"b": "",
+	}
+	for id, addr := range map[string]string{"a": shopA, "b": shopB} {
+		dir := filepath.Join(sitesDir, id)
+		token := tokens["TOKEN_"+strings.ToUpper(id)]
+		dated(addr, token, dir)
+		ignore := ""
+		if id == "a" {
+			ignore = "    ignore: [order.date]\n"
+		}
+		cfg := "site: http://" + addr + "\nquiet: 150ms\ntimeout: 5s\n" + tuning[id] + "flush:\n  - pwd > flushed-in\nactions:\n" +
+			"  - name: Send\n    command: ./send.sh\n" +
+			"  - name: Checkout\n    http:\n      url: /order\n      form: {email: ann@example.com}\n" + ignore
+		if err := os.MkdirAll(filepath.Join(dir, ".echo"), 0o750); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, ".echo", "config.yaml"), []byte(cfg), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, "send.sh"), []byte("#!/bin/sh\ntouch sent\n"), 0o755); err != nil { //nolint:gosec // a test script
+			t.Fatal(err)
+		}
+	}
+	t.Chdir(t.TempDir()) // the hub runs somewhere else
+	var log bytes.Buffer
+	chosen, _ := sites.Select("all")
+	results := RunWindow(context.Background(), WindowOptions{Store: store, Sites: chosen, URL: "http://" + hub, Token: tokens["READ"],
+		After: "touch broken", Version: "test", Log: &log})
+	if len(results) != 2 {
+		t.Fatalf("results: %+v\n%s", results, log.String())
+	}
+	a, b := results[0], results[1]
+	if a.Error != "" || a.Broke() || a.Counts["broke"]+a.Counts["new"]+a.Counts["changed"] != 0 {
+		t.Errorf("client-a should show nothing its config tunes away: %+v\n%s", a, log.String())
+	}
+	if !b.Broke() || b.Counts["broke"] == 0 {
+		t.Errorf("client-b should break: %+v\n%s", b, log.String())
+	}
+	for _, id := range []string{"a", "b"} {
+		dir := filepath.Join(sitesDir, id)
+		if _, err := os.Stat(filepath.Join(dir, "sent")); err != nil {
+			t.Errorf("./send.sh didn't run in %s: %v", dir, err)
+		}
+		if _, err := os.Stat(filepath.Join(dir, "flushed-in")); err != nil {
+			t.Errorf("the flush didn't run in %s: %v", dir, err)
+		}
+	}
+	run, err := os.ReadFile(filepath.Join(a.Dir, "run.json"))
+	if err != nil || strings.Contains(string(run), "not found") {
+		t.Errorf("client-a's run: %v\n%s", err, run)
 	}
 }

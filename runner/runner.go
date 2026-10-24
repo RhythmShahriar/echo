@@ -19,6 +19,7 @@ import (
 	"maps"
 	"net/http"
 	"net/url"
+	"path/filepath"
 	"os"
 	"regexp"
 	"slices"
@@ -73,6 +74,12 @@ type Options struct {
 	// token or a site's write token) is the caller's to decide; it is not
 	// taken from Client.Token for that reason.
 	RunKey string
+	// Dir is the project folder: command and flush actions run in it and
+	// a replay action's relative event file (event: hooks/paid.json) is
+	// read from it. Empty means the working folder. The CLI, the hub's
+	// schedule and the MCP server set it to the folder that holds
+	// .echo/, so "./send.sh" or "php artisan ..." finds the site.
+	Dir string
 
 	// assumeLeases lets tests run actions in parallel with a client that
 	// has no lease API, for sites whose mail is all tagged.
@@ -210,12 +217,12 @@ func runAction(ctx context.Context, o Options, run *model.Run, a config.Action, 
 	case a.HTTP != nil:
 		err = doHTTP(ctx, o, a, runValue, fake)
 	case a.Command != "":
-		err = command(ctx, fake.expand(a.Command), runValue, a.Env)
+		err = command(ctx, o.Dir, fake.expand(a.Command), runValue, a.Env)
 	case a.Replay != nil:
 		if o.Replay == nil {
 			err = fmt.Errorf("replay isn't available in this build")
 		} else {
-			err = o.Replay(ctx, *a.Replay, resolve(cfg.Site, a.Replay.To), client.RunValue(runID, act.ID))
+			err = o.Replay(ctx, o.inDir(*a.Replay), resolve(cfg.Site, a.Replay.To), client.RunValue(runID, act.ID))
 		}
 	}
 	if err != nil {
@@ -253,7 +260,7 @@ func (o Options) runFlush(ctx context.Context, runValue string) {
 		defer o.flush.Unlock()
 	}
 	for _, f := range o.Config.Flush {
-		if err := command(ctx, f, runValue, nil); err != nil && o.Hooks.Log != nil {
+		if err := command(ctx, o.Dir, f, runValue, nil); err != nil && o.Hooks.Log != nil {
 			o.Hooks.Log(fmt.Sprintf("flush %q: %v", f, err))
 		}
 	}
@@ -445,16 +452,28 @@ type maskedError struct {
 func (e *maskedError) Error() string { return e.msg }
 func (e *maskedError) Unwrap() error { return e.err }
 
-// command runs cmd in the shell (see Shell) with RHYTHM_ECHO_RUN set to
-// runValue, signed like the header when RunKey is set, so connectors in CLI processes
-// (wp-cli, artisan, scripts) tag what they send and a script may pass it
-// on to the site as X-Echo-Run.
-func command(ctx context.Context, cmd, runValue string, env map[string]string) error {
+// inDir returns a with a relative event file made relative to o.Dir, so
+// the replayer reads the project's file wherever Echo runs from. A
+// built-in event's name (payment_intent.succeeded) is left as it is.
+func (o Options) inDir(a config.ReplayAction) config.ReplayAction {
+	if o.Dir != "" && strings.HasSuffix(a.Event, ".json") && !filepath.IsAbs(a.Event) {
+		a.Event = filepath.Join(o.Dir, a.Event)
+	}
+	return a
+}
+
+// command runs cmd in the shell (see Shell) in dir ("" is the working
+// folder) with RHYTHM_ECHO_RUN set to runValue, signed like the header
+// when RunKey is set, so connectors in CLI processes (wp-cli, artisan,
+// scripts) tag what they send and a script may pass it on to the site as
+// X-Echo-Run.
+func command(ctx context.Context, dir, cmd, runValue string, env map[string]string) error {
 	vars := []string{runEnv + "=" + runValue}
 	for k, v := range env {
 		vars = append(vars, k+"="+v)
 	}
 	c := Shell(ctx, cmd, vars)
+	c.Dir = dir
 	var stderr bytes.Buffer
 	c.Stdout, c.Stderr = io.Discard, &stderr
 	if err := c.Run(); err != nil {

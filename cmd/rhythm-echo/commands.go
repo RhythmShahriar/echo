@@ -139,16 +139,6 @@ func (s *session) actions(name string) (*model.Run, error) {
 	}
 	s.view.Step("Echo", fmt.Sprintf("%s mode at %s", h.Mode, s.echo.URL))
 	s.ran = true
-	// Flush and command actions run in the project's folder, as they do
-	// from the folder itself: "php artisan ..." fails from proj/sub.
-	// runner.Options has no Dir yet, so the whole process moves there for
-	// the run; every path the command reads after it is absolute or
-	// relative to the working folder it is put back in.
-	back, err := chdir(s.projectDir())
-	if err != nil {
-		return nil, err
-	}
-	defer back()
 	return runner.Run(s.ctx, s.runnerOptions(name, h))
 }
 
@@ -159,7 +149,10 @@ func (s *session) runnerOptions(name string, h client.Health) runner.Options {
 	key := s.runKey(h)
 	o := runner.Options{Config: s.cfg, Client: s.echo, Version: version, Name: name, Only: s.o.actions,
 		Replay: replayer(s.cfg, s.projectDir(), s.cfgPath, key), Hooks: runner.Hooks{Action: s.view.Action, Log: s.view.Log},
-		Parallel: s.o.parallel, RunKey: key}
+		Parallel: s.o.parallel, RunKey: key,
+		// Flush and command actions run in the project's folder, as they
+		// do from the folder itself: "php artisan ..." fails from proj/sub.
+		Dir: s.projectDir()}
 	if s.o.quietForSet {
 		o.Quiet = s.o.quietFor
 	}
@@ -1006,18 +999,6 @@ func rel(path string) string {
 		return r
 	}
 	return path
-}
-
-// chdir changes into dir and returns what changes back.
-func chdir(dir string) (func(), error) {
-	wd, err := os.Getwd()
-	if err != nil {
-		return nil, err
-	}
-	if err := os.Chdir(dir); err != nil {
-		return nil, err
-	}
-	return func() { _ = os.Chdir(wd) }, nil
 }
 
 func plural(n int, word string) string {

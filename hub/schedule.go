@@ -21,7 +21,6 @@ import (
 	"time"
 
 	"github.com/RhythmShahriar/echo/client"
-	"github.com/RhythmShahriar/echo/compare"
 	"github.com/RhythmShahriar/echo/config"
 	"github.com/RhythmShahriar/echo/model"
 	"github.com/RhythmShahriar/echo/runner"
@@ -144,10 +143,12 @@ type Result struct {
 // Broke reports whether the site broke or couldn't be checked.
 func (r Result) Broke() bool { return r.Error != "" || r.AfterError != "" || r.Counts[model.Broke] > 0 }
 
-// Replay, when set, makes the replayer for a site's replay actions. The
-// CLI sets it before calling ScheduleMain; without it replay actions
-// report that replay isn't available.
-var Replay func(config.Config) runner.Replayer
+// Replay, when set, makes the replayer for a site's replay actions, given
+// the site's config, its project folder and its config file (the
+// replayer looks there for live payment keys). The CLI sets it before
+// calling ScheduleMain; without it replay actions report that replay
+// isn't available.
+var Replay func(cfg config.Config, dir, cfgPath string) runner.Replayer
 
 // preSnapshot is the snapshot each window takes before its update. One
 // name per site, replaced each time, so windows don't pile up snapshots.
@@ -239,9 +240,12 @@ func window(ctx context.Context, o WindowOptions, echo *client.Client, site *Sit
 		return fail(err)
 	}
 	st := SiteStore(o.Store, site.ID)
-	runOpts := runner.Options{Config: cfg, Client: echo, Version: o.Version}
+	// The site's actions run in its project folder, as they do from
+	// there with rhythm echo snapshot: "./send.sh" or "wp cron event run"
+	// must reach this site, not whatever the hub runs in.
+	runOpts := runner.Options{Config: cfg, Client: echo, Version: o.Version, Dir: site.ProjectDir()}
 	if Replay != nil {
-		runOpts.Replay = Replay(cfg)
+		runOpts.Replay = Replay(cfg, site.ProjectDir(), site.Config)
 	}
 
 	r.Snapshot = o.Snapshot
@@ -278,7 +282,9 @@ func window(ctx context.Context, o WindowOptions, echo *client.Client, site *Sit
 	if err := store.SaveRun(dir, run); err != nil {
 		return fail(err)
 	}
-	c := compare.Compare(before, run, snapDir, dir, o.Version)
+	// With the site's checks: levels and each action's ignore:, as
+	// rhythm echo compare applies them.
+	c := runner.CompareOptions(cfg).Compare(before, run, snapDir, dir, o.Version)
 	c.Warnings = append(c.Warnings, run.Warnings...)
 	if err := store.SaveComparison(dir, c); err != nil {
 		return fail(err)

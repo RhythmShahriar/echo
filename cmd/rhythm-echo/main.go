@@ -156,8 +156,11 @@ func help(name string, stdin io.Reader, stdout, stderr io.Writer) int {
 var ownUsage = map[string]string{"mcp": mcp.Usage, "hub": hub.Usage, "schedule": hub.ScheduleUsage, "conformance": conformance.Usage}
 
 // ownReplayer is the replayer mcp and schedule run replay actions with:
-// the one snapshot and compare use, in the working folder.
-func ownReplayer(cfg config.Config) runner.Replayer { return replayer(cfg, ".", "", "") }
+// the one snapshot and compare use, for the project in dir with its
+// config at cfgPath.
+func ownReplayer(cfg config.Config, dir, cfgPath string) runner.Replayer {
+	return replayer(cfg, dir, cfgPath, "")
+}
 
 // unknownCommand names the command meant, when one is close, rather
 // than print the whole help.
