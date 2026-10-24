@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -14,6 +15,7 @@ import (
 	"github.com/RhythmShahriar/echo/config"
 	"github.com/RhythmShahriar/echo/model"
 	"github.com/RhythmShahriar/echo/report"
+	"github.com/RhythmShahriar/echo/store"
 )
 
 func init() {
@@ -156,5 +158,70 @@ func TestLiveLogPrintsEachMessageOnce(t *testing.T) {
 	}
 	if !strings.Contains(got, "Update: ") || !strings.Contains(got, "is now blocked (was faked)") {
 		t.Errorf("no marked update:\n%s", got)
+	}
+}
+
+func TestUsageErrorsExitTwo(t *testing.T) {
+	t.Chdir(t.TempDir())
+	srv := httptest.NewServer(catcher.NewServer(catcher.NewInbox(10), catcher.Config{Version: "test"}))
+	defer srv.Close()
+	if code, _, errOut := runCLI(t, "run", "--url", srv.URL); code != exitUsage || !strings.Contains(errOut, "no actions in") {
+		t.Errorf("no actions: %d %q", code, errOut)
+	}
+	_ = os.MkdirAll(config.Dir, 0o750)
+	_ = os.WriteFile(config.Path(), []byte("actions:\n  - name: Contact form\n    command: \"true\"\n"), 0o600)
+	for _, tc := range []struct {
+		args []string
+		want string
+	}{
+		{[]string{"run", "extra"}, "no arguments"},
+		{[]string{"run", "--action", "nope"}, `no action named "nope"; the actions are: Contact form`},
+		{[]string{"snapshot", "--action", "nope"}, `no action named "nope"`},
+		{[]string{"show", "nope", "--url", srv.URL}, `no message "nope"`},
+		{[]string{"report", "nope"}, `no snapshot named "nope"`},
+		{[]string{"init", "extra"}, "usage"},
+		{[]string{"ca", "extra"}, "usage"},
+	} {
+		code, out, errOut := runCLI(t, tc.args...)
+		if code != exitUsage || !strings.Contains(errOut, tc.want) {
+			t.Errorf("%v: exit %d, stderr %q; want 2 and %q", tc.args, code, errOut, tc.want)
+		}
+		if strings.Contains(out, "rhythm echo 1.0.0-test") {
+			t.Errorf("%v: printed the header before the usage error:\n%s", tc.args, out)
+		}
+	}
+}
+
+func TestReportAndDeleteAfterSnapshots(t *testing.T) {
+	if _, err := exec.LookPath("true"); err != nil {
+		t.Skip("no true")
+	}
+	t.Chdir(t.TempDir())
+	srv := httptest.NewServer(catcher.NewServer(catcher.NewInbox(100), catcher.Config{Version: "test"}))
+	defer srv.Close()
+	_ = os.MkdirAll(config.Dir, 0o750)
+	_ = os.WriteFile(config.Path(), []byte("quiet: 100ms\ntimeout: 2s\nactions:\n  - name: Noop\n    command: \"true\"\n"), 0o600)
+	for _, name := range []string{"b-first", "a-second"} {
+		if code, out, errOut := runCLI(t, "snapshot", "--url", srv.URL, "--name", name, "--plain"); code != 0 {
+			t.Fatalf("snapshot %s: %d\n%s\n%s", name, code, out, errOut)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(config.Dir, store.Incoming)); err == nil {
+		t.Error("the incoming folder was left behind")
+	}
+	if code, out, errOut := runCLI(t, "report", "--plain"); code != 0 || !strings.Contains(out, "a-second") {
+		t.Errorf("report after only snapshots: %d\n%s\n%s", code, out, errOut)
+	}
+	if code, out, _ := runCLI(t, "snapshots", "delete", "a-second"); code != 0 || !strings.Contains(out, "latest snapshot is now b-first") {
+		t.Errorf("delete the latest: %d\n%s", code, out)
+	}
+	if code, out, _ := runCLI(t, "snapshots"); code != 0 || !strings.Contains(out, "(latest)") {
+		t.Errorf("snapshots after delete:\n%s", out)
+	}
+	if code, _, _ := runCLI(t, "snapshots", "delete", "b-first"); code != 0 {
+		t.Error("delete the last one")
+	}
+	if code, _, errOut := runCLI(t, "compare", "--url", srv.URL); code != exitUsage || !strings.Contains(errOut, "no snapshot yet") {
+		t.Errorf("compare with none left: %d %q", code, errOut)
 	}
 }

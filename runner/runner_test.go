@@ -2,6 +2,7 @@ package runner
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -121,5 +122,20 @@ func TestProductionRefused(t *testing.T) {
 	}
 	if !strings.Contains(run.Actions[0].Error, "production") {
 		t.Errorf("error = %q", run.Actions[0].Error)
+	}
+}
+
+func TestSelect(t *testing.T) {
+	if _, err := Select(config.Config{}, nil); !errors.Is(err, ErrNoActions) {
+		t.Errorf("no actions: %v", err)
+	}
+	cfg := config.Config{Actions: []config.Action{{Name: "Contact form"}, {Name: "Checkout"}, {Name: "Reset"}}}
+	got, err := Select(cfg, []string{"reset", "contact FORM"})
+	if err != nil || len(got) != 2 || got[0].Name != "Contact form" || got[1].Name != "Reset" {
+		t.Errorf("Select = %v, %v", got, err)
+	}
+	if _, err := Select(cfg, []string{"Checkout", "nope"}); !errors.Is(err, ErrUnknownAction) || !strings.Contains(err.Error(), `"nope"`) ||
+		!strings.Contains(err.Error(), "Contact form, Checkout, Reset") {
+		t.Errorf("unknown action: %v", err)
 	}
 }

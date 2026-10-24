@@ -52,9 +52,14 @@ func startProxy(s *session, srv *catcher.Server) (func(), error) {
 // so it can be trusted in containers and runtimes (--pem prints it).
 func cmdCA(args []string, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("ca", flag.ContinueOnError)
-	fs.SetOutput(stderr)
+	fs.SetOutput(io.Discard)
 	pem := fs.Bool("pem", false, "print the certificate instead of its path")
-	if err := fs.Parse(args); err != nil {
+	if err := fs.Parse(args); err != nil || fs.NArg() > 0 {
+		if errors.Is(err, flag.ErrHelp) {
+			fmt.Fprintln(stdout, "usage: rhythm echo ca [--pem]   (--pem prints the certificate instead of its path)")
+			return exitOK
+		}
+		fmt.Fprintln(stderr, "rhythm echo: usage: rhythm echo ca [--pem]")
 		return exitUsage
 	}
 	ca, err := proxy.LoadCA("")

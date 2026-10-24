@@ -11,13 +11,14 @@ import (
 
 var version = "dev"
 
-// Exit codes, as in Tuner and Soundcheck.
+// Exit codes, as in Tuner and Soundcheck. Every command returns one of
+// these; the help text lists them under "Exit codes".
 const (
-	exitOK       = 0
-	exitFindings = 1
-	exitUsage    = 2
-	exitError    = 3
-	exitCanceled = 130
+	exitOK       = 0   // done, and nothing at or above --fail-on
+	exitFindings = 1   // --fail-on hit, a doctor check failed, or the site rejected a replay
+	exitUsage    = 2   // wrong command line, or .echo/config.yaml asks for what isn't there
+	exitError    = 3   // couldn't run: Echo not reachable, a file or network error
+	exitCanceled = 130 // interrupted
 )
 
 func main() { os.Exit(run(os.Args[1:], os.Stdin, os.Stdout, os.Stderr)) }

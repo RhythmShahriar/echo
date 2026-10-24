@@ -34,6 +34,9 @@ import (
 // from "the site failed".
 var ErrRefused = errors.New("replay refused")
 
+// ErrNoSecret means no signing secret was given or found in the environment.
+var ErrNoSecret = errors.New("no signing secret")
+
 // Resolver resolves target hosts. *net.Resolver and dns.Zone satisfy it.
 type Resolver interface {
 	LookupHost(ctx context.Context, host string) ([]string, error)
@@ -251,7 +254,7 @@ func resolveSecret(scheme string, o Options, env []string) (secret, from string,
 		from = orDefault(o.SecretEnv, secretEnv[scheme])
 		secret, _ = lookupEnv(env, from)
 		if secret == "" {
-			return "", from, fmt.Errorf("no signing secret: set %s to the endpoint's test signing secret", from)
+			return "", from, fmt.Errorf("%w: set %s to the endpoint's test signing secret", ErrNoSecret, from)
 		}
 	}
 	secret = strings.TrimSpace(secret)

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -52,5 +53,18 @@ func TestNotRunning(t *testing.T) {
 	_, err := New("http://127.0.0.1:1", "").Health(context.Background())
 	if !errors.Is(err, ErrNotRunning) {
 		t.Errorf("err = %v", err)
+	}
+}
+
+func TestAPIErrors(t *testing.T) {
+	srv := httptest.NewServer(catcher.NewServer(catcher.NewInbox(10), catcher.Config{Version: "test", Token: "t0k"}))
+	defer srv.Close()
+	_, err := New(srv.URL, "t0k").Message(context.Background(), "nope")
+	if !IsNotFound(err) || err.Error() != "Echo answered 404 Not Found to GET /v1/messages/nope" {
+		t.Errorf("unknown message: %v", err)
+	}
+	_, err = New(srv.URL, "wrong").Health(context.Background())
+	if IsNotFound(err) || err == nil || !strings.Contains(err.Error(), "401 Unauthorized to GET /v1/health: missing or wrong") {
+		t.Errorf("wrong token: %v", err)
 	}
 }

@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -20,6 +19,7 @@ import (
 	"github.com/RhythmShahriar/echo/replay"
 	"github.com/RhythmShahriar/echo/report"
 	"github.com/RhythmShahriar/echo/runner"
+	"github.com/RhythmShahriar/rhythm/kit/secrets"
 )
 
 // cmdCheck runs the DNS deliverability checks for a domain. Nothing is
@@ -208,14 +208,12 @@ func cmdReplay(s *session) int {
 	action := "replay:" + ev.Type
 	_ = s.echo.Begin(s.ctx, runID, action)
 	defer func() { _ = s.echo.End(context.WithoutCancel(s.ctx)) }()
-	s.view.Header(version, *to)
+	target := resolveTarget(s.cfg.Site, *to)
+	s.view.Header(version, secrets.Redact(target))
 	s.view.Step("Event", ev.Name+" ("+ev.Scheme+")")
-	res, err := replay.Send(s.ctx, ev, replay.Target{URL: resolveTarget(s.cfg.Site, *to), Headers: headersMap},
+	res, err := replay.Send(s.ctx, ev, replay.Target{URL: target, Headers: headersMap},
 		replay.Options{SecretEnv: *secretEnv, Staging: s.cfg.Staging, Scan: scanConfigs(), Run: runID, Action: action})
 	if err != nil {
-		if errors.Is(err, replay.ErrRefused) || errors.Is(err, replay.ErrPayPal) {
-			return s.fail(usageErr("%v", err))
-		}
 		return s.fail(err)
 	}
 	s.view.Step("Response", fmt.Sprintf("%d in %s", res.Status, res.Duration.Round(time.Millisecond)))

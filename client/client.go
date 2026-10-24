@@ -132,7 +132,31 @@ func (c *Client) Capture(ctx context.Context, cp wire.Capture) (wire.Decision, e
 func RunValue(run, action string) string { return run + "/" + action }
 
 // ErrNotRunning means nothing answered at the URL.
-var ErrNotRunning = errors.New("echo isn't running")
+var ErrNotRunning = errors.New("no Echo is running")
+
+// APIError is an answer from Echo other than success.
+type APIError struct {
+	Method, Path string
+	StatusCode   int
+	Status       string // e.g. "404 Not Found"
+	Message      string // the body, trimmed
+}
+
+func (e *APIError) Error() string {
+	msg := "Echo answered " + e.Status + " to " + e.Method + " " + e.Path
+	switch e.Message {
+	case "", http.StatusText(e.StatusCode), "404 page not found": // nothing the status doesn't say
+		return msg
+	}
+	return msg + ": " + e.Message
+}
+
+// IsNotFound reports whether err is Echo answering 404, e.g. for a message
+// ID it doesn't have.
+func IsNotFound(err error) bool {
+	var ae *APIError
+	return errors.As(err, &ae) && ae.StatusCode == http.StatusNotFound
+}
 
 func (c *Client) do(ctx context.Context, method, path string, q url.Values, body, out any) error {
 	u := c.URL + path
@@ -167,7 +191,7 @@ func (c *Client) do(ctx context.Context, method, path string, q url.Values, body
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode >= 300 {
 		msg, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
-		return fmt.Errorf("echo %s %s: %s %s", method, path, resp.Status, strings.TrimSpace(string(msg)))
+		return &APIError{Method: method, Path: path, StatusCode: resp.StatusCode, Status: resp.Status, Message: strings.TrimSpace(string(msg))}
 	}
 	if out == nil {
 		return nil

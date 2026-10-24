@@ -10,6 +10,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -17,6 +18,7 @@ import (
 	"os"
 	"os/exec"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -48,6 +50,41 @@ type Hooks struct {
 	Log    func(string)
 }
 
+// Errors from Select: the configuration or the command line asks for
+// something that isn't there, so they're the user's to fix.
+var (
+	ErrNoActions     = errors.New("no actions")
+	ErrUnknownAction = errors.New("no action")
+)
+
+// Select returns the configured actions to run: all of them, or those
+// named in only (case-insensitive, in the config's order). Every name in
+// only must match an action.
+func Select(cfg config.Config, only []string) ([]config.Action, error) {
+	if len(cfg.Actions) == 0 {
+		return nil, fmt.Errorf("%w in %s; add some (rhythm echo init writes examples), or use Soundcheck with --echo", ErrNoActions, config.Path())
+	}
+	if len(only) == 0 {
+		return cfg.Actions, nil
+	}
+	var names []string
+	for _, a := range cfg.Actions {
+		names = append(names, a.Name)
+	}
+	for _, n := range only {
+		if !slices.ContainsFunc(names, func(a string) bool { return strings.EqualFold(a, n) }) {
+			return nil, fmt.Errorf("%w named %q; the actions are: %s", ErrUnknownAction, n, strings.Join(names, ", "))
+		}
+	}
+	var out []config.Action
+	for _, a := range cfg.Actions {
+		if slices.ContainsFunc(only, func(n string) bool { return strings.EqualFold(a.Name, n) }) {
+			out = append(out, a)
+		}
+	}
+	return out, nil
+}
+
 // Run runs every action and returns the run.
 func Run(ctx context.Context, o Options) (*model.Run, error) {
 	start := time.Now()
@@ -56,8 +93,9 @@ func Run(ctx context.Context, o Options) (*model.Run, error) {
 		return nil, err
 	}
 	cfg := o.Config
-	if len(cfg.Actions) == 0 {
-		return nil, fmt.Errorf("no actions in %s; add some (rhythm echo init writes examples), or use Soundcheck with --echo", config.Path())
+	actions, err := Select(cfg, o.Only)
+	if err != nil {
+		return nil, err
 	}
 	run := &model.Run{Schema: model.Schema, Tool: "rhythm-echo", Version: o.Version, ID: store.Stamp(start) + "-" + token(3),
 		Target: cfg.Site, Name: o.Name, Mode: h.Mode, Started: start.UTC()}
@@ -66,20 +104,6 @@ func Run(ctx context.Context, o Options) (*model.Run, error) {
 	}
 	fake := newFake()
 	opts := check.Options{SiteHost: host(cfg.Site), AllowRecipients: cfg.AllowRecipients}
-	actions := cfg.Actions
-	if len(o.Only) > 0 {
-		actions = nil
-		for _, a := range cfg.Actions {
-			for _, n := range o.Only {
-				if strings.EqualFold(a.Name, n) {
-					actions = append(actions, a)
-				}
-			}
-		}
-		if len(actions) == 0 {
-			return nil, fmt.Errorf("no action named %s", strings.Join(o.Only, ", "))
-		}
-	}
 	for i, a := range actions {
 		if ctx.Err() != nil {
 			break
