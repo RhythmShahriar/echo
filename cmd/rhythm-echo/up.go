@@ -5,10 +5,12 @@ package main
 
 import (
 	"context"
+	"crypto/subtle"
 	"errors"
 	"fmt"
 	"net"
 	"net/http"
+	"net/url"
 	"sort"
 	"strings"
 	"sync"
@@ -18,6 +20,7 @@ import (
 	"github.com/RhythmShahriar/echo/check"
 	"github.com/RhythmShahriar/echo/model"
 	"github.com/RhythmShahriar/echo/report"
+	"github.com/RhythmShahriar/echo/wire"
 )
 
 // cmdUp runs the catcher until interrupted: the API connectors post to
@@ -39,11 +42,7 @@ func cmdUp(s *session) int {
 	srv := catcher.NewServer(inbox, catcher.Config{Mode: cfg.Mode, Allow: cfg.Allow, Token: token, Version: version})
 	inbox.OnAdd(newLiveLog(s.view).add)
 
-	mux := http.NewServeMux()
-	mux.Handle("/v1/", srv)
-	mux.Handle("/api/v1/", srv) // Mailpit-compatible email API
-	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) { live(w, r, inbox, cfg.Mode) })
-	api := &http.Server{Addr: cfg.Listen, Handler: mux, ReadHeaderTimeout: 10 * time.Second}
+	api := &http.Server{Addr: cfg.Listen, Handler: upHandler(upRoutes(srv, inbox, cfg.Mode), token), ReadHeaderTimeout: 10 * time.Second}
 	ln, err := net.Listen("tcp", cfg.Listen)
 	if err != nil {
 		return s.fail(fmt.Errorf("listening on %s: %w (is Echo already running? see: rhythm echo doctor)", cfg.Listen, err))
@@ -53,7 +52,11 @@ func cmdUp(s *session) int {
 
 	s.start("this machine")
 	s.view.Step("Mode", modeLine(cfg.Mode))
-	s.view.Step("API", "http://"+cfg.Listen+"  (connectors post here; open it for the live view)")
+	apiLine := "http://" + cfg.Listen + "  (connectors post here; open it for the live view)"
+	if token != "" {
+		apiLine = "http://" + cfg.Listen + "  (connectors post here; open /?token=<your token> once for the live view)"
+	}
+	s.view.Step("API", apiLine)
 	stopSMTP := func() {}
 	if smtpOn {
 		sl, err := net.Listen("tcp", cfg.SMTP)
@@ -97,6 +100,85 @@ func cmdUp(s *session) int {
 		fmt.Fprintf(s.stderr, "\nStopped. Captured %s this session.\n", report.Tally(liveRun(inbox, cfg.Mode)))
 	}
 	return exitOK
+}
+
+// upRoute is one route of up's API listener. upHandler puts every route
+// behind requireToken, and up_test probes each one without the token, so
+// a route added here can't be left open.
+type upRoute struct {
+	pattern string
+	probe   string // a GET path that reaches the route, for the test
+	handler http.Handler
+}
+
+// upRoutes lists everything the API listener serves.
+func upRoutes(srv *catcher.Server, inbox *catcher.Inbox, mode string) []upRoute {
+	return []upRoute{
+		{"/v1/", "/v1/messages", srv},
+		{"/api/v1/", "/api/v1/messages", srv}, // Mailpit-compatible email API
+		{"GET /{$}", "/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { live(w, r, inbox, mode) })},
+	}
+}
+
+// upHandler serves routes, all behind the token when one is set.
+func upHandler(routes []upRoute, token string) http.Handler {
+	mux := http.NewServeMux()
+	for _, r := range routes {
+		mux.Handle(r.pattern, r.handler)
+	}
+	return requireToken(token, mux)
+}
+
+// tokenCookie holds the token for a browser that opened the live view
+// with ?token= once.
+const tokenCookie = "echo_token"
+
+// requireToken guards a handler when token is set. Connectors and scripts
+// send X-Echo-Token. A browser can't, so it opens /?token=... once: Echo
+// sets an HttpOnly, same-site cookie and redirects to the URL without the
+// token, so the token doesn't stay in the address bar or the history.
+func requireToken(token string, next http.Handler) http.Handler {
+	if token == "" {
+		return next
+	}
+	same := func(got string) bool { return subtle.ConstantTimeCompare([]byte(got), []byte(token)) == 1 }
+	deny := func(w http.ResponseWriter) {
+		w.Header().Set("Cache-Control", "no-store")
+		http.Error(w, "missing or wrong "+wire.TokenHeader+" (in a browser, open /?token=<your token> once)", http.StatusUnauthorized)
+	}
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if q := r.URL.Query(); q.Has("token") && (r.Method == http.MethodGet || r.Method == http.MethodHead) {
+			if !same(q.Get("token")) {
+				deny(w)
+				return
+			}
+			// Secure only under TLS: up serves plain HTTP on loopback, where
+			// a Secure cookie would never be sent back.
+			http.SetCookie(w, &http.Cookie{Name: tokenCookie, Value: token, Path: "/", HttpOnly: true, //nolint:gosec // Secure is set under TLS, see above
+				SameSite: http.SameSiteStrictMode, Secure: r.TLS != nil})
+			q.Del("token")
+			back := url.URL{Path: r.URL.Path, RawQuery: q.Encode()}
+			if !strings.HasPrefix(back.Path, "/") || strings.HasPrefix(back.Path, "//") || strings.HasPrefix(back.Path, "/\\") {
+				back.Path = "/" // "//host" would redirect to another site
+			}
+			w.Header().Set("Cache-Control", "no-store")
+			http.Redirect(w, r, back.String(), http.StatusSeeOther)
+			return
+		}
+		if same(r.Header.Get(wire.TokenHeader)) {
+			next.ServeHTTP(w, r)
+			return
+		}
+		if c, err := r.Cookie(tokenCookie); err == nil && same(c.Value) {
+			// The catcher checks the header itself: the cookie stands in
+			// for it, so the browser can open /v1/messages too.
+			r = r.Clone(r.Context())
+			r.Header.Set(wire.TokenHeader, token)
+			next.ServeHTTP(w, r)
+			return
+		}
+		deny(w)
+	})
 }
 
 // liveLog prints each captured message once. The inbox calls back again
