@@ -86,7 +86,9 @@ compare what each action sends before and after a change.
 
 Usage:
   rhythm echo up [flags]                 start the catcher (API :8025, SMTP :1025)
-  rhythm echo install <stack> [target]   connect a site: wordpress, laravel, next, generic
+  rhythm echo install <stack> [target]   connect a site: wordpress, laravel, next, node, generic
+                                         (wordpress: [path] --url --token --proxy --ca, or
+                                         --wp-cli, --container <name>, --uninstall)
   rhythm echo doctor                     check that every capture layer works
   rhythm echo watch                      show messages as they arrive
   rhythm echo ls | show <id> | clear     list, inspect or delete captured messages

@@ -32,6 +32,8 @@ func cmdInstall(args []string, stdout, stderr io.Writer) int {
 	wpcli := fs.Bool("wp-cli", false, "")
 	container := fs.String("container", "", "")
 	uninstall := fs.Bool("uninstall", false, "")
+	proxyURL := fs.String("proxy", "", "")
+	caPath := fs.String("ca", "", "")
 	pos, err := cli.ParseInterspersed(fs, args)
 	if err != nil || len(pos) == 0 {
 		fmt.Fprintln(stderr, "rhythm echo: usage: rhythm echo install <wordpress|laravel|next|node|generic> [path] [--url URL] [--token T]")
@@ -45,7 +47,7 @@ func cmdInstall(args []string, stdout, stderr io.Writer) int {
 		if len(pos) > 1 {
 			target = pos[1]
 		}
-		s := wordpress.Settings{URL: echoURL, Token: tok, Mode: *mode, Force: *force}
+		s := wordpress.Settings{URL: echoURL, Token: tok, Mode: *mode, Force: *force, Proxy: *proxyURL, CA: *caPath}
 		return installWordPress(target, s, *wpcli, *container, *uninstall, stdout, stderr)
 	case "laravel":
 		fmt.Fprintf(stdout, `Laravel: add the package and point it at Echo.
