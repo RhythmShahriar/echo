@@ -582,7 +582,7 @@ func cmdWatch(s *session) int {
 	if !s.o.quiet {
 		fmt.Fprintf(s.stderr, "Watching %s (%s mode). Ctrl+C to stop.\n", s.echo.URL, h.Mode)
 	}
-	w := &watcher{s: s, status: newStatusLRU(watchMemory), enc: json.NewEncoder(s.stdout), opts: s.checks}
+	w := &watcher{s: s, status: newLRU[model.Status](watchMemory), enc: json.NewEncoder(s.stdout), opts: s.checks}
 	w.enc.SetEscapeHTML(false)
 	// From when the command began: a terminal that doesn't answer the
 	// color query Bubble Tea sends as it initializes holds the process up
@@ -633,7 +633,7 @@ const (
 // status changes.
 type watcher struct {
 	s      *session
-	status *statusLRU
+	status *lru[model.Status]
 	enc    *json.Encoder
 	opts   check.Options
 }
@@ -686,29 +686,30 @@ func printIssues(w io.Writer, issues []model.Issue, plain bool) {
 	}
 }
 
-// statusLRU remembers the last status of the most recently seen
-// messages, forgetting the least recently seen beyond max, so a long
-// watch doesn't grow without bound.
-type statusLRU struct {
+// lru remembers a value for each of the most recently seen messages,
+// forgetting the least recently seen beyond max, so a long watch or up
+// doesn't grow without bound. Watch keeps each message's status in one,
+// up's live log what it printed.
+type lru[V any] struct {
 	max   int
 	order *list.List // of string IDs, most recent first
 	at    map[string]*list.Element
-	value map[string]model.Status
+	value map[string]V
 }
 
-func newStatusLRU(max int) *statusLRU {
-	return &statusLRU{max: max, order: list.New(), at: map[string]*list.Element{}, value: map[string]model.Status{}}
+func newLRU[V any](max int) *lru[V] {
+	return &lru[V]{max: max, order: list.New(), at: map[string]*list.Element{}, value: map[string]V{}}
 }
 
-// put records id's status and returns the one before, if id was known.
-func (c *statusLRU) put(id string, st model.Status) (prev model.Status, seen bool) {
+// put records id's value and returns the one before, if id was known.
+func (c *lru[V]) put(id string, v V) (prev V, seen bool) {
 	if e, ok := c.at[id]; ok {
 		prev, seen = c.value[id], true
 		c.order.MoveToFront(e)
 	} else {
 		c.at[id] = c.order.PushFront(id)
 	}
-	c.value[id] = st
+	c.value[id] = v
 	for c.order.Len() > c.max {
 		old := c.order.Remove(c.order.Back()).(string) //nolint:forcetypeassert // the list only holds IDs
 		delete(c.at, old)

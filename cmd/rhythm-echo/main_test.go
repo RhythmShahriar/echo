@@ -758,8 +758,8 @@ func TestWatchShowsWhatArrivedWhileItStarted(t *testing.T) {
 	waitFor(t, func() bool { return strings.Contains(out.String(), "Sent while watch started") }, "the message sent while watch started")
 }
 
-func TestStatusLRUForgetsTheOldest(t *testing.T) {
-	c := newStatusLRU(2)
+func TestLRUForgetsTheOldest(t *testing.T) {
+	c := newLRU[model.Status](2)
 	c.put("a", model.Faked)
 	c.put("b", model.Faked)
 	if prev, seen := c.put("a", model.Blocked); !seen || prev != model.Faked {

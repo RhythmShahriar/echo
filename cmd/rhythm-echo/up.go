@@ -475,7 +475,7 @@ type liveLog struct {
 	checks check.Options
 	issues func(model.Message) []model.Issue // when set, used instead of running the checks
 	mu     sync.Mutex                        // guards seen and keeps a message's lines together
-	seen   map[string]logged
+	seen   *lru[logged]
 }
 
 // logged is what the log last printed for a message.
@@ -486,7 +486,7 @@ type logged struct {
 
 // newLiveLog prints to v; set checks for what content checks expect.
 func newLiveLog(v *report.Pretty) *liveLog {
-	return &liveLog{view: v, seen: map[string]logged{}}
+	return &liveLog{view: v, seen: newLRU[logged](watchMemory)}
 }
 
 func (l *liveLog) add(m model.Message) {
@@ -499,11 +499,7 @@ func (l *liveLog) add(m model.Message) {
 	marks := markers(issues)
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	prev, seen := l.seen[m.ID]
-	if len(l.seen) > 20000 { // the inbox keeps 10000; forget the oldest half's worth at once
-		clear(l.seen)
-	}
-	l.seen[m.ID] = logged{m.Status, marks}
+	prev, seen := l.seen.put(m.ID, logged{m.Status, marks}) // twice what the inbox keeps; the oldest are forgotten
 	switch {
 	case !seen:
 		l.view.Message(m)

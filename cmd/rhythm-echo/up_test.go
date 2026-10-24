@@ -485,6 +485,22 @@ func TestLiveLogReprintsChangedIssues(t *testing.T) {
 	}
 }
 
+// TestLiveLogForgetsOneAtATime: past what the log remembers, the oldest
+// message is forgotten, not all of them, so an update to a recent one
+// still prints as an update.
+func TestLiveLogForgetsOneAtATime(t *testing.T) {
+	var out bytes.Buffer
+	l := newLiveLog(report.NewPretty(&out, &out, report.PrettyOptions{Plain: true}))
+	l.seen = newLRU[logged](3)
+	for i := range 4 {
+		l.add(model.Message{ID: fmt.Sprintf("m%d", i), Channel: model.Email, To: []string{"ann@example.org"}, Subject: fmt.Sprintf("Order %d", i), Status: model.Sent})
+	}
+	l.add(model.Message{ID: "m3", Channel: model.Email, To: []string{"ann@example.org"}, Subject: "Order 3", Status: model.Failed})
+	if got := out.String(); strings.Count(got, "Order 3") != 1 || !strings.Contains(got, "is now failed (was sent)") {
+		t.Errorf("the update to a recent message:\n%s", got)
+	}
+}
+
 // fakeMailpit serves Mailpit's /api/v1/info and page on addr and its
 // SMTP greeting on smtp when that isn't "".
 func fakeMailpit(t *testing.T, addr, smtp string) {
