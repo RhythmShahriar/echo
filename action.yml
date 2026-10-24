@@ -331,8 +331,8 @@ runs:
           jq -e 'has("changes")' "$json" >/dev/null && compared=true
         fi
 
-        # One --fail-on vocabulary, as in the CLI: any case, none never fails,
-        # and the default is broke when comparing and error otherwise.
+        # One --fail-on vocabulary, as in the CLI: any case is fine and none
+        # never fails. The default is broke when comparing, else error.
         level=$(printf '%s' "$FAIL_ON" | tr '[:upper:]' '[:lower:]')
         if [ "$compared" = true ]; then
           case "$level" in
@@ -352,10 +352,13 @@ runs:
         config=()
         [ -z "$CONFIG" ] || config=(--config "$CONFIG")
         # Split ARGS like a shell (quotes group words) without running it:
-        # xargs only parses quotes.
+        # xargs only parses quotes. Its output is taken first, so a quote
+        # left open is a usage error instead of silently dropping the flags.
         extra=()
         if [ -n "$ARGS" ]; then
-          while IFS= read -r a; do extra+=("$a"); done < <(printf '%s' "$ARGS" | xargs -n1 printf '%s\n')
+          words=$(printf '%s' "$ARGS" | xargs -n1 printf '%s\n' 2>/dev/null) ||
+            usage "args: a quote isn't closed; put words with spaces in matching ' or \" quotes"
+          [ -z "$words" ] || while IFS= read -r a; do extra+=("$a"); done <<< "$words"
         fi
         which=()
         case "$MODE" in
