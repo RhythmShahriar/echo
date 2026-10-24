@@ -15,6 +15,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
 	"syscall"
@@ -83,6 +84,17 @@ var askFreePorts = func(s *session, question string) bool {
 	return err == nil && ok
 }
 
+// wsaeaddrinuse is Windows' WSAEADDRINUSE. A bind there fails with it,
+// and syscall.EADDRINUSE on Windows is a different, made-up number that
+// never matches.
+const wsaeaddrinuse = syscall.Errno(10048)
+
+// addrInUse reports whether a bind failed because the port is taken on
+// goos.
+func addrInUse(err error, goos string) bool {
+	return errors.Is(err, syscall.EADDRINUSE) || goos == "windows" && errors.Is(err, wsaeaddrinuse)
+}
+
 // moveAside handles a port up couldn't bind. When another mail catcher
 // (or anything else) holds it, it names that and offers the next free
 // pair; with auto (--free-ports) or a yes on the terminal it saves the
@@ -91,7 +103,7 @@ var askFreePorts = func(s *session, question string) bool {
 // show.
 func moveAside(s *session, listen, smtp *string, failed error, auto bool) (ln, sl net.Listener, err error) {
 	var be *bindError
-	if !errors.As(failed, &be) || !errors.Is(be.err, syscall.EADDRINUSE) {
+	if !errors.As(failed, &be) || !addrInUse(be.err, runtime.GOOS) {
 		return nil, nil, failed
 	}
 	smtpOn := *smtp != ""

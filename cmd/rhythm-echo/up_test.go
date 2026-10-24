@@ -17,6 +17,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 
@@ -609,6 +610,31 @@ func TestIdentifyBusyPorts(t *testing.T) {
 	} {
 		if got := identify(c.addr, c.smtp); got != c.want {
 			t.Errorf("identify(%s, smtp=%v) = %q, want %q", c.addr, c.smtp, got, c.want)
+		}
+	}
+}
+
+// TestAddrInUseOnWindows: Windows fails a bind with WSAEADDRINUSE, so
+// the busy-port help must match it there and only there.
+func TestAddrInUseOnWindows(t *testing.T) {
+	bind := func(errno syscall.Errno) error {
+		return &net.OpError{Op: "listen", Net: "tcp", Err: os.NewSyscallError("bind", errno)}
+	}
+	for _, c := range []struct {
+		err  error
+		goos string
+		want bool
+	}{
+		{bind(syscall.EADDRINUSE), "linux", true},
+		{bind(syscall.EADDRINUSE), "darwin", true},
+		{bind(wsaeaddrinuse), "windows", true},
+		{bind(wsaeaddrinuse), "linux", false},
+		{bind(syscall.EACCES), "windows", false},
+		{bind(syscall.EACCES), "linux", false},
+		{fmt.Errorf("no such host"), "windows", false},
+	} {
+		if got := addrInUse(c.err, c.goos); got != c.want {
+			t.Errorf("addrInUse(%v, %s) = %v, want %v", c.err, c.goos, got, c.want)
 		}
 	}
 }
