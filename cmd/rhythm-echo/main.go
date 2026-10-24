@@ -12,8 +12,9 @@
 //
 // The commands are up (the catcher), install, doctor, watch, ls, show,
 // clear, snapshot, compare, run, report, snapshots, replay, latest,
-// check, headers, init, ca and sendmail; `rhythm-echo help` lists their
-// flags and exit codes. Every command exits 0 when done, 1 for findings,
+// check, headers, providers, checks, init, ca, mcp, hub, schedule,
+// conformance and sendmail; `rhythm-echo help` lists their flags and exit
+// codes. Every command exits 0 when done, 1 for findings,
 // 2 for a usage error and 3 when it couldn't run, as Tuner and Soundcheck
 // do; sendmail uses sendmail's own codes instead.
 package main
@@ -25,6 +26,10 @@ import (
 
 	"github.com/charmbracelet/x/term"
 
+	"github.com/RhythmShahriar/echo/config"
+	"github.com/RhythmShahriar/echo/hub"
+	"github.com/RhythmShahriar/echo/mcp"
+	"github.com/RhythmShahriar/echo/runner"
 	"github.com/RhythmShahriar/rhythm/kit"
 )
 
@@ -97,6 +102,15 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		return command(c, cmdSnapshots, args[1:], stdout, stderr)
 	case "latest":
 		return command(c, cmdLatest, args[1:], stdout, stderr)
+	case "mcp":
+		mcp.Version, mcp.Replay = version, ownReplayer
+		return mcp.Main(args[1:], stdin, stdout, stderr)
+	case "hub":
+		hub.Version = version
+		return hub.Main(args[1:], stdin, stdout, stderr)
+	case "schedule":
+		hub.Version, hub.Replay = version, ownReplayer
+		return hub.ScheduleMain(args[1:], stdin, stdout, stderr)
 	case "init":
 		return cmdInit(args[1:], stdout, stderr)
 	case "install":
@@ -120,11 +134,23 @@ func help(name string, stdin io.Reader, stdout, stderr io.Writer) int {
 			fmt.Fprintf(stdout, "rhythm echo sendmail: %s\n\nUsage:\n  rhythm echo %s\n", c.about, c.use)
 			return exitOK
 		}
+		if u, ok := ownUsage[c.name]; ok {
+			fmt.Fprint(stdout, u)
+			return exitOK
+		}
 		return run([]string{c.name, "--help"}, stdin, stdout, stderr)
 	}
 	commandHelp(stdout, c)
 	return exitOK
 }
+
+// ownUsage is the help of the commands another package runs, which
+// print it on stderr for --help; help prints it on stdout.
+var ownUsage = map[string]string{"mcp": mcp.Usage, "hub": hub.Usage, "schedule": hub.ScheduleUsage}
+
+// ownReplayer is the replayer mcp and schedule run replay actions with:
+// the one snapshot and compare use, in the working folder.
+func ownReplayer(cfg config.Config) runner.Replayer { return replayer(cfg, ".", "", "") }
 
 // unknownCommand names the command meant, when one is close, rather
 // than print the whole help.
@@ -169,6 +195,10 @@ Usage:
                                          write .echo/config.yaml with an action for this stack
                                          (wordpress, laravel, next, node or php; --force replaces it)
   rhythm echo ca [--pem]                 print the proxy's CA certificate path (--pem: the certificate)
+  rhythm echo mcp                        MCP server for coding agents: claude mcp add echo -- rhythm-echo mcp
+  rhythm echo hub --store D --sites F    one Echo for many staging sites, each with its own write token
+  rhythm echo schedule "<when>" --store D --after "<command>"
+                                         snapshot, update and compare the hub's sites in a window
   rhythm echo sendmail [-t] [-i] [-f from] [rcpt…]
                                          sendmail stand-in for sendmail_path; reads the message on stdin
   rhythm echo help [command] | version   this help, one command's, or the version
