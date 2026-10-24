@@ -582,6 +582,8 @@ var commands = []cmdSpec{
 			{"mta-sts-fetch", ""}, {"resolver", ""}, {"fail-on", failOnIssues}}, reportFlags)},
 	{name: "headers", use: "headers <file.eml | ->", about: "check a real received email's authentication",
 		flags: flags([]flagUse{{"check", ""}, {"hops", ""}, {"resolver", ""}, {"mta-sts-fetch", ""}, {"fail-on", failOnIssues}}, reportFlags)},
+	{name: "providers", use: "providers", about: "list the services Echo recognizes, by channel",
+		flags: flags([]flagUse{{"json", "the list as JSON: slug, name, channel and hosts"}}, terminalFlags)},
 	{name: "mcp", use: "mcp [--url URL] [--token T] [--config FILE]", about: "MCP server for coding agents, on stdin and stdout", own: true},
 	{name: "hub", use: "hub --store DIR --sites FILE [flags]", about: "one Echo for many staging sites, each with its own write token", own: true},
 	{name: "schedule", use: `schedule "<when>" --store DIR --after "<command>"`, about: "snapshot, update and compare the hub's sites in a window", own: true},

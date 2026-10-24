@@ -1031,6 +1031,7 @@ const (
 	kindDoctor     jsonKind = "doctor"     // doctor: what was checked and how it went
 	kindReplay     jsonKind = "replay"     // replay: the site's answer and what it sent
 	kindLatest     jsonKind = "latest"     // latest: the newest message with its codes and links
+	kindProviders  jsonKind = "providers"  // providers: the services Echo recognizes
 )
 
 // The verdicts of an envelope. They don't depend on --fail-on, which

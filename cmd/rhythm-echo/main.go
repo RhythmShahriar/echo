@@ -102,6 +102,8 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		return command(c, cmdSnapshots, args[1:], stdout, stderr)
 	case "latest":
 		return command(c, cmdLatest, args[1:], stdout, stderr)
+	case "providers":
+		return command(c, cmdProviders, args[1:], stdout, stderr)
 	case "mcp":
 		mcp.Version, mcp.Replay = version, ownReplayer
 		return mcp.Main(args[1:], stdin, stdout, stderr)
@@ -194,6 +196,7 @@ Usage:
   rhythm echo init [--stack s] [--force]
                                          write .echo/config.yaml with an action for this stack
                                          (wordpress, laravel, next, node or php; --force replaces it)
+  rhythm echo providers                  list the services Echo recognizes, by channel (--json)
   rhythm echo ca [--pem]                 print the proxy's CA certificate path (--pem: the certificate)
   rhythm echo mcp                        MCP server for coding agents: claude mcp add echo -- rhythm-echo mcp
   rhythm echo hub --store D --sites F    one Echo for many staging sites, each with its own write token
