@@ -91,7 +91,7 @@ actions:
     expect: {email: 1}
 ```
 
-Each action counts as done when nothing new arrives for `quiet` (default 2s), or after `timeout` (default 30s). Echo caps `quiet` at 30s and `timeout` at 60s: a longer value acts as the cap.
+Each action counts as done when nothing new arrives for `quiet` (default 2s), or after `timeout` (default 30s). Echo caps `quiet` at 30s and `timeout` at 60s: a longer value acts as the cap. For one run, `--quiet 500ms` and `--timeout 10s` on snapshot, compare and run override them (within the same caps; a value outside them is refused).
 
 Commands find `.echo/config.yaml` in the folder you're in or one above it, up to the repository root, so they work from any subfolder. Snapshots and runs are kept next to the config; `--config` points at another one (its snapshots come with it) and `--store <dir>` keeps them elsewhere.
 

@@ -53,6 +53,11 @@ type options struct {
 	sets, headers                                                cli.RepeatFlag
 	secretEnv, scheme, typ                                       string
 	wait                                                         time.Duration
+
+	// snapshot, compare and run: --quiet <d> and --timeout <d> override
+	// the config's quiet: and timeout:. Each set flag is true when given.
+	quietFor, timeout       time.Duration
+	quietForSet, timeoutSet bool
 }
 
 func flagSet(o *options) *flag.FlagSet {
@@ -65,7 +70,7 @@ func flagSet(o *options) *flag.FlagSet {
 	fs.BoolVar(&o.html, "html", false, "")
 	both("o", "output", func(n string) { fs.StringVar(&o.output, n, "", "") })
 	fs.BoolVar(&o.open, "open", false, "")
-	both("q", "quiet", func(n string) { fs.BoolVar(&o.quiet, n, false, "") })
+	both("q", "quiet", func(n string) { fs.Var(quietFlag{o}, n, "") })
 	fs.BoolVar(&o.plain, "plain", false, "")
 	fs.BoolVar(&o.noColor, "no-color", false, "")
 	both("v", "verbose", func(n string) { fs.BoolVar(&o.verbose, n, false, "") })
@@ -112,6 +117,7 @@ func flagSet(o *options) *flag.FlagSet {
 	fs.StringVar(&o.scheme, "scheme", "", "")
 	fs.StringVar(&o.typ, "type", "", "")
 	fs.DurationVar(&o.wait, "wait", 5*time.Second, "")
+	fs.DurationVar(&o.timeout, "timeout", 0, "")
 	return fs
 }
 
@@ -130,6 +136,9 @@ func parse(c cmdSpec, args []string) (*plan, error) {
 	p := &plan{}
 	o := &p.o
 	fs := flagSet(o)
+	if c.accepts("timeout") {
+		args = joinQuietValue(args)
+	}
 	pos, err := cli.ParseInterspersed(fs, args)
 	if err != nil {
 		if errors.Is(err, flag.ErrHelp) {
@@ -139,6 +148,10 @@ func parse(c cmdSpec, args []string) (*plan, error) {
 	}
 	if bad := c.unused(fs); len(bad) > 0 {
 		return nil, noEffect(c.name, bad)
+	}
+	o.timeoutSet = visited(fs, "timeout")
+	if o.quietForSet && !c.accepts("timeout") {
+		return nil, cli.Usagef("--quiet %s: only snapshot, compare and run take a duration; -q alone means results only", shortDuration(o.quietFor))
 	}
 	p.args = pos
 	path := o.configPath
@@ -176,6 +189,9 @@ func parse(c cmdSpec, args []string) (*plan, error) {
 		p.cfg.MITM = true
 	}
 	p.cfg.Allow = append(p.cfg.Allow, o.allow...)
+	if err := p.overrideWaits(); err != nil {
+		return nil, err
+	}
 
 	var chosen []string
 	for name, on := range map[string]bool{"json": o.json, "md": o.md, "junit": o.junit, "html": o.html} {
@@ -416,6 +432,7 @@ var flagDocs = map[string]flagDoc{
 	"type":       {"--type <t>", `for JSON files: the event type (default the payload's "type")`},
 	"list":       {"--list", "list the built-in events"},
 	"wait":       {"--wait <d>", "how long to collect what the site sends back (default 5s)"},
+	"timeout":    {"--timeout <d>", "longest wait per action (overrides timeout:, at most 1m)"},
 }
 
 // Flag groups several commands share.
@@ -426,7 +443,25 @@ var (
 	storeFlags    = []flagUse{{"config", ""}, {"store", ""}}
 	messageFlags  = []flagUse{{"channel", ""}, {"run", ""}, {"to", ""}}
 	terminalFlags = []flagUse{{"quiet", ""}, {"plain", ""}, {"no-color", ""}}
+	// actionFlags are reportFlags for the commands that run actions, where
+	// --quiet also takes the quiet window.
+	actionFlags = slices.Concat(withDoc(reportFlags, "quiet", quietWindowDoc), []flagUse{{"timeout", ""}})
 )
+
+// quietWindowDoc is --quiet's help where it also takes a duration.
+const quietWindowDoc = "results only. With a duration (--quiet 500ms): how long nothing\n" +
+	"must arrive before an action is done (overrides quiet:, at most 30s)"
+
+// withDoc returns fl with name's help replaced by doc.
+func withDoc(fl []flagUse, name, doc string) []flagUse {
+	out := slices.Clone(fl)
+	for i := range out {
+		if out[i].name == name {
+			out[i].doc = doc
+		}
+	}
+	return out
+}
 
 func flags(groups ...[]flagUse) []flagUse { return slices.Concat(groups...) }
 
@@ -454,12 +489,12 @@ var commands = []cmdSpec{
 	{name: "snapshot", aliases: []string{"snap"}, use: "snapshot [--name N]", about: "run the actions in .echo/config.yaml and save what they sent",
 		flags: flags(echoFlags, []flagUse{{"store", ""}, {"action", ""}, {"name", ""},
 			{"force", "save the snapshot even when every action failed; with --import,\nreplace one of the same name"},
-			{"export", ""}, {"import", ""}, {"fail-on", ""}}, reportFlags)},
+			{"export", ""}, {"import", ""}, {"fail-on", ""}}, actionFlags)},
 	{name: "compare", aliases: []string{"cmp"}, use: "compare [--snapshot N]", about: "run the actions again and show what changed since a snapshot",
 		flags: flags(echoFlags, []flagUse{{"store", ""}, {"action", ""}, {"snapshot", ""}, {"against", ""},
-			{"fail-on", failOnChanges}}, reportFlags)},
+			{"fail-on", failOnChanges}}, actionFlags)},
 	{name: "run", use: "run", about: "run the actions once, no comparison",
-		flags: flags(echoFlags, []flagUse{{"store", ""}, {"action", ""}, {"fail-on", ""}}, reportFlags)},
+		flags: flags(echoFlags, []flagUse{{"store", ""}, {"action", ""}, {"fail-on", ""}}, actionFlags)},
 	{name: "report", use: "report [run | snapshot]", about: "show the last result again (--open, -o)",
 		flags: flags(storeFlags, []flagUse{{"fail-on", "as compare for a comparison, as run otherwise; none: never"}}, reportFlags)},
 	{name: "snapshots", use: "snapshots [delete <name>]", about: "list snapshots, or delete one",
@@ -565,6 +600,8 @@ func flagError(err error, c cmdSpec) error {
 		// boolean, so say what it wants instead.
 		why := m[3]
 		switch {
+		case m[2] == "quiet" || m[2] == "q":
+			// -q is a boolean flag that also takes a duration.
 		case strings.Contains(msg, "boolean"):
 			why = "want true or false"
 		case why == "parse error":
@@ -684,4 +721,147 @@ func commandHelp(w io.Writer, c cmdSpec) {
 	}
 	fmt.Fprint(w, "\nExit codes: 0 ok, 1 findings, 2 usage error, 3 couldn't run, 130 interrupted.\n"+
 		"rhythm echo help lists every command.\n")
+}
+
+// quietFlag is -q and --quiet. Alone it means results only, as in Tuner
+// and Soundcheck; with a duration (--quiet=500ms, or --quiet 500ms on
+// the commands that run actions) it is the quiet window instead, named
+// after the config's quiet:. It is a boolean flag so that a bare -q
+// still takes no value.
+type quietFlag struct{ o *options }
+
+func (f quietFlag) String() string {
+	if f.o == nil || !f.o.quiet {
+		return "false"
+	}
+	return "true"
+}
+
+// IsBoolFlag lets -q stand alone.
+func (quietFlag) IsBoolFlag() bool { return true }
+
+func (f quietFlag) Set(v string) error {
+	// Only the words: "0" and "1" would otherwise turn results-only off
+	// and on where a duration was meant.
+	switch v {
+	case "true":
+		f.o.quiet = true
+		return nil
+	case "false":
+		f.o.quiet = false
+		return nil
+	}
+	d, err := time.ParseDuration(v)
+	if err != nil {
+		return errQuietValue
+	}
+	f.o.quietFor, f.o.quietForSet = d, true
+	return nil
+}
+
+var errQuietValue = errors.New("want a duration like 500ms, or no value for results only")
+
+// joinQuietValue rewrites "--quiet 500ms" as "--quiet=500ms": the flag
+// package never gives a boolean flag the next argument. Only a word that
+// reads as a duration (or starts like one) is joined, so -q followed by
+// a positional argument keeps its meaning.
+func joinQuietValue(args []string) []string {
+	out := make([]string, 0, len(args))
+	for i := 0; i < len(args); i++ {
+		a := args[i]
+		if a == "--" {
+			return append(out, args[i:]...)
+		}
+		if (a == "-q" || a == "--quiet" || a == "-quiet") && i+1 < len(args) && looksLikeDuration(args[i+1]) {
+			out = append(out, a+"="+args[i+1])
+			i++
+			continue
+		}
+		out = append(out, a)
+	}
+	return out
+}
+
+// looksLikeDuration reports whether v is a duration, or a number meant as
+// one (5, -1s), which Set then explains.
+func looksLikeDuration(v string) bool {
+	if _, err := time.ParseDuration(v); err == nil {
+		return true
+	}
+	v = strings.TrimPrefix(v, "-")
+	return v != "" && v[0] >= '0' && v[0] <= '9'
+}
+
+// visited reports whether the flag name was set on the command line.
+func visited(fs *flag.FlagSet, name string) bool {
+	seen := false
+	fs.Visit(func(f *flag.Flag) { seen = seen || f.Name == name })
+	return seen
+}
+
+// overrideWaits applies --quiet <d> and --timeout <d> to the config,
+// checked as .echo/config.yaml's quiet: and timeout: are: more than 0,
+// quiet at most 30s and no longer than the timeout, the timeout at most
+// 1m. Those are the limits Echo's wait API applies, so a larger value
+// would be cut short without a word. A wrong value is a usage error
+// (exit 2) before anything runs.
+//
+// This stands in for runner.Options.Quiet and Timeout until they are
+// released; the config has no per-action quiet on this version, so
+// replacing the global one has the same effect.
+func (p *plan) overrideWaits() error {
+	o := &p.o
+	if !o.quietForSet && !o.timeoutSet {
+		return nil
+	}
+	quiet, timeout := p.cfg.Quiet.Duration, p.cfg.Timeout.Duration
+	quietFrom, timeoutFrom := "quiet: in "+p.configName(), "timeout: in "+p.configName()
+	if o.quietForSet {
+		switch q := o.quietFor; {
+		case q <= 0:
+			return cli.Usagef("--quiet %s: must be more than 0, like 2s", shortDuration(q))
+		case q > maxQuiet:
+			return cli.Usagef("--quiet %s: over the %s Echo waits for quiet at most", shortDuration(q), shortDuration(maxQuiet))
+		}
+		quiet = o.quietFor
+	}
+	if o.timeoutSet {
+		switch t := o.timeout; {
+		case t <= 0:
+			return cli.Usagef("--timeout %s: must be more than 0, like 30s", shortDuration(t))
+		case t > maxTimeout:
+			return cli.Usagef("--timeout %s: over the %s Echo waits at most", shortDuration(t), shortDuration(maxTimeout))
+		}
+		timeout, timeoutFrom = o.timeout, "--timeout"
+	}
+	if quiet > timeout {
+		if o.quietForSet {
+			return cli.Usagef("--quiet %s is longer than the timeout of %s (%s), so no action could ever fall quiet",
+				shortDuration(quiet), shortDuration(timeout), timeoutFrom)
+		}
+		return cli.Usagef("--timeout %s is shorter than the quiet of %s (%s), so no action could ever fall quiet; lower it with --quiet",
+			shortDuration(timeout), shortDuration(quiet), quietFrom)
+	}
+	p.cfg.Quiet = config.Duration{Duration: quiet}
+	p.cfg.Timeout = config.Duration{Duration: timeout}
+	return nil
+}
+
+// The limits of Echo's wait API. They stand in for config.MaxQuiet and
+// config.MaxTimeout until those are released.
+const (
+	maxQuiet   = 30 * time.Second
+	maxTimeout = time.Minute
+)
+
+// shortDuration writes d as a person would: 1m rather than 1m0s.
+func shortDuration(d time.Duration) string {
+	s := d.String()
+	if strings.HasSuffix(s, "m0s") {
+		s = strings.TrimSuffix(s, "0s")
+	}
+	if strings.HasSuffix(s, "h0m") {
+		s = strings.TrimSuffix(s, "0m")
+	}
+	return s
 }

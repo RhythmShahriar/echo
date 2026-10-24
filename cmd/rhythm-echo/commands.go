@@ -344,7 +344,7 @@ func (s *session) moveSnapshot() int {
 		return s.fail(usageErr("pick --export or --import, not both"))
 	case len(s.args) > 0:
 		return s.fail(usageErr("snapshot takes no arguments; name the snapshot with --name"))
-	case len(o.actions) > 0 || o.failOn != "" || s.format != "" || o.open:
+	case len(o.actions) > 0 || o.failOn != "" || s.format != "" || o.open || o.quietForSet || o.timeoutSet:
 		return s.fail(usageErr("--export and --import run no actions, so they take only --name, --force, --config and --store"))
 	}
 	archiveErr := func(err error) int {

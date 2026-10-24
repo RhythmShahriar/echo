@@ -223,6 +223,9 @@ Actions (snapshot, compare, run):
       --name <name>          snapshot: its name (default the date and time)
       --force                snapshot: save it even when every action failed
       --snapshot <name>      compare: which snapshot (default the latest)
+      --quiet <d>            how long nothing must arrive before an action is done
+                             (overrides quiet:, at most 30s); -q alone: results only
+      --timeout <d>          longest wait per action (overrides timeout:, at most 1m)
       --against <path>       compare: with this run instead (a run folder, its run.json or
                              a .tgz from snapshot --export)
       --export <file.tgz>    snapshot: write one (--name, default the latest) to a .tgz;

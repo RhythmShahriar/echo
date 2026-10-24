@@ -1670,3 +1670,83 @@ func TestEveryCommandWritesTheEnvelope(t *testing.T) {
 		t.Errorf("snapshots --json with none: %d\n%s", code, out)
 	}
 }
+
+// TestQuietAndTimeoutFlags: --quiet <d> and --timeout <d> reach the
+// runner and are checked like the config's quiet: and timeout:, while a
+// bare -q still means results only.
+func TestQuietAndTimeoutFlags(t *testing.T) {
+	t.Chdir(t.TempDir())
+	srv := httptest.NewServer(catcher.NewServer(catcher.NewInbox(100), catcher.Config{Version: "test"}))
+	defer srv.Close()
+	shop := shopSite(t, srv.URL, "Hi Ann, welcome.")
+	action := "actions:\n  - name: Sign up\n    http: {method: POST, url: /signup, form: {email: ann@shop.test}}\n"
+	writeConfig(t, "site: "+shop.URL+"\nquiet: 3s\ntimeout: 10s\n"+action+"    expect: {email: 1}\n")
+
+	// The config's 3s quiet would hold the action for 3s.
+	start := time.Now()
+	code, out, errOut := runCLI(t, "run", "--url", srv.URL, "--plain", "--quiet", "200ms")
+	if took := time.Since(start); code != exitOK || took > 2*time.Second || !strings.Contains(out, "1 email") {
+		t.Errorf("run --quiet 200ms: exit %d in %s\n%s%s", code, took, out, errOut)
+	}
+	// --quiet=<d> is the same; it doesn't hide the output as -q does.
+	if code, out, _ := runCLI(t, "run", "--url", srv.URL, "--plain", "--quiet=200ms"); code != exitOK || !strings.Contains(out, "Echo") {
+		t.Errorf("run --quiet=200ms: %d\n%s", code, out)
+	}
+
+	// Two emails are expected and one comes: only the timeout ends it,
+	// and the runner counts the wait that ran out as the action failing.
+	writeConfig(t, "site: "+shop.URL+"\nquiet: 200ms\ntimeout: 10s\n"+action+"    expect: {email: 2}\n")
+	start = time.Now()
+	code, out, _ = runCLI(t, "run", "--url", srv.URL, "--plain", "--timeout", "600ms")
+	if took := time.Since(start); code != exitError || took > 4*time.Second || !strings.Contains(out, "timeout=600ms") {
+		t.Errorf("run --timeout 600ms: exit %d in %s\n%s", code, took, out)
+	}
+	writeConfig(t, "site: "+shop.URL+"\nquiet: 200ms\ntimeout: 10s\n"+action+"    expect: {email: 1}\n")
+
+	// A bare -q before a flag or at the end is still results only.
+	for _, args := range [][]string{{"-q", "--plain"}, {"--plain", "-q"}, {"--quiet", "--quiet", "300ms"}} {
+		if code, _, errOut := runCLI(t, append([]string{"run", "--url", srv.URL, "--fail-on", "none"}, args...)...); code != exitOK {
+			t.Errorf("run %v: %d %s", args, code, errOut)
+		}
+	}
+
+	for _, tc := range []struct {
+		args []string
+		want string
+	}{
+		{[]string{"run", "--timeout", "0s"}, "--timeout 0s: must be more than 0, like 30s"},
+		{[]string{"compare", "--timeout", "-5s"}, "--timeout -5s: must be more than 0"},
+		{[]string{"snapshot", "--timeout", "2m"}, "--timeout 2m: over the 1m Echo waits at most"},
+		{[]string{"run", "--quiet", "0s"}, "--quiet 0s: must be more than 0, like 2s"},
+		{[]string{"run", "--quiet", "0"}, "--quiet 0s: must be more than 0"},
+		{[]string{"run", "--quiet", "45s"}, "--quiet 45s: over the 30s Echo waits for quiet at most"},
+		{[]string{"run", "--quiet", "5s", "--timeout", "1s"}, "--quiet 5s is longer than the timeout of 1s (--timeout), so no action could ever fall quiet"},
+		{[]string{"run", "--quiet", "20s"}, "--quiet 20s is longer than the timeout of 10s (timeout: in .echo/config.yaml)"},
+		{[]string{"run", "--timeout", "100ms"}, "--timeout 100ms is shorter than the quiet of 200ms (quiet: in .echo/config.yaml), so no action could ever fall quiet; lower it with --quiet"},
+		{[]string{"run", "--quiet", "5"}, `--quiet "5": want a duration like 500ms, or no value for results only`},
+		{[]string{"run", "--timeout", "soon"}, `--timeout "soon": want a duration like 10m or 5s`},
+		{[]string{"ls", "--quiet=2s"}, "--quiet 2s: only snapshot, compare and run take a duration; -q alone means results only"},
+		{[]string{"ls", "--timeout", "2s"}, "--timeout has no effect on ls"},
+		{[]string{"snapshot", "--export", "x.tgz", "--timeout", "2s"}, "--export and --import run no actions"},
+	} {
+		code, out, errOut := runCLI(t, append(tc.args, "--url", srv.URL)...)
+		if code != exitUsage || !strings.Contains(errOut, tc.want) || out != "" {
+			t.Errorf("%v: exit %d, stderr %q; want 2 and %q", tc.args, code, errOut, tc.want)
+		}
+	}
+
+	// ls's -q followed by an argument isn't joined: only commands that
+	// run actions take a duration.
+	if got := joinQuietValue([]string{"-q", "5s", "--", "--quiet", "1s"}); strings.Join(got, " ") != "-q=5s -- --quiet 1s" {
+		t.Errorf("joinQuietValue: %q", got)
+	}
+	for _, c := range []string{"snapshot", "compare", "run"} {
+		_, out, _ := runCLI(t, c, "--help")
+		if !strings.Contains(out, "--timeout <d>") || !strings.Contains(out, "With a duration (--quiet 500ms)") {
+			t.Errorf("%s --help doesn't explain --quiet <d> and --timeout:\n%s", c, out)
+		}
+	}
+	if _, out, _ := runCLI(t, "ls", "--help"); strings.Contains(out, "--timeout") || strings.Contains(out, "With a duration") {
+		t.Errorf("ls --help lists the quiet window:\n%s", out)
+	}
+}
