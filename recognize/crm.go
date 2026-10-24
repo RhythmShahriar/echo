@@ -249,19 +249,36 @@ var makeHook = Recognizer{
 }
 
 // n8n: webhook nodes, {instance}/webhook/{path} (or /webhook-test/ while
-// building), on n8n Cloud or self-hosted.
+// building). "/webhook/" alone is far too common a path to claim, so the
+// host must look like n8n too: n8n Cloud (*.n8n.cloud), a self-hosted
+// instance named for it (n8n.shop.com, shop-n8n.example.net) or one on
+// n8n's default port, 5678.
 var n8n = Recognizer{
 	Provider: "n8n",
 	Channel:  model.Webhook,
 	Match: func(r Request) bool {
 		p := r.URL.Path
-		return strings.HasPrefix(p, "/webhook/") || strings.HasPrefix(p, "/webhook-test/") ||
-			(host(r, "n8n.cloud") && strings.Contains(p, "/webhook"))
+		if !strings.HasPrefix(p, "/webhook/") && !strings.HasPrefix(p, "/webhook-test/") {
+			return false
+		}
+		return host(r, "n8n.cloud") || n8nHost(r.URL.Hostname()) || r.URL.Port() == "5678"
 	},
 	Fill: func(r Request, m *model.Message) { m.To = []string{hookTo(r)} },
 	Fake: func(Request, *model.Message) Fake {
 		return jsonFake(200, `{"message":"Workflow was started"}`)
 	},
+}
+
+// n8nHost reports whether a host name has a label naming n8n.
+func n8nHost(h string) bool {
+	for _, label := range strings.Split(strings.ToLower(h), ".") {
+		for _, part := range strings.FieldsFunc(label, func(c rune) bool { return c == '-' || c == '_' }) {
+			if part == "n8n" {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func asList(v any) []any {

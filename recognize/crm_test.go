@@ -67,7 +67,11 @@ var crmCases = []tcase{
 		req:   jsonReq("POST", "https://shop.app.n8n.cloud/webhook/new-order", `{"order":1042}`),
 		check: func(t *testing.T, m model.Message) { eq(t, "channel", m.Channel, model.Webhook) }},
 	{name: "self-hosted test webhook", provider: "n8n", status: 200,
-		req: jsonReq("POST", "https://automation.shop.test/webhook-test/2f6a", `{}`)},
+		req: jsonReq("POST", "https://n8n.shop.test/webhook-test/2f6a", `{}`)},
+	{name: "self-hosted on the default port", provider: "n8n", status: 200,
+		req: jsonReq("POST", "http://automation.shop.test:5678/webhook/new-order", `{}`)},
+	{name: "self-hosted, named in a label", provider: "n8n", status: 200,
+		req: jsonReq("POST", "https://shop-n8n.example.net/webhook/new-order", `{}`)},
 }
 
 var crmNegatives = []negative{
@@ -79,4 +83,8 @@ var crmNegatives = []negative{
 	{"Zapier site", "zapier", req("GET", "https://zapier.com/apps", nil, "")},
 	{"Make site", "make", req("GET", "https://www.make.com/en", nil, "")},
 	{"Teams webhook is not n8n", "n8n", jsonReq("POST", "https://outlook.office.com/webhook/abc", `{"text":"x"}`)},
+	{"any /webhook/ path is not n8n", "n8n", jsonReq("POST", "https://crm.shop.test/webhook/leads", `{}`)},
+	{"a receiver's /webhook-test/ is not n8n", "n8n", jsonReq("POST", "https://automation.shop.test/webhook-test/2f6a", `{}`)},
+	{"n8n.cloud pages are not hooks", "n8n", req("GET", "https://shop.app.n8n.cloud/home/workflows", nil, "")},
+	{"a host merely containing n8n", "n8n", jsonReq("POST", "https://xn8nx.shop.test/webhook/a", `{}`)},
 }
