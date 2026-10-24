@@ -397,6 +397,7 @@ func TestLiveShowsContentChecks(t *testing.T) {
 		body := fmt.Sprintf(`{"v":1,"kind":"email","source":{"via":"wordpress"},"email":{"from":"shop@shop.example.com","to":["ann@example.org"],"subject":%q,"text":%q}}`,
 			subject, text)
 		r := httptest.NewRequest(http.MethodPost, "/v1/capture", strings.NewReader(body))
+		r.Host = "127.0.0.1:8025" // a connector on this machine
 		r.Header.Set("Content-Type", "application/json")
 		if w := serve(h, r); w.Code != http.StatusOK {
 			t.Fatalf("capture: %d %s", w.Code, w.Body)
@@ -1069,7 +1070,9 @@ func TestLoginWithoutAToken(t *testing.T) {
 	if w := serve(h, httptest.NewRequest(http.MethodGet, "/", nil)); w.Code != http.StatusFound {
 		t.Errorf("GET / = %d", w.Code)
 	}
-	if w := serve(h, httptest.NewRequest(http.MethodGet, "/v1/messages", nil)); w.Code != 200 {
+	api := httptest.NewRequest(http.MethodGet, "/v1/messages", nil)
+	api.Host = "127.0.0.1:8025" // a connector on this machine
+	if w := serve(h, api); w.Code != 200 {
 		t.Errorf("API = %d", w.Code)
 	}
 	c := viewerSession(t, h)
