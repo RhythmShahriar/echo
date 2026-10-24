@@ -7,8 +7,10 @@
 // Git and most Unix tools call sendmail, so pointing them here captures
 // their mail without touching the app.
 //
-// Delivery goes to Echo's SMTP sink (RHYTHM_ECHO_SMTP, default
-// 127.0.0.1:1025, logging in with RHYTHM_ECHO_TOKEN when it's set), or to the capture API when only RHYTHM_ECHO_URL is set.
+// Delivery goes to Echo's SMTP sink, logging in with RHYTHM_ECHO_TOKEN
+// when it's set. The sink is RHYTHM_ECHO_SMTP, else the one a running
+// Echo at RHYTHM_ECHO_URL reports (or its capture API), else smtp: in
+// the nearest .echo/config.yaml, else 127.0.0.1:1025.
 // Nothing is ever delivered for real. A message without its own X-Echo-Run
 // header is tagged with RHYTHM_ECHO_RUN, which Echo sets on the commands
 // its actions run, so cron jobs and scripts are tied to their action.
@@ -93,17 +95,17 @@ func Main(args []string, stdin io.Reader, stderr io.Writer) int {
 		fmt.Fprintln(stderr, "rhythm-echo sendmail: no recipients (give them as arguments, or use -t)")
 		return exUsage
 	}
-	smtpAddr, apiURL := os.Getenv(EnvSMTP), os.Getenv(EnvURL)
-	if apiURL != "" && smtpAddr == "" {
-		err = viaAPI(apiURL, os.Getenv(EnvToken), msg, from, rcpts)
+	t := findTarget(os.Getenv, stderr)
+	if t.api != "" {
+		err = viaAPI(t.api, os.Getenv(EnvToken), msg, from, rcpts)
 	} else {
-		if smtpAddr == "" {
-			smtpAddr = DefaultSMTP
-		}
-		err = viaSMTP(smtpAddr, os.Getenv(EnvToken), msg, from, rcpts)
+		err = viaSMTP(t.smtp, os.Getenv(EnvToken), msg, from, rcpts)
 	}
 	if err != nil {
 		fmt.Fprintf(stderr, "rhythm-echo sendmail: %v\n", err)
+		if t.from != EnvSMTP && t.from != EnvURL {
+			fmt.Fprintf(stderr, "rhythm-echo sendmail: Echo's address came from %s\n", t.from)
+		}
 		var ne net.Error
 		if errors.As(err, &ne) || errors.Is(err, errUnreachable) {
 			return exUnavailable
