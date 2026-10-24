@@ -15,6 +15,10 @@ export function activate(o?: Options): boolean {
   s.cfg = cfg;
   s.active = g.active;
   if (g.active) reason = g.reason;
+  if (g.warning && !s.warned.has('guard')) {
+    s.warned.add('guard');
+    cfg.logger.warn(`[rhythm-echo] ${g.warning}`);
+  }
   return g.active;
 }
 

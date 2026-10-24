@@ -90,10 +90,11 @@ async function main() {
   // E2E_BUNDLER=webpack checks the webpack build; Turbopack is the default
   sh(join(app, 'node_modules', '.bin', 'next'), ['build', ...(process.env.E2E_BUNDLER === 'webpack' ? ['--webpack'] : [])], { cwd: app, env });
 
-  // 4. next start, with every escaped request sent to a dead proxy
+  // 4. next start, with every escaped request sent to a dead proxy. It runs
+  // with NODE_ENV=production, which the guard only lets through when forced.
   const next = start('next', join(app, 'node_modules', '.bin', 'next'), ['start', '-p', '18926', '-H', '127.0.0.1'], {
     cwd: app,
-    env: { ...env, NODE_USE_ENV_PROXY: '1', HTTP_PROXY: 'http://127.0.0.1:9', HTTPS_PROXY: 'http://127.0.0.1:9', NO_PROXY: '127.0.0.1,localhost' },
+    env: { ...env, RHYTHM_ECHO_FORCE: '1', NODE_USE_ENV_PROXY: '1', HTTP_PROXY: 'http://127.0.0.1:9', HTTPS_PROXY: 'http://127.0.0.1:9', NO_PROXY: '127.0.0.1,localhost' },
   });
   await until('next start', async () => (await fetch(`${SITE}/`)).ok).catch((e) => {
     throw new Error(`${e.message}\n${next.log}`);

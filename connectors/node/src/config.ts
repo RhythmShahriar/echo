@@ -89,17 +89,29 @@ export function resolveConfig(o: Options = {}, e: Env = env()): Config {
 export interface Guard {
   active: boolean;
   reason: string;
+  /** A one-line problem with the environment worth logging even when inactive. */
+  warning?: string;
 }
+
+/** NODE_ENV values that mean "not production". Anything else counts as production. */
+const nonProduction = new Set(['development', 'test', 'staging', 'preview', 'local']);
 
 /**
  * guard decides whether the connector may run here. A connector that is
  * active and cannot reach Echo blocks every outbound request, so a
- * production deploy that still has the package installed must stay inert.
+ * production deploy that still has the package installed must stay inert,
+ * and when in doubt the guard says production.
  *
  * - VERCEL_ENV=production: off. VERCEL_ENV is the only reliable signal on
  *   Vercel, because `next start` sets NODE_ENV=production on previews too.
- * - NODE_ENV=production outside Vercel (a self-hosted server): off unless
- *   RHYTHM_ECHO_URL is set, which is a deliberate choice to use Echo there.
+ * - NODE_ENV=production outside Vercel (a self-hosted server): off. Only
+ *   RHYTHM_ECHO_FORCE turns it on: RHYTHM_ECHO_URL alone is too easy to
+ *   leave set in a production environment copied from staging.
+ * - NODE_ENV unset outside Vercel: off unless RHYTHM_ECHO_URL is set. Many
+ *   self-hosted services never set NODE_ENV, so unset is not development.
+ * - NODE_ENV set to anything else that isn't a known non-production value
+ *   ("prod", "dev"): off, with a warning, because a typo must not
+ *   seal a production service.
  * - `next build` (NEXT_PHASE=phase-production-build): off, so static
  *   generation is never blocked.
  * - RHYTHM_ECHO_FORCE overrides all of these.
@@ -110,8 +122,21 @@ export function guard(cfg: Pick<Config, 'force'>, e: Env = env()): Guard {
   const vercel = (e.VERCEL_ENV ?? '').toLowerCase();
   if (vercel === 'production') return { active: false, reason: 'VERCEL_ENV=production' };
   if (vercel !== '') return { active: true, reason: `VERCEL_ENV=${vercel}` };
-  if ((e.NODE_ENV ?? '').toLowerCase() === 'production' && !e.RHYTHM_ECHO_URL) {
-    return { active: false, reason: 'NODE_ENV=production without RHYTHM_ECHO_URL' };
+  const raw = e.NODE_ENV;
+  if (raw === undefined || raw.trim() === '') {
+    if (e.RHYTHM_ECHO_URL) return { active: true, reason: 'NODE_ENV unset, RHYTHM_ECHO_URL set' };
+    return { active: false, reason: 'NODE_ENV unset outside Vercel, so production (set RHYTHM_ECHO_URL or NODE_ENV=development)' };
   }
-  return { active: true, reason: `NODE_ENV=${e.NODE_ENV ?? 'unset'}` };
+  const nodeEnv = raw.trim().toLowerCase();
+  if (nodeEnv === 'production') {
+    return { active: false, reason: 'NODE_ENV=production (set RHYTHM_ECHO_FORCE=1 only on a server that is not production)' };
+  }
+  if (!nonProduction.has(nodeEnv)) {
+    return {
+      active: false,
+      reason: `NODE_ENV=${raw}, so production`,
+      warning: `NODE_ENV=${raw} is not one of ${[...nonProduction].join(', ')} or production: treating it as production and staying off`,
+    };
+  }
+  return { active: true, reason: `NODE_ENV=${nodeEnv}` };
 }

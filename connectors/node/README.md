@@ -78,7 +78,7 @@ In serverless functions and short scripts, `await flush()` (exported by both ent
 |---|---|---|
 | `RHYTHM_ECHO_URL` | `http://127.0.0.1:8025` | Echo's capture API. On a preview deployment, this is a URL that reaches your Echo (a tunnel). |
 | `RHYTHM_ECHO_TOKEN` | none | Sent as `X-Echo-Token`. Needed when Echo listens beyond loopback. |
-| `RHYTHM_ECHO_FORCE` | off | `1` turns the connector on even where the production guard says no. |
+| `RHYTHM_ECHO_FORCE` | off | `1` turns the connector on even where the production guard says no. Needed for `NODE_ENV=production` outside Vercel, such as `next start` on a staging server. |
 | `RHYTHM_ECHO_SITE` | none | The site's own hosts or URLs, comma separated. `VERCEL_URL`, `VERCEL_BRANCH_URL` and `NEXT_PUBLIC_SITE_URL` count too. Calls to them are captured and Echo lets them through as sent. |
 | `RHYTHM_ECHO_RUN` | none | `<run>/<action>` for work done outside a request. Echo's action runner sets it. |
 
@@ -94,10 +94,17 @@ In serverless functions and short scripts, `await flush()` (exported by both ent
 The connector stays completely inert, with no hooks installed, when any of these applies:
 
 - `VERCEL_ENV=production`
-- `NODE_ENV=production` outside Vercel, unless `RHYTHM_ECHO_URL` is set. Setting the URL counts as choosing to use Echo on that server.
+- `NODE_ENV=production` outside Vercel. `RHYTHM_ECHO_URL` alone does not turn it on there. Only `RHYTHM_ECHO_FORCE=1` does.
+- `NODE_ENV` unset outside Vercel, unless `RHYTHM_ECHO_URL` is set. Many self-hosted services never set `NODE_ENV`, so unset counts as production.
+- `NODE_ENV` set to anything other than `development`, `test`, `staging`, `preview`, `local` or `production`. A typo such as `prod` counts as production. The connector logs one warning:
+
+  ```
+  [rhythm-echo] NODE_ENV=prod is not one of development, test, staging, preview, local or production: treating it as production and staying off
+  ```
+
 - during `next build` (`NEXT_PHASE=phase-production-build`), so static generation is never blocked
 
-`RHYTHM_ECHO_FORCE=1` overrides all three. Preview and development deployments activate it, including `next start` on a preview, which runs with `NODE_ENV=production`.
+`RHYTHM_ECHO_FORCE=1` overrides all of these. Preview and development deployments on Vercel activate it, including `next start` on a preview, which runs with `NODE_ENV=production`. `next start` on your own staging server also runs with `NODE_ENV=production`, so set `RHYTHM_ECHO_FORCE=1` there.
 
 When active, it logs one line per runtime:
 
