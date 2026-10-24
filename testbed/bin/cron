@@ -1,0 +1,16 @@
+#!/bin/sh
+# The shop server's crontab line: runs WordPress's due events (the shop
+# defers its receipt emails to WP-Cron, and DISABLE_WP_CRON is set, so
+# nothing else runs them). Echo runs it after every action (flush: in
+# .echo/config.yaml).
+#
+# Broken state (scenarios.yaml):
+# - s08: the server move dropped the crontab's PATH, so the job fails with
+#   "wp: not found" and scheduled email is never sent.
+set -eu
+here=$(cd "$(dirname "$0")" && pwd)
+if [ -e "$here/../state/s08" ]; then
+	echo "/bin/sh: 1: wp: not found" >&2
+	exit 127
+fi
+exec "$here/wp" cron event run --due-now --quiet

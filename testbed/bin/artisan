@@ -1,0 +1,6 @@
+#!/bin/sh
+# php artisan in the testbed's Laravel container, with RHYTHM_ECHO_RUN
+# passed on (see bin/wp).
+#
+#   testbed/bin/artisan queue:work --stop-when-empty
+exec docker exec -i -w /app -e RHYTHM_ECHO_RUN "${TESTBED_PROJECT:-echo-testbed}-laravel-1" php artisan "$@"

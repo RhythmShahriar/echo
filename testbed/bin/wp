@@ -1,0 +1,7 @@
+#!/bin/sh
+# WP-CLI in the testbed's WordPress container, as www-data. Echo's action
+# runner sets RHYTHM_ECHO_RUN for commands and flushes; it is passed on, so
+# the connector ties what WP-CLI sends to the action.
+#
+#   testbed/bin/wp option get admin_email
+exec docker exec -i -u www-data -e RHYTHM_ECHO_RUN "${TESTBED_PROJECT:-echo-testbed}-wp-1" wp --path=/var/www/html "$@"

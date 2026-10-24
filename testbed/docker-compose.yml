@@ -1,0 +1,178 @@
+# Echo testbed: a WordPress shop, a Laravel app, a Next.js app, a plain-PHP
+# page, a CRM that receives webhooks and Mailpit, all on a network with no
+# way out. Every scenario is broken while testbed/state/<id> exists (see
+# toggle.sh), so switching never rebuilds or restarts anything.
+#
+# The sites sit on `sealed` (internal: true): Docker gives it no gateway,
+# so nothing on it can reach the internet, whatever Echo or a connector
+# decides. `gate` is the only service on both networks. It is the way in
+# (the sites on 127.0.0.1:18850-18855) and it forwards Echo's ports
+# (API 18860, SMTP 18861, proxy 18862) to the Echo on the host. Echo itself
+# runs on the host (`rhythm-echo up`, started by the benchmark or
+# `make echo`) and listens on 0.0.0.0 with a token.
+#
+# Everything is thrown away on `make down`: the database lives in tmpfs
+# and WordPress in a volume removed with -v.
+name: echo-testbed
+
+networks:
+  sealed:
+    internal: true # no gateway: nothing here reaches the internet
+  egress: {} # the gate's side: published ports, and the route to the host
+
+x-echo-env: &echo-env
+  RHYTHM_ECHO_URL: http://gate:18860
+  RHYTHM_ECHO_TOKEN: ${TESTBED_TOKEN:-echo-testbed-token}
+  RHYTHM_ECHO_SMTP: gate:18861
+
+x-db-env: &db-env
+  WORDPRESS_DB_HOST: db
+  WORDPRESS_DB_USER: wordpress
+  WORDPRESS_DB_PASSWORD: wordpress
+  WORDPRESS_DB_NAME: wordpress
+
+services:
+  gate:
+    image: nginx:1.27-alpine
+    networks: [sealed, egress]
+    extra_hosts:
+      - host.docker.internal:host-gateway
+    volumes:
+      - ./gate/nginx.conf:/etc/nginx/nginx.conf:ro
+    ports:
+      - "127.0.0.1:18850:18850" # WordPress
+      - "127.0.0.1:18851:18851" # Laravel
+      - "127.0.0.1:18852:18852" # Next.js
+      - "127.0.0.1:18853:18853" # plain PHP
+      - "127.0.0.1:18854:18854" # Mailpit web UI and API
+      - "127.0.0.1:18855:18855" # Mailpit SMTP (the benchmark's Mailpit column)
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:18899/"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  db:
+    image: mariadb:11.4.8
+    networks: [sealed]
+    environment:
+      MARIADB_DATABASE: wordpress
+      MARIADB_USER: wordpress
+      MARIADB_PASSWORD: wordpress
+      MARIADB_RANDOM_ROOT_PASSWORD: "1"
+    tmpfs:
+      - /var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
+  # WordPress 6.8.3 with WP-CLI, Echo's mu-plugin (installed into
+  # wp/mu-plugins by `make up`) and the fixture plugins. Echo's CA is added
+  # to the system store at start, so raw cURL through Echo's proxy verifies.
+  wp:
+    build:
+      context: ./wp
+    image: echo-testbed-wp:6.8.3
+    networks: [sealed]
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      <<: *db-env
+      WORDPRESS_CONFIG_EXTRA: |
+        define('DISABLE_WP_CRON', true);
+        define('AUTOMATIC_UPDATER_DISABLED', true);
+        define('WP_ENVIRONMENT_TYPE', 'staging');
+        define('WP_HTTP_BLOCK_EXTERNAL', true);
+        define('WP_ACCESSIBLE_HOSTS', 'gate,mailpit');
+    command: ["sh", "-c", "cp /echo-ca/ca.pem /usr/local/share/ca-certificates/rhythm-echo.crt && update-ca-certificates >/dev/null && exec docker-entrypoint.sh apache2-foreground"]
+    volumes:
+      - wp:/var/www/html
+      - ./wp/mu-plugins:/var/www/html/wp-content/mu-plugins:ro
+      - ./wp/plugins/testbed-forms:/var/www/html/wp-content/plugins/testbed-forms:ro
+      - ./wp/plugins/testbed-shop:/var/www/html/wp-content/plugins/testbed-shop:ro
+      - ./wp/plugins/testbed-shop-sms:/var/www/html/wp-content/plugins/testbed-shop-sms:ro
+      - ./wp/plugins/testbed-stripe:/var/www/html/wp-content/plugins/testbed-stripe:ro
+      - ./state:/var/www/html/wp-content/testbed-state:ro
+      - ./runtime/ca.pem:/echo-ca/ca.pem:ro
+      - ./wp/seed.sh:/seed.sh:ro
+
+  # Laravel 12 with rhythmsh/echo-laravel from a path repository, built by
+  # `make up` into runtime/laravel (see laravel/build.sh).
+  laravel:
+    image: php:8.3-cli
+    networks: [sealed]
+    working_dir: /app/public
+    user: "${TESTBED_UID:-1000}:${TESTBED_GID:-1000}"
+    environment:
+      <<: *echo-env
+      APP_ENV: staging
+      APP_URL: http://localhost:18851
+      MAIL_MAILER: smtp
+      MAIL_HOST: mailpit
+      MAIL_PORT: "1025"
+      MAIL_SCHEME: ""
+      MAIL_FROM_ADDRESS: orders@shop.example.com
+      MAIL_FROM_NAME: Bean & Leaf
+      QUEUE_CONNECTION: database
+      DB_CONNECTION: sqlite
+      DB_DATABASE: /app/database/database.sqlite
+      SESSION_DRIVER: array
+      CACHE_STORE: array
+    command: ["php", "-S", "0.0.0.0:8000", "../vendor/laravel/framework/src/Illuminate/Foundation/resources/server.php"]
+    volumes:
+      - ./runtime/laravel:/app
+      - ./state:/state:ro
+
+  # Next.js 16 with @rhythmsh/echo (packed from connectors/node), built by
+  # `make up` into runtime/next (see next/build.sh).
+  next:
+    image: node:24-bookworm-slim
+    networks: [sealed]
+    working_dir: /app
+    user: "${TESTBED_UID:-1000}:${TESTBED_GID:-1000}"
+    environment:
+      <<: *echo-env
+      NEXT_TELEMETRY_DISABLED: "1"
+      HOME: /tmp
+    command: ["node_modules/.bin/next", "start", "-p", "3000", "-H", "0.0.0.0"]
+    volumes:
+      - ./runtime/next:/app
+      - ./state:/state:ro
+
+  # Plain PHP: mail() goes to `rhythm-echo sendmail` (sendmail_path), the
+  # static Linux binary `make up` builds from this checkout.
+  php:
+    image: php:8.3.27-apache
+    networks: [sealed]
+    environment:
+      <<: *echo-env
+    volumes:
+      - ./php/site:/var/www/html:ro
+      - ./php/sendmail.ini:/usr/local/etc/php/conf.d/zz-testbed.ini:ro
+      - ./runtime/rhythm-echo-linux:/usr/local/bin/rhythm-echo:ro
+      - ./state:/state:ro
+
+  # The shop's CRM: receives the order webhooks. Answers 500 while s16 is
+  # broken. Only reachable on the sealed network (observe-mode scenarios).
+  crm:
+    image: php:8.3-cli
+    networks: [sealed]
+    command: ["php", "-S", "0.0.0.0:80", "/crm/index.php"]
+    volumes:
+      - ./crm:/crm:ro
+      - ./state:/state:ro
+
+  # Stands in for the real mail server in observe mode, and is the
+  # benchmark's Mailpit column (see bench/mailpit.go).
+  mailpit:
+    image: axllent/mailpit:v1.29.2
+    networks: [sealed]
+    environment:
+      MP_DISABLE_VERSION_CHECK: "true"
+      MP_MAX_MESSAGES: "5000"
+
+volumes:
+  wp: {}

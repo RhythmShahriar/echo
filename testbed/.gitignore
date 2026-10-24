@@ -1,0 +1,10 @@
+/state/*
+!/state/.gitkeep
+/runtime/
+/bench/work/
+# Echo's connector, installed by `make up` (its settings hold the token)
+/wp/mu-plugins/rhythm-echo.php
+/wp/mu-plugins/rhythm-echo/
+# what Echo's CLI keeps when run from here by hand
+/.echo/*
+!/.echo/config.yaml
