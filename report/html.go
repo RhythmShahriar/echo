@@ -103,7 +103,7 @@ func HTML(w io.Writer, r Result) error {
 		Mode: run.Mode, Compared: r.Compared(), Tally: Tally(run)}
 	if r.Compared() {
 		c := r.Comparison
-		d.Verdict, d.Against = verdict(c), snapshotAt(c.Before)
+		d.Verdict, d.Against = verdict(r), snapshotAt(c.Before)
 		d.Tone = "ok"
 		switch {
 		case c.Count(model.Broke) > 0:

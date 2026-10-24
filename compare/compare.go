@@ -32,8 +32,31 @@ func Compare(before, after *model.Run, beforeDir, afterDir, version string) *mod
 		Before: model.RunRef{Target: before.Target, Name: before.Name, Dir: beforeDir, Started: before.Started},
 		After:  model.RunRef{Target: after.Target, Name: after.Name, Dir: afterDir, Started: after.Started}}
 	g := grouper{}
+	var notes []string
 	for _, a := range after.Actions {
 		b := before.Action(a.ID)
+		if b != nil {
+			out.Actions++
+		}
+		if a.Error != "" {
+			// Nothing it sent can be trusted as the whole story, so it isn't
+			// compared. Failing in the snapshot too doesn't make it "the
+			// same": a site that's down at both ends was never checked.
+			title := "Action fails"
+			if b != nil && b.Error != "" {
+				title = "Action still fails"
+			}
+			g.add(model.Change{Class: model.Broke, Check: ActionFailed, Title: title, Detail: a.Error,
+				Fix: "The request that triggers the messages failed, so nothing it sends was compared: fix that first."}, a.Label)
+			continue
+		}
+		if b != nil && b.Error != "" {
+			// There's nothing in the snapshot to compare with; listing all
+			// it sends now as NEW would bury the fix.
+			g.add(model.Change{Class: model.Fixed, Check: ActionFailed, Title: "Action fails"}, a.Label)
+			notes = append(notes, fmt.Sprintf("%q failed in the snapshot, so what it sends now wasn't compared: take a new snapshot", a.Label))
+			continue
+		}
 		if b == nil {
 			// Not in the snapshot: everything it sends is new.
 			for _, c := range Messages(nil, a.Messages) {
@@ -42,12 +65,6 @@ func Compare(before, after *model.Run, beforeDir, afterDir, version string) *mod
 			for _, c := range Issues(nil, a.Issues) {
 				g.add(c, a.Label)
 			}
-			continue
-		}
-		out.Actions++
-		if b.Error == "" && a.Error != "" {
-			g.add(model.Change{Class: model.Broke, Check: "action/failed", Title: "Action fails",
-				Detail: a.Error, Fix: "The request that triggers the messages failed; fix that first."}, a.Label)
 			continue
 		}
 		for _, c := range Messages(b.Messages, a.Messages) {
@@ -61,9 +78,13 @@ func Compare(before, after *model.Run, beforeDir, afterDir, version string) *mod
 		g.add(c, "site-wide")
 	}
 	out.Changes = g.list()
-	out.Warnings = mismatch(before, after)
+	out.Warnings = append(mismatch(before, after), notes...)
 	return out
 }
+
+// ActionFailed is the check of a change about an action that failed in the
+// compared run (BROKE) or failed only in the snapshot (FIXED).
+const ActionFailed = "run/action-failed"
 
 // Messages diffs the messages one action sent in two runs.
 func Messages(before, after []model.Message) []model.Change {

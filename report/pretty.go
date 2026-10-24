@@ -243,7 +243,7 @@ func (p *Pretty) comparison(r Result, hint string) {
 		for _, class := range model.Classes {
 			parts = append(parts, fmt.Sprintf("%d %s", c.Count(class), class))
 		}
-		fmt.Fprintf(p.w, "\n%s - %s - %s compared, %s\n", verdict(c), strings.Join(parts, ", "), plural(c.Actions, "action", "actions"), Tally(r.Run))
+		fmt.Fprintf(p.w, "\n%s - %s - %s compared, %s\n", verdict(r), strings.Join(parts, ", "), plural(c.Actions, "action", "actions"), Tally(r.Run))
 		p.notes(c.Warnings)
 		if hint != "" {
 			fmt.Fprintln(p.w, hint)
@@ -275,7 +275,7 @@ func (p *Pretty) comparison(r Result, hint string) {
 	if p.o.Quiet {
 		return
 	}
-	fmt.Fprintln(p.w, comparePanel(c))
+	fmt.Fprintln(p.w, comparePanel(r))
 	fmt.Fprintf(p.w, "  %s\n", muted.Render(fmt.Sprintf("%s compared with %s · %s", plural(c.Actions, "action", "actions"), snapshotName(c.Before), Tally(r.Run))))
 	p.notes(c.Warnings)
 	if hint != "" {
@@ -416,7 +416,8 @@ func line(marker, title, right string) string {
 	return "    " + marker + "  " + ui.Pad(t, width-6-lipgloss.Width(right)) + muted.Render(right)
 }
 
-func comparePanel(c *model.Comparison) string {
+func comparePanel(r Result) string {
+	c := r.Comparison
 	color := lipgloss.Color(ui.Ok)
 	switch {
 	case c.Count(model.Broke) > 0:
@@ -426,7 +427,7 @@ func comparePanel(c *model.Comparison) string {
 	case c.Count(model.Changed) > 0:
 		color = ClassColor(model.Changed)
 	}
-	head := bold.Render("ECHO") + "   " + lipgloss.NewStyle().Foreground(color).Bold(true).Render(verdict(c))
+	head := bold.Render("ECHO") + "   " + lipgloss.NewStyle().Foreground(color).Bold(true).Render(verdict(r))
 	var parts []string
 	for _, class := range model.Classes {
 		n := c.Count(class)

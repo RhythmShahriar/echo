@@ -47,9 +47,14 @@ var channelGlyph = map[model.Channel]string{
 
 // FailOn reports whether r should fail a build at threshold: a change
 // class (broke, new, changed) for comparisons, an issue level for runs.
+// An action that failed fails at every threshold but "none": what it sent
+// was never checked.
 func FailOn(r Result, threshold string) bool {
-	if threshold == "" {
+	if threshold == "" || threshold == "none" {
 		return false
+	}
+	if failed, _ := failedActions(r.Run); failed > 0 {
+		return true
 	}
 	if r.Compared() {
 		limit := slices.Index(model.Classes, threshold)
@@ -66,12 +71,28 @@ func FailOn(r Result, threshold string) bool {
 			return true
 		}
 	}
-	for _, a := range r.Run.Actions {
-		if a.Error != "" && limit >= 0 {
-			return true
+	return false
+}
+
+// AllFailed reports whether every action of the run (the compared run, for
+// a comparison) failed, so there is no result at all. A run with no
+// actions (check, headers) hasn't failed.
+func AllFailed(r Result) bool {
+	failed, total := failedActions(r.Run)
+	return total > 0 && failed == total
+}
+
+// failedActions counts the actions that failed.
+func failedActions(run *model.Run) (failed, total int) {
+	if run == nil {
+		return 0, 0
+	}
+	for _, a := range run.Actions {
+		if a.Error != "" {
+			failed++
 		}
 	}
-	return false
+	return failed, len(run.Actions)
 }
 
 // ValidFailOn checks a --fail-on value.
@@ -210,8 +231,13 @@ func capitalize(s string) string {
 	return strings.ToUpper(s[:1]) + s[1:]
 }
 
-// verdict answers "is my site still saying what it should?".
-func verdict(c *model.Comparison) string {
+// verdict answers "is my site still saying what it should?". When
+// actions failed in the compared run it can't be answered.
+func verdict(r Result) string {
+	c := r.Comparison
+	if failed, total := failedActions(r.Run); failed > 0 {
+		return fmt.Sprintf("Could not compare: %d of %d actions failed in this run", failed, total)
+	}
 	switch {
 	case c.Count(model.Broke) > 0:
 		return "Something broke"
