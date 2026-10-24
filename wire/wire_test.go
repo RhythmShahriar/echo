@@ -84,7 +84,7 @@ func TestSignRunWithoutToken(t *testing.T) {
 // JSON, so older catchers and connectors are unaffected.
 func TestCaptureV1Unchanged(t *testing.T) {
 	c := Capture{
-		Version: Version,
+		Version: 1,
 		Kind:    "email",
 		Run:     "r1/checkout",
 		Source:  Source{Via: "wordpress", Stack: "wordpress", Hook: "wp_mail", Host: "shop.test"},

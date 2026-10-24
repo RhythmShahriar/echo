@@ -9,17 +9,37 @@
 // implement it.
 //
 //	POST /v1/capture   Capture → Decision
+//	GET  /v1/health    {"wire": Version, ...}
+//
+// schema.json is the same protocol as a JSON Schema, generated from these
+// types (go generate), for connectors in other languages and for the
+// conformance stand-in. Tags beyond json feed it: enum lists a field's
+// values, since names the wire version that added a field.
 package wire
 
 import (
 	"crypto/hmac"
 	"crypto/sha256"
+	_ "embed" // schema.json
 	"encoding/base64"
 	"strings"
 )
 
-// Version is sent by connectors and checked by Echo.
-const Version = 1
+//go:generate go run ../conformance/gen -src wire.go -o schema.json
+
+// Version is the newest wire version, the one connectors send. Echo
+// accepts captures from MinVersion to Version and says which it speaks in
+// /v1/health. A connector that finds an older Echo there sends that
+// version instead, without the fields the older one lacks.
+const Version = 2
+
+// MinVersion is the oldest wire version Echo still accepts.
+const MinVersion = 1
+
+// Schema is schema.json: the protocol as a JSON Schema (draft 2020-12).
+//
+//go:embed schema.json
+var Schema []byte
 
 // RunHeader carries "<run>/<action>" from the thing that triggered a
 // request (Soundcheck's browser, `rhythm echo run`) to the connector,
@@ -48,11 +68,11 @@ const (
 
 // Capture is one email or HTTP request a connector saw.
 type Capture struct {
-	Version int    `json:"v"`
-	Kind    string `json:"kind"`            // email or http
-	Phase   string `json:"phase,omitempty"` // http: before or after; email: after (with id) reports a real send's outcome
-	ID      string `json:"id,omitempty"`    // after: the ID Echo returned for before
-	Run     string `json:"run,omitempty"`   // from X-Echo-Run, "<run>/<action>"
+	Version int    `json:"v"`                                   // the wire version this capture follows
+	Kind    string `json:"kind" enum:"email,http"`              // email or http
+	Phase   string `json:"phase,omitempty" enum:"before,after"` // http: before or after; email: after (with id) reports a real send's outcome
+	ID      string `json:"id,omitempty"`                        // after: the ID Echo returned for before
+	Run     string `json:"run,omitempty"`                       // from X-Echo-Run, "<run>/<action>"
 	Source  Source `json:"source"`
 	Email   *Email `json:"email,omitempty"`
 	HTTP    *HTTP  `json:"http,omitempty"`
@@ -61,12 +81,12 @@ type Capture struct {
 
 // Source describes the connector and what it hooked.
 type Source struct {
-	Via    string `json:"via"`              // wordpress, laravel, node, smtp, proxy
-	Stack  string `json:"stack,omitempty"`  // wordpress, laravel, node, php
-	Plugin string `json:"plugin,omitempty"` // best guess at the sender: a plugin slug, a package
-	Hook   string `json:"hook,omitempty"`   // wp_mail, pre_http_request, fetch, nodemailer…
-	Host   string `json:"host,omitempty"`   // the site's own host (always allowed)
-	Site   string `json:"site,omitempty"`   // the site's ID when one Echo serves many sites
+	Via    string `json:"via"`                      // wordpress, laravel, node, smtp, proxy
+	Stack  string `json:"stack,omitempty"`          // wordpress, laravel, node, php
+	Plugin string `json:"plugin,omitempty"`         // best guess at the sender: a plugin slug, a package
+	Hook   string `json:"hook,omitempty"`           // wp_mail, pre_http_request, fetch, nodemailer…
+	Host   string `json:"host,omitempty"`           // the site's own host (always allowed)
+	Site   string `json:"site,omitempty" since:"2"` // the site's ID when one Echo serves many sites
 }
 
 // Email is a message handed to the site's mailer.
@@ -84,7 +104,7 @@ type Email struct {
 
 	// Attachments lists the files attached to the message, for connectors
 	// that send no Raw MIME. With Raw set, Echo reads them from the MIME.
-	Attachments []Attachment `json:"attachments,omitempty"`
+	Attachments []Attachment `json:"attachments,omitempty" since:"2"`
 }
 
 // Attachment describes one attached file. Connectors send what they know
@@ -116,9 +136,9 @@ const (
 // Decision is Echo's answer to a capture.
 type Decision struct {
 	ID       string    `json:"id"`
-	Mode     string    `json:"mode"`               // seal or observe
-	Action   string    `json:"action,omitempty"`   // http: allow, fake or block; email: fake (don't send) or allow
-	Response *Response `json:"response,omitempty"` // for fake
+	Mode     string    `json:"mode" enum:"seal,observe"`
+	Action   string    `json:"action,omitempty" enum:"allow,fake,block"` // http: allow, fake or block; email: fake (don't send) or allow
+	Response *Response `json:"response,omitempty"`                       // for fake
 }
 
 // Response is the answer a connector gives the site instead of sending.
