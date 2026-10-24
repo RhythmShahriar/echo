@@ -38,6 +38,7 @@ import (
 
 	"github.com/RhythmShahriar/echo/catcher"
 	"github.com/RhythmShahriar/echo/model"
+	"github.com/RhythmShahriar/echo/recognize"
 	"github.com/RhythmShahriar/echo/wire"
 )
 
@@ -359,7 +360,9 @@ func (p *Proxy) handle(w http.ResponseWriter, r *http.Request, scheme, host, hoo
 	}
 	run := runOf(r)
 	capt := &wire.HTTP{Method: r.Method, URL: u.String(), Headers: flatten(r.Header), Body: string(body)}
-	if p.allowed(u.Hostname()) {
+	// Allowed hosts go straight through, except a live payment call: the
+	// catcher refuses those whatever the allowlist says.
+	if p.allowed(u.Hostname()) && !livePayment(r.Method, u, capt.Headers, body) {
 		p.forward(w, r, u, body, "", run, hook, capt)
 		return
 	}
@@ -444,6 +447,18 @@ func (p *Proxy) forward(w http.ResponseWriter, r *http.Request, u *url.URL, body
 		msg = "copying response: " + copyErr.Error()
 	}
 	after(resp.StatusCode, decode(resp.Header.Get("Content-Encoding"), kept.Bytes(), kept.cut), msg)
+}
+
+// livePayment reports whether a request is a payment call the catcher
+// refuses in every mode (recognize.Refuses).
+func livePayment(method string, u *url.URL, headers map[string]string, body []byte) bool {
+	h := make(map[string]string, len(headers))
+	for k, v := range headers {
+		h[strings.ToLower(k)] = v
+	}
+	req := recognize.Request{Method: strings.ToUpper(method), URL: u, Headers: h, Body: body}
+	var m model.Message
+	return recognize.Refuses(recognize.Recognize(req, &m), req)
 }
 
 func (p *Proxy) markBlocked(id, reason string) {

@@ -283,6 +283,31 @@ func TestPlainHTTP(t *testing.T) {
 	})
 }
 
+// TestAllowedLivePaymentRefused: an allowlisted payment host is still
+// refused, and not forwarded, when the call is in live mode.
+func TestAllowedLivePaymentRefused(t *testing.T) {
+	for _, mode := range []string{catcher.Seal, catcher.Observe} {
+		t.Run(mode, func(t *testing.T) {
+			h := newHarness(t, setup{mode: mode, allow: []string{"api.stripe.com"}})
+			req, _ := http.NewRequest(http.MethodPost, "http://api.stripe.com/v1/charges", strings.NewReader("amount=1000&currency=usd"))
+			req.Header.Set("Authorization", strings.Join([]string{"Bearer sk", "_live_", "abcdefghijklmnop1234"}, ""))
+			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+			resp, err := goClient(t, h, h.echoCA).Do(req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			b, _ := io.ReadAll(resp.Body)
+			_ = resp.Body.Close()
+			if resp.StatusCode != http.StatusForbidden || !strings.Contains(string(b), "rhythm_echo_sealed") {
+				t.Fatalf("got %d %s", resp.StatusCode, b)
+			}
+			if ms := h.messages(t, 1); len(ms) != 1 || ms[0].Status != model.Blocked || ms[0].Provider != "stripe" {
+				t.Errorf("messages = %+v", ms)
+			}
+		})
+	}
+}
+
 func TestTokenRequiredWhenSet(t *testing.T) {
 	h := newHarness(t, setup{mode: catcher.Seal, mitm: true, token: "s3cret-echo"})
 	c := goClient(t, h, h.echoCA)

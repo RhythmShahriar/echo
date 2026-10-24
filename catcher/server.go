@@ -181,15 +181,20 @@ func (s *Server) http(c wire.Capture, run, action string, src model.Source) (wir
 			m.Status, m.Error = model.Failed, c.Error
 		}
 		d.Action = wire.Allow
+	case recognize.Refuses(rec, req):
+		// A live payment (or one whose mode Echo can't read) is refused
+		// in every mode, allowlisted or not: a test must never charge a
+		// card. It's answered with the provider's own refusal.
+		f := recognize.FakeFor(rec, req, &m)
+		m.Status, m.Error = model.Blocked, "refused: a live-mode "+m.Provider+" call; use test credentials on staging"
+		m.Response = &model.Response{Status: f.Status, Body: s.cut(f.Body)}
+		d.Action, d.Response = wire.Fake, &wire.Response{Status: f.Status, Headers: f.Headers, Body: f.Body}
 	case s.cfg.Mode == Observe || allowed:
 		m.Status = model.Sent // until the after phase says otherwise
 		d.Action = wire.Allow
 	default:
 		f := recognize.FakeFor(rec, req, &m)
 		m.Status = model.Faked
-		if recognize.Refuses(rec, req) {
-			m.Status = model.Blocked // e.g. a live payment: answered with the provider's own refusal
-		}
 		m.Response = &model.Response{Status: f.Status, Body: s.cut(f.Body)}
 		d.Action, d.Response = wire.Fake, &wire.Response{Status: f.Status, Headers: f.Headers, Body: f.Body}
 	}

@@ -22,9 +22,9 @@ import (
 //     can't read at all: Echo refuses with the provider's own error shape,
 //     so the SDK throws and the site records a failed payment. A staging
 //     copy of production holding live keys must never see "paid" for an
-//     order nobody paid for, and must never charge a real card when the
-//     seal is lifted by mistake. Refuse reports these so the catcher can
-//     mark the message blocked.
+//     order nobody paid for, and must never charge a real card: these
+//     are refused in observe mode and for allowlisted hosts too. Refuse
+//     reports them so the catcher can mark the message blocked.
 //
 // Connectors mask keys before reporting them but keep the first eight
 // characters ("sk_live_•••••"), which is all the mode check needs.
