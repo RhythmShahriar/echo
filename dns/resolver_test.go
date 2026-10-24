@@ -123,7 +123,7 @@ func answerQuery(q []byte) []byte {
 	case name == "shop.test." || name == "mx.shop.test.":
 		// No data of this type: an empty NOERROR answer.
 	default:
-		resp.Header.RCode = dnsmessage.RCodeNameError
+		resp.RCode = dnsmessage.RCodeNameError
 	}
 	out, err := resp.Pack()
 	if err != nil {
