@@ -43,7 +43,7 @@ The binary is never chosen from the admin screens, so an administrator account a
 
 = Does it send my data anywhere? =
 
-Only to the Rhythm Echo you run and configure. Echo keeps what the site sends in memory on your machine. Nothing goes to the plugin author or any other service.
+Only to the Rhythm Echo you run and configure. Echo keeps what the site sends in memory on your machine. Nothing goes to the plugin author or any other service. Credentials are masked before they leave the site: only a Stripe key's mode prefix (`sk_test_` or `sk_live_`) is kept, so Echo can tell a test key from a live one.
 
 = What happens on my live site? =
 
@@ -54,6 +54,10 @@ Nothing. WordPress says a site is production when WP_ENVIRONMENT_TYPE is not set
 The token travels as a plain HTTP header. Keep Echo on the same machine, a private network or behind TLS when the site reaches it over a network you don't trust.
 
 When the token is set in wp-config.php (RHYTHM_ECHO_TOKEN or RHYTHM_ECHO_WRITE_TOKEN), the environment or the installer's settings file, Tools > Echo shows Echo's URL read-only: set RHYTHM_ECHO_URL there too. An administrator account alone then cannot send the token to another server.
+
+= Why does it use proc_open? =
+
+Only for the Snapshot and Compare buttons and the wp echo commands, which run the rhythm-echo binary. It stays off until wp-config.php, the environment or the installer's settings file sets RHYTHM_ECHO_BIN. It runs that one binary with fixed arguments and no shell: a snapshot name is checked so it can never become a flag. The seal itself never runs a program.
 
 = Can one Echo serve many sites? =
 
