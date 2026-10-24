@@ -269,6 +269,8 @@ func TestRelease(t *testing.T) {
 			{"unknown message", "nope", "ann@client.example", withToken, http.StatusNotFound},
 			{"two addresses", rawID, "ann@client.example, bob@client.example", withToken, http.StatusBadRequest},
 			{"not an address", rawID, "ann", withToken, http.StatusBadRequest},
+			{"quoted local part", rawID, `"x@evil.example"@client.example`, withToken, http.StatusForbidden},
+			{"percent hack", rawID, "x%evil.example@client.example", withToken, http.StatusForbidden},
 		} {
 			before := len(m.deliveries())
 			if code, a := release(t, h, tc.id, tc.to, tc.auth); code != tc.want {
@@ -376,14 +378,19 @@ func TestHandlerConfig(t *testing.T) {
 func TestAllowed(t *testing.T) {
 	allow := []string{"*@client.example", "pat@agency.test"}
 	for addr, want := range map[string]bool{
-		"ann@client.example":       true,
-		"ANN@Client.Example":       true,
-		"pat@agency.test":          true,
-		"ann@real.example":         false,
-		"ann@client.example.evil":  false,
-		"sam@agency.test":          false,
-		"ann@sub.client.example":   false,
-		"client.example@other.com": false,
+		"ann@client.example":              true,
+		"ANN@Client.Example":              true,
+		"pat@agency.test":                 true,
+		"ann@real.example":                false,
+		"ann@client.example.evil":         false,
+		"sam@agency.test":                 false,
+		"ann@sub.client.example":          false,
+		"client.example@other.com":        false,
+		`"x@evil.example"@client.example`: false,
+		"x@evil.example@client.example":   false,
+		"x%evil.example@client.example":   false,
+		"evil.example!x@client.example":   false,
+		"@client.example":                 false,
 	} {
 		if got := Allowed(allow, addr); got != want {
 			t.Errorf("Allowed(%q) = %v, want %v", addr, got, want)

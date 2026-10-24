@@ -124,9 +124,16 @@ type releaser struct {
 	acct  account
 }
 
-// Allowed reports whether addr matches one of the allow globs.
+// Allowed reports whether addr matches one of the allow globs. Addresses
+// whose local part holds '@', '%', '!' or a quote never match: a glob like
+// "*@client.example" would take "x%evil.example@client.example" or a quoted
+// "x@evil.example"@client.example, which some relays route elsewhere.
 func Allowed(allow []string, addr string) bool {
 	addr = strings.ToLower(strings.TrimSpace(addr))
+	at := strings.LastIndex(addr, "@")
+	if at <= 0 || strings.ContainsAny(addr[:at], `@%!"`) {
+		return false
+	}
 	for _, g := range allow {
 		if ok, _ := path.Match(strings.ToLower(strings.TrimSpace(g)), addr); ok {
 			return true
