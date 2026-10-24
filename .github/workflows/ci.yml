@@ -6,8 +6,19 @@ on:
   push:
     branches: [master]
   pull_request:
+permissions:
+  contents: read
 jobs:
+  # The shared workflows are pinned by commit; Dependabot can't bump a
+  # branch, so move the SHA by hand when RhythmShahriar/.github changes.
   go:
-    uses: RhythmShahriar/.github/.github/workflows/ci-go.yml@master
+    uses: RhythmShahriar/.github/.github/workflows/ci-go.yml@d296f34c9b6629211c68561504d938c404afaf74 # master
   commitlint:
-    uses: RhythmShahriar/.github/.github/workflows/commitlint.yml@master
+    uses: RhythmShahriar/.github/.github/workflows/commitlint.yml@d296f34c9b6629211c68561504d938c404afaf74 # master
+  actionlint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: actionlint
+        # rhysd/actionlint:1.7.7, by digest so a moved tag can't change the check.
+        run: docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint@sha256:887a259a5a534f3c4f36cb02dca341673c6089431057242cdc931e9f133147e9 -color
