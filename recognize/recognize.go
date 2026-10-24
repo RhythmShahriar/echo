@@ -13,6 +13,7 @@ import (
 	"net/url"
 	"slices"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/RhythmShahriar/echo/model"
 	"github.com/RhythmShahriar/rhythm/kit/secrets"
@@ -187,8 +188,44 @@ var generic = Recognizer{
 		if r.Method == "POST" || r.Method == "PUT" || r.Method == "PATCH" {
 			m.Channel = model.Webhook
 		}
-		m.To = []string{r.URL.Host + r.URL.Path}
+		m.To = []string{genericTo(r)}
 	},
+}
+
+// genericTo names an unknown destination by host and path, with every
+// segment that may be a credential replaced by "…": one longer than 20
+// characters (tokens, UUIDs, hashes) or shaped like a token. The full URL
+// is still stored, masked by RedactURL; To is what lists and compare show,
+// so it must never hold a key, even one no rule recognizes.
+func genericTo(r Request) string {
+	segs := strings.Split(r.URL.Path, "/")
+	for i, seg := range segs {
+		if utf8.RuneCountInString(seg) > 20 || tokenShaped(segs, i) {
+			segs[i] = "…"
+		}
+	}
+	return r.URL.Host + strings.Join(segs, "/")
+}
+
+// keySegments are path words that say the next segment is a credential
+// (IFTTT's /with/key/{key}, /token/{t} reset links).
+var keySegments = []string{"key", "token", "secret", "apikey", "api_key", "access_token"}
+
+// tokenShaped reports whether path segment i looks like a credential: a
+// Telegram bot token, the segment after a key word, or a value
+// secrets.Redact would mask.
+func tokenShaped(segs []string, i int) bool {
+	seg := segs[i]
+	if seg == "" {
+		return false
+	}
+	if telegramBot.MatchString(seg) {
+		return true
+	}
+	if i > 0 && slices.Contains(keySegments, strings.ToLower(segs[i-1])) {
+		return true
+	}
+	return secrets.Redact(seg) != seg
 }
 
 // secretQuery are query parameters that carry a URL's credential on top
@@ -198,8 +235,9 @@ var secretQuery = []string{"sig", "signature", "code"}
 
 // RedactURL masks the credentials in a request URL for storing and
 // showing it: what secrets.Redact finds (keys, Slack and Discord hook
-// tokens), signature parameters, and the secret last segment of catch
-// hooks (Zapier, Make, n8n). The masked form is the same every
+// tokens), signature parameters, Telegram bot tokens, the segment after
+// a key word (IFTTT's /with/key/{key}) and the secret last segment of
+// catch hooks (Zapier, Make, n8n). The masked form is the same every
 // run, so compare still pairs messages by URL.
 func RedactURL(rec Recognizer, raw string) string {
 	u, err := url.Parse(raw)
@@ -207,16 +245,28 @@ func RedactURL(rec Recognizer, raw string) string {
 		return secrets.Redact(raw)
 	}
 	changed := false
+	// Credentials in the path, whatever the recognizer: a Telegram bot
+	// token (bot<id>: is kept, it names the bot) and the segment after a
+	// key word.
+	segs := strings.Split(u.Path, "/")
+	for i, seg := range segs {
+		if t := telegramBot.FindStringSubmatch(seg); t != nil {
+			segs[i], changed = "bot"+t[1]+":"+secrets.Mask(t[2], 2), true
+		} else if seg != "" && i > 0 && slices.Contains(keySegments, strings.ToLower(segs[i-1])) && !strings.Contains(seg, "•") {
+			segs[i], changed = secrets.Mask(seg, 2), true
+		}
+	}
 	if rec.SecretURL {
-		segs := strings.Split(u.Path, "/")
 		for i := len(segs) - 1; i >= 0; i-- {
 			if segs[i] != "" {
-				segs[i], changed = secrets.Mask(segs[i], 2), true
+				if !strings.Contains(segs[i], "•") {
+					segs[i], changed = secrets.Mask(segs[i], 2), true
+				}
 				break
 			}
 		}
-		u.Path = strings.Join(segs, "/")
 	}
+	u.Path = strings.Join(segs, "/")
 	pairs := strings.Split(u.RawQuery, "&")
 	for i, p := range pairs {
 		k, v, _ := strings.Cut(p, "=")

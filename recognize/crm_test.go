@@ -12,7 +12,19 @@ import (
 
 var zapierHook = "https://hooks.zapier.com/hooks/catch/1234567/" + join("ab", "c9xyz") + "/"
 
+var iftttKey = join("dQw4w9", "WgXcQabcdefghij")
+
 var crmCases = []tcase{
+	{name: "trigger", provider: "ifttt", status: 200,
+		req: jsonReq("POST", "https://maker.ifttt.com/trigger/order_paid/with/key/"+iftttKey, `{"value1":"1042"}`),
+		check: func(t *testing.T, m model.Message) {
+			eq(t, "channel", m.Channel, model.Webhook)
+			eq(t, "event", m.Event, "order_paid")
+			eqList(t, "to", m.To, "ifttt order_paid")
+		}},
+	{name: "json trigger", provider: "ifttt", status: 200,
+		req:   jsonReq("POST", "https://maker.ifttt.com/trigger/low_stock/json/with/key/"+iftttKey, `{"sku":"A1"}`),
+		check: func(t *testing.T, m model.Message) { eq(t, "event", m.Event, "low_stock") }},
 	{name: "create contact", provider: "hubspot", status: 201,
 		req: jsonReq("POST", "https://api.hubapi.com/crm/v3/objects/contacts", `{"properties":{"email":"ann@example.com","firstname":"Ann"}}`,
 			"authorization", "Bearer "+join("pat", "-na1-", "00000000-0000-4000-8000-000000000000")),
@@ -78,6 +90,8 @@ var crmCases = []tcase{
 }
 
 var crmNegatives = []negative{
+	{"IFTTT home page", "ifttt", jsonReq("GET", "https://maker.ifttt.com/use/"+iftttKey, "")},
+	{"trigger path on another host", "ifttt", jsonReq("POST", "https://hooks.shop.test/trigger/x/with/key/abc", `{}`)},
 	{"HubSpot website", "hubspot", req("GET", "https://www.hubspot.com/pricing", nil, "")},
 	{"Mailchimp site", "mailchimp", req("GET", "https://mailchimp.com/", nil, "")},
 	{"Mandrill is not Mailchimp marketing", "mailchimp", jsonReq("POST", "https://mandrillapp.com/api/1.0/messages/send", `{}`)},

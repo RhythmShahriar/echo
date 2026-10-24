@@ -257,3 +257,35 @@ func TestRedactURLMasksHookSecrets(t *testing.T) {
 		}
 	}
 }
+
+func TestRedactURLMasksPathTokens(t *testing.T) {
+	for _, c := range []struct{ raw, want string }{
+		{"https://api.telegram.org/bot" + tgToken + "/sendMessage", "https://api.telegram.org/bot123456789:AA•••••/sendMessage"},
+		{"https://maker.ifttt.com/trigger/order_paid/with/key/" + iftttKey, "https://maker.ifttt.com/trigger/order_paid/with/key/dQ•••••"},
+		{"https://api.shop.test/v1/token/" + join("r3s3t", "c0de"), "https://api.shop.test/v1/token/r3•••••"},
+		{"https://api.shop.test/v1/keys/list", "https://api.shop.test/v1/keys/list"},
+	} {
+		var m model.Message
+		if got := RedactURL(Recognize(req("POST", c.raw, nil, ""), &m), c.raw); got != c.want {
+			t.Errorf("RedactURL(%s) = %s, want %s", c.raw, got, c.want)
+		}
+	}
+}
+
+func TestGenericToHoldsNoToken(t *testing.T) {
+	for _, c := range []struct{ raw, want string }{
+		// A bot token on a host Echo doesn't know (a self-hosted Bot API).
+		{"https://tg.shop.test/bot" + tgToken + "/sendMessage", "tg.shop.test/…/sendMessage"},
+		{"https://hooks.shop.test/trigger/x/with/key/abc", "hooks.shop.test/trigger/x/with/key/…"},
+		{"https://crm.shop.test/hooks/" + join("9f86d081884c7d65", "9a2feaa0c55ad015"), "crm.shop.test/hooks/…"},
+		{"https://crm.shop.test/api/" + join("AKIA", "IOSFODNN7EXAMPLE") + "/leads", "crm.shop.test/api/…/leads"},
+		// Ordinary paths are kept whole.
+		{"https://crm.shop.test/api/v2/leads/1042", "crm.shop.test/api/v2/leads/1042"},
+		{"https://shop.test:8443/wp-json/wc/v3/orders", "shop.test:8443/wp-json/wc/v3/orders"},
+	} {
+		var m model.Message
+		rec := Recognize(jsonReq("POST", c.raw, `{}`), &m)
+		eq(t, "provider for "+c.raw, rec.Provider, "")
+		eqList(t, "to for "+c.raw, m.To, c.want)
+	}
+}

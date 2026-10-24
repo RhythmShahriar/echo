@@ -25,6 +25,7 @@ func init() {
 	register(zapier)
 	register(makeHook)
 	register(n8n)
+	register(ifttt)
 }
 
 // restEvent names a REST call from its path words (IDs dropped, joined
@@ -286,6 +287,29 @@ var n8n = Recognizer{
 	Fill: hookFill,
 	Fake: func(Request, *model.Message) Fake {
 		return jsonFake(200, `{"message":"Workflow was started"}`)
+	},
+}
+
+// ifttt: Webhooks service triggers,
+// maker.ifttt.com/trigger/{event}/with/key/{key} (or .../json/with/key/{key}
+// to pass the whole body on). The key is the account's credential and the
+// last segment, so the URL is masked like a catch hook's.
+var ifttt = Recognizer{
+	Provider:  "ifttt",
+	Name:      "IFTTT",
+	SecretURL: true,
+	Channel:   model.Webhook,
+	Match: func(r Request) bool {
+		s := segments(r)
+		return host(r, "maker.ifttt.com") && len(s) >= 5 && s[0] == "trigger" && s[len(s)-2] == "key" && s[len(s)-3] == "with"
+	},
+	Fill: func(r Request, m *model.Message) {
+		event := segments(r)[1]
+		m.Event = event
+		m.To = []string{"ifttt " + event}
+	},
+	Fake: func(r Request, m *model.Message) Fake {
+		return textFake(200, "Congratulations! You've fired the "+m.Event+" event")
 	},
 }
 
