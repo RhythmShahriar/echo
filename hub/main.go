@@ -267,6 +267,30 @@ func ScheduleMain(args []string, _ io.Reader, stdout, stderr io.Writer) int {
 	return scheduleMain(ctx, args, stdout, stderr, time.Now, sleep)
 }
 
+// until is how long until the next window, to the minute and in days,
+// hours and minutes: 2d 1h45m, 3h, 45m.
+func until(d time.Duration) string {
+	m := int(d.Round(time.Minute) / time.Minute)
+	if m < 1 {
+		return "less than a minute"
+	}
+	days, hours, mins := m/(24*60), m/60%24, m%60
+	var b strings.Builder
+	if days > 0 {
+		fmt.Fprintf(&b, "%dd", days)
+		if hours > 0 || mins > 0 {
+			b.WriteString(" ")
+		}
+	}
+	if hours > 0 {
+		fmt.Fprintf(&b, "%dh", hours)
+	}
+	if mins > 0 {
+		fmt.Fprintf(&b, "%dm", mins)
+	}
+	return b.String()
+}
+
 func sleep(ctx context.Context, d time.Duration) error {
 	t := time.NewTimer(d)
 	defer t.Stop()
@@ -344,7 +368,7 @@ func scheduleMain(ctx context.Context, args []string, stdout, stderr io.Writer, 
 	for {
 		if !*runNow {
 			next := sched.Next(now())
-			fmt.Fprintf(stderr, "Next window: %s (in %s)\n", next.Format("Mon 2 Jan 15:04 MST"), next.Sub(now()).Round(time.Minute))
+			fmt.Fprintf(stderr, "Next window: %s (in %s)\n", next.Format("Mon 2 Jan 15:04 MST"), until(next.Sub(now())))
 			if err := wait(ctx, next.Sub(now())); err != nil {
 				return 0 // stopped while waiting
 			}

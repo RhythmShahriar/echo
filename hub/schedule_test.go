@@ -237,8 +237,23 @@ func TestScheduleMain(t *testing.T) {
 	if code != 3 || waited != 64*time.Hour {
 		t.Errorf("--once: code %d, waited %s\n%s%s", code, waited, out, errb)
 	}
-	if !strings.Contains(errb, "Next window: Tue 27 Oct 02:00 UTC (in 64h0m0s)") || !strings.Contains(out, "client-a: couldn't compare") {
+	if !strings.Contains(errb, "Next window: Tue 27 Oct 02:00 UTC (in 2d 16h)") || !strings.Contains(out, "client-a: couldn't compare") {
 		t.Errorf("output:\n%s%s", out, errb)
+	}
+}
+
+func TestUntil(t *testing.T) {
+	for d, want := range map[time.Duration]string{
+		49*time.Hour + 45*time.Minute:   "2d 1h45m",
+		48 * time.Hour:                  "2d",
+		24*time.Hour + 5*time.Minute:    "1d 5m",
+		3 * time.Hour:                   "3h",
+		45*time.Minute + 20*time.Second: "45m",
+		10 * time.Second:                "less than a minute",
+	} {
+		if got := until(d); got != want {
+			t.Errorf("until(%s) = %q, want %q", d, got, want)
+		}
 	}
 }
 
