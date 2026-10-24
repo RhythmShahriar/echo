@@ -18,9 +18,13 @@
 set -euo pipefail
 
 # mask hides who a message went to and what it said: email addresses keep
-# only their domain, international numbers and quoted text (subjects,
-# events, values in titles) become ***. So does the subject in a
-# `rhythm-echo up --plain` line ("12:00:01 email to x: Subject [sealed]").
+# only their domain, phone numbers and quoted text (subjects, events,
+# values in titles) become ***. A number without a leading + counts as a
+# phone number when it follows "to " or a comma and has 7 or more digits,
+# so times and dates stay readable. Single quotes must stand apart from
+# words ('x', not the one in "can't") and may hold an apostrophe; curly
+# quotes count too. The subject in a `rhythm-echo up --plain` line
+# ("12:00:01 email to x: Subject [sealed]") is masked as well.
 # $tok is Echo's token, hidden too in case a log line repeats it. $raw
 # (summary-details) keeps everything but the token; $keepq keeps quoted
 # text, for error messages that quote what was wrong.
@@ -32,7 +36,14 @@ def mask:
   | if $raw then . else
       gsub("[A-Za-z0-9._%+-]+@(?<d>([A-Za-z0-9-]+\\.)+[A-Za-z]{2,})"; "***@\(.d)")
       | gsub("\\+[0-9][0-9 ().-]{6,}[0-9]"; "+***")
-      | (if $keepq then . else gsub("\"[^\"]*\""; "\"***\"") end)
+      | gsub("(?<p>(?:\\bto|,) )(?<n>\\(?[0-9][0-9 ().-]{5,}[0-9])";
+          "\(.p)\(if (.n | gsub("[^0-9]"; "") | length) >= 7 and (.n | test("^[0-9]{4}-[0-9]{2}-[0-9]{2}$") | not) then "***" else .n end)")
+      | (if $keepq then . else
+          gsub("\"[^\"]*\""; "\"***\"")
+          | gsub("(?<![A-Za-z0-9])\u0027(?:[^\u0027]|\u0027(?=[A-Za-z]))*\u0027(?![A-Za-z0-9])"; "\u0027***\u0027")
+          | gsub("\u2018(?:[^\u2019]|\u2019(?=[A-Za-z]))*\u2019"; "\u2018***\u2019")
+          | gsub("\u201c[^\u201d]*\u201d"; "\u201c***\u201d")
+        end)
       | sub("^(?<h>[0-9]{2}:[0-9]{2}:[0-9]{2} .+? to [^:]*: ).*(?<s> \\[[a-z_ -]+\\])$"; "\(.h)***\(.s)")
     end;
 def cell: gsub("\\|"; "\\|") | gsub("[\r\n]+"; " ") | gsub("<"; "&lt;") | gsub(">"; "&gt;");

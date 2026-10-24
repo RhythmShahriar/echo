@@ -65,6 +65,12 @@ func TestSummaryMask(t *testing.T) {
 		{`Welcome email ("Hi Jane") is no longer sent`, `Welcome email ("***") is no longer sent`},
 		{"Echo listening on 127.0.0.1:8025 with token tok3n", "Echo listening on 127.0.0.1:8025 with token ***"},
 		{"nothing private on 2026-10-24 12:00:01", "nothing private on 2026-10-24 12:00:01"},
+		{"SMS to (555) 123-4567 changed", "SMS to *** changed"},
+		{"SMS to 555.123.4567, 555 987 6543 is new", "SMS to ***, *** is new"},
+		{"Runs from 2026-10-24 to 2026-10-25, 3 to 4 times", "Runs from 2026-10-24 to 2026-10-25, 3 to 4 times"},
+		{"Email 'Order W-1001' can't be sent", "Email '***' can't be sent"},
+		{"Email 'Jane's order' isn't sent", "Email '***' isn't sent"},
+		{"Email ‘Jane’s order’ and “Hi Jane” are gone", "Email ‘***’ and “***” are gone"},
 	}
 	for _, c := range cases {
 		cmd := exec.Command("bash", sh, "mask") //nolint:gosec // our own script
