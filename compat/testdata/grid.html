@@ -1,0 +1,20 @@
+<!doctype html>
+<html>
+<head>
+<link rel="stylesheet" href="https://shop.test/mail.css">
+<style>
+  /* display: flex in a comment is not a use */
+  @import url("https://shop.test/fonts.css");
+  .items { display: grid; grid-template-columns: 1fr 1fr; }
+  .price { color: var(--brand, #333); content: "a { display: flex }"; }
+</style>
+</head>
+<body>
+<div class="items">
+  <img src="https://shop.test/logo.svg" alt="Shop">
+  <img src="data:image/png;base64,iVBORw0KGgo=" alt="">
+</div>
+<video src="https://shop.test/promo.mp4"></video>
+<script>track()</script>
+</body>
+</html>
