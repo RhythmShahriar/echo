@@ -91,13 +91,13 @@ func TestWire2Fields(t *testing.T) {
 }
 
 func TestWire2AttachmentsCleaned(t *testing.T) {
-	x := extras{}
-	_ = json.Unmarshal([]byte(`{"email":{"attachments":[{"name":"a.pdf","size":-4,"sha256":"not hex"},{"name":"b","sha256":"ABCDEF"}]}}`), &x)
-	got := x.attachments()
+	var c wire.Capture
+	_ = json.Unmarshal([]byte(`{"email":{"attachments":[{"name":"a.pdf","size":-4,"sha256":"not hex"},{"name":"b","sha256":"ABCDEF"}]}}`), &c)
+	got := attachments(c.Email)
 	if len(got) != 2 || got[0].Size != 0 || got[0].SHA256 != "" || got[1].SHA256 != "" {
 		t.Errorf("attachments = %+v", got)
 	}
-	if (extras{}).attachments() != nil {
+	if attachments(nil) != nil || attachments(&wire.Email{}) != nil {
 		t.Error("no attachments: nil")
 	}
 }
@@ -105,17 +105,13 @@ func TestWire2AttachmentsCleaned(t *testing.T) {
 // TestWire2AttachmentsBounded: a capture can't list more than
 // maxAttachments files, nor a type that isn't a MIME type.
 func TestWire2AttachmentsBounded(t *testing.T) {
-	files := make([]wireAttachment, maxAttachments+40)
+	files := make([]wire.Attachment, maxAttachments+40)
 	for i := range files {
-		files[i] = wireAttachment{Name: "f.pdf", Type: "Application/PDF"}
+		files[i] = wire.Attachment{Name: "f.pdf", Type: "Application/PDF"}
 	}
 	files[0].Type = strings.Repeat("x", 4096)
 	files[1].Type = "text/html; <script>"
-	x := extras{}
-	x.Email = &struct {
-		Attachments []wireAttachment `json:"attachments"`
-	}{Attachments: files}
-	got := x.attachments()
+	got := attachments(&wire.Email{Attachments: files})
 	if len(got) != maxAttachments || got[0].Type != "" || got[1].Type != "" || got[2].Type != "application/pdf" {
 		t.Errorf("%d attachments, types %q %q %q", len(got), got[0].Type, got[1].Type, got[2].Type)
 	}

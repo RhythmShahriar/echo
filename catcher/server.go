@@ -270,7 +270,7 @@ type health struct {
 }
 
 func (s *Server) health(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusOK, health{Tool: "rhythm-echo", Version: s.cfg.Version, Mode: s.cfg.Mode, Wire: wireMax,
+	writeJSON(w, http.StatusOK, health{Tool: "rhythm-echo", Version: s.cfg.Version, Mode: s.cfg.Mode, Wire: wire.Version,
 		SMTP: s.cfg.SMTPAddr, Proxy: s.cfg.ProxyAddr, BootID: s.cfg.BootID, Store: s.cfg.Store,
 		Capabilities: capabilities, Providers: recognize.Providers()})
 }
@@ -290,7 +290,7 @@ func (s *Server) capture(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "bad capture: "+err.Error(), http.StatusBadRequest)
 		return
 	}
-	d, err := s.captureFor(c, decodeExtras(body), requestSite(r))
+	d, err := s.captureFor(c, requestSite(r))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -301,14 +301,13 @@ func (s *Server) capture(w http.ResponseWriter, r *http.Request) {
 // Capture records c and returns the decision. Connectors reach it through
 // the API; the SMTP sink and the proxy call it directly.
 func (s *Server) Capture(c wire.Capture) (wire.Decision, error) {
-	return s.captureFor(c, extras{}, "")
+	return s.captureFor(c, "")
 }
 
-// captureFor is Capture with the wire 2 fields x and the site of the
-// write token the capture came with. That site marks what's captured
-// over the one the capture names and an after phase only updates that
-// site's own messages.
-func (s *Server) captureFor(c wire.Capture, x extras, site string) (wire.Decision, error) {
+// captureFor is Capture with the site of the write token the capture
+// came with. That site marks what's captured over the one the capture
+// names and an after phase only updates that site's own messages.
+func (s *Server) captureFor(c wire.Capture, site string) (wire.Decision, error) {
 	if err := checkVersion(c.Version); err != nil {
 		return wire.Decision{}, err
 	}
@@ -317,7 +316,7 @@ func (s *Server) captureFor(c wire.Capture, x extras, site string) (wire.Decisio
 	src := model.Source{Via: c.Source.Via, Stack: c.Source.Stack, Plugin: c.Source.Plugin, Hook: c.Source.Hook, Host: c.Source.Host,
 		Site: site}
 	if src.Site == "" {
-		src.Site = s.fitAny(x.Source.Site, mask.Text)
+		src.Site = s.fitAny(c.Source.Site, mask.Text)
 	}
 	if c.Phase == wire.After && c.ID != "" && site != "" {
 		if m, ok := s.Inbox.Get(c.ID); ok && m.Source.Site != site {
@@ -345,7 +344,7 @@ func (s *Server) captureFor(c wire.Capture, x extras, site string) (wire.Decisio
 			s.pit.smtpAccepted.Add(1)
 			s.pit.smtpBytes.Add(int64(len(c.Email.Raw)))
 		}
-		m, f := s.email(c.Email, x.attachments())
+		m, f := s.email(c.Email, attachments(c.Email))
 		m.Run, m.Action, m.Source = run, action, src
 		// Mail handed to Echo's own SMTP sink or sendmail stand-in ends
 		// there in every mode: nothing delivers it, so it's never "sent".

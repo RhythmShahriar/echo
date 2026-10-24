@@ -171,10 +171,7 @@ func SignRun(token, run, action string) string {
 // unsigned values (no token configured) can use them. A value with a
 // signature that does not verify returns nothing.
 func VerifyRun(token, value string) (run, action string, ok bool) {
-	v, sig := value, ""
-	if i := strings.LastIndexByte(value, '.'); i >= 0 && isSig(value[i+1:]) {
-		v, sig = value[:i], value[i+1:]
-	}
+	v, sig := SplitRun(value)
 	run, action, found := strings.Cut(v, "/")
 	if !found || run == "" {
 		return "", "", false
@@ -186,6 +183,16 @@ func VerifyRun(token, value string) (run, action string, ok bool) {
 		return "", "", false
 	}
 	return run, action, true
+}
+
+// SplitRun splits a run value into "<run>/<action>" and its signature,
+// "" for an unsigned value. An action name with a dot in it
+// ("order.paid") is not taken for a signature.
+func SplitRun(value string) (v, sig string) {
+	if i := strings.LastIndexByte(value, '.'); i >= 0 && isSig(value[i+1:]) {
+		return value[:i], value[i+1:]
+	}
+	return value, ""
 }
 
 func runSig(token, v string) string {

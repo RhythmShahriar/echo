@@ -74,6 +74,21 @@ func TestVerifyRunUnsigned(t *testing.T) {
 	}
 }
 
+// TestSplitRun: a signature is split off; an action with a dot in its
+// name is not one.
+func TestSplitRun(t *testing.T) {
+	signed := SignRun("secret", "r1", "checkout")
+	for value, want := range map[string][2]string{
+		signed:          {"r1/checkout", signed[len("r1/checkout."):]},
+		"r1/order.paid": {"r1/order.paid", ""},
+		"r1/checkout":   {"r1/checkout", ""},
+	} {
+		if v, sig := SplitRun(value); v != want[0] || sig != want[1] {
+			t.Errorf("SplitRun(%q) = %q %q, want %q %q", value, v, sig, want[0], want[1])
+		}
+	}
+}
+
 func TestSignRunWithoutToken(t *testing.T) {
 	if got := SignRun("", "r1", "checkout"); got != "r1/checkout" {
 		t.Fatalf("SignRun without a token = %q, want it unsigned", got)

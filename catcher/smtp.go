@@ -109,7 +109,7 @@ func (s *session) Data(r io.Reader) error {
 		e.To, e.BCC = s.to, nil
 	}
 	_, err = s.s.captureFor(wire.Capture{Version: wire.Version, Kind: "email", Run: p.Headers[strings.ToLower(wire.RunHeader)],
-		Source: wire.Source{Via: "smtp", Host: s.client, Plugin: mailer(p.Headers)}, Email: e}, extras{}, s.site)
+		Source: wire.Source{Via: "smtp", Host: s.client, Plugin: mailer(p.Headers)}, Email: e}, s.site)
 	return err
 }
 
