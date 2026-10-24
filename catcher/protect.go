@@ -38,11 +38,11 @@ type ProtectOptions struct {
 //   - a page can't stop its browser sending Origin, so any Origin other
 //     than Echo's own is refused (403);
 //   - with DNS rebinding a page points its own name at 127.0.0.1 and reads
-//     the inbox, but its Host header still names the attacker's domain, so
+//     the inbox but its Host header still names the attacker's domain, so
 //     a Host that isn't loopback or a configured name is refused (403).
 //
 // Tools that aren't browsers (curl, connectors, Mailpit clients) send no
-// Origin and a plain Host, and pass unchanged.
+// Origin and a plain Host and pass unchanged.
 func Protect(next http.Handler, o ProtectOptions) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if o.Token != "" && subtle.ConstantTimeCompare([]byte(r.Header.Get(wire.TokenHeader)), []byte(o.Token)) == 1 {
@@ -118,7 +118,7 @@ func jsonBody(r *http.Request) bool {
 
 // browser reports whether r shows any sign of coming from a web browser.
 // Every browser sends a User-Agent starting "Mozilla/"; current ones also
-// send Sec-Fetch headers, and pages may add a Referer.
+// send Sec-Fetch headers and pages may add a Referer.
 func browser(r *http.Request) bool {
 	return strings.HasPrefix(r.UserAgent(), "Mozilla/") || r.Header.Get("Sec-Fetch-Mode") != "" ||
 		r.Header.Get("Sec-Fetch-Site") != "" || r.Referer() != ""

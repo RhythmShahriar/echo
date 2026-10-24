@@ -8,7 +8,7 @@
 // paths, secrets in JSON numbers and base64 MIME parts. The rules move to
 // the kit once it has them.
 //
-// Every function keeps at most Keep characters of a secret, and none for
+// Every function keeps at most Keep characters of a secret and none for
 // values that change on every send (reset keys, login codes), so a
 // comparison of two runs doesn't see them as changed.
 package mask
@@ -78,7 +78,7 @@ var (
 
 // URL masks the credential parts of a URL (or of a URL-like string such as
 // "api.telegram.org/bot<token>/sendMessage"): a Telegram bot token, a
-// /key/<x> path segment, and the values of query keys key, k, code, otp,
+// /key/<x> path segment and the values of query keys key, k, code, otp,
 // reset, token, sig, signature and hash. Other query values (?page=2) are
 // kept.
 func URL(s string) string {
@@ -97,7 +97,7 @@ func URL(s string) string {
 }
 
 // Text masks free text (an email body, a subject, an SMS): the kit's rules,
-// one-time codes, and URL on every URL in it.
+// one-time codes and URL on every URL in it.
 func Text(s string) string {
 	if s == "" {
 		return ""
@@ -129,7 +129,7 @@ func codes(s string) string {
 }
 
 // jsonField matches a JSON key and its string or number value. It works on
-// text that may not parse (a body cut to size), and keeps the original
+// text that may not parse (a body cut to size) and keeps the original
 // spacing around the colon.
 var jsonField = regexp.MustCompile(`"((?:[^"\\]|\\.)*)"(\s*:\s*)("(?:[^"\\]|\\.)*"|-?\d[\d.eE+-]*)`)
 
@@ -139,7 +139,7 @@ var notSecretKeys = map[string]bool{"orderkey": true, "metakey": true, "cachekey
 
 // secretField reports whether a JSON key names a credential. The words
 // are pass, pwd, secret, token and auth anywhere in the name ("db_pwd",
-// "access_token", "auth"), and key at its end ("apiKey", "license_key").
+// "access_token", "auth") and key at its end ("apiKey", "license_key").
 // A bare "key" counts only when its value looks random: meta_data lists
 // use it for field names. Counts ("total_tokens") and "author" don't.
 func secretField(name, value string) bool {
@@ -203,7 +203,7 @@ func keep(v string) string {
 
 // MIME masks a raw RFC 5322 message. Text parts are decoded (base64,
 // quoted-printable) before masking, since a secret in base64 is invisible
-// to every rule, and stored decoded as 8bit. Other parts are replaced by
+// to every rule and stored decoded as 8bit. Other parts are replaced by
 // one line naming them:
 //
 //	[attachment invoice-42.pdf application/pdf 84211 sha256:9f86d0…]

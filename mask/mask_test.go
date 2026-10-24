@@ -54,7 +54,7 @@ func TestRules(t *testing.T) {
 		{"page kept", URL, "https://shop.test/orders?page=2&utm_source=email", "", "", true},
 		{"keyword kept", URL, "https://shop.test/search?keyword=shoes&sort=price", "", "", true},
 
-		// Text: the kit's rules, codes, and URL on every URL.
+		// Text: the kit's rules, codes and URL on every URL.
 		{"link in text", Text, "Reset: https://shop.test/wp-login.php?action=rp&key=" + secret + "&login=jane.", secret, "login=jane.", false},
 		{"link in html", Text, `<a href="https://shop.test/magic?token=` + secret + `&amp;page=2">here</a>`, secret, "page=2\">here</a>", false},
 		{"login code subject", Text, "Your login code is 482913", "482913", "Your login code is " + Hidden, false},

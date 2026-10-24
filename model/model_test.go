@@ -103,7 +103,7 @@ func TestV1RunLoadsUnchanged(t *testing.T) {
 }
 
 // TestNewFieldsAreOptional: a message without the fields added after
-// v1.0.0 encodes without any trace of them, and one with them reads back.
+// v1.0.0 encodes without any trace of them and one with them reads back.
 func TestNewFieldsAreOptional(t *testing.T) {
 	m := Message{ID: "x", Channel: Email, Status: Faked, Source: Source{Via: "smtp"}, At: time.Unix(0, 0).UTC()}
 	b, _ := json.Marshal(m)

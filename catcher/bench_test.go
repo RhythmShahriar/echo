@@ -67,7 +67,7 @@ func BenchmarkCaptureLargeEmail(b *testing.B) {
 }
 
 // TestLargeCaptureIsCutBeforeMasking: a 20 MiB text took 29 s to mask in
-// full. Cut first, it's quick, and what's stored fits MaxBody.
+// full. Cut first, it's quick and what's stored fits MaxBody.
 func TestLargeCaptureIsCutBeforeMasking(t *testing.T) {
 	s := NewServer(NewInbox(10), Config{})
 	big := largeText(20 << 20)

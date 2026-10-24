@@ -215,7 +215,7 @@ func (s *Server) http(c wire.Capture, run, action string, src model.Source) (wir
 	rec := recognize.Recognize(req, &m)
 	m.URL = s.fitAny(recognize.RedactURL(rec, h.URL), mask.Text) // a catch hook's URL is its credential
 	// Recognizers copy what they read from the raw request: the SMS text,
-	// the chat message, and for unknown APIs the host and path as To.
+	// the chat message and for unknown APIs the host and path as To.
 	s.maskFields(&m)
 	allowed := s.allowed(u.Hostname(), src.Host)
 	d := wire.Decision{Mode: s.cfg.Mode}
@@ -289,7 +289,7 @@ func (s *Server) email(e *wire.Email) model.Message {
 
 // maskFields masks the fields a message's text and recipients are read
 // into, each cut to size: a subject can hold a login code, an HTML link a
-// reset key, and a recipient copied from an API path a bot token.
+// reset key and a recipient copied from an API path a bot token.
 func (s *Server) maskFields(m *model.Message) {
 	m.Subject, m.Text, m.HTML = s.fit(m, m.Subject, mask.Text), s.fit(m, m.Text, mask.Text), s.fit(m, m.HTML, mask.Text)
 	m.From, m.ReplyTo = s.fit(m, m.From, maskAddress), s.fit(m, m.ReplyTo, maskAddress)
@@ -350,7 +350,7 @@ func fillEmpty(m *model.Message, p model.Message) {
 
 // fit masks v with fn and keeps at most MaxBody bytes of the result,
 // marking m as truncated when it cuts. v is cut to MaxBody plus a margin
-// before masking: masking all of a 20 MiB body took 29 s, and all but
+// before masking: masking all of a 20 MiB body took 29 s and all but
 // MaxBody of it was thrown away.
 func (s *Server) fit(m *model.Message, v string, fn func(string) string) string {
 	v, cut := s.cutMasked(v, fn)
