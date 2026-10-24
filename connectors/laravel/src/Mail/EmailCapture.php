@@ -65,7 +65,39 @@ final class EmailCapture
             'text' => self::body($message->getTextBody()),
             'html' => self::body($message->getHtmlBody()),
             'headers' => Connector::headers($headers),
+            // Without the MIME, Echo learns of the files only from this.
+            'attachments' => isset($email['raw']) ? [] : self::attachments($message),
         ], fn ($v) => $v !== '' && $v !== []) + $email;
+    }
+
+    /**
+     * What Echo needs to know about each attached file: name, type, size
+     * and the SHA-256 of its content, never the content. Inline parts
+     * (images the HTML embeds) are not attachments.
+     *
+     * @return list<array{name?: string, type?: string, size?: int, sha256?: string}>
+     */
+    private static function attachments(Email $message): array
+    {
+        $out = [];
+        foreach ($message->getAttachments() as $part) {
+            if ($part->getDisposition() === 'inline') {
+                continue;
+            }
+            try {
+                $body = $part->getBody();
+            } catch (Throwable) {
+                $body = null; // unreadable now: the send itself reports it
+            }
+            $out[] = array_filter([
+                'name' => (string) $part->getFilename(),
+                'type' => $part->getContentType(),
+                'size' => $body === null ? null : strlen($body),
+                'sha256' => $body === null ? null : hash('sha256', $body),
+            ], fn ($v) => $v !== '' && $v !== null);
+        }
+
+        return $out;
     }
 
     /**

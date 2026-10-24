@@ -20,7 +20,8 @@
  *   SMTP): a sealed site must not hand mail to a real mailer. Observed mail
  *   is sent the way core sends it, with core's filters and actions. If
  *   something defined wp_mail() first, Echo falls back to pre_wp_mail and
- *   phpmailer_init and says so in its warnings.
+ *   phpmailer_init and says so in its warnings. Attachments are described
+ *   (name, type, size, SHA-256), never sent.
  * - HTTP: pre_http_request sees every wp_remote_*() call (API mailers, SMS
  *   plugins, WooCommerce webhooks, Slack, GA4, Meta CAPI) before it is sent;
  *   Echo answers allow, fake or block. Allowed requests are reported again
@@ -1262,9 +1263,12 @@ final class Rhythm_Echo {
 		$headers['From']         = '' !== $mailer->FromName ? sprintf( '%s <%s>', $mailer->FromName, $mailer->From ) : $mailer->From;
 		$headers['Content-Type'] = $mailer->ContentType . ( '' !== $mailer->CharSet && false === strpos( $mailer->ContentType, 'multipart/' ) ? '; charset=' . $mailer->CharSet : '' );
 		$files                   = array();
+		$described               = array();
 		foreach ( $mailer->getAttachments() as $a ) {
 			if ( 'inline' !== ( $a[6] ?? '' ) ) {
-				$files[] = (string) ( '' !== (string) $a[2] ? $a[2] : $a[1] );
+				$name        = (string) ( '' !== (string) $a[2] ? $a[2] : $a[1] );
+				$files[]     = $name;
+				$described[] = self::attachment( $name, (string) ( $a[4] ?? '' ), ! empty( $a[5] ) ? (string) $a[0] : null, ! empty( $a[5] ) ? '' : (string) $a[0] );
 			}
 		}
 		if ( $files ) {
@@ -1280,6 +1284,9 @@ final class Rhythm_Echo {
 			'subject'  => $mailer->Subject,
 			'headers'  => (object) $headers,
 		);
+		if ( $described ) {
+			$email['attachments'] = $described;
+		}
 		$type = strtolower( $mailer->ContentType );
 		if ( 'text/html' === $type ) {
 			$email['html'] = self::cap( $mailer->Body, self::MAX_BODY );
@@ -1293,6 +1300,43 @@ final class Rhythm_Echo {
 			$email['text'] = self::cap( $mailer->Body, self::MAX_BODY );
 		}
 		return $email;
+	}
+
+	/**
+	 * One attached file as Echo's wire protocol has it: name, type, size and
+	 * the SHA-256 of its content, never the content. Captures carry no full
+	 * MIME, so this is how Echo learns what was attached. A file that can't
+	 * be read here goes with its name and type only.
+	 *
+	 * @param string|null $data the content of a string attachment, else null
+	 * @param string      $path the file, for a file attachment
+	 * @return array<string, string|int>
+	 */
+	private static function attachment( string $name, string $type, ?string $data, string $path ): array {
+		if ( '' === $type ) {
+			$type = function_exists( 'wp_check_filetype' ) ? (string) wp_check_filetype( $name )['type'] : '';
+		}
+		$out = array(
+			'name' => $name,
+			'type' => '' !== $type ? $type : 'application/octet-stream',
+		);
+		if ( null !== $data ) {
+			$out['size']   = strlen( $data );
+			$out['sha256'] = hash( 'sha256', $data );
+		} elseif ( '' !== $path && is_file( $path ) && is_readable( $path ) ) {
+			$sha = hash_file( 'sha256', $path );
+			$len = filesize( $path );
+			if ( false !== $sha && false !== $len ) {
+				$out['size']   = $len;
+				$out['sha256'] = $sha;
+			}
+		}
+		return array_filter(
+			$out,
+			static function ( $v ): bool {
+				return '' !== $v;
+			}
+		);
 	}
 
 	/**
@@ -1351,8 +1395,15 @@ final class Rhythm_Echo {
 		$from   = (string) apply_filters( 'wp_mail_from', null !== $parsed['from_email'] ? $parsed['from_email'] : self::default_from() );
 		$type   = (string) apply_filters( 'wp_mail_content_type', null !== $parsed['content_type'] ? $parsed['content_type'] : 'text/plain' );
 		$body   = (string) ( $atts['message'] ?? '' );
-		$files  = array_map( 'basename', self::list_of( $atts['attachments'] ?? array(), "\n" ) );
-		$hdrs   = array();
+
+		$files     = array();
+		$described = array();
+		foreach ( self::list_of( $atts['attachments'] ?? array(), "\n" ) as $key => $path ) {
+			$name        = is_string( $key ) ? $key : basename( $path );
+			$files[]     = $name;
+			$described[] = self::attachment( $name, '', null, $path );
+		}
+		$hdrs = array();
 		foreach ( $parsed['headers'] as $name => $value ) {
 			$hdrs[ $name ] = self::mask_header( (string) $name, (string) $value );
 		}
@@ -1370,6 +1421,9 @@ final class Rhythm_Echo {
 			'subject'  => (string) ( $atts['subject'] ?? '' ),
 			'headers'  => (object) $hdrs,
 		);
+		if ( $described ) {
+			$email['attachments'] = $described;
+		}
 		if ( 'text/html' === $type ) {
 			$email['html'] = self::cap( $body, self::MAX_BODY );
 		} else {

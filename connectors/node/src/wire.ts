@@ -34,6 +34,19 @@ export interface Email {
   html?: string;
   headers?: Record<string, string>;
   raw?: string;
+  /** The files the mail carries, for a capture without raw MIME. Never their content. */
+  attachments?: Attachment[];
+}
+
+/** Attachment describes one attached file: what is known about it, never its content. */
+export interface Attachment {
+  name?: string;
+  /** MIME type, application/pdf. */
+  type?: string;
+  /** Decoded size in bytes. */
+  size?: number;
+  /** Hex SHA-256 of the decoded content. */
+  sha256?: string;
 }
 
 export interface HTTP {

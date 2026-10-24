@@ -4,7 +4,9 @@
 package wordpress
 
 import (
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -403,5 +405,54 @@ func TestRequestRunLogsOnce(t *testing.T) {
 	logged := callPHP(t, `{"token":"secret"}`, "accept_run,accept_run", &got, "r1/checkout", "127.0.0.1", false)
 	if n := strings.Count(logged, "Rhythm Echo: ignored an unsigned X-Echo-Run: with a token set, only runs Echo signed with it count"); n != 1 {
 		t.Errorf("logged %d times:\n%s", n, logged)
+	}
+}
+
+// The fallback layer (pre_wp_mail) sees wp_mail()'s attachment paths.
+func TestMailAttachments(t *testing.T) {
+	dir := t.TempDir()
+	pdf := filepath.Join(dir, "invoice-42.pdf")
+	content := []byte("%PDF-1.7\n" + strings.Repeat("x", 4096) + "\n%%EOF\n")
+	if err := os.WriteFile(pdf, content, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	type att struct {
+		Name   string `json:"name"`
+		Type   string `json:"type"`
+		Size   int    `json:"size"`
+		SHA256 string `json:"sha256"`
+	}
+	var got struct {
+		Attachments []att             `json:"attachments"`
+		Headers     map[string]string `json:"headers"`
+	}
+	mail := map[string]any{"to": "ann@example.test", "subject": "Invoice", "message": "Attached", "attachments": []string{pdf}}
+	callPHP(t, `{}`, "email_from_atts", &got, mail)
+	sum := sha256.Sum256(content)
+	want := []att{{"invoice-42.pdf", "application/pdf", len(content), hex.EncodeToString(sum[:])}}
+	if fmt.Sprint(got.Attachments) != fmt.Sprint(want) {
+		t.Errorf("attachments = %+v, want %+v", got.Attachments, want)
+	}
+	if got.Headers["X-Echo-Attachments"] != "invoice-42.pdf" {
+		t.Errorf("X-Echo-Attachments = %q", got.Headers["X-Echo-Attachments"])
+	}
+
+	// A name given as the key (wp_mail allows it) wins; a missing file
+	// keeps its name and type only.
+	mail["attachments"] = map[string]string{"bill.pdf": pdf, "gone.csv": filepath.Join(dir, "gone.csv")}
+	got.Attachments = nil
+	callPHP(t, `{}`, "email_from_atts", &got, mail)
+	want = []att{want[0], {Name: "gone.csv", Type: "text/csv"}}
+	want[0].Name = "bill.pdf"
+	if fmt.Sprint(got.Attachments) != fmt.Sprint(want) {
+		t.Errorf("attachments = %+v, want %+v", got.Attachments, want)
+	}
+
+	// Without files there is no field.
+	var bare map[string]any
+	delete(mail, "attachments")
+	callPHP(t, `{}`, "email_from_atts", &bare, mail)
+	if _, ok := bare["attachments"]; ok {
+		t.Errorf("attachments without files: %v", bare["attachments"])
 	}
 }

@@ -10,6 +10,7 @@
 // assumed. Nodemailer 7+ ships ESM and CJS builds with separate classes;
 // both are patched.
 
+import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
@@ -19,7 +20,7 @@ import { guessPackage, maskHeader } from './capture.js';
 import { send, sealed } from './client.js';
 import { currentContext } from './run.js';
 import { state, warnOnce } from './state.js';
-import type { Email } from './wire.js';
+import type { Attachment, Email } from './wire.js';
 
 type SendMail = (this: Mailer, data: MailData, cb?: (err: Error | null, info?: unknown) => void) => unknown;
 interface Mailer {
@@ -40,7 +41,19 @@ type MailData = {
   text?: unknown;
   html?: unknown;
   headers?: Record<string, unknown>;
+  attachments?: MailAttachment[];
   envelope?: unknown;
+};
+/** The parts of a Nodemailer attachment the connector reads. */
+type MailAttachment = {
+  filename?: string | false;
+  content?: unknown;
+  path?: unknown;
+  href?: unknown;
+  contentType?: string;
+  encoding?: string;
+  cid?: string;
+  contentDisposition?: string;
 };
 
 const PATCHED = Symbol.for('rhythm.echo.nodemailer');
@@ -129,6 +142,9 @@ async function deliver(mailer: Mailer, orig: SendMail, data: MailData, plugin: s
   const mail: MailData = { ...(mailer._defaults ?? {}), ...data };
   const ctx = await currentContext();
   const email = toEmail(mail);
+  // The connector sends no raw MIME, so Echo learns of files only from this.
+  const files = await attachments(mail.attachments);
+  if (files.length) email.attachments = files;
   const d = await send({
     kind: 'email',
     run: ctx.run,
@@ -177,6 +193,57 @@ export function toEmail(m: MailData): Email {
     html: content(m.html),
     headers: Object.keys(headers).length ? headers : undefined,
   };
+}
+
+// File types by extension, for an attachment without a contentType. The
+// rest is application/octet-stream, as Nodemailer has it.
+const types: Record<string, string> = {
+  pdf: 'application/pdf', zip: 'application/zip', json: 'application/json', xml: 'application/xml',
+  csv: 'text/csv', txt: 'text/plain', html: 'text/html', htm: 'text/html', ics: 'text/calendar',
+  png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', svg: 'image/svg+xml',
+  doc: 'application/msword', docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  xls: 'application/vnd.ms-excel', xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+};
+
+/**
+ * attachments describes the files a mail carries: name, type, size and
+ * SHA-256 of the decoded content. Inline images (with a cid) are part of
+ * the HTML, not attachments. A stream or a remote URL can't be read
+ * without taking it from Nodemailer, so those go with a name and type only.
+ */
+export async function attachments(list: MailAttachment[] | undefined): Promise<Attachment[]> {
+  const out: Attachment[] = [];
+  for (const a of Array.isArray(list) ? list : []) {
+    if (!a || typeof a !== 'object' || a.cid || a.contentDisposition === 'inline') continue;
+    const where = typeof a.path === 'string' ? a.path : typeof a.href === 'string' ? a.href : '';
+    const local = where !== '' && !/^(https?|data):/i.test(where);
+    const name = typeof a.filename === 'string' ? a.filename : a.filename === false || !local ? '' : path.basename(where);
+    const ext = /\.([a-z0-9]+)$/i.exec(name || where)?.[1]?.toLowerCase() ?? '';
+    const att: Attachment = { name: name || undefined, type: a.contentType ?? types[ext] ?? 'application/octet-stream' };
+    let body: Buffer | undefined;
+    try {
+      if (typeof a.content === 'string') body = Buffer.from(a.content, (a.encoding ?? 'utf8') as BufferEncoding);
+      else if (a.content instanceof Uint8Array) body = Buffer.from(a.content);
+      else if (a.content === undefined && /^data:/i.test(where)) body = dataURI(where);
+      else if (a.content === undefined && local) body = await fs.promises.readFile(where);
+    } catch {
+      body = undefined; // unreadable here: Nodemailer reports it when it sends
+    }
+    if (body) {
+      att.size = body.length;
+      att.sha256 = createHash('sha256').update(body).digest('hex');
+    }
+    out.push(att);
+  }
+  return out;
+}
+
+/** dataURI decodes "data:<type>;base64,<data>" (or percent-encoded data). */
+function dataURI(uri: string): Buffer {
+  const comma = uri.indexOf(',');
+  const meta = uri.slice(5, comma);
+  const data = uri.slice(comma + 1);
+  return /;base64$/i.test(meta) ? Buffer.from(data, 'base64') : Buffer.from(decodeURIComponent(data), 'utf8');
 }
 
 function content(v: unknown): string | undefined {

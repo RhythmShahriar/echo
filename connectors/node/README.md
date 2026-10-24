@@ -122,7 +122,7 @@ If Echo can't be reached while the site is sealed, outbound requests fail as net
 |---|---|---|
 | `fetch` | Node, Edge | Resend, Postmark 5, Slack and Discord webhooks, GA4 and Meta CAPI over fetch, and any `fetch` call. Bodies can be strings, `URLSearchParams`, `FormData`, `Blob`, `ArrayBuffer`, streams or a `Request`. Streams are teed, so the request still gets the whole body. |
 | `http` / `https` | Node | axios (Twilio, SendGrid), got, needle, `http.get`, and older SDKs. Requests are held until the body is written. An allowed request then goes out through its own agent unchanged. A faked one is answered through Node's own HTTP parser. |
-| Nodemailer | Node | `sendMail` on every transport, in Nodemailer's ESM and CJS builds. When sealed, it resolves with a fake `info` (`messageId`, `accepted`) without connecting. |
+| Nodemailer | Node | `sendMail` on every transport, in Nodemailer's ESM and CJS builds. When sealed, it resolves with a fake `info` (`messageId`, `accepted`) without connecting. Attachments are listed in `email.attachments` with name, type, size and SHA-256, never their content. Inline images (`cid`) are left out. A stream or a remote URL gets a name and type only. |
 
 The connector never captures requests to Echo itself or to loopback. Calls to the site's own host are captured and reported with `source.host`. Echo lets them through and records them as sent. The site's host comes only from configuration (`RHYTHM_ECHO_SITE`, `VERCEL_URL`, `VERCEL_BRANCH_URL`, `NEXT_PUBLIC_SITE_URL` or the `site` option), never from the incoming request's `Host` or `X-Forwarded-Host`, which a visitor can set to a provider's host. With none configured, every outbound call is treated as a call to someone else.
 

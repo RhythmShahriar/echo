@@ -53,6 +53,11 @@ function home_url() {
 function site_url() {
 	return 'http://site.test';
 }
+function wp_check_filetype( $name ) {
+	$types = array( 'pdf' => 'application/pdf', 'csv' => 'text/csv' );
+	$ext   = strtolower( pathinfo( $name, PATHINFO_EXTENSION ) );
+	return array( 'ext' => $ext, 'type' => $types[ $ext ] ?? false );
+}
 function network_home_url() {
 	return 'http://site.test';
 }

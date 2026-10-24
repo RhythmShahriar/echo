@@ -18,7 +18,10 @@ package wordpress
 
 import (
 	"bufio"
+	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -66,6 +69,25 @@ type rig struct {
 		sync.Mutex
 		lines []string
 	}
+	// The email captures as the connector sent them, before Echo parsed
+	// them: email.attachments is checked here.
+	mails struct {
+		sync.Mutex
+		got []wire.Email
+	}
+}
+
+// sentMails returns the email captures with this subject Echo got so far.
+func (r *rig) sentMails(subject string) []wire.Email {
+	r.mails.Lock()
+	defer r.mails.Unlock()
+	var got []wire.Email
+	for _, m := range r.mails.got {
+		if m.Subject == subject {
+			got = append(got, m)
+		}
+	}
+	return got
 }
 
 func (r *rig) seal() *catcher.Server    { return r.use(catcher.Seal) }
@@ -127,6 +149,11 @@ func TestDockerWordPress(t *testing.T) {
 		}
 		if strings.Contains(mail.Headers["x-echo-attachments"], "PDF-1.4") {
 			t.Error("attachment content was sent")
+		}
+		sum := sha256.Sum256([]byte("%PDF-1.4 fake"))
+		want := []wire.Attachment{{Name: "cv.pdf", Type: "application/pdf", Size: 13, SHA256: hex.EncodeToString(sum[:])}}
+		if sent := r.sentMails("New submission: Hello"); len(sent) == 0 || fmt.Sprint(sent[0].Attachments) != fmt.Sprint(want) {
+			t.Errorf("sent attachments = %+v, want %+v", sent, want)
 		}
 		sms := byProvider["sms/twilio"]
 		if sms.Text != "Your order #42 has shipped" || sms.To[0] != "+15551230000" || sms.Status != model.Faked {
@@ -227,6 +254,16 @@ func TestDockerWordPress(t *testing.T) {
 		msgs := s.Inbox.List(catcher.Filter{Channel: model.Email})
 		if len(msgs) != 2 || msgs[0].Run != "cronrun" || msgs[0].Action != "schedule" || msgs[1].Run != "cronrun" || msgs[1].Action != "schedule" {
 			t.Fatalf("cron mail runs = %v", runs(msgs))
+		}
+		// A mail without files has no attachments field.
+		cron := r.sentMails("Cron reminder")
+		if len(cron) == 0 {
+			t.Error("no cron mail reached Echo")
+		}
+		for _, m := range cron {
+			if m.Attachments != nil {
+				t.Errorf("cron mail attachments = %+v, want none", m.Attachments)
+			}
 		}
 	})
 
@@ -605,6 +642,16 @@ func start(t *testing.T) *rig {
 	// Echo, switchable between seal, observe and down.
 	r.seal()
 	listen(t, echoPort, http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		if req.URL.Path == "/v1/capture" {
+			b, _ := io.ReadAll(req.Body)
+			req.Body = io.NopCloser(bytes.NewReader(b))
+			var c wire.Capture
+			if json.Unmarshal(b, &c) == nil && c.Kind == "email" && c.Email != nil {
+				r.mails.Lock()
+				r.mails.got = append(r.mails.got, *c.Email)
+				r.mails.Unlock()
+			}
+		}
 		if s := r.echo.Load(); s != nil {
 			s.ServeHTTP(w, req)
 			return
