@@ -123,7 +123,7 @@ func (s *session) dnsOptions(sender *dns.Sender) (dns.Options, *probe) {
 	if s.o.mtaSTSFetch {
 		opts.HTTP = &http.Client{Timeout: 10 * time.Second}
 	}
-	var r dns.Resolver = dns.System
+	r := dns.System
 	if s.o.resolver != "" {
 		r = customResolver(s.o.resolver)
 	}
