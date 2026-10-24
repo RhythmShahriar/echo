@@ -73,7 +73,7 @@ func TestPlainOutputs(t *testing.T) {
 	p.Summary(Result{Run: sampleRun(), Comparison: sampleComparison()}, "report: x.html")
 	out := buf.String()
 	for _, want := range []string{"[BROKE] Email to admin@shop.test is no longer sent - Contact form, Quote form", "1 → 0",
-		"fix: Check the mail plugin.", "[FIXED] PHP error printed in email", "Something stopped being sent - 1 broke, 1 new, 1 changed, 1 fixed",
+		"fix: Check the mail plugin.", "[FIXED] PHP error printed in email", "Something broke - 1 broke, 1 new, 1 changed, 1 fixed",
 		"note: 1 action from the snapshot"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("missing %q:\n%s", want, out)
@@ -123,7 +123,7 @@ func TestMachineFormats(t *testing.T) {
 	if err := Markdown(&buf, r); err != nil {
 		t.Fatal(err)
 	}
-	if md := buf.String(); !strings.Contains(md, "**Something stopped being sent.**") || !strings.Contains(md, "| 1 | 1 | 1 | 1 |") {
+	if md := buf.String(); !strings.Contains(md, "**Something broke.**") || !strings.Contains(md, "| 1 | 1 | 1 | 1 |") {
 		t.Errorf("markdown:\n%s", md)
 	}
 	buf.Reset()
@@ -148,7 +148,7 @@ func TestHTMLIsSafeAndComplete(t *testing.T) {
 		t.Fatal(err)
 	}
 	out := buf.String()
-	for _, want := range []string{"Something stopped being sent", "Email to admin@shop.test is no longer sent", `<iframe sandbox`,
+	for _, want := range []string{"Something broke", "Email to admin@shop.test is no longer sent", `<iframe sandbox`,
 		"Thanks {first_name}", "&#34;a&#34;: 1", "500 oops", "The action failed: exit status 1"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("html lacks %q", want)

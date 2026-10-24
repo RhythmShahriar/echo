@@ -211,7 +211,7 @@ func capitalize(s string) string {
 func verdict(c *model.Comparison) string {
 	switch {
 	case c.Count(model.Broke) > 0:
-		return "Something stopped being sent"
+		return "Something broke"
 	case c.Count(model.New) > 0:
 		return "New messages or problems"
 	case c.Count(model.Changed) > 0:

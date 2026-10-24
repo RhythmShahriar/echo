@@ -1,0 +1,543 @@
+package main
+
+import (
+	"cmp"
+	"context"
+	"errors"
+	"flag"
+	"fmt"
+	"io"
+	"os"
+	"os/exec"
+	"os/signal"
+	"path/filepath"
+	"runtime"
+	"strings"
+	"syscall"
+	"time"
+
+	"github.com/charmbracelet/lipgloss"
+	"github.com/muesli/termenv"
+
+	"github.com/RhythmShahriar/echo/client"
+	"github.com/RhythmShahriar/echo/compare"
+	"github.com/RhythmShahriar/echo/config"
+	"github.com/RhythmShahriar/echo/model"
+	"github.com/RhythmShahriar/echo/report"
+	"github.com/RhythmShahriar/echo/runner"
+	"github.com/RhythmShahriar/echo/store"
+	"github.com/RhythmShahriar/rhythm/kit/cli"
+	kitconfig "github.com/RhythmShahriar/rhythm/kit/config"
+	"github.com/RhythmShahriar/rhythm/kit/update"
+)
+
+const keepRuns = 20
+
+// command parses flags and runs fn, turning errors into exit codes.
+func command(fn func(*session) int, args []string, stdout, stderr io.Writer) int {
+	p, err := parse(args)
+	if err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			usage(stdout)
+			return exitOK
+		}
+		fmt.Fprintln(stderr, "rhythm echo:", err)
+		return exitUsage
+	}
+	s := p.begin(stdout, stderr)
+	defer s.stop()
+	return fn(s)
+}
+
+type session struct {
+	*plan
+	stdout, stderr io.Writer
+	ctx            context.Context
+	stop           func()
+	tty, live      bool
+	view           *report.Pretty
+	notice         <-chan string
+}
+
+func (p *plan) begin(stdout, stderr io.Writer) *session {
+	s := &session{plan: p, stdout: stdout, stderr: stderr}
+	s.ctx, s.stop = signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	s.tty = cli.IsTerminal(stdout)
+	plain := p.o.plain || !s.tty
+	if plain || p.o.noColor {
+		lipgloss.SetColorProfile(termenv.Ascii)
+	}
+	s.live = p.format == "" || p.o.output != ""
+	out := stdout
+	if !s.live {
+		out = io.Discard
+	}
+	s.view = report.NewPretty(out, stderr, report.PrettyOptions{Plain: plain, Quiet: p.o.quiet, Verbose: p.o.verbose})
+	return s
+}
+
+func (s *session) fail(err error) int {
+	if errors.Is(err, context.Canceled) {
+		fmt.Fprintln(s.stderr, "rhythm echo: canceled")
+		return exitCanceled
+	}
+	fmt.Fprintln(s.stderr, "rhythm echo:", err)
+	var ue cli.UsageError
+	if errors.As(err, &ue) {
+		return exitUsage
+	}
+	return exitError
+}
+
+// start prints the header and the one-time notice, and checks for a new
+// release in the background.
+func (s *session) start(target string) {
+	if kitconfig.FirstRun("echo-authorised-use") && !s.o.quiet {
+		fmt.Fprint(s.stderr, "Note: use Echo on sites you own or are authorised to test. Captured messages can\n"+
+			"hold personal data: they stay on this machine, with credentials masked. This notice is shown once.\n\n")
+	}
+	s.notice = update.Notice(s.ctx, &update.Updater{Repo: "RhythmShahriar/echo", Binary: "rhythm-echo", Current: version,
+		UserAgent: "rhythm-echo/" + version + " (+https://rythm.sh/echo)", API: os.Getenv("RHYTHM_GITHUB_API")})
+	s.view.Header(version, target)
+}
+
+// actions runs the configured actions against the running Echo.
+func (s *session) actions(name string) (*model.Run, error) {
+	if h, err := s.echo.Health(s.ctx); err != nil {
+		return nil, err
+	} else {
+		s.view.Step("Echo", fmt.Sprintf("%s mode at %s", h.Mode, s.echo.URL))
+	}
+	return runner.Run(s.ctx, runner.Options{Config: s.cfg, Client: s.echo, Version: version, Name: name, Only: s.o.actions,
+		Replay: replayer(s.cfg), Hooks: runner.Hooks{Action: s.view.Action, Log: s.view.Log}})
+}
+
+// finish saves the HTML report, writes the chosen format, prints the
+// summary and picks the exit code.
+func (s *session) finish(res report.Result, hint string) int {
+	html := ""
+	if res.Dir != "" {
+		html = filepath.Join(res.Dir, "report.html")
+		if err := writeFile(html, func(w io.Writer) error { return report.HTML(w, res) }); err != nil {
+			fmt.Fprintln(s.stderr, "rhythm echo: writing the HTML report:", err)
+			html = ""
+		}
+	}
+	if s.format != "" {
+		write := func(w io.Writer) error {
+			switch s.format {
+			case "json":
+				return report.JSON(w, res)
+			case "md":
+				return report.Markdown(w, res)
+			case "junit":
+				return report.JUnit(w, res, s.o.failOn)
+			}
+			return report.HTML(w, res)
+		}
+		var err error
+		if s.o.output != "" {
+			err = writeFile(s.o.output, write)
+		} else {
+			err = write(s.stdout)
+		}
+		if err != nil {
+			fmt.Fprintln(s.stderr, "rhythm echo: writing the report:", err)
+			return exitError
+		}
+	}
+	open := html
+	if s.format == "html" && s.o.output != "" {
+		open = s.o.output
+	}
+	if hint == "" && open != "" {
+		hint = "full report: " + rel(open)
+	}
+	if s.live {
+		s.view.Summary(res, hint)
+	}
+	if s.o.output != "" && !s.o.quiet {
+		fmt.Fprintf(s.stderr, "Report written to %s\n", s.o.output)
+	}
+	if s.o.open && open != "" {
+		if err := openFile(open); err != nil {
+			fmt.Fprintln(s.stderr, "rhythm echo: opening the report:", err)
+		}
+	}
+	if s.notice != nil && s.live && !s.o.quiet {
+		select {
+		case msg, ok := <-s.notice:
+			if ok {
+				fmt.Fprintln(s.stderr, msg)
+			}
+		case <-time.After(200 * time.Millisecond):
+		}
+	}
+	if s.ctx.Err() != nil {
+		fmt.Fprintln(s.stderr, "rhythm echo: canceled; results are partial")
+		return exitCanceled
+	}
+	if report.FailOn(res, s.o.failOn) {
+		return exitFindings
+	}
+	return exitOK
+}
+
+func (s *session) checkFailOn(compared bool) error {
+	if s.o.failOn == "" {
+		return nil
+	}
+	if err := report.ValidFailOn(s.o.failOn, compared); err != nil {
+		return cli.UsageError{Msg: err.Error()}
+	}
+	return nil
+}
+
+func cmdSnapshot(s *session) int {
+	if len(s.args) > 0 {
+		return s.fail(usageErr("snapshot takes no arguments; actions come from %s", config.Path()))
+	}
+	if err := s.checkFailOn(false); err != nil {
+		return s.fail(err)
+	}
+	name := cmp.Or(s.o.name, store.Stamp(time.Now()))
+	dir, err := s.st.NewDir(store.Incoming, name)
+	if err != nil {
+		return s.fail(err)
+	}
+	defer func() { _ = os.RemoveAll(dir) }() //nolint:gosec // our own incoming folder
+	s.start(cmp.Or(s.cfg.Site, "this machine"))
+	s.view.Step("Snapshot", fmt.Sprintf("%q", name))
+	run, err := s.actions(name)
+	if err != nil {
+		return s.fail(err)
+	}
+	if err := store.SaveRun(dir, run); err != nil {
+		return s.fail(err)
+	}
+	final, err := s.st.Promote(dir, name)
+	if err == nil {
+		err = s.st.SetLatest(name)
+	}
+	if err != nil {
+		return s.fail(err)
+	}
+	_ = os.Remove(filepath.Dir(dir)) //nolint:gosec // our own .incoming folder, removed only when empty
+	s.st.ExcludeFromGit()
+	return s.finish(report.Result{Run: run, Dir: final}, "next: make your change, then run: rhythm echo compare")
+}
+
+func cmdCompare(s *session) int {
+	if len(s.args) > 0 {
+		return s.fail(usageErr("compare takes no arguments; pick a snapshot with --snapshot"))
+	}
+	if err := s.checkFailOn(true); err != nil {
+		return s.fail(err)
+	}
+	snapDir, err := s.st.Snapshot(s.o.snapshot)
+	if err != nil {
+		return s.fail(cli.UsageError{Msg: err.Error()})
+	}
+	before, err := store.LoadRun(snapDir)
+	if err != nil {
+		return s.fail(err)
+	}
+	dir, err := s.st.NewDir("runs", store.Stamp(time.Now()))
+	if err != nil {
+		return s.fail(err)
+	}
+	s.start(cmp.Or(s.cfg.Site, before.Target, "this machine"))
+	s.view.Step("Snapshot", fmt.Sprintf("%q, %s, taken %s", before.Name, plural(len(before.Actions), "action"), report.Ago(before.Started)))
+	after, err := s.actions("")
+	if err != nil && after == nil {
+		return s.fail(err)
+	}
+	if err := store.SaveRun(dir, after); err != nil {
+		return s.fail(err)
+	}
+	c := compare.Compare(before, after, snapDir, dir, version)
+	c.Warnings = append(c.Warnings, after.Warnings...)
+	if err := store.SaveComparison(dir, c); err != nil {
+		return s.fail(err)
+	}
+	s.st.ExcludeFromGit()
+	if err := s.st.Prune(keepRuns); err != nil {
+		fmt.Fprintln(s.stderr, "rhythm echo: pruning old runs:", err)
+	}
+	return s.finish(report.Result{Run: after, Comparison: c, Dir: dir}, "")
+}
+
+func cmdRun(s *session) int {
+	if err := s.checkFailOn(false); err != nil {
+		return s.fail(err)
+	}
+	dir, err := s.st.NewDir("runs", store.Stamp(time.Now()))
+	if err != nil {
+		return s.fail(err)
+	}
+	s.start(cmp.Or(s.cfg.Site, "this machine"))
+	run, err := s.actions("")
+	if err != nil && run == nil {
+		return s.fail(err)
+	}
+	if err := store.SaveRun(dir, run); err != nil {
+		return s.fail(err)
+	}
+	s.st.ExcludeFromGit()
+	_ = s.st.Prune(keepRuns)
+	return s.finish(report.Result{Run: run, Dir: dir}, "")
+}
+
+func cmdReport(s *session) int {
+	var dir string
+	var err error
+	switch len(s.args) {
+	case 0:
+		if dir, err = s.st.LatestRun(); err != nil {
+			err = cli.UsageError{Msg: err.Error()}
+		}
+	case 1:
+		if fi, statErr := os.Stat(s.args[0]); statErr == nil && fi.IsDir() { //nolint:gosec // the user names a folder
+			dir = s.args[0]
+		} else {
+			dir, err = s.st.Snapshot(s.args[0])
+		}
+	default:
+		err = usageErr("report takes at most one run folder or snapshot name")
+	}
+	if err != nil {
+		return s.fail(err)
+	}
+	run, err := store.LoadRun(dir)
+	if err != nil {
+		return s.fail(err)
+	}
+	res := report.Result{Run: run, Dir: dir}
+	if c, err := store.LoadComparison(dir); err == nil {
+		res.Comparison = c
+	}
+	if err := s.checkFailOn(res.Compared()); err != nil {
+		return s.fail(err)
+	}
+	s.view.Header(version, cmp.Or(run.Target, "this machine"))
+	return s.finish(res, "")
+}
+
+// cmdWatch prints messages as they arrive at a running Echo.
+func cmdWatch(s *session) int {
+	h, err := s.echo.Health(s.ctx)
+	if err != nil {
+		return s.fail(err)
+	}
+	if !s.o.quiet {
+		fmt.Fprintf(s.stderr, "Watching %s (%s mode). Ctrl+C to stop.\n", s.echo.URL, h.Mode)
+	}
+	since := time.Now().UTC()
+	seen := map[string]bool{}
+	for s.ctx.Err() == nil {
+		ms, err := s.echo.Wait(s.ctx, s.filter(since), 1, 200*time.Millisecond, 25*time.Second)
+		if err != nil {
+			if s.ctx.Err() != nil {
+				break
+			}
+			return s.fail(err)
+		}
+		for _, m := range ms {
+			if !seen[m.ID] {
+				seen[m.ID] = true
+				s.view.Message(m)
+				since = m.At
+			}
+		}
+	}
+	return exitOK
+}
+
+func (s *session) filter(since time.Time) client.Filter {
+	return client.Filter{Run: s.o.runID, Channel: model.Channel(s.o.channel), To: s.o.to, Since: since}
+}
+
+func cmdList(s *session) int {
+	ms, err := s.echo.Messages(s.ctx, s.filter(time.Time{}))
+	if err != nil {
+		return s.fail(err)
+	}
+	if s.o.json {
+		return jsonOut(s, ms)
+	}
+	if len(ms) == 0 && !s.o.quiet {
+		fmt.Fprintln(s.stderr, "No messages captured yet.")
+	}
+	for _, m := range ms {
+		fmt.Fprintf(s.stdout, "%s  ", m.ID)
+		s.view.Message(m)
+	}
+	return exitOK
+}
+
+func cmdShow(s *session) int {
+	if len(s.args) != 1 {
+		return s.fail(usageErr("show needs a message ID from: rhythm echo ls"))
+	}
+	m, err := s.echo.Message(s.ctx, s.args[0])
+	if err != nil {
+		return s.fail(err)
+	}
+	return jsonOut(s, m)
+}
+
+func cmdClear(s *session) int {
+	n, err := s.echo.Clear(s.ctx, s.filter(time.Time{}))
+	if err != nil {
+		return s.fail(err)
+	}
+	fmt.Fprintf(s.stdout, "Deleted %s\n", plural(n, "message"))
+	return exitOK
+}
+
+func cmdSnapshots(args []string, stdout, stderr io.Writer) int {
+	st := store.Store{Root: config.Dir}
+	if len(args) == 2 && (args[0] == "delete" || args[0] == "rm") {
+		dir, err := st.Snapshot(args[1])
+		if err != nil {
+			fmt.Fprintln(stderr, "rhythm echo:", err)
+			return exitUsage
+		}
+		if err := os.RemoveAll(dir); err != nil { //nolint:gosec // validated by Snapshot
+			fmt.Fprintln(stderr, "rhythm echo:", err)
+			return exitError
+		}
+		fmt.Fprintln(stdout, "Deleted snapshot", args[1])
+		return exitOK
+	}
+	if len(args) > 0 {
+		fmt.Fprintln(stderr, "rhythm echo: usage: rhythm echo snapshots [delete <name>]")
+		return exitUsage
+	}
+	names, err := st.Snapshots()
+	if err != nil {
+		fmt.Fprintln(stderr, "rhythm echo:", err)
+		return exitError
+	}
+	if len(names) == 0 {
+		fmt.Fprintln(stdout, "No snapshots yet. Take one: rhythm echo snapshot")
+		return exitOK
+	}
+	latest, _ := st.Snapshot("")
+	fmt.Fprintf(stdout, "%-24s %-8s %-12s %s\n", "NAME", "ACTIONS", "TAKEN", "SENT")
+	for _, n := range names {
+		dir := filepath.Join(st.Root, "snapshots", n)
+		r, err := store.LoadRun(dir)
+		if err != nil {
+			fmt.Fprintf(stdout, "%-24s %s\n", n, err)
+			continue
+		}
+		mark := ""
+		if dir == latest {
+			mark = "  (latest)"
+		}
+		fmt.Fprintf(stdout, "%-24s %-8d %-12s %s%s\n", n, len(r.Actions), report.Ago(r.Started), report.Tally(r), mark)
+	}
+	return exitOK
+}
+
+func cmdInit(args []string, stdout, stderr io.Writer) int {
+	fs := flag.NewFlagSet("init", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	force := fs.Bool("force", false, "")
+	if err := fs.Parse(args); err != nil {
+		return exitUsage
+	}
+	path := config.Path()
+	if _, err := os.Stat(path); err == nil && !*force {
+		fmt.Fprintf(stderr, "rhythm echo: %s already exists (--force replaces it)\n", path)
+		return exitUsage
+	}
+	if err := os.MkdirAll(config.Dir, 0o750); err != nil {
+		fmt.Fprintln(stderr, "rhythm echo:", err)
+		return exitError
+	}
+	if err := os.WriteFile(path, []byte(config.Template), 0o644); err != nil { //nolint:gosec // a project file meant to be committed
+		fmt.Fprintln(stderr, "rhythm echo:", err)
+		return exitError
+	}
+	store.Store{Root: config.Dir}.ExcludeFromGit()
+	fmt.Fprintf(stdout, "Wrote %s. Every setting is optional; add actions to snapshot and compare.\n", path)
+	return exitOK
+}
+
+// cmdUpdate exists so `rhythm update` (which runs every tool's update)
+// succeeds; Echo has no data to refresh.
+func cmdUpdate(_ []string, stdout, _ io.Writer) int {
+	fmt.Fprintln(stdout, "Echo has nothing to refresh; provider recognizers update with the binary (rhythm update).")
+	return exitOK
+}
+
+func jsonOut(s *session, v any) int {
+	if err := report.JSONValue(s.stdout, v); err != nil {
+		return s.fail(err)
+	}
+	return exitOK
+}
+
+func writeFile(path string, write func(io.Writer) error) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
+		return err
+	}
+	tmp, err := os.CreateTemp(filepath.Dir(path), ".report-*")
+	if err != nil {
+		return err
+	}
+	defer func() { _ = os.Remove(tmp.Name()) }()
+	if err := write(tmp); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	if err := os.Chmod(tmp.Name(), 0o644); err != nil { //nolint:gosec // a report meant to be read
+		return err
+	}
+	return os.Rename(tmp.Name(), path)
+}
+
+func openFile(path string) error {
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return err
+	}
+	// The commands are fixed; the argument is the report just written.
+	var c *exec.Cmd
+	switch runtime.GOOS {
+	case "darwin":
+		c = exec.Command("open", abs) //nolint:gosec // see above
+	case "windows":
+		c = exec.Command("rundll32", "url.dll,FileProtocolHandler", abs) //nolint:gosec // see above
+	default:
+		c = exec.Command("xdg-open", abs) //nolint:gosec // see above
+	}
+	return c.Start()
+}
+
+func rel(path string) string {
+	wd, err := os.Getwd()
+	if err != nil {
+		return path
+	}
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return path
+	}
+	if r, err := filepath.Rel(wd, abs); err == nil && !strings.HasPrefix(r, "..") {
+		return r
+	}
+	return path
+}
+
+func plural(n int, word string) string {
+	if n == 1 {
+		return "1 " + word
+	}
+	return fmt.Sprintf("%d %ss", n, word)
+}
