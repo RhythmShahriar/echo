@@ -6,6 +6,7 @@ package compare
 import (
 	"encoding/json"
 	"math/rand/v2"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -323,5 +324,28 @@ func TestHugeRewriteFallsBack(t *testing.T) {
 	hs := Diff(strings.Join(a, "\n"), strings.Join(b, "\n"))
 	if len(hs) != 1 || !strings.HasPrefix(hs[0].Summary(), "lines 1-3000 changed") {
 		t.Errorf("want one whole-text hunk, got %d", len(hs))
+	}
+}
+
+// TestChangeDiffIsWorkedOutOnce: the same change's hunks come back from
+// the cache; other texts, even split at another place, get their own.
+func TestChangeDiffIsWorkedOutOnce(t *testing.T) {
+	c := model.Change{Check: "message/text", Before: "Hi\nOrder shipped", After: "Hi\nOrder shipped\nLeave us a review!"}
+	first, again := ChangeDiff(c), ChangeDiff(c)
+	if len(first) != 1 || &first[0][0] != &again[0][0] {
+		t.Error("the second call worked the diff out again")
+	}
+	moved := model.Change{Check: "message/text", Before: c.Before + "\nOrder shipped", After: "Leave us a review!"}
+	if hs := ChangeDiff(moved); len(hs) == 0 || hs[0].Summary() == first[0].Summary() {
+		t.Errorf("other texts share a cached diff: %v", hs)
+	}
+	for i := range maxCachedDiffs + 1 {
+		ChangeDiff(model.Change{Check: "message/text", Before: "a", After: strconv.Itoa(i)})
+	}
+	diffs.mu.Lock()
+	n := len(diffs.by)
+	diffs.mu.Unlock()
+	if n > maxCachedDiffs {
+		t.Errorf("the cache holds %d diffs", n)
 	}
 }

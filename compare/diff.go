@@ -5,11 +5,13 @@ package compare
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"html"
 	"regexp"
 	"strings"
+	"sync"
 
 	"github.com/RhythmShahriar/echo/model"
 )
@@ -52,12 +54,51 @@ func Diff(before, after string) []Hunk {
 }
 
 // ChangeDiff returns the hunks of a text or payload change, worked out
-// from its full Before and After. Any other change has none.
+// from its full Before and After. Any other change has none. The hunks
+// are shared between calls, so callers must not change them.
 func ChangeDiff(c model.Change) []Hunk {
 	if !diffable(c.Check) {
 		return nil
 	}
-	return Diff(c.Before, c.After)
+	return diffs.get(c.Before, c.After)
+}
+
+// diffCache keeps the hunks of recent texts. Grouping, Key and every
+// report format ask for the same change's diff, and normalizing each line
+// plus Myers on two 256 KiB texts is worth doing once. A model.Change has
+// no field to keep them in yet, so they are cached by the texts' hash.
+type diffCache struct {
+	mu sync.Mutex
+	by map[[sha256.Size]byte][]Hunk
+}
+
+// maxCachedDiffs bounds the cache; a full cache starts over, which keeps
+// it simple and costs only a recompute.
+const maxCachedDiffs = 256
+
+var diffs diffCache
+
+func (d *diffCache) get(before, after string) []Hunk {
+	h := sha256.New()
+	fmt.Fprintf(h, "%d:", len(before))
+	h.Write([]byte(before))
+	h.Write([]byte(after))
+	var k [sha256.Size]byte
+	h.Sum(k[:0])
+	d.mu.Lock()
+	hs, ok := d.by[k]
+	d.mu.Unlock()
+	if ok {
+		return hs
+	}
+	hs = Diff(before, after)
+	d.mu.Lock()
+	if d.by == nil || len(d.by) >= maxCachedDiffs {
+		d.by = map[[sha256.Size]byte][]Hunk{}
+	}
+	d.by[k] = hs
+	d.mu.Unlock()
+	return hs
 }
 
 func diffable(check string) bool { return check == "message/text" || check == "message/payload" }
