@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net"
 	"net/http"
-	"net/url"
 	"sort"
 	"strings"
 	"sync"
@@ -39,6 +38,7 @@ func cmdUp(s *session) int {
 
 	mux := http.NewServeMux()
 	mux.Handle("/v1/", srv)
+	mux.Handle("/api/v1/", srv) // Mailpit-compatible email API
 	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) { live(w, r, inbox, cfg.Mode) })
 	api := &http.Server{Addr: cfg.Listen, Handler: mux, ReadHeaderTimeout: 10 * time.Second}
 	ln, err := net.Listen("tcp", cfg.Listen)
@@ -122,12 +122,12 @@ func (l *liveLog) add(m model.Message) {
 	case !seen:
 		l.view.Message(m)
 	case prev != m.Status:
-		to := strings.Join(m.To, ", ")
-		if u, err := url.Parse(m.URL); to == "" && err == nil {
-			to = u.Host // not the path: some webhook URLs carry their secret there
+		what := check.Describe(m) // names the host for webhooks and requests
+		if c := m.Channel; len(m.To) > 0 && (c == model.Email || c == model.SMS || c == model.WhatsApp) {
+			what += " to " + strings.Join(m.To, ", ")
 		}
-		l.view.Step("Update", fmt.Sprintf("%s %s to %s is now %s (was %s)",
-			m.At.Local().Format("15:04:05"), check.Describe(m), to, m.Status, prev))
+		l.view.Step("Update", fmt.Sprintf("%s %s is now %s (was %s)",
+			m.At.Local().Format("15:04:05"), what, m.Status, prev))
 	}
 }
 
