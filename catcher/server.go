@@ -34,15 +34,17 @@ type Config struct {
 	Mode    string   // seal (default) or observe
 	Allow   []string // hosts that may be reached even when sealed: "api.stripe.com", "*.sandbox.paypal.com"
 	Token   string   // required in X-Echo-Token when set (Echo listening beyond loopback)
+	Listen  string   // the address Echo listens on; its host is accepted in Host besides loopback names
 	MaxBody int      // bytes of body kept per message; default 256 KiB
 	Version string
 }
 
 // Server is the catcher's HTTP API.
 type Server struct {
-	Inbox *Inbox
-	cfg   Config
-	mux   *http.ServeMux
+	Inbox   *Inbox
+	cfg     Config
+	mux     *http.ServeMux
+	handler http.Handler // mux behind Protect and the token check
 }
 
 // NewServer returns the API over inbox.
@@ -63,13 +65,29 @@ func NewServer(inbox *Inbox, cfg Config) *Server {
 	s.mux.HandleFunc("POST /v1/actions/begin", s.begin)
 	s.mux.HandleFunc("POST /v1/actions/end", s.end)
 	s.mailpitRoutes()
+	s.handler = Protect(http.HandlerFunc(s.serve), ProtectOptions{Token: cfg.Token, Hosts: listenHosts(cfg.Listen)})
 	return s
+}
+
+// listenHosts returns the host of listen as a name Protect accepts, unless
+// it's a wildcard: a browser can send "Host: 0.0.0.0" to reach loopback,
+// so a wildcard must not widen what's allowed.
+func listenHosts(listen string) []string {
+	host := hostOnly(listen)
+	if ip := net.ParseIP(host); host == "" || ip != nil && ip.IsUnspecified() {
+		return nil
+	}
+	return []string{host}
 }
 
 // Mode is seal or observe.
 func (s *Server) Mode() string { return s.cfg.Mode }
 
-func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+// ServeHTTP serves the API. Requests pass Protect first, then the token
+// check when a token is set.
+func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) { s.handler.ServeHTTP(w, r) }
+
+func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
 	if s.cfg.Token != "" && subtle.ConstantTimeCompare([]byte(r.Header.Get(wire.TokenHeader)), []byte(s.cfg.Token)) != 1 {
 		http.Error(w, "missing or wrong "+wire.TokenHeader, http.StatusUnauthorized)
 		return
