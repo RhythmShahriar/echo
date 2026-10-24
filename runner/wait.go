@@ -234,17 +234,22 @@ func withoutExpectations(issues []model.Issue) []model.Issue {
 	return out
 }
 
-// describe names a message in a warning: its channel and subject, event
-// or URL.
+// describe names a message in a warning by its channel and ID, and its
+// event when it has one, like `email message 3f2a9c1b7d4e`. Run warnings
+// aren't masked like message bodies, so a subject or URL (which can hold
+// a one-time code or a token) stays out of them; the ID finds the
+// message in the report.
 func describe(m model.Message) string {
 	what := string(m.Channel)
 	if what == "" {
-		what = "message"
+		what = "a"
 	}
-	for _, s := range []string{m.Subject, m.Event, m.URL} {
-		if s != "" {
-			return fmt.Sprintf("%s %q", what, s)
-		}
+	what += " message"
+	if m.ID != "" {
+		what += " " + m.ID
+	}
+	if m.Event != "" {
+		what += fmt.Sprintf(" (event %q)", m.Event)
 	}
 	return what
 }

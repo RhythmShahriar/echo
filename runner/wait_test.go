@@ -255,7 +255,7 @@ func TestLateMailGoesToItsAction(t *testing.T) {
 	if len(run.Warnings) != 2 {
 		t.Fatalf("warnings: %q", run.Warnings)
 	}
-	if !regexp.MustCompile(`^Checkout: email "Receipt" arrived \d+\.\d s after the action ended and is counted with it$`).MatchString(run.Warnings[0]) {
+	if !regexp.MustCompile(`^Checkout: email message m1 arrived \d+\.\d s after the action ended and is counted with it$`).MatchString(run.Warnings[0]) {
 		t.Errorf("note: %q", run.Warnings[0])
 	}
 	if !strings.HasPrefix(run.Warnings[1], "Some mail arrived after its action ended; add a flush: command") {
@@ -321,7 +321,7 @@ func TestTaggedLateMailStaysWithItsAction(t *testing.T) {
 	if len(run.Action("action:later").Messages) != 0 {
 		t.Error("the later action must not get the invoice")
 	}
-	if len(run.Warnings) != 2 || !strings.HasPrefix(run.Warnings[0], `Checkout: email "Invoice" arrived `) {
+	if len(run.Warnings) != 2 || !regexp.MustCompile(`^Checkout: email message \w+ arrived `).MatchString(run.Warnings[0]) {
 		t.Errorf("warnings: %q", run.Warnings)
 	}
 }
@@ -335,6 +335,25 @@ func TestAfter(t *testing.T) {
 	} {
 		if got := after(at, end); got != want {
 			t.Errorf("after(%s) = %q, want %q", at, got, want)
+		}
+	}
+}
+
+// A late-mail warning names the message without its subject or URL,
+// which can hold a one-time code or a token that run warnings would show
+// unmasked.
+func TestDescribeLeavesContentOut(t *testing.T) {
+	for _, c := range []struct {
+		m    model.Message
+		want string
+	}{
+		{model.Message{ID: "m1", Channel: model.Email, Subject: "Your code is 123456"}, "email message m1"},
+		{model.Message{ID: "m2", Channel: model.Webhook, URL: "https://hooks.test/T0/secret-token"}, "webhook message m2"},
+		{model.Message{ID: "m3", Channel: model.Analytics, Event: "purchase"}, `analytics message m3 (event "purchase")`},
+		{model.Message{}, "a message"},
+	} {
+		if got := describe(c.m); got != c.want {
+			t.Errorf("describe = %q, want %q", got, c.want)
 		}
 	}
 }
