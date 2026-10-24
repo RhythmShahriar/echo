@@ -74,6 +74,8 @@ type options struct {
 	quietFor, timeout       time.Duration
 	quietForSet, timeoutSet bool
 
+	test bool // checks: try the config's rules on their fixtures
+
 	// latest
 	code, link bool
 	kind       string
@@ -148,6 +150,7 @@ func flagSet(o *options) *flag.FlagSet {
 	fs.StringVar(&o.typ, "type", "", "")
 	fs.DurationVar(&o.wait, "wait", 5*time.Second, "")
 	fs.DurationVar(&o.timeout, "timeout", 0, "")
+	fs.BoolVar(&o.test, "test", false, "")
 	fs.BoolVar(&o.code, "code", false, "")
 	fs.BoolVar(&o.link, "link", false, "")
 	fs.StringVar(&o.kind, "kind", "", "")
@@ -495,6 +498,7 @@ var flagDocs = map[string]flagDoc{
 	"code":       {"--code", "print the one-time code (the default, else the first link)"},
 	"link":       {"--link", "print the first link instead (magic, verify, reset, login or\nunsubscribe)"},
 	"kind":       {"--kind <k>", "with --link: only this kind of link, e.g. magic or reset"},
+	"test":       {"--test", "try each of the config's rules on its fixtures; exit 1 when one fails"},
 	"timeout":    {"--timeout <d>", "longest wait per action (overrides timeout:, at most 1m)"},
 }
 
@@ -584,6 +588,8 @@ var commands = []cmdSpec{
 		flags: flags([]flagUse{{"check", ""}, {"hops", ""}, {"resolver", ""}, {"mta-sts-fetch", ""}, {"fail-on", failOnIssues}}, reportFlags)},
 	{name: "providers", use: "providers", about: "list the services Echo recognizes, by channel",
 		flags: flags([]flagUse{{"json", "the list as JSON: slug, name, channel and hosts"}}, terminalFlags)},
+	{name: "checks", use: "checks [--test]", about: "list the checks, the config's own rules too (--test: try the rules' fixtures)",
+		flags: []flagUse{{"config", ""}, {"test", ""}, {"quiet", ""}}},
 	{name: "mcp", use: "mcp [--url URL] [--token T] [--config FILE]", about: "MCP server for coding agents, on stdin and stdout", own: true},
 	{name: "hub", use: "hub --store DIR --sites FILE [flags]", about: "one Echo for many staging sites, each with its own write token", own: true},
 	{name: "schedule", use: `schedule "<when>" --store DIR --after "<command>"`, about: "snapshot, update and compare the hub's sites in a window", own: true},

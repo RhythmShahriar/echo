@@ -104,6 +104,8 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		return command(c, cmdLatest, args[1:], stdout, stderr)
 	case "providers":
 		return command(c, cmdProviders, args[1:], stdout, stderr)
+	case "checks":
+		return command(c, cmdChecks, args[1:], stdout, stderr)
 	case "mcp":
 		mcp.Version, mcp.Replay = version, ownReplayer
 		return mcp.Main(args[1:], stdin, stdout, stderr)
@@ -197,6 +199,7 @@ Usage:
                                          write .echo/config.yaml with an action for this stack
                                          (wordpress, laravel, next, node or php; --force replaces it)
   rhythm echo providers                  list the services Echo recognizes, by channel (--json)
+  rhythm echo checks [--test]            list the checks and the config's rules (--test: try their fixtures)
   rhythm echo ca [--pem]                 print the proxy's CA certificate path (--pem: the certificate)
   rhythm echo mcp                        MCP server for coding agents: claude mcp add echo -- rhythm-echo mcp
   rhythm echo hub --store D --sites F    one Echo for many staging sites, each with its own write token
@@ -321,6 +324,10 @@ Deliverability (check, headers; never sends anything):
       --resolver <host:port> DNS server to ask (default the system's)
       --check                (headers) also run the DNS checks for the sender
       --hops                 (headers) show the route the message took
+
+Checks (checks; rules: and checks: in .echo/config.yaml add and tune them):
+      --test                 try each of the config's rules on its fixtures; exit 1 when
+                             one fails
 
 Exit codes (as in Tuner and Soundcheck):
   0    ok
