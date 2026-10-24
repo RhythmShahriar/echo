@@ -76,7 +76,7 @@ var (
 	// A one-time code named as one: "Your login code is 482913".
 	oneTimeCode = regexp.MustCompile(`(?i)(\b(?:code|otp|passcode|pin)\b(?:\s+is)?[\s:#-]{0,3})(\d{4,10})\b`)
 	// A JSON Web Token: a header and a payload, both base64url JSON
-	// ("eyJ" is `{"`), and a signature. It signs someone in wherever it's
+	// ("eyJ" is `{"`) and a signature. It signs someone in wherever it's
 	// pasted, in a URL, a log line or a message.
 	jwt = regexp.MustCompile(`\beyJ[A-Za-z0-9_-]{8,}\.eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]*`)
 )
