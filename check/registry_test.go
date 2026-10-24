@@ -223,13 +223,34 @@ func TestCustomFixtures(t *testing.T) {
 		`FAIL  brand/old-phone should match "Call 0800 999 999" but doesn't`,
 		`FAIL  brand/old-phone shouldn't match "Call 0800 123 456" but does`,
 		`ok    brand/rival matches "MegaShop"`,
-		`FAIL  brand/rival: has no no_match fixture; every rule needs one that matches and one that doesn't`,
+		`WARN  brand/rival: has no no_match fixture; give each rule one that matches and one that doesn't`,
 		`FAIL  brand/bad: rule "brand/bad": regex: error parsing regexp`,
-		"3 rules, 3 fixtures, 4 failed.",
+		"3 rules, 3 fixtures: 3 failed, 1 missing.",
 	} {
 		if !strings.Contains(b.String(), want) {
 			t.Errorf("want %q in:\n%s", want, b.String())
 		}
+	}
+}
+
+// TestMissingFixturesWarn: a rule without fixtures is a warning, counted
+// apart from the fixtures that fail, so checks --test passes as the other
+// commands load the rule.
+func TestMissingFixturesWarn(t *testing.T) {
+	var b strings.Builder
+	none := Custom{ID: "brand/key", Match: "KEY"}
+	ok, err := WriteFixtures(&b, []Custom{oldPhone, none})
+	if err != nil || !ok {
+		t.Errorf("a rule without fixtures failed: %v\n%s", err, b.String())
+	}
+	for _, want := range []string{"WARN  brand/key: has no match fixture", "WARN  brand/key: has no no_match fixture", "2 rules, 3 fixtures: all pass, 2 missing."} {
+		if !strings.Contains(b.String(), want) {
+			t.Errorf("want %q in:\n%s", want, b.String())
+		}
+	}
+	b.Reset()
+	if ok, _ := WriteFixtures(&b, []Custom{none}); !ok || !strings.HasSuffix(b.String(), "1 rule, 0 fixtures: 2 missing.\n") {
+		t.Errorf("only missing fixtures: %v\n%s", ok, b.String())
 	}
 }
 

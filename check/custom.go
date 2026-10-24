@@ -140,6 +140,10 @@ type FixtureResult struct {
 // OK reports whether the fixture came out as declared.
 func (f FixtureResult) OK() bool { return f.Err == nil && f.Text != "" && f.Want == f.Got }
 
+// Missing reports whether this is a kind of fixture the rule has none
+// of. That is a warning: the config still loads and the rule still runs.
+func (f FixtureResult) Missing() bool { return f.Err == nil && f.Text == "" }
+
 // String is the line `rhythm echo checks --test` prints.
 func (f FixtureResult) String() string {
 	kind := "no_match"
@@ -150,7 +154,7 @@ func (f FixtureResult) String() string {
 	case f.Err != nil:
 		return fmt.Sprintf("FAIL  %s: %v", f.Rule, f.Err)
 	case f.Text == "":
-		return fmt.Sprintf("FAIL  %s: has no %s fixture; every rule needs one that matches and one that doesn't", f.Rule, kind)
+		return fmt.Sprintf("WARN  %s: has no %s fixture; give each rule one that matches and one that doesn't", f.Rule, kind)
 	case f.OK() && f.Want:
 		return fmt.Sprintf("ok    %s matches %q", f.Rule, clip(f.Text, 60))
 	case f.OK():
@@ -162,7 +166,7 @@ func (f FixtureResult) String() string {
 }
 
 // TestFixtures runs every custom rule against its fixtures. A rule
-// without a match or a no_match fixture fails, as a built-in check would.
+// without a match or a no_match fixture gets a result that is Missing.
 func TestFixtures(cs []Custom) []FixtureResult {
 	var out []FixtureResult
 	for _, c := range cs {
@@ -192,12 +196,16 @@ func TestFixtures(cs []Custom) []FixtureResult {
 }
 
 // WriteFixtures prints TestFixtures' results and a summary line and
-// reports whether every fixture passed.
+// reports whether every fixture passed. A missing fixture is counted on
+// its own and doesn't fail: the other commands load such a rule too.
 func WriteFixtures(w io.Writer, cs []Custom) (bool, error) {
 	rs := TestFixtures(cs)
-	failed, fixtures := 0, 0
+	failed, missing, fixtures := 0, 0, 0
 	for _, r := range rs {
-		if !r.OK() {
+		switch {
+		case r.Missing():
+			missing++
+		case !r.OK():
 			failed++
 		}
 		if r.Text != "" {
@@ -214,14 +222,24 @@ func WriteFixtures(w io.Writer, cs []Custom) (bool, error) {
 	if fixtures == 1 {
 		fx = "fixture"
 	}
+	var parts []string
+	switch {
+	case failed > 0:
+		parts = append(parts, fmt.Sprintf("%d failed", failed))
+	case fixtures > 0:
+		parts = append(parts, "all pass")
+	}
+	if missing > 0 {
+		parts = append(parts, fmt.Sprintf("%d missing", missing))
+	}
 	var err error
 	switch {
 	case len(cs) == 0:
 		_, err = fmt.Fprintln(w, "No custom rules in .echo/config.yaml (add them under rules:).")
-	case failed == 0:
+	case failed == 0 && missing == 0:
 		_, err = fmt.Fprintf(w, "%d %s, %d %s, all pass.\n", len(cs), rules, fixtures, fx)
 	default:
-		_, err = fmt.Fprintf(w, "%d %s, %d %s, %d failed.\n", len(cs), rules, fixtures, fx, failed)
+		_, err = fmt.Fprintf(w, "%d %s, %d %s: %s.\n", len(cs), rules, fixtures, fx, strings.Join(parts, ", "))
 	}
 	return failed == 0, err
 }

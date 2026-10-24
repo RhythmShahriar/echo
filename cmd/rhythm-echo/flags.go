@@ -525,7 +525,7 @@ var flagDocs = map[string]flagDoc{
 	"brand-name":  {"--brand-name <name>", "with --site: the agency's name on the report"},
 	"brand-logo":  {"--brand-logo <file>", "with --site: the agency's logo (PNG, JPEG, GIF, WebP or SVG)"},
 	"brand-color": {"--brand-color <#hex>", "with --site: the report's accent color, e.g. #1F6FEB"},
-	"test":        {"--test", "try each of the config's rules on its fixtures; exit 1 when one fails"},
+	"test":        {"--test", "try each of the config's rules on its fixtures; exit 1 when one fails\n(a rule without fixtures is a warning)"},
 	"timeout":     {"--timeout <d>", "longest wait per action (overrides timeout:, at most 1m)"},
 }
 
