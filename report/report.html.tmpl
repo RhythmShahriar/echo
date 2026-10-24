@@ -56,6 +56,12 @@ h2 { font-size: 13px; letter-spacing: .1em; text-transform: uppercase; color: va
 .where { color: var(--muted); font: 12px/1.6 var(--mono); flex: none; max-width: 40%; text-align: right; overflow-wrap: anywhere; }
 .facts { color: var(--muted); font-size: 13px; margin-top: 8px; overflow-wrap: anywhere; }
 .facts code { font: 12.5px var(--mono); background: var(--soft); border-radius: 5px; padding: 1px 5px; color: var(--text); }
+.diff .hunk { color: var(--muted); font: 12.5px var(--mono); margin-top: 10px; overflow-wrap: anywhere; }
+.diff pre { margin: 4px 0 0; padding: 8px 0; background: var(--soft); border-radius: 8px; font: 12.5px/1.5 var(--mono); overflow-x: auto; }
+.diff pre ins, .diff pre del, .diff pre span { display: block; padding: 0 12px; text-decoration: none; white-space: pre-wrap; overflow-wrap: anywhere; }
+.diff pre span { color: var(--muted); }
+.diff pre ins { background: color-mix(in srgb, var(--fixed) 16%, transparent); }
+.diff pre del { background: color-mix(in srgb, var(--broke) 16%, transparent); }
 .fix { margin: 10px 0 0; padding: 9px 12px; background: var(--soft); border-radius: 8px; font-size: 14px; }
 .fix::before { content: "→ "; color: var(--dot); font-weight: 700; }
 details.action { background: var(--card); border: 1px solid var(--line); border-radius: 12px; margin-bottom: 10px; }
@@ -108,7 +114,8 @@ footer { margin-top: 44px; color: var(--muted); font-size: 12px; display: flex; 
   {{if .Compared}}
     {{if .Changes}}<h2>Changes</h2>{{range .Changes}}
     <article class="item k-{{.Key}}"><div class="head"><h3><span class="badge">{{.Label}}</span>{{.Title}}</h3><div class="where">{{.Where}}</div></div>
-      {{if or .BeforeAfter .Detail}}<div class="facts">{{if .BeforeAfter}}<code>{{.BeforeAfter}}</code> {{end}}{{.Detail}}</div>{{end}}
+      {{if or (and .BeforeAfter (not .Diff)) .Detail}}<div class="facts">{{if and .BeforeAfter (not .Diff)}}<code>{{.BeforeAfter}}</code> {{end}}{{.Detail}}</div>{{end}}
+      {{if .Diff}}<div class="diff">{{range .Diff}}<div class="hunk">{{.Summary}}</div><pre>{{range .Lines}}{{if eq .Op "add"}}<ins>+ {{.Text}}</ins>{{else if eq .Op "del"}}<del>- {{.Text}}</del>{{else}}<span>  {{.Text}}</span>{{end}}{{end}}</pre>{{end}}</div>{{end}}
       {{if gt (len .Actions) 1}}<div class="facts">{{range $i, $a := .Actions}}{{if $i}}, {{end}}{{$a}}{{end}}</div>{{end}}
       {{if .Fix}}<p class="fix">{{.Fix}}</p>{{end}}</article>{{end}}
     {{else}}<div class="empty"><b>No differences</b>Every action sends what it sent in the snapshot.</div>{{end}}

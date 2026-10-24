@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/RhythmShahriar/echo/check"
+	"github.com/RhythmShahriar/echo/compare"
 	"github.com/RhythmShahriar/echo/model"
 )
 
@@ -64,6 +65,9 @@ func Markdown(w io.Writer, r Result) error {
 				fmt.Fprintf(&b, "| %s | %s | %s | %s |\n", title, cell(actionsLabel(ch.Actions, 3)), cell(beforeAfter(ch)), fix)
 			}
 			b.WriteString("\n")
+			for _, ch := range cs {
+				markdownDiff(&b, ch)
+			}
 		}
 		notes(&b, c.Warnings)
 	} else {
@@ -91,6 +95,46 @@ func Markdown(w io.Writer, r Result) error {
 	fmt.Fprintf(&b, "<sub>rhythm-echo %s · %s mode · %s</sub>\n", run.Version, run.Mode, run.Started.UTC().Format("2006-01-02 15:04 MST"))
 	_, err := io.WriteString(w, b.String())
 	return err
+}
+
+// mdHunks caps the hunks per change in Markdown: a PR comment has a size
+// limit, and the HTML report has them all.
+const mdHunks = 10
+
+// markdownDiff writes a text or payload change's hunks as a collapsed
+// diff block, each hunk headed "@@ line 9 added: … @@".
+func markdownDiff(b *strings.Builder, ch model.Change) {
+	hs := compare.ChangeDiff(ch)
+	if len(hs) == 0 {
+		return
+	}
+	var body []string
+	for i, h := range hs {
+		if i == mdHunks {
+			body = append(body, fmt.Sprintf("@@ +%d more in the HTML report @@", len(hs)-mdHunks))
+			break
+		}
+		body = append(body, "@@ "+Safe(h.Summary())+" @@")
+		body = append(body, hunkText(h)...)
+	}
+	text := strings.Join(body, "\n")
+	// A fence longer than any run of backticks in the text, so a captured
+	// line can't close it.
+	fence := strings.Repeat("`", max(3, longestRun(text, '`')+1))
+	fmt.Fprintf(b, "<details><summary>Diff: %s</summary>\n\n%sdiff\n%s\n%s\n\n</details>\n\n", cell(ch.Title), fence, text, fence)
+}
+
+func longestRun(s string, c byte) int {
+	best, n := 0, 0
+	for i := 0; i < len(s); i++ {
+		if s[i] == c {
+			n++
+			best = max(best, n)
+		} else {
+			n = 0
+		}
+	}
+	return best
 }
 
 func notes(b *strings.Builder, ns []string) {

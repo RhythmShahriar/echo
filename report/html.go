@@ -16,6 +16,7 @@ import (
 	"strings"
 
 	"github.com/RhythmShahriar/echo/check"
+	"github.com/RhythmShahriar/echo/compare"
 	"github.com/RhythmShahriar/echo/model"
 )
 
@@ -75,6 +76,12 @@ type htmlItem struct {
 	Key, Label, Title, Check, Where string
 	Actions                         []string
 	BeforeAfter, Detail, Fix        string
+	Diff                            []htmlHunk // a text or payload change, line by line
+}
+
+type htmlHunk struct {
+	Summary string
+	Lines   []compare.DiffLine
 }
 
 type htmlAction struct {
@@ -120,6 +127,9 @@ func HTML(w io.Writer, r Result) error {
 		for _, ch := range c.Changes {
 			it := htmlItem{Key: ch.Class, Label: classInfo[ch.Class].Label, Title: ch.Title, Check: ch.Check, Where: countLabel(ch.Actions),
 				Actions: ch.Actions, BeforeAfter: beforeAfter(ch), Detail: ch.Detail}
+			for _, h := range compare.ChangeDiff(ch) {
+				it.Diff = append(it.Diff, htmlHunk{Summary: h.Summary(), Lines: h})
+			}
 			if ch.Class != model.Fixed {
 				it.Fix = ch.Fix
 			}

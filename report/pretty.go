@@ -12,6 +12,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/RhythmShahriar/echo/check"
+	"github.com/RhythmShahriar/echo/compare"
 	"github.com/RhythmShahriar/echo/model"
 	"github.com/RhythmShahriar/rhythm/kit/ui"
 )
@@ -225,8 +226,10 @@ func (p *Pretty) comparison(r Result, hint string) {
 		for _, class := range model.Classes {
 			for _, ch := range groups[class] {
 				fmt.Fprintf(p.w, "[%s] %s - %s\n", classInfo[class].Label, Safe(ch.Title), Safe(actionsLabel(ch.Actions, 3)))
-				if ba := beforeAfter(ch); ba != "" {
-					fmt.Fprintf(p.w, "  %s\n", Safe(ba))
+				if !p.diff(ch, "  ") {
+					if ba := beforeAfter(ch); ba != "" {
+						fmt.Fprintf(p.w, "  %s\n", Safe(ba))
+					}
 				}
 				if ch.Detail != "" {
 					fmt.Fprintf(p.w, "  %s\n", Safe(firstLine(ch.Detail)))
@@ -266,6 +269,9 @@ func (p *Pretty) comparison(r Result, hint string) {
 				fmt.Fprintln(p.w)
 			} else {
 				fmt.Fprintln(p.w, line(lipgloss.NewStyle().Foreground(ClassColor(class)).Bold(true).Render(classInfo[class].Glyph), ch.Title, countLabel(ch.Actions)))
+				if class == model.Changed {
+					p.diff(ch, "       ")
+				}
 			}
 		}
 		if class == model.Changed || class == model.Fixed {
@@ -408,6 +414,53 @@ func card(badge string, color lipgloss.Color, title, where string, details []str
 	}
 	rail := lipgloss.NewStyle().Border(lipgloss.Border{Left: "▌"}, false, false, false, true).BorderForeground(color).PaddingLeft(1).MarginLeft(1)
 	return rail.Render(strings.Join(body, "\n"))
+}
+
+// diff prints the hunks of a text or payload change under it, each as
+// "line 9 added: …" and its lines with 2 lines of context: the first
+// hunk, or every hunk with -v. It reports whether ch had a diff.
+func (p *Pretty) diff(ch model.Change, pad string) bool {
+	hs := compare.ChangeDiff(ch)
+	if len(hs) == 0 {
+		return false
+	}
+	shown := hs
+	if !p.o.Verbose {
+		shown = hs[:1]
+	}
+	add := lipgloss.NewStyle().Foreground(ClassColor(model.Fixed))
+	del := lipgloss.NewStyle().Foreground(ClassColor(model.Broke))
+	for _, h := range shown {
+		summary, lines := Safe(h.Summary()), hunkText(h)
+		if p.o.Plain {
+			fmt.Fprintf(p.w, "%s%s\n", pad, summary)
+			for _, l := range lines {
+				fmt.Fprintf(p.w, "%s  %s\n", pad, l)
+			}
+			continue
+		}
+		fmt.Fprintf(p.w, "%s%s\n", pad, ui.Truncate(summary, width-len(pad)))
+		for i, l := range lines {
+			l = ui.Truncate(l, width-len(pad)-2)
+			switch h[i].Op {
+			case compare.OpAdd:
+				l = add.Render(l)
+			case compare.OpDel:
+				l = del.Render(l)
+			default:
+				l = muted.Render(l)
+			}
+			fmt.Fprintf(p.w, "%s  %s\n", pad, l)
+		}
+	}
+	if more := len(hs) - len(shown); more > 0 {
+		hint := "+" + plural(more, "more place changed", "more places changed") + " (-v shows them all)"
+		if !p.o.Plain {
+			hint = muted.Render(hint)
+		}
+		fmt.Fprintf(p.w, "%s%s\n", pad, hint)
+	}
+	return true
 }
 
 func line(marker, title, right string) string {

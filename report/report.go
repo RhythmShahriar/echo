@@ -13,6 +13,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/RhythmShahriar/echo/compare"
 	"github.com/RhythmShahriar/echo/model"
 )
 
@@ -257,11 +258,34 @@ func countLabel(actions []string) string {
 	return plural(len(actions), "action", "actions")
 }
 
+// beforeAfter is a change's values in one line: "1 time → 2 times", or
+// for a text or payload change what its first hunk changed ("line 9
+// added: Order total: $42.00"), since the full texts don't fit a line.
 func beforeAfter(c model.Change) string {
+	if hs := compare.ChangeDiff(c); len(hs) > 0 {
+		s := hs[0].Summary()
+		if len(hs) > 1 {
+			s += fmt.Sprintf(" (+%d more)", len(hs)-1)
+		}
+		return s
+	}
 	if c.Before == "" && c.After == "" {
 		return ""
 	}
 	return cmp.Or(c.Before, "–") + " → " + cmp.Or(c.After, "–")
+}
+
+// diffMarks are the line prefixes of a diff, as in a unified diff.
+var diffMarks = map[string]string{compare.OpAdd: "+ ", compare.OpDel: "- ", compare.OpCtx: "  "}
+
+// hunkText is a hunk as plain lines: a "+ ", "- " or "  " mark, then the
+// line made Safe.
+func hunkText(h compare.Hunk) []string {
+	out := make([]string, 0, len(h))
+	for _, l := range h {
+		out = append(out, diffMarks[l.Op]+Safe(l.Text))
+	}
+	return out
 }
 
 func firstLine(s string) string {
