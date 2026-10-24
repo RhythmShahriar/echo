@@ -9,7 +9,7 @@ import (
 )
 
 // Credentials counts the masks in s that stand for a credential: an API
-// key, a password, a bearer token or a key Echo recognised by its shape.
+// key, a password, a bearer token or a key Echo recognizes by its shape.
 // Masks placed over a one-time code, the token of a reset, verify or
 // magic link and the signature of a signed URL don't count: they change
 // on every send and are meant for the reader, so a payload that carries

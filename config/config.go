@@ -716,6 +716,11 @@ func entryURL(raw string) *site {
 func Path() string { return filepath.Join(Dir, "config.yaml") }
 
 // Template is what `rhythm echo init` writes. It must stay loadable.
+//
+// The relay example names an SMTP URL with a placeholder login, not a
+// credential.
+//
+//nolint:gosec // G101: the example user:pass is a placeholder
 const Template = `# Echo settings. Everything here is optional; delete what you don't change.
 # Reference: https://github.com/RhythmShahriar/rhythm/wiki/Echo-Configuration
 # Commit this file to share it; snapshots and runs are kept out of git.
