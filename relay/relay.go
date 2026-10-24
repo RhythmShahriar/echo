@@ -169,6 +169,13 @@ func (rl *releaser) release(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusUnauthorized, answer{Error: "releasing needs the read token or a signed-in reader"})
 		return
 	}
+	// Only JSON: a cross-site form can't send that type without the
+	// browser asking first, so a signed-in reader's cookie can't be used
+	// to release mail from another site's page.
+	if ct, _, err := mime.ParseMediaType(r.Header.Get("Content-Type")); err != nil || ct != "application/json" {
+		writeJSON(w, http.StatusUnsupportedMediaType, answer{Error: "send the release as Content-Type: application/json"})
+		return
+	}
 	var body struct {
 		To string `json:"to"`
 	}

@@ -286,6 +286,26 @@ func TestRelease(t *testing.T) {
 		}
 	})
 
+	t.Run("not JSON", func(t *testing.T) {
+		// What a cross-site form can send with a reader's cookie.
+		before := len(m.deliveries())
+		for _, ct := range []string{"text/plain", "application/x-www-form-urlencoded", ""} {
+			req := httptest.NewRequest(http.MethodPost, "/v1/messages/"+rawID+"/release", strings.NewReader(`{"to": "ann@client.example"}`))
+			if ct != "" {
+				req.Header.Set("Content-Type", ct)
+			}
+			req.Header.Set("Cookie", "session=ok")
+			rec := httptest.NewRecorder()
+			h.ServeHTTP(rec, req)
+			if rec.Code != http.StatusUnsupportedMediaType {
+				t.Errorf("%q: %d %s", ct, rec.Code, rec.Body)
+			}
+		}
+		if len(m.deliveries()) != before {
+			t.Error("sent")
+		}
+	})
+
 	t.Run("email from a provider's HTTP API", func(t *testing.T) {
 		api := in.Add(model.Message{Run: "r1", Channel: model.Email, Provider: "sendgrid", Method: http.MethodPost,
 			URL: "https://api.sendgrid.com/v3/mail/send", Status: model.Faked, Source: model.Source{Via: "proxy"},
