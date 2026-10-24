@@ -178,3 +178,16 @@ func eqList(t *testing.T, what string, got []string, want ...string) {
 		t.Errorf("%s = %q, want %q", what, got, want)
 	}
 }
+
+func TestProvidersAreListedOnce(t *testing.T) {
+	seen := map[string]bool{}
+	for _, p := range Providers() {
+		if p == "" || seen[p] {
+			t.Errorf("provider %q listed twice or empty", p)
+		}
+		seen[p] = true
+	}
+	if !seen["vonage"] {
+		t.Error("vonage missing")
+	}
+}

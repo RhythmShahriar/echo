@@ -8,6 +8,7 @@ package recognize
 import (
 	"encoding/json"
 	"net/url"
+	"slices"
 	"strings"
 
 	"github.com/RhythmShahriar/echo/model"
@@ -102,11 +103,14 @@ func FakeFor(rec Recognizer, r Request, m *model.Message) Fake {
 	return Fake{Status: 200, Headers: map[string]string{"content-type": "application/json"}, Body: `{"ok":true}`}
 }
 
-// Providers lists the providers Echo knows, for docs and `echo doctor`.
+// Providers lists the providers Echo knows, each once (a provider may have
+// several recognizers, one per API), for docs and `rhythm echo doctor`.
 func Providers() []string {
 	out := make([]string, 0, len(registry))
 	for _, r := range registry {
-		out = append(out, r.Provider)
+		if !slices.Contains(out, r.Provider) {
+			out = append(out, r.Provider)
+		}
 	}
 	return out
 }
