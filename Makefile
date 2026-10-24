@@ -1,12 +1,23 @@
 GOLANGCI := go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0
 
-.PHONY: build test lint fmt check hooks testbed testbed-down bench
+.PHONY: build test test-connectors test-docker actionlint lint fmt check hooks testbed testbed-down bench
 
 build: ## build bin/rhythm-echo
 	go build -o bin/rhythm-echo ./cmd/rhythm-echo
 
-test: ## run tests (browser tests need Chrome)
+test: ## run the Go tests (the connector suites: make test-connectors)
 	go test -race ./...
+
+test-connectors: ## run the Node, Laravel and WordPress connector suites (needs Node and Docker)
+	cd connectors/node && npm ci --ignore-scripts && npm run typecheck && npm test
+	$(MAKE) -C connectors/laravel install test
+	go test -tags docker ./connectors/wordpress/
+
+test-docker: ## run every Docker test, as the nightly CI does
+	go test -tags docker -timeout 20m ./...
+
+actionlint: ## lint the GitHub workflows, from the image CI pins
+	docker run --rm -v "$(CURDIR):/repo" -w /repo rhysd/actionlint@sha256:887a259a5a534f3c4f36cb02dca341673c6089431057242cdc931e9f133147e9 -color
 
 lint:
 	$(GOLANGCI) run ./...
