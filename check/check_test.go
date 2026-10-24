@@ -107,3 +107,24 @@ func TestSecretInPayloadWhateverTheStatus(t *testing.T) {
 		t.Error("no credential, no issue")
 	}
 }
+
+func TestDescribeUsesDisplayNames(t *testing.T) {
+	for _, c := range []struct {
+		m          model.Message
+		kind, desc string
+	}{
+		{model.Message{Channel: model.Email, Provider: "amazon-ses"}, "Amazon SES email", "Amazon SES email"},
+		{model.Message{Channel: model.Email}, "email", "email"},
+		{model.Message{Channel: model.SMS, Provider: "messagebird"}, "MessageBird SMS", "MessageBird SMS"},
+		{model.Message{Channel: model.Analytics, Provider: "meta-capi"}, "Meta Conversions API event", "Meta Conversions API event"},
+		{model.Message{Channel: model.Webhook, Provider: "zapier", URL: "https://hooks.zapier.com/hooks/catch/1/ab•••••/"}, "Zapier webhook", "Zapier webhook"},
+		{model.Message{Channel: model.Webhook, Provider: "woocommerce", URL: "https://crm.shop.test/wc"}, "WooCommerce webhook", "WooCommerce webhook to crm.shop.test"},
+		{model.Message{Channel: model.Webhook, URL: "https://crm.shop.test/api/leads"}, "webhook", "webhook to crm.shop.test"},
+		{model.Message{Channel: model.HTTP, Method: "GET", URL: "https://cdn.shop.test/x"}, "request", "request to cdn.shop.test"},
+		{model.Message{Channel: model.HTTP, Method: "CONNECT", URL: "https://api.example.com/"}, "HTTPS connection", "HTTPS connection to api.example.com"},
+	} {
+		if k, d := Kind(c.m), Describe(c.m); k != c.kind || d != c.desc {
+			t.Errorf("%s/%s: Kind %q, Describe %q; want %q, %q", c.m.Channel, c.m.Provider, k, d, c.kind, c.desc)
+		}
+	}
+}

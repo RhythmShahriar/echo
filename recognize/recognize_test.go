@@ -191,3 +191,14 @@ func TestProvidersAreListedOnce(t *testing.T) {
 		t.Error("vonage missing")
 	}
 }
+
+func TestEveryProviderHasADisplayName(t *testing.T) {
+	for _, p := range Providers() {
+		if _, ok := names[p]; !ok {
+			t.Errorf("no display name for %q", p)
+		}
+	}
+	if Name("amazon-ses") != "Amazon SES" || Name("unknown-thing") != "unknown-thing" {
+		t.Error("Name")
+	}
+}

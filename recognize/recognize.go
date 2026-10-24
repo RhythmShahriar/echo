@@ -115,6 +115,27 @@ func Providers() []string {
 	return out
 }
 
+// names are the providers' display names, for titles and reports.
+var names = map[string]string{
+	"twilio": "Twilio", "slack": "Slack", "discord": "Discord", "woocommerce": "WooCommerce", "teams": "Teams",
+	"sendgrid": "SendGrid", "mailgun": "Mailgun", "postmark": "Postmark", "resend": "Resend", "amazon-ses": "Amazon SES",
+	"brevo": "Brevo", "sparkpost": "SparkPost", "mandrill": "Mandrill",
+	"vonage": "Vonage", "messagebird": "MessageBird", "bird": "Bird", "plivo": "Plivo", "amazon-sns": "Amazon SNS",
+	"telnyx": "Telnyx", "clicksend": "ClickSend", "whatsapp-cloud": "WhatsApp Cloud API",
+	"ga4": "GA4", "meta-capi": "Meta Conversions API", "stripe": "Stripe", "paypal": "PayPal", "fcm": "FCM", "onesignal": "OneSignal",
+	"hubspot": "HubSpot", "mailchimp": "Mailchimp", "klaviyo": "Klaviyo", "activecampaign": "ActiveCampaign",
+	"zapier": "Zapier", "make": "Make", "n8n": "n8n",
+}
+
+// Name returns a provider's display name ("amazon-ses" → "Amazon SES"),
+// or the slug itself for one Echo doesn't know.
+func Name(provider string) string {
+	if n, ok := names[provider]; ok {
+		return n
+	}
+	return provider
+}
+
 // host reports whether r is for host or a subdomain of it.
 func host(r Request, hosts ...string) bool {
 	h := strings.ToLower(r.URL.Hostname())

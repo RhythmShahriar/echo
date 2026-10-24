@@ -17,6 +17,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/RhythmShahriar/echo/model"
+	"github.com/RhythmShahriar/echo/recognize"
 )
 
 // Options says what's expected of messages.
@@ -139,16 +140,30 @@ func Message(m model.Message, o Options) []model.Issue {
 	return out
 }
 
-// Describe names a message for titles: "email", "Twilio SMS", "webhook to
-// hooks.zapier.com". Titles must stay stable, so no IDs or times.
+// Describe names a message for titles: "email", "Twilio SMS", "Zapier
+// webhook", "webhook to crm.shop.com". Titles must stay stable, so no IDs
+// or times.
 func Describe(m model.Message) string {
-	p := providerName(m.Provider)
+	what := Kind(m)
+	switch {
+	case m.Channel != model.Webhook && m.Channel != model.HTTP:
+	case m.Provider != "" && m.Provider != "woocommerce": // the provider says where it goes
+	default:
+		if u, err := url.Parse(m.URL); err == nil && u.Host != "" {
+			return what + " to " + u.Hostname()
+		}
+	}
+	return what
+}
+
+// Kind names what a message is without where it went, for lines that
+// show the destination next to it: "Amazon SES email", "webhook",
+// "request".
+func Kind(m model.Message) string {
+	p := recognize.Name(m.Provider)
 	switch m.Channel {
 	case model.Email:
-		if p != "" {
-			return p + " email"
-		}
-		return "email"
+		return strings.TrimSpace(p + " email")
 	case model.SMS:
 		return strings.TrimSpace(p + " SMS")
 	case model.WhatsApp:
@@ -160,23 +175,14 @@ func Describe(m model.Message) string {
 	case model.Payment:
 		return strings.TrimSpace(p + " call")
 	case model.Push:
-		return "push notification"
+		return strings.TrimSpace(p + " push notification")
+	case model.Webhook:
+		return strings.TrimSpace(p + " webhook")
 	}
-	if u, err := url.Parse(m.URL); err == nil && u.Host != "" {
-		return "webhook to " + u.Hostname()
+	if m.Method == "CONNECT" {
+		return "HTTPS connection"
 	}
 	return "request"
-}
-
-var providerNames = map[string]string{"twilio": "Twilio", "slack": "Slack", "discord": "Discord", "woocommerce": "WooCommerce",
-	"sendgrid": "SendGrid", "mailgun": "Mailgun", "postmark": "Postmark", "resend": "Resend", "ses": "Amazon SES", "brevo": "Brevo",
-	"vonage": "Vonage", "ga4": "GA4", "meta-capi": "Meta", "stripe": "Stripe", "paypal": "PayPal", "fcm": "FCM", "teams": "Teams"}
-
-func providerName(p string) string {
-	if n, ok := providerNames[p]; ok {
-		return n
-	}
-	return p
 }
 
 var (
