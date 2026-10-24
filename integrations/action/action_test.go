@@ -327,4 +327,40 @@ func TestActionPRComment(t *testing.T) {
 	if len(calls) != 3 || !strings.HasPrefix(calls[2], "api -X PATCH repos/RhythmShahriar/echo/issues/comments/101 -f body=") {
 		t.Fatalf("second run's gh calls: %q", calls)
 	}
+
+	// up runs no checks, so the compare's report left in RUNNER_TEMP must
+	// not be posted again.
+	gh.reply(t, `[]`, "102")
+	up := r.use(in("mode", "up", "pr-comment", "true"))
+	stopEcho(r)
+	if !up.ok {
+		t.Fatalf("up failed:\n%s", up.log)
+	}
+	if calls := gh.calls(t); len(calls) != 0 {
+		t.Errorf("up posted a stale comment: %q", calls)
+	}
+}
+
+// TestActionWindows stops on a runner the release has no build for, with
+// an error that says why, before anything is downloaded.
+func TestActionWindows(t *testing.T) {
+	needBash(t)
+	r := newRunner(t)
+	bin := t.TempDir()
+	fakes := map[string]string{
+		"uname": "#!/bin/sh\ncase \"$1\" in -m) echo x86_64 ;; *) echo MINGW64_NT-10.0-20348 ;; esac\n",
+		"curl":  "#!/bin/sh\necho curl ran >&2\nexit 22\n",
+	}
+	for name, body := range fakes {
+		if err := os.WriteFile(filepath.Join(bin, name), []byte(body), 0o700); err != nil { //nolint:gosec // a test executable
+			t.Fatal(err)
+		}
+	}
+	r.path = []string{bin}
+	res := r.use(map[string]string{"version": "1.2.3"})
+	if res.ok {
+		t.Fatalf("the Action ran on Windows:\n%s", res.log)
+	}
+	contains(t, "log", res.log, "::error::the Echo Action runs on Linux and macOS runners, not MINGW64_NT-10.0-20348")
+	lacks(t, "log", res.log, "curl ran")
 }

@@ -160,6 +160,7 @@ runs:
         { VERSION=$(bash "$PICK" 2>&3); } 3>&1
         case "$(uname -m)" in x86_64|amd64) arch=amd64 ;; aarch64|arm64) arch=arm64 ;; *) echo "unsupported CPU $(uname -m)"; exit 1 ;; esac
         os=$(uname -s | tr '[:upper:]' '[:lower:]')
+        case "$os" in linux | darwin) ;; *) echo "::error::the Echo Action runs on Linux and macOS runners, not $(uname -s)"; exit 1 ;; esac
         if [ "$VERSION" = latest ]; then
           base=https://github.com/RhythmShahriar/echo/releases/latest/download
         else
@@ -192,6 +193,9 @@ runs:
         set -euo pipefail
         log="$RUNNER_TEMP/echo.log"
         md="$RUNNER_TEMP/echo-summary.md"
+        # A report from an earlier Echo step in this job must not reach this
+        # step's pull request comment.
+        rm -f "$RUNNER_TEMP/echo-report.json"
         # stop writes the summary and exit code of a failed start, so the
         # job summary says why whatever the mode.
         stop() {
