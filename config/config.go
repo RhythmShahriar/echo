@@ -451,9 +451,9 @@ func (c Config) waits() error {
 	t := c.Timeout.Duration
 	switch {
 	case t <= 0:
-		return fmt.Errorf("%stimeout: %s must be more than 0, like 30s", c.at("timeout"), short(t))
+		return fmt.Errorf("%stimeout: %s must be more than 0, like 30s", c.at("timeout"), Short(t))
 	case t > MaxTimeout:
-		return fmt.Errorf("%stimeout: %s is over the %s Echo waits for one action at most", c.at("timeout"), short(t), short(MaxTimeout))
+		return fmt.Errorf("%stimeout: %s is over the %s Echo waits for one action at most", c.at("timeout"), Short(t), Short(MaxTimeout))
 	}
 	if err := c.quiet(c.Quiet.Duration); err != nil {
 		return fmt.Errorf("%s%w", c.at("quiet"), err)
@@ -467,17 +467,19 @@ func (c Config) quiet(q time.Duration) error {
 	t := c.Timeout.Duration
 	switch {
 	case q <= 0:
-		return fmt.Errorf("quiet: %s must be more than 0, like 2s", short(q))
+		return fmt.Errorf("quiet: %s must be more than 0, like 2s", Short(q))
 	case q > MaxQuiet:
-		return fmt.Errorf("quiet: %s is over the %s Echo waits for quiet at most", short(q), short(MaxQuiet))
+		return fmt.Errorf("quiet: %s is over the %s Echo waits for quiet at most", Short(q), Short(MaxQuiet))
 	case q > t:
-		return fmt.Errorf("quiet: %s is longer than the timeout of %s%s, so no action could ever fall quiet", short(q), short(t), c.also("timeout"))
+		return fmt.Errorf("quiet: %s is longer than the timeout of %s%s, so no action could ever fall quiet", Short(q), Short(t), c.also("timeout"))
 	}
 	return nil
 }
 
-// short writes a duration the way a config would: 1m, not 1m0s.
-func short(d time.Duration) string {
+// Short writes a duration the way a config would: 1m, not 1m0s, and 1h,
+// not 1h0m0s. Messages about waits use it so a value reads the same
+// wherever it's reported.
+func Short(d time.Duration) string {
 	s := d.String()
 	if strings.HasSuffix(s, "m0s") {
 		s = strings.TrimSuffix(s, "0s")

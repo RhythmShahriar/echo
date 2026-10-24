@@ -55,18 +55,18 @@ func (o Options) waits() (config.Config, error) {
 	t, q := cfg.Timeout.Duration, cfg.Quiet.Duration
 	switch {
 	case t > config.MaxTimeout:
-		return cfg, waitError(fmt.Sprintf("timeout %s is over the %s Echo waits for one action at most", short(t), short(config.MaxTimeout)))
+		return cfg, waitError(fmt.Sprintf("timeout %s is over the %s Echo waits for one action at most", config.Short(t), config.Short(config.MaxTimeout)))
 	case q > config.MaxQuiet:
-		return cfg, waitError(fmt.Sprintf("quiet %s is over the %s Echo waits for quiet at most", short(q), short(config.MaxQuiet)))
+		return cfg, waitError(fmt.Sprintf("quiet %s is over the %s Echo waits for quiet at most", config.Short(q), config.Short(config.MaxQuiet)))
 	case q > t:
-		return cfg, waitError(fmt.Sprintf("quiet %s is longer than the timeout of %s, so no action could ever fall quiet", short(q), short(t)))
+		return cfg, waitError(fmt.Sprintf("quiet %s is longer than the timeout of %s, so no action could ever fall quiet", config.Short(q), config.Short(t)))
 	}
 	// An action's own quiet passed Load against the file's timeout; a
 	// shorter Options.Timeout can still undercut it.
 	if o.Quiet <= 0 {
 		for _, a := range cfg.Actions {
 			if a.Quiet != nil && a.Quiet.Duration > t {
-				return cfg, waitError(fmt.Sprintf("action %q: quiet %s is longer than the timeout of %s, so it could never fall quiet", a.Name, short(a.Quiet.Duration), short(t)))
+				return cfg, waitError(fmt.Sprintf("action %q: quiet %s is longer than the timeout of %s, so it could never fall quiet", a.Name, config.Short(a.Quiet.Duration), config.Short(t)))
 			}
 		}
 	}
@@ -84,15 +84,6 @@ func (o Options) quietFor(a config.Action) time.Duration {
 		return a.Quiet.Duration
 	}
 	return o.Config.Quiet.Duration
-}
-
-// short writes a duration the way a config would: 1m, not 1m0s.
-func short(d time.Duration) string {
-	s := d.String()
-	if strings.HasSuffix(s, "m0s") {
-		s = strings.TrimSuffix(s, "0s")
-	}
-	return s
 }
 
 // wait returns the messages an action caused. Without expect it waits

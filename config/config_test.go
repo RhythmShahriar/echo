@@ -176,8 +176,6 @@ func TestEveryKeyParses(t *testing.T) {
 	}
 }
 
-// TestRoundTrip writes a loaded config back out: it must load again and
-// write the same YAML, so tools can rewrite configs without losing keys.
 // TestExpectEveryChannel: expect takes every channel Echo knows, as a
 // count or as counts per event.
 func TestExpectEveryChannel(t *testing.T) {
@@ -198,6 +196,8 @@ func TestExpectEveryChannel(t *testing.T) {
 	}
 }
 
+// TestRoundTrip writes a loaded config back out: it must load again and
+// write the same YAML, so tools can rewrite configs without losing keys.
 func TestRoundTrip(t *testing.T) {
 	c, err := Load(write(t, full))
 	if err != nil {
@@ -352,5 +352,19 @@ func TestWaits(t *testing.T) {
 	c.Timeout.Duration = 0
 	if err := c.Validate(); err == nil || err.Error() != "timeout: 0s must be more than 0, like 30s" {
 		t.Errorf("no file: %v", err)
+	}
+}
+
+func TestShort(t *testing.T) {
+	for d, want := range map[time.Duration]string{
+		1500 * time.Millisecond: "1.5s",
+		time.Minute:             "1m",
+		90 * time.Second:        "1m30s",
+		time.Hour:               "1h",
+		time.Hour + time.Minute: "1h1m",
+	} {
+		if got := Short(d); got != want {
+			t.Errorf("Short(%v) = %q, want %q", d, got, want)
+		}
 	}
 }
