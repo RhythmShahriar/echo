@@ -1,0 +1,104 @@
+# Hard seal for a Docker Compose staging site: the app has no route to
+# the internet, only to Echo. Echo records every email and request, fakes
+# provider answers (seal mode) and is the only service with a way out.
+#
+#   export RHYTHM_ECHO_BIN=/path/to/linux/rhythm-echo   # a static Linux binary
+#   export RHYTHM_ECHO_TOKEN=$(openssl rand -hex 16)
+#   docker compose up -d
+#   open http://127.0.0.1:8080        # the site, through the front
+#   open http://127.0.0.1:8025        # Echo: inbox, API
+#
+# See ../docker-compose.md for how it works and how to check it.
+name: echo-sealed
+
+networks:
+  sealed:
+    internal: true # no gateway: nothing on this network can reach the outside
+  egress: {} # Echo's and the front's way out
+
+volumes:
+  echo-state: {} # Echo's CA (with its private key) survives restarts, so trust does too
+  echo-ca: {} # the CA certificate only, for the app to trust
+  db: {}
+
+x-echo-env: &echo-env
+  # Proxy for SDKs and plain PHP/Python/Node/Go clients. The token is the
+  # proxy password: Echo listens beyond loopback, so it insists on one.
+  HTTPS_PROXY: http://echo:${RHYTHM_ECHO_TOKEN:?set RHYTHM_ECHO_TOKEN}@echo:8026
+  https_proxy: http://echo:${RHYTHM_ECHO_TOKEN}@echo:8026
+  http_proxy: http://echo:${RHYTHM_ECHO_TOKEN}@echo:8026 # lowercase only: HTTP_PROXY is unsafe under CGI (httpoxy)
+  NO_PROXY: localhost,127.0.0.1,db,app,echo
+  no_proxy: localhost,127.0.0.1,db,app,echo
+  # Connectors (WordPress mu-plugin, Laravel, Node) and the sendmail shim.
+  RHYTHM_ECHO_URL: http://echo:8025
+  RHYTHM_ECHO_TOKEN: ${RHYTHM_ECHO_TOKEN}
+  RHYTHM_ECHO_SMTP: echo:1025
+  # Trust Echo's CA in Node and Python (PHP: see ../php-fpm.md).
+  NODE_EXTRA_CA_CERTS: /echo-ca/ca.pem
+
+services:
+  echo:
+    image: alpine:3.20
+    volumes:
+      - ${RHYTHM_ECHO_BIN:?set RHYTHM_ECHO_BIN to a Linux rhythm-echo binary}:/usr/local/bin/rhythm-echo:ro
+      - echo-state:/root/.cache/rhythm/echo
+    command:
+      - rhythm-echo
+      - up
+      - --seal
+      - --listen=0.0.0.0:8025
+      - --smtp=0.0.0.0:1025
+      - --proxy=0.0.0.0:8026
+      - --mitm
+      - --token=${RHYTHM_ECHO_TOKEN}
+      # - --allow=api.stripe.com # hosts that may really be reached while sealed
+    networks: [sealed, egress]
+    ports:
+      - 127.0.0.1:${RHYTHM_ECHO_PORT:-8025}:8025 # inbox and API, from this machine only
+
+  # Copies Echo's CA certificate (never the key) to a volume the app reads.
+  echo-ca:
+    image: alpine:3.20
+    depends_on: [echo]
+    command: ["sh", "-c", "until wget -q -O /echo-ca/ca.pem http://echo:8026/ca.pem; do sleep 1; done"]
+    volumes:
+      - echo-ca:/echo-ca
+    networks: [sealed]
+
+  app:
+    image: wordpress:php8.2-apache
+    depends_on:
+      echo-ca: { condition: service_completed_successfully }
+      db: { condition: service_started }
+    environment:
+      <<: *echo-env
+      WORDPRESS_DB_HOST: db
+      WORDPRESS_DB_USER: wp
+      WORDPRESS_DB_PASSWORD: wp
+      WORDPRESS_DB_NAME: wp
+      WP_ENVIRONMENT_TYPE: staging
+    volumes:
+      - echo-ca:/echo-ca:ro
+    networks: [sealed] # only: no ports here, internal networks can't publish them
+
+  db:
+    image: mariadb:11
+    environment:
+      MARIADB_DATABASE: wp
+      MARIADB_USER: wp
+      MARIADB_PASSWORD: wp
+      MARIADB_RANDOM_ROOT_PASSWORD: "1"
+    volumes:
+      - db:/var/lib/mysql
+    networks: [sealed]
+
+  # The way in for browsers. It only forwards to the app; it is not a way
+  # out for it.
+  front:
+    image: nginx:1.27-alpine
+    depends_on: [app]
+    volumes:
+      - ./nginx-front.conf:/etc/nginx/conf.d/default.conf:ro
+    networks: [sealed, egress]
+    ports:
+      - 127.0.0.1:${RHYTHM_FRONT_PORT:-8080}:80

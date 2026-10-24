@@ -1,0 +1,52 @@
+#!/usr/sbin/nft -f
+# Hard seal for a staging VM: egress deny with Echo as the only way out.
+#
+# Only the user Echo runs as may open connections to the internet. Every
+# other process (php-fpm, Apache, Node, cron) can reach loopback, private
+# networks and DNS, and must go through Echo's proxy (127.0.0.1:8026) and
+# SMTP sink (127.0.0.1:1025) for anything else. Anything else is refused
+# at once, so a leak fails loudly instead of hanging.
+#
+#   sudo useradd --system --no-create-home rhythm-echo
+#   sudo nft -f nftables-echo.nft          # load (replaces only this table)
+#   sudo nft delete table inet echo_seal   # unseal
+#
+# See ../linux-firewall.md.
+
+define echo_user = "rhythm-echo" # the only user allowed out (must exist when loading)
+define resolvers_v4 = { 127.0.0.53, 1.1.1.1 } # DNS servers the VM uses (resolvectl status)
+define resolvers_v6 = { ::1 }
+define private_v4 = { 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 169.254.0.0/16 } # database, cache, other staging boxes
+define private_v6 = { fc00::/7, fe80::/10 }
+
+table inet echo_seal {}
+delete table inet echo_seal
+
+table inet echo_seal {
+	# Addresses the app may reach directly (rare: a payment sandbox you
+	# trust). Prefer Echo's --allow list, which keeps a record.
+	set direct_v4 {
+		type ipv4_addr
+		flags interval
+	}
+
+	chain output {
+		type filter hook output priority filter; policy drop;
+
+		oifname "lo" accept
+		ct state established,related accept
+		meta skuid $echo_user accept comment "Echo forwards allowed and observed traffic"
+		# meta skuid 0 accept comment "root: package updates; leave off for a strict seal"
+
+		ip daddr $private_v4 accept
+		ip6 daddr $private_v6 accept
+		ip daddr @direct_v4 accept
+		meta l4proto { tcp, udp } th dport 53 ip daddr $resolvers_v4 accept
+		meta l4proto { tcp, udp } th dport 53 ip6 daddr $resolvers_v6 accept
+		icmpv6 type { nd-neighbor-solicit, nd-neighbor-advert, nd-router-solicit } accept
+
+		limit rate 10/minute log prefix "echo-seal refused: " flags skuid
+		meta l4proto tcp reject with tcp reset
+		reject with icmpx admin-prohibited
+	}
+}
