@@ -137,8 +137,20 @@ func subset(want, got map[string]any) bool {
 	return true
 }
 
+// request builds a request addressed to a loopback Echo, the way a
+// connector reaches it. httptest's default Host, example.com, is one
+// Echo's rebinding guard refuses.
+func request(method, path string, body io.Reader) *http.Request {
+	req := httptest.NewRequest(method, path, body)
+	req.Host = "127.0.0.1:8025"
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	return req
+}
+
 func post(s http.Handler, capture []byte, token string) (int, string) {
-	req := httptest.NewRequest(http.MethodPost, "/v1/capture", bytes.NewReader(capture))
+	req := request(http.MethodPost, "/v1/capture", bytes.NewReader(capture))
 	if token != "" {
 		req.Header.Set(wire.TokenHeader, token)
 	}
@@ -233,7 +245,7 @@ func TestStandInWire1(t *testing.T) {
 		t.Fatal(err)
 	}
 	rec := httptest.NewRecorder()
-	s.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/v1/health", nil))
+	s.ServeHTTP(rec, request(http.MethodGet, "/v1/health", nil))
 	var h map[string]any
 	if err := json.Unmarshal(rec.Body.Bytes(), &h); err != nil || h["wire"] != 1.0 || h["mode"] != "seal" {
 		t.Fatalf("health = %s", rec.Body)
@@ -278,7 +290,7 @@ func TestStandInToken(t *testing.T) {
 	if status, _ := post(s, vec(t, "capture-email-sealed.json"), "tok"); status != http.StatusOK {
 		t.Errorf("token: HTTP %d", status)
 	}
-	req := httptest.NewRequest(http.MethodGet, "/v1/conformance", nil)
+	req := request(http.MethodGet, "/v1/conformance", nil)
 	req.Header.Set(wire.TokenHeader, "tok")
 	rec := httptest.NewRecorder()
 	s.ServeHTTP(rec, req)
