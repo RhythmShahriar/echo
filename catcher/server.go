@@ -57,6 +57,8 @@ type Config struct {
 	// actions (and read health); what it captures is marked with that
 	// site (Source.Site), so `site:client-a` finds it. Everything else
 	// needs ReadToken (or Token), which reads every site's messages.
+	// With WriteTokens and neither of those, nothing can read: not the
+	// live view, not the API, not a Mailpit client.
 	WriteTokens map[string]string
 	ReadToken   string
 	Listen      string // the address Echo listens on; its host is accepted in Host besides loopback names
