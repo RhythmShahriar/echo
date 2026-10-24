@@ -117,3 +117,12 @@ func TestShellQuote(t *testing.T) {
 		}
 	}
 }
+
+func TestRemoveDirPerOS(t *testing.T) {
+	if got := removeDir("/home/a b/.cache/rhythm/echo", "linux"); got != "rm -r '/home/a b/.cache/rhythm/echo'" {
+		t.Errorf("linux: %q", got)
+	}
+	if got := removeDir(`C:\Users\a b\AppData\Local\rhythm\echo`, "windows"); got != `rmdir /s /q "C:\Users\a b\AppData\Local\rhythm\echo"` {
+		t.Errorf("windows: %q", got)
+	}
+}

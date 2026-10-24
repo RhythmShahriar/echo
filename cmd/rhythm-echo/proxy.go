@@ -16,6 +16,7 @@ import (
 	"net"
 	"net/http"
 	"slices"
+	"runtime"
 	"strings"
 
 	"github.com/RhythmShahriar/echo/catcher"
@@ -173,9 +174,18 @@ func untrustSteps(certs []*x509.Certificate, dirs []string) string {
 		b.WriteString("\nTo delete the CA itself, so nothing can sign with it again (Echo makes a new one when it next needs one):\n")
 	}
 	for _, d := range dirs {
-		fmt.Fprintf(&b, "  rm -r %s\n", shellQuote(d))
+		b.WriteString("  " + removeDir(d, runtime.GOOS) + "\n")
 	}
 	return b.String()
+}
+
+// removeDir is the command that deletes folder dir on goos: rm -r with a
+// shell-quoted path, or cmd.exe's rmdir on Windows, which has no rm.
+func removeDir(dir, goos string) string {
+	if goos == "windows" {
+		return `rmdir /s /q "` + dir + `"`
+	}
+	return "rm -r " + shellQuote(dir)
 }
 
 // cmdSendmail is a sendmail-compatible entry for PHP's sendmail_path and
