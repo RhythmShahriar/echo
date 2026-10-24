@@ -27,15 +27,17 @@ type Inbox struct {
 	msgs     []model.Message
 	max      int
 	maxBytes int64
-	bytes    int64         // sum of size(m) over msgs
-	changed  chan struct{} // closed and replaced whenever a message is added or updated
-	scopes   []scope       // the actions in progress, oldest first, for messages that don't say
+	bytes    int64            // sum of size(m) over msgs
+	changed  chan struct{}    // closed and replaced whenever a message is added or updated
+	scopes   []scope          // the actions in progress, oldest first, for messages that don't say
+	closed   map[string]scope // the last action each run closed, for mail that arrives late
 	seq      int
 	onAdd    func(model.Message)
 	check    func(model.Message) []model.Issue // fills Issues; nil leaves them alone
 	// after is time.After. Tests swap it for a clock they move by hand, so
 	// Wait's quiet period doesn't depend on how fast the machine is.
 	after func(time.Duration) <-chan time.Time
+	now   func() time.Time // time.Now, swapped by tests that date mail around Begin and End
 }
 
 // scope is one action in progress, opened by Begin.
@@ -44,12 +46,15 @@ type scope struct {
 	run    string
 	action string
 	owner  string // who opened it (the API caller's address), for an End without a lease
+	begun  time.Time
+	ended  time.Time // set once closed
 }
 
 // NewInbox keeps at most max messages and DefaultMaxBytes of them (oldest
 // dropped first).
 func NewInbox(max int) *Inbox {
-	return &Inbox{max: max, maxBytes: DefaultMaxBytes, changed: make(chan struct{}), after: time.After}
+	return &Inbox{max: max, maxBytes: DefaultMaxBytes, changed: make(chan struct{}), closed: map[string]scope{},
+		after: time.After, now: time.Now}
 }
 
 // SetMaxBytes caps how much message data the inbox holds, dropping the
@@ -127,15 +132,17 @@ func (in *Inbox) SetCheck(fn func(model.Message) []model.Issue) {
 // async sends) are attributed to it, as long as it's the only action in
 // progress. Several runs may be open at once (two compares, a runner and
 // a manual send): untagged mail is then marked ambiguous instead of being
-// credited to whichever began last. An empty run and action open nothing.
+// credited to whichever began last. Mail dated before the open action
+// began goes to the action its run closed last instead, marked late (see
+// late). An empty run and action open nothing.
 func (in *Inbox) Begin(run, action string) string { return in.begin(run, action, "") }
 
 func (in *Inbox) begin(run, action, owner string) string {
 	if run == "" && action == "" {
 		return ""
 	}
-	sc := scope{lease: rand.Text(), run: run, action: action, owner: owner}
 	in.mu.Lock()
+	sc := scope{lease: rand.Text(), run: run, action: action, owner: owner, begun: in.now()}
 	in.scopes = append(in.scopes, sc)
 	in.mu.Unlock()
 	return sc.lease
@@ -149,11 +156,29 @@ func (in *Inbox) End(leases ...string) {
 	defer in.mu.Unlock()
 	if len(leases) == 0 {
 		if len(in.scopes) > 0 {
-			in.scopes = slices.Delete(in.scopes, 0, 1)
+			in.close(0)
 		}
 		return
 	}
-	in.scopes = slices.DeleteFunc(in.scopes, func(sc scope) bool { return slices.Contains(leases, sc.lease) })
+	for i := len(in.scopes) - 1; i >= 0; i-- {
+		if slices.Contains(leases, in.scopes[i].lease) {
+			in.close(i)
+		}
+	}
+}
+
+// close ends the i-th open action and remembers it as its run's last, so
+// mail it caused that arrives during the run's next action can still be
+// credited to it. Called with in.mu held.
+func (in *Inbox) close(i int) {
+	sc := in.scopes[i]
+	sc.ended = in.now()
+	if sc.run != "" {
+		if last, ok := in.closed[sc.run]; !ok || !last.ended.After(sc.ended) {
+			in.closed[sc.run] = sc
+		}
+	}
+	in.scopes = slices.Delete(in.scopes, i, i+1)
 }
 
 // endOldest closes the oldest action owner opened, for clients that don't
@@ -165,7 +190,7 @@ func (in *Inbox) endOldest(owner string) bool {
 	if i < 0 {
 		return false
 	}
-	in.scopes = slices.Delete(in.scopes, i, i+1)
+	in.close(i)
 	return true
 }
 
@@ -175,6 +200,10 @@ func (in *Inbox) attribute(m *model.Message) {
 	if m.Run != "" || m.Action != "" {
 		return
 	}
+	if last, ok := in.late(*m); ok {
+		m.Run, m.Attribution, m.LateFor = last.run, model.Late, last.action
+		return
+	}
 	switch len(in.scopes) {
 	case 0:
 	case 1:
@@ -182,6 +211,43 @@ func (in *Inbox) attribute(m *model.Message) {
 	default:
 		m.Attribution = model.Ambiguous
 	}
+}
+
+// late finds the closed action an untagged message belongs to although it
+// arrived during a later one: a queued mail sent after the action's quiet
+// period was over. It needs the time the message was written (its Date
+// header), and that time must fall before every open action began and
+// after the closed action began; otherwise the message is attributed by
+// arrival as usual. Only the last closed action of each open run is a
+// candidate, and only one may fit. Called with in.mu held.
+func (in *Inbox) late(m model.Message) (scope, bool) {
+	if len(in.scopes) == 0 {
+		return scope{}, false
+	}
+	sent, ok := sentAt(m.Headers)
+	if !ok {
+		return scope{}, false
+	}
+	// A Date header counts whole seconds: the message was written at some
+	// point in [sent, sent+1s). It's late only if all of that second is
+	// before the open action began.
+	end := sent.Add(time.Second)
+	for _, sc := range in.scopes {
+		if end.After(sc.begun) {
+			return scope{}, false
+		}
+	}
+	var found []scope
+	for _, sc := range in.scopes {
+		last, ok := in.closed[sc.run]
+		if ok && end.After(last.begun) && !slices.ContainsFunc(found, func(f scope) bool { return f.lease == last.lease }) {
+			found = append(found, last)
+		}
+	}
+	if len(found) != 1 {
+		return scope{}, false
+	}
+	return found[0], true
 }
 
 // Add stores m after filling its ID, time, run and issues. It returns
@@ -263,7 +329,10 @@ func (in *Inbox) Get(id string) (model.Message, bool) {
 
 // Filter selects messages. Zero fields match anything.
 type Filter struct {
-	Run     string
+	Run string
+	// Action matches the action that caused a message, including one
+	// that arrived late (LateFor): waiting on an action that has ended
+	// still finds the mail it caused.
 	Action  string
 	Channel model.Channel
 	To      string // substring of any recipient, case-insensitive
@@ -273,7 +342,7 @@ type Filter struct {
 func (f Filter) match(m model.Message) bool {
 	switch {
 	case f.Run != "" && m.Run != f.Run,
-		f.Action != "" && m.Action != f.Action,
+		f.Action != "" && m.Action != f.Action && (m.Attribution != model.Late || m.LateFor != f.Action),
 		f.Channel != "" && m.Channel != f.Channel,
 		!f.Since.IsZero() && m.At.Before(f.Since):
 		return false

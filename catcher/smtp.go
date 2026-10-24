@@ -9,6 +9,7 @@ import (
 	"io"
 	"mime"
 	"net"
+	netmail "net/mail"
 	"strings"
 	"time"
 
@@ -170,6 +171,17 @@ func addrs(h mail.Header, key string) []string {
 		out = append(out, a.Address)
 	}
 	return out
+}
+
+// sentAt returns when a message says it was written: its Date header.
+// Mail without one, or with one that doesn't parse, has no usable time.
+func sentAt(h map[string]string) (time.Time, bool) {
+	v := h["date"]
+	if v == "" {
+		return time.Time{}, false
+	}
+	t, err := netmail.ParseDate(v)
+	return t, err == nil
 }
 
 func first(s []string) string {

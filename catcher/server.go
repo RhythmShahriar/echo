@@ -150,6 +150,7 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
 var capabilities = []string{
 	"leases", // begin answers a lease that end takes
 	"issues", // every message carries the checks' findings
+	"late",   // untagged mail dated before the open action is credited to the one before
 }
 
 // health is what GET /v1/health answers, in this order.
