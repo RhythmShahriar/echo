@@ -262,3 +262,26 @@ func BenchmarkGet(b *testing.B) {
 		})
 	}
 }
+
+func TestErrorsAndNamesAreMaskedAndCut(t *testing.T) {
+	s := NewServer(NewInbox(10), Config{MaxBody: 16 << 10})
+	bot := "https://api.telegram.org/bot1234:AAHZq9TOPSECRETvalue77abcdefghij/sendMessage"
+	long := strings.Repeat("r", 1000)
+	d, err := s.Capture(wire.Capture{Version: 1, Kind: "email", Run: long + "/" + long, Error: "post " + bot + ": timeout " + largeText(1<<20),
+		Email: &wire.Email{To: []string{"a@example.com"}, Text: "hi"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	m, _ := s.Inbox.Get(d.ID)
+	if strings.Contains(m.Error, "TOPSECRET") || len(m.Error) > 16<<10 || !strings.HasPrefix(m.Error, "post ") {
+		t.Errorf("error kept raw: %d bytes, %.120q", len(m.Error), m.Error)
+	}
+	if len(m.Run) != maxName || len(m.Action) != maxName {
+		t.Errorf("run %d bytes, action %d, want %d each", len(m.Run), len(m.Action), maxName)
+	}
+	// A short, clean error is kept as it is.
+	d, _ = s.Capture(wire.Capture{Version: 1, Kind: "email", Error: "connection refused", Email: &wire.Email{To: []string{"a@example.com"}}})
+	if m, _ := s.Inbox.Get(d.ID); m.Error != "connection refused" || m.Run != "" {
+		t.Errorf("clean error: %+v", m)
+	}
+}

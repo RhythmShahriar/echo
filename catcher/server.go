@@ -296,6 +296,7 @@ func (s *Server) captureFor(c wire.Capture, x extras, site string) (wire.Decisio
 		return wire.Decision{}, err
 	}
 	run, action := splitRun(c.Run, s.runTokens(site))
+	run, action = cutName(run), cutName(action)
 	src := model.Source{Via: c.Source.Via, Stack: c.Source.Stack, Plugin: c.Source.Plugin, Hook: c.Source.Hook, Host: c.Source.Host,
 		Site: site}
 	if src.Site == "" {
@@ -313,7 +314,7 @@ func (s *Server) captureFor(c wire.Capture, x extras, site string) (wire.Decisio
 		if c.Phase == wire.After && c.ID != "" {
 			s.Inbox.Update(c.ID, func(m *model.Message) {
 				if c.Error != "" {
-					m.Status, m.Error = model.Failed, c.Error
+					m.Status, m.Error = model.Failed, s.errorText(c.Error)
 				} else if m.Status != model.Failed {
 					m.Status = model.Sent
 				}
@@ -332,7 +333,7 @@ func (s *Server) captureFor(c wire.Capture, x extras, site string) (wire.Decisio
 		// Mail handed to Echo's own SMTP sink or sendmail stand-in ends
 		// there in every mode: nothing delivers it, so it's never "sent".
 		sent := s.cfg.Mode == Observe && !sink(c.Source.Via)
-		m.Status, m.Error = model.Faked, c.Error
+		m.Status, m.Error = model.Faked, s.errorText(c.Error)
 		if sent {
 			m.Status = model.Sent
 		}
@@ -361,7 +362,7 @@ func (s *Server) http(c wire.Capture, run, action string, src model.Source) (wir
 			m.Response = &model.Response{Status: h.Status, Body: s.fitAny(h.Response, mask.Body)}
 			switch {
 			case c.Error != "":
-				m.Status, m.Error = model.Failed, c.Error
+				m.Status, m.Error = model.Failed, s.errorText(c.Error)
 			case h.Status >= 400:
 				m.Status = model.Failed
 			default:
@@ -398,7 +399,7 @@ func (s *Server) http(c wire.Capture, run, action string, src model.Source) (wir
 		m.Status = model.Sent
 		m.Response = &model.Response{Status: h.Status, Body: s.fitAny(h.Response, mask.Body)}
 		if h.Status >= 400 || c.Error != "" {
-			m.Status, m.Error = model.Failed, c.Error
+			m.Status, m.Error = model.Failed, s.errorText(c.Error)
 		}
 		d.Action = wire.Allow
 	case recognize.Refuses(rec, req):
@@ -486,6 +487,23 @@ func (s *Server) maskFields(m *model.Message) {
 	m.Subject, m.Text, m.HTML = s.fit(m, m.Subject, mask.Text), s.fit(m, m.Text, mask.Text), s.fit(m, m.HTML, mask.Text)
 	m.From, m.ReplyTo = s.fit(m, m.From, maskAddress), s.fit(m, m.ReplyTo, maskAddress)
 	m.To, m.CC, m.BCC = s.addresses(m, m.To), s.addresses(m, m.CC), s.addresses(m, m.BCC)
+	m.Event = s.fitAny(m.Event, mask.Text) // read from the request: a webhook topic, analytics event names
+}
+
+// errorText masks and cuts the error a connector reports. It often
+// quotes the URL that failed, and a bot token or ?token= query with it.
+func (s *Server) errorText(v string) string { return s.fitAny(v, mask.Text) }
+
+// maxName is the most bytes of a run or action name Echo keeps. They are
+// labels for people and filters, not data, and every message stores them.
+const maxName = 256
+
+// cutName cuts a run or action name to maxName bytes, on a character boundary.
+func cutName(v string) string {
+	if len(v) <= maxName {
+		return v
+	}
+	return v[:runeStart(v, maxName)]
 }
 
 func maskAddress(v string) string { return mask.URL(mask.Text(v)) }
@@ -816,7 +834,7 @@ func (s *Server) begin(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), timeout)
 	defer cancel()
-	lease, err := s.Inbox.beginScope(ctx, ScopeOptions{Run: b.Run, Action: b.Action, Exclusive: b.Exclusive, TTL: ttl}, caller(r))
+	lease, err := s.Inbox.beginScope(ctx, ScopeOptions{Run: cutName(b.Run), Action: cutName(b.Action), Exclusive: b.Exclusive, TTL: ttl}, caller(r))
 	if err != nil {
 		http.Error(w, fmt.Sprintf("begin: waited %s: %v; end the actions in the way (POST /v1/actions/end) or retry with a longer timeout", timeout, err),
 			http.StatusConflict)
