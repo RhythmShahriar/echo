@@ -177,6 +177,9 @@ func TestRunWindow(t *testing.T) {
 	if hist, _ := History(store, "client-a", time.Now().Add(time.Hour)); len(hist) != 0 {
 		t.Errorf("history since later: %+v", hist)
 	}
+	if _, err := History(store, "../client-a", time.Time{}); err == nil {
+		t.Error("History read a site outside the store")
+	}
 
 	// A failing update is recorded and the compare still runs.
 	results = RunWindow(context.Background(), WindowOptions{Store: store, Sites: chosen[1:], URL: "http://" + hubAddr, Token: tokens["READ"],

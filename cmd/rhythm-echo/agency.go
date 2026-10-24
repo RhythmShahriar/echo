@@ -30,6 +30,8 @@ var hexColor = regexp.MustCompile(`^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$`)
 func (s *session) agencyReport() int {
 	o := s.o
 	switch {
+	case !hub.ValidSiteID(o.site):
+		return s.fail(usageErr("--site %q: a hub site's id is letters, digits, dots, dashes and underscores, as in sites.yaml", o.site))
 	case o.storeDir == "":
 		return s.fail(usageErr("--site reads the hub's results: name the hub's store with --store"))
 	case len(s.args) > 0:

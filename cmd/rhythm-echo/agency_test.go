@@ -76,6 +76,8 @@ func TestAgencyReport(t *testing.T) {
 		{[]string{"report", "--site", "client-a", "--store", root, "--brand-color", "blue"}, `--brand-color "blue": want #RGB or #RRGGBB`},
 		{[]string{"report", "--site", "client-a", "--store", root, "--json"}, "the agency report is HTML"},
 		{[]string{"report", "--pdf"}, "add --site <id>"},
+		{[]string{"report", "--site", "../x", "--store", root}, `--site "../x": a hub site's id is letters, digits`},
+		{[]string{"report", "--site", "a/b", "--store", root}, `--site "a/b"`},
 	} {
 		if code, _, errOut := runCLI(t, c.args...); code != exitUsage || !strings.Contains(errOut, c.want) {
 			t.Errorf("%v: %d %s", c.args, code, errOut)

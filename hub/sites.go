@@ -44,6 +44,10 @@ type Sites struct {
 
 var siteID = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$`)
 
+// ValidSiteID reports whether id can name a site: it starts with a letter
+// or digit and holds no slash, so it stays one folder in the store.
+func ValidSiteID(id string) bool { return siteID.MatchString(id) }
+
 // LoadSites reads a sites file and the tokens its variables name, through
 // getenv (os.Getenv in production). Every site needs its own non-empty
 // token, none may equal the read token and the read token must be set:

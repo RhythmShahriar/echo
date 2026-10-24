@@ -392,6 +392,9 @@ func verdict(c *model.Comparison) string {
 // History returns a site's window results since t, oldest first. It is
 // what an agency report summarizes.
 func History(hubStore, site string, since time.Time) ([]Result, error) {
+	if !ValidSiteID(site) {
+		return nil, fmt.Errorf("site %q: an id is letters, digits, dots, dashes and underscores", site)
+	}
 	runs := filepath.Join(SiteStore(hubStore, site).Root, "runs")
 	entries, err := os.ReadDir(runs)
 	if errors.Is(err, os.ErrNotExist) {
