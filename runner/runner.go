@@ -149,7 +149,10 @@ func Run(ctx context.Context, o Options) (*model.Run, error) {
 		o.HTTP = &http.Client{Timeout: cfg.Timeout.Duration, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 	}
 	fake := newFake()
-	opts := check.Options{SiteHost: host(cfg.Site), AllowRecipients: cfg.AllowRecipients}
+	opts, err := CheckOptions(cfg)
+	if err != nil {
+		return nil, err
+	}
 	done := runAll(ctx, o, run, actions, fake, opts)
 	if w := ambiguityWarning(len(done.lost), done.overlapped); w != "" {
 		run.Warnings = append(run.Warnings, w)

@@ -10,6 +10,7 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/RhythmShahriar/echo/check"
 	"github.com/RhythmShahriar/echo/model"
 	"github.com/RhythmShahriar/echo/wire"
 )
@@ -70,6 +71,36 @@ func TestEveryCaptureIsChecked(t *testing.T) {
 	_ = json.NewDecoder(resp.Body).Decode(&list)
 	if len(list) != 2 || len(list[0].Issues) == 0 || len(list[1].Issues) != 0 {
 		t.Errorf("the list carries issues too: %+v", list)
+	}
+}
+
+// TestCapturesFollowTheProjectsChecks: the config's rules: and checks:
+// reach what every capture carries, as they do a run's report.
+func TestCapturesFollowTheProjectsChecks(t *testing.T) {
+	rules, err := check.CustomRules([]check.Custom{{ID: "brand/secret-project", Match: "SECRET-PROJECT", Level: model.Error}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := NewServer(NewInbox(10), Config{Site: "https://shop.example", Rules: rules,
+		Checks: map[string]string{"content/placeholder": check.Off, "content/dev-link": "notice"}})
+	srv := httptest.NewServer(s)
+	defer srv.Close()
+	d := post(t, srv, wire.Capture{Version: 1, Kind: "email", Source: wire.Source{Via: "test"}, Email: &wire.Email{
+		From: "shop@shop.example", To: []string{"buyer@example.com"}, Subject: "SECRET-PROJECT launch",
+		Text: "Hi {first_name}, see http://localhost/launch"}})
+	m := getMessage(t, srv, d.ID)
+	levels := map[string]model.Level{}
+	for _, i := range m.Issues {
+		levels[i.Check] = i.Level
+	}
+	if levels["brand/secret-project"] != model.Error {
+		t.Errorf("the project's rule: %v", m.Issues)
+	}
+	if _, on := levels["content/placeholder"]; on {
+		t.Errorf("checks: off still reports content/placeholder: %v", m.Issues)
+	}
+	if levels["content/dev-link"] != model.Notice {
+		t.Errorf("checks: notice: %v", m.Issues)
 	}
 }
 

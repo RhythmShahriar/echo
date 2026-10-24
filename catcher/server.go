@@ -69,6 +69,11 @@ type Config struct {
 	// message.
 	Site            string
 	AllowRecipients []string
+	// Rules are the project's own checks (the config's rules:, made by
+	// check.CustomRules) and Checks its per-check levels (checks:), so
+	// what a capture carries matches what a run reports.
+	Rules  []check.Rule
+	Checks map[string]string
 	// SMTPAddr and ProxyAddr are where the SMTP sink and the proxy listen
 	// ("off" when they don't run), so clients reach the real ones rather
 	// than config defaults. Empty means not known: health leaves it out.
@@ -120,7 +125,7 @@ func NewServer(inbox *Inbox, cfg Config) *Server {
 		cfg.Warn("action " + name + " was never ended, so it closed when its lease ran out; mail that doesn't name its run is no longer credited to it")
 	})
 	s := &Server{Inbox: inbox, cfg: cfg, mux: http.NewServeMux(), pit: mailpitState{started: time.Now(), read: map[string]bool{}}}
-	opts := check.Options{SiteHost: hostOnly(cfg.Site), AllowRecipients: cfg.AllowRecipients}
+	opts := check.Options{SiteHost: hostOnly(cfg.Site), AllowRecipients: cfg.AllowRecipients, Rules: cfg.Rules, Checks: cfg.Checks}
 	inbox.SetCheck(func(m model.Message) []model.Issue { return check.Message(m, opts) })
 	s.mux.HandleFunc("GET /v1/health", s.health)
 	s.mux.HandleFunc("POST /v1/capture", s.capture)
