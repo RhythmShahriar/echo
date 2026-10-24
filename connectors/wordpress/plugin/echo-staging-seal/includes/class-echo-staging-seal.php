@@ -170,8 +170,14 @@ final class Echo_Staging_Seal {
 		$saved = self::stored();
 		$url   = esc_url_raw( trim( sanitize_text_field( self::posted( 'echo_url' ) ) ), array( 'http', 'https' ) );
 		$mode  = sanitize_key( self::posted( 'echo_mode' ) );
-		$token = trim( sanitize_text_field( self::posted( 'echo_token' ) ) );
+		$token = self::posted( 'echo_token' );
 		$site  = sanitize_key( self::posted( 'echo_site_id' ) );
+		// A token is compared byte for byte with Echo's, so it is checked,
+		// never rewritten: sanitize_text_field would drop %XX octets and
+		// anything tag-like and save a token that no longer matches.
+		if ( '' !== $token && ! self::valid_token( $token ) ) {
+			self::back( 'bad-token' );
+		}
 		$new   = array(
 			// A locked URL field is not posted: keep what was there.
 			'url'     => self::url_locked( Rhythm_Echo::settings_file() ) ? ( $saved['url'] ?? '' ) : untrailingslashit( $url ),
@@ -182,6 +188,14 @@ final class Echo_Staging_Seal {
 		$new['token'] = '' !== self::posted( 'echo_token_clear' ) ? '' : ( '' !== $token ? $token : ( $saved['token'] ?? '' ) );
 		update_option( self::OPTION, $new );
 		self::back( 'saved' );
+	}
+
+	/**
+	 * Whether a token can be saved as typed: printable ASCII without
+	 * spaces, as Echo's own tokens are, and at most 512 characters.
+	 */
+	public static function valid_token( string $token ): bool {
+		return 1 === preg_match( '/^[\x21-\x7E]{1,512}$/D', $token );
 	}
 
 	/**
@@ -399,6 +413,9 @@ final class Echo_Staging_Seal {
 		$done = isset( $_GET['echo'] ) && is_string( $_GET['echo'] ) ? sanitize_key( wp_unslash( $_GET['echo'] ) ) : '';
 		if ( 'saved' === $done ) {
 			echo '<div class="notice notice-success"><p>' . esc_html__( 'Settings saved.', 'echo-staging-seal' ) . '</p></div>';
+		}
+		if ( 'bad-token' === $done ) {
+			echo '<div class="notice notice-error"><p>' . esc_html__( 'Settings not saved: the token can only hold letters, digits and punctuation, with no spaces (up to 512 characters). Paste the token Echo was started with.', 'echo-staging-seal' ) . '</p></div>';
 		}
 		if ( self::$mu_plugin ) {
 			echo '<div class="notice notice-info"><p>' . esc_html__( 'The Rhythm Echo mu-plugin is installed and runs the seal, with its own settings file. The settings below do not reach it.', 'echo-staging-seal' ) . '</p></div>';

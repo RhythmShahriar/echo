@@ -652,6 +652,22 @@ func testPlugin(t *testing.T, r *rig) {
 		saved["url"] != "" || saved["mode"] != "observe" || saved["token"] != "saved-token" || saved["site_id"] != "client-b" {
 		t.Errorf("saved settings = %v (%v)", saved, err)
 	}
+	// A token is saved as typed, %XX and tag-like text included, or
+	// refused whole: never rewritten into one that no longer matches.
+	form.Set("echo_token", "a%41b<em>c</em>")
+	r.browse(t, admin, http.MethodPost, post, form)
+	if got := strings.TrimSpace(r.wp(t, nil, "eval", "echo get_option( 'echo_staging_seal_settings' )['token'];")); got != "a%41b<em>c</em>" {
+		t.Errorf("token saved as %q", got)
+	}
+	form.Set("echo_token", "two words")
+	if _, page := r.browse(t, admin, http.MethodPost, post, form); !strings.Contains(page, "Settings not saved: the token can only hold") {
+		t.Error("a token with a space was not refused")
+	}
+	form.Set("echo_token", "saved-token")
+	r.browse(t, admin, http.MethodPost, post, form)
+	if got := strings.TrimSpace(r.wp(t, nil, "eval", "echo get_option( 'echo_staging_seal_settings' )['token'];")); got != "saved-token" {
+		t.Errorf("token after a refused save and a good one: %q", got)
+	}
 	// The installer's settings file sets the token, so the screen shows
 	// the URL read-only and a posted one is not saved: the token goes
 	// only where the file says.

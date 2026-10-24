@@ -241,6 +241,30 @@ func TestPluginArgv(t *testing.T) {
 	}
 }
 
+// The settings screen saves a token as typed or not at all: rewriting it
+// (as sanitize_text_field would) saves one that no longer matches Echo's.
+func TestPluginValidToken(t *testing.T) {
+	setup := `{"require":["plugin/echo-staging-seal/includes/class-echo-staging-seal.php"]}`
+	for token, want := range map[string]bool{
+		"rB8xQ2-_tk":               true,
+		"a%41b<em>c</em>":          true,
+		"~!@#$%^&*()+={}[]|:;'?/.": true,
+		strings.Repeat("x", 512):   true,
+		"":                         false,
+		"two words":                false,
+		"tab\there":                false,
+		"line\n":                   false,
+		"caf\u00e9":                false,
+		strings.Repeat("x", 513):   false,
+	} {
+		var got bool
+		callPHP(t, setup, "Echo_Staging_Seal::valid_token", &got, token)
+		if got != want {
+			t.Errorf("valid_token(%q) = %v, want %v", token, got, want)
+		}
+	}
+}
+
 // A token set outside the settings screen goes only to a URL set there
 // too: the screen's saved URL is ignored then, so an administrator account
 // alone cannot send it to another server.
