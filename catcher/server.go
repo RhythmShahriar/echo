@@ -21,6 +21,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/RhythmShahriar/echo/check"
 	"github.com/RhythmShahriar/echo/mask"
 	"github.com/RhythmShahriar/echo/model"
 	"github.com/RhythmShahriar/echo/recognize"
@@ -50,7 +51,13 @@ type Config struct {
 	Token   string   // required in X-Echo-Token when set (Echo listening beyond loopback)
 	Listen  string   // the address Echo listens on; its host is accepted in Host besides loopback names
 	MaxBody int      // bytes of body kept per message; default 256 KiB
-	Version string
+	// Site is the site being tested (a URL or host): links to it aren't
+	// development links. AllowRecipients are the address and number globs
+	// that may really be messaged. Both feed the checks run on every
+	// message.
+	Site            string
+	AllowRecipients []string
+	Version         string
 	// Warn is told about things worth a line in the log, such as a
 	// connector's site host that Echo ignores. Default: the standard log.
 	Warn func(msg string)
@@ -77,6 +84,8 @@ func NewServer(inbox *Inbox, cfg Config) *Server {
 		cfg.Warn = func(msg string) { log.Print("echo: " + msg) }
 	}
 	s := &Server{Inbox: inbox, cfg: cfg, mux: http.NewServeMux()}
+	opts := check.Options{SiteHost: hostOnly(cfg.Site), AllowRecipients: cfg.AllowRecipients}
+	inbox.SetCheck(func(m model.Message) []model.Issue { return check.Message(m, opts) })
 	s.mux.HandleFunc("GET /v1/health", s.health)
 	s.mux.HandleFunc("POST /v1/capture", s.capture)
 	s.mux.HandleFunc("GET /v1/messages", s.list)

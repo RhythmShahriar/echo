@@ -32,6 +32,7 @@ type Inbox struct {
 	scopes   []scope       // the actions in progress, oldest first, for messages that don't say
 	seq      int
 	onAdd    func(model.Message)
+	check    func(model.Message) []model.Issue // fills Issues; nil leaves them alone
 	// after is time.After. Tests swap it for a clock they move by hand, so
 	// Wait's quiet period doesn't depend on how fast the machine is.
 	after func(time.Duration) <-chan time.Time
@@ -110,6 +111,16 @@ func size(m model.Message) int64 {
 // live view). It's called with the inbox unlocked.
 func (in *Inbox) OnAdd(fn func(model.Message)) { in.onAdd = fn }
 
+// SetCheck makes the inbox find the problems in every message it stores
+// (check.Message): Add and Update fill Message.Issues with fn's result, so
+// whatever shows a message (the live view, watch, the API) shows its
+// problems too, not only a run's report.
+func (in *Inbox) SetCheck(fn func(model.Message) []model.Issue) {
+	in.mu.Lock()
+	in.check = fn
+	in.mu.Unlock()
+}
+
 // Begin marks run/action as in progress and returns a lease that End
 // takes to close it. Messages captured meanwhile that don't carry their
 // own run (SMTP mail, connectors that couldn't see the X-Echo-Run header,
@@ -173,16 +184,24 @@ func (in *Inbox) attribute(m *model.Message) {
 	}
 }
 
-// Add stores m, filling its ID, time and run, and returns it.
+// Add stores m, filling its ID, time, run and issues, and returns it.
 func (in *Inbox) Add(m model.Message) model.Message {
 	in.mu.Lock()
 	in.seq++
+	seq, check := in.seq, in.check
+	in.mu.Unlock()
 	if m.At.IsZero() {
 		m.At = time.Now().UTC()
 	}
 	if m.ID == "" {
-		m.ID = model.NewID(fmt.Sprint(m.At.UnixNano(), in.seq, m.URL, m.Subject))
+		m.ID = model.NewID(fmt.Sprint(m.At.UnixNano(), seq, m.URL, m.Subject))
 	}
+	// Checked unlocked: the rules read up to MaxBody of text and HTML,
+	// and SMTP, the proxy and connectors add at the same time.
+	if check != nil {
+		m.Issues = check(m)
+	}
+	in.mu.Lock()
 	in.attribute(&m)
 	in.msgs = append(in.msgs, m)
 	in.bytes += size(m)
@@ -205,6 +224,9 @@ func (in *Inbox) Update(id string, fn func(*model.Message)) bool {
 		if in.msgs[i].ID == id {
 			before := size(in.msgs[i])
 			fn(&in.msgs[i])
+			if in.check != nil { // a failed send is a problem the capture didn't have
+				in.msgs[i].Issues = in.check(in.msgs[i])
+			}
 			in.bytes += size(in.msgs[i]) - before
 			out, found = in.msgs[i], true
 			break
