@@ -24,7 +24,7 @@ import (
 )
 
 // Attachment is a file an email carries: what compare checks is still
-// attached, and whether it changed.
+// attached and whether it changed.
 type Attachment struct {
 	Name   string
 	Type   string // application/pdf

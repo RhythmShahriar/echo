@@ -240,7 +240,7 @@ func truncated(m model.Message) bool { return strings.HasSuffix(m.Body, truncate
 
 // content compares two matched messages. note says what couldn't be
 // compared. textCovered leaves out a text change: a new placeholder or PHP
-// error in a is already BROKE, and the line it changed would say it twice.
+// error in a is already BROKE; the line it changed would say it twice.
 func content(b, a model.Message, textCovered bool) (out []model.Change, note string) {
 	what := check.Capitalize(identityLabel(a))
 	ch := func(check, title, before, after, fix string) {

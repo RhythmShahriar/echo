@@ -11,7 +11,7 @@ import (
 	"github.com/RhythmShahriar/echo/model"
 )
 
-// Rules on what a reader sees, and on what a payload carries.
+// Rules on what a reader sees and on what a payload carries.
 
 var sendFailed = Rule{
 	ID: "send/failed", Level: model.Error,
