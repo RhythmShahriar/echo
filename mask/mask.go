@@ -35,8 +35,9 @@ const Hidden = "•••••"
 
 // headerName matches header names whose value is a credential whatever
 // its format: X-Auth-Token, X-Amz-Security-Token, Private-Token,
-// X-Goog-Api-Key, X-Shopify-Access-Token, Cookie, Authorization.
-var headerName = regexp.MustCompile(`(?i)token|secret|key|auth|signature|session|password|cookie|credential`)
+// X-Goog-Api-Key, X-Shopify-Access-Token, Cookie, Authorization and
+// the JWT a proxy adds (Cf-Access-Jwt-Assertion).
+var headerName = regexp.MustCompile(`(?i)token|secret|key|auth|signature|session|password|cookie|credential|jwt|assertion`)
 
 // Header masks a header value: whole when the name says it holds a
 // credential, otherwise only the secrets Text finds in it.
@@ -69,18 +70,22 @@ var (
 	keySegment = regexp.MustCompile(`(?i)(/key/)([^/?#\s"'<>]+)`)
 	// Query values that open an account or prove who someone is. The
 	// separator may be "&amp;" in HTML, hence ";".
-	queryValue = regexp.MustCompile(`(?i)([?&;](?:key|k|code|otp|reset|token|sig|signature|hash)=)([^&#\s"'<>]+)`)
+	queryValue = regexp.MustCompile(`(?i)([?&;](?:key|k|code|otp|reset|token|sig|signature|hash|auth|ticket)=)([^&#\s"'<>]+)`)
 	// A URL in free text.
 	urlPattern = regexp.MustCompile(`(?i)\b(?:https?|ftp)://[^\s"'<>]+`)
 	// A one-time code named as one: "Your login code is 482913".
 	oneTimeCode = regexp.MustCompile(`(?i)(\b(?:code|otp|passcode|pin)\b(?:\s+is)?[\s:#-]{0,3})(\d{4,10})\b`)
+	// A JSON Web Token: a header and a payload, both base64url JSON
+	// ("eyJ" is `{"`), and a signature. It signs someone in wherever it's
+	// pasted, in a URL, a log line or a message.
+	jwt = regexp.MustCompile(`\beyJ[A-Za-z0-9_-]{8,}\.eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]*`)
 )
 
 // URL masks the credential parts of a URL (or of a URL-like string such as
 // "api.telegram.org/bot<token>/sendMessage"): a Telegram bot token, a
 // /key/<x> path segment and the values of query keys key, k, code, otp,
-// reset, token, sig, signature and hash. Other query values (?page=2) are
-// kept.
+// reset, token, sig, signature, hash, auth and ticket. Other query values
+// (?page=2) are kept.
 func URL(s string) string {
 	s = telegramBot.ReplaceAllStringFunc(s, func(m string) string {
 		p := telegramBot.FindStringSubmatch(m)
@@ -97,12 +102,13 @@ func URL(s string) string {
 }
 
 // Text masks free text (an email body, a subject, an SMS): the kit's rules,
-// one-time codes and URL on every URL in it.
+// JWTs, one-time codes and URL on every URL in it.
 func Text(s string) string {
 	if s == "" {
 		return ""
 	}
 	s = secrets.Redact(s)
+	s = jwt.ReplaceAllStringFunc(s, keep)
 	s = codes(s)
 	return urlPattern.ReplaceAllStringFunc(s, URL)
 }
@@ -140,10 +146,11 @@ var notSecretKeys = map[string]bool{"orderkey": true, "metakey": true, "cachekey
 // secretField reports whether a JSON key names a credential. The words
 // are pass, pwd, secret, token and auth anywhere in the name ("db_pwd",
 // "access_token", "auth") and key at its end ("apiKey", "license_key").
-// A bare "key" counts only when its value looks random: meta_data lists
-// use it for field names. Counts ("total_tokens") and "author" don't.
+// A bare "key" counts only when its value looks random or is a number of
+// six digits or more: meta_data lists use it for field names. Counts
+// ("total_tokens") and "author" don't.
 func secretField(name, value string) bool {
-	n := strings.NewReplacer("_", "", "-", "", ".", "").Replace(strings.ToLower(name))
+	n := fieldName(name)
 	switch {
 	case strings.HasSuffix(n, "tokens"), strings.Contains(n, "passenger"):
 		return false
@@ -151,11 +158,52 @@ func secretField(name, value string) bool {
 		strings.Contains(strings.ReplaceAll(n, "author", ""), "auth"):
 		return true
 	case n == "key":
-		return randomLooking(value)
+		return randomLooking(value) || len(value) >= 6 && digits(value)
 	case strings.HasSuffix(n, "key"):
 		return !notSecretKeys[n]
 	}
 	return false
+}
+
+// fieldName is a JSON key lowercased without separators: "login_code"
+// and "loginCode" both read "logincode".
+func fieldName(name string) string {
+	return strings.NewReplacer("_", "", "-", "", ".", "").Replace(strings.ToLower(name))
+}
+
+// oneTimeField reports whether a JSON key and its value are a one-time
+// code: otp, code or pin at the end of the name ("login_code", "pin")
+// with a value that reads like one (see oneTimeValue).
+func oneTimeField(name, value string) bool {
+	n := fieldName(name)
+	return (strings.HasSuffix(n, "otp") || strings.HasSuffix(n, "pin") || strings.HasSuffix(n, "code") && !notCodeKeys[n]) &&
+		oneTimeValue(value)
+}
+
+// notCodeKeys are names ending in "code" that hold a label, not a
+// one-time code: a postal code is 4 to 10 digits too.
+var notCodeKeys = map[string]bool{"zipcode": true, "postcode": true, "postalcode": true, "statuscode": true,
+	"errorcode": true, "countrycode": true, "currencycode": true, "languagecode": true, "areacode": true,
+	"barcode": true, "promocode": true, "couponcode": true, "discountcode": true, "productcode": true}
+
+// oneTimeValue reports whether v reads like a one-time code: 4 to 10
+// letters and digits with at least one digit ("482913", "X7K9QZ"). An
+// error code such as "rest_forbidden" or an HTTP status doesn't.
+func oneTimeValue(v string) bool {
+	if len(v) < 4 || len(v) > 10 || !strings.ContainsAny(v, "0123456789") {
+		return false
+	}
+	return strings.IndexFunc(v, notAlnum) < 0
+}
+
+// notAlnum reports whether r is anything but an ASCII letter or digit.
+func notAlnum(r rune) bool {
+	return (r < '0' || r > '9') && (r < 'A' || r > 'Z') && (r < 'a' || r > 'z')
+}
+
+// digits reports whether v is all ASCII digits.
+func digits(v string) bool {
+	return v != "" && strings.IndexFunc(v, func(r rune) bool { return r < '0' || r > '9' }) < 0
 }
 
 // randomLooking reports whether v reads like a generated credential
@@ -168,13 +216,16 @@ func randomLooking(v string) bool {
 }
 
 // JSON masks the string and number values of keys that name a credential
-// (see secretField), then runs Text on
-// the rest. A masked number becomes a string, so it can't be read back as
-// the original.
+// (see secretField) or hold a one-time code (see oneTimeField, hidden
+// whole), then runs Text on the rest. A masked number becomes a string,
+// so it can't be read back as the original.
 func JSON(s string) string {
 	s = jsonField.ReplaceAllStringFunc(s, func(m string) string {
 		p := jsonField.FindStringSubmatch(m)
 		v := strings.TrimSuffix(strings.TrimPrefix(p[3], `"`), `"`)
+		if oneTimeField(p[1], v) {
+			return `"` + p[1] + `"` + p[2] + `"` + Hidden + `"`
+		}
 		if !secretField(p[1], v) {
 			return m
 		}

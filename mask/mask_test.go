@@ -31,6 +31,8 @@ func TestRules(t *testing.T) {
 		{"x-shopify-access-token", hdr("X-Shopify-Access-Token"), secret, secret, Hidden, false},
 		{"authorization", hdr("authorization"), "Bearer " + secret, secret, Hidden, false},
 		{"cookie", hdr("Cookie"), "wordpress_logged_in=" + secret, secret, Hidden, false},
+		{"cf-access-jwt-assertion", hdr("Cf-Access-Jwt-Assertion"), "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJqYW5lIiwiZXhwIjo5OTl9.c2lnbmF0dXJlX3ZhbHVl", "eyJzdWIi", Hidden, false},
+		{"x-forwarded-for kept", hdr("X-Forwarded-For"), "203.0.113.7", "", "", true},
 		{"x-request-id kept", hdr("X-Request-Id"), "req-7f3a9c-" + secret, "", "", true},
 		{"content-type kept", hdr("Content-Type"), "application/json; charset=utf-8", "", "", true},
 		{"empty stays empty", hdr("X-Wc-Webhook-Signature"), "", "", "", true},
@@ -51,6 +53,9 @@ func TestRules(t *testing.T) {
 		{"reset", URL, "https://shop.test/a?reset=" + secret, secret, "reset=" + Hidden, false},
 		{"sig in html", URL, "https://shop.test/dl?file=a.pdf&amp;sig=" + secret, secret, "file=a.pdf", false},
 		{"hash", URL, "https://shop.test/confirm?hash=" + secret, secret, "hash=" + Hidden, false},
+		{"auth", URL, "https://shop.test/hook?auth=" + secret, secret, "auth=" + Hidden, false},
+		{"ticket", URL, "https://sso.test/validate?ticket=ST-" + secret, secret, "ticket=" + Hidden, false},
+		{"author kept", URL, "https://shop.test/blog?author=jane&t=42", "", "", true},
 		{"page kept", URL, "https://shop.test/orders?page=2&utm_source=email", "", "", true},
 		{"keyword kept", URL, "https://shop.test/search?keyword=shoes&sort=price", "", "", true},
 
@@ -62,6 +67,8 @@ func TestRules(t *testing.T) {
 		{"order number kept", Text, "Order #482913 has shipped", "", "", true},
 		{"zip code kept", Text, "Zip code 90210", "", "", true},
 		{"kit rule still applies", Text, "password=" + secret, secret, "password=", false},
+		{"jwt in text", Text, "Bearer-less: eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJqYW5lIiwiZXhwIjo5OTl9.c2lnbmF0dXJlX3ZhbHVl done", "eyJzdWIi", " done", false},
+		{"jwt-like words kept", Text, "eyJ is how base64 JSON starts. See docs.eyJ.test", "", "", true},
 		{"plain text kept", Text, "Thanks for your order, Jane!", "", "", true},
 
 		// JSON: string and number values by key name.
@@ -77,6 +84,13 @@ func TestRules(t *testing.T) {
 		{"json token counts kept", JSON, `{"usage":{"prompt_tokens":12,"total_tokens":40}}`, "", "", true},
 		{"json author kept", JSON, `{"author": 12, "keywords": "shoes", "total": 42.5}`, "", "", true},
 		{"json order kept", JSON, `{"id":4242,"status":"processing","line_items":[{"sku":"A1","qty":2}]}`, "", "", true},
+		{"json otp number", JSON, `{"otp": 482913}`, "482913", `"otp": "` + Hidden + `"`, false},
+		{"json code string", JSON, `{"code": "482913"}`, "48", `"code": "` + Hidden + `"`, false},
+		{"json pin", JSON, `{"pin": 1234}`, "1234", `"pin": "` + Hidden + `"`, false},
+		{"json login_code letters and digits", JSON, `{"login_code": "X7K9QZ"}`, "X7K9QZ", `"login_code": "` + Hidden + `"`, false},
+		{"json bare numeric key", JSON, `{"key": 48291374}`, "48291374", `"key": "`, false},
+		{"json error and postal codes kept", JSON, `{"code":"rest_forbidden","data":{"status":403},"postcode":"90210","country_code":"US","status_code":404}`, "", "", true},
+		{"json short code and numeric key kept", JSON, `{"code":42,"key":2024,"shipping":"1234"}`, "", "", true},
 		{"json cut short", JSON, `{"items":[1,2],"secret":"` + secret, "", secret, true}, // an unterminated value can't be read: nothing to mask, nothing broken
 	} {
 		t.Run(c.name, func(t *testing.T) {
