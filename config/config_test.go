@@ -225,6 +225,21 @@ func TestRoundTrip(t *testing.T) {
 	}
 }
 
+// TestIgnoreListField: an ignore pattern can name a field in a list
+// ("items[].sku"), as compare reads it; a lone "[" is still refused.
+func TestIgnoreListField(t *testing.T) {
+	c, err := Load(write(t, "actions:\n  - name: A\n    command: x\n    ignore: [\"items[].sku\", \"order.lines[].*\"]\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := c.Actions[0].Ignore; len(got) != 2 || got[0] != "items[].sku" {
+		t.Errorf("ignore = %q", got)
+	}
+	if _, err := Load(write(t, "actions:\n  - name: A\n    command: x\n    ignore: [\"items[.sku\"]\n")); err == nil {
+		t.Error("ignore: items[.sku was accepted")
+	}
+}
+
 func TestErrorsNameTheLine(t *testing.T) {
 	for in, want := range map[string]string{
 		"checks:\n  content/dev-link: loud\n":                                                     "line 2: checks: content/dev-link: \"loud\" isn't off, notice, warning, error, broke or changed",

@@ -412,7 +412,7 @@ func (c Config) Validate() error {
 			}
 		}
 		for j, g := range a.Ignore {
-			if err := glob(g); err != nil {
+			if err := glob(g, true); err != nil {
 				return fmt.Errorf("%saction %q: ignore: %w", c.at("actions", i, "ignore", j), a.Name, err)
 			}
 		}
@@ -484,7 +484,7 @@ func (c Config) Validate() error {
 			}
 		}
 		for j, g := range c.Relay.Allow {
-			if err := glob(g); err != nil {
+			if err := glob(g, false); err != nil {
 				return fmt.Errorf("%srelay: allow: %w", c.at("relay", "allow", j), err)
 			}
 		}
@@ -557,11 +557,17 @@ func Short(d time.Duration) string {
 }
 
 // glob checks an ignore or allow pattern: *, ? and [ ] as in path.Match.
-func glob(g string) error {
+// In a field pattern "[]" is the list marker of a field path
+// ("items[].sku"), as compare reads it, not an empty class.
+func glob(g string, field bool) error {
 	if strings.TrimSpace(g) == "" {
 		return errors.New("an empty pattern matches nothing")
 	}
-	if _, err := path.Match(g, ""); err != nil {
+	p := g
+	if field {
+		p = strings.ReplaceAll(p, "[]", `\[\]`)
+	}
+	if _, err := path.Match(p, ""); err != nil {
 		return fmt.Errorf("%q isn't a valid pattern (unclosed [ or a trailing \\)", g)
 	}
 	return nil
