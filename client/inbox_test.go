@@ -42,7 +42,7 @@ func TestListPagesAndSearches(t *testing.T) {
 	if fmt.Sprint(got) != "[Order 4 Order 3 Order 2 Order 1 Order 0]" {
 		t.Errorf("pages: %v", got)
 	}
-	// Messages keeps its array, oldest first, and takes a search too.
+	// Messages keeps its array (oldest first) and takes a search too.
 	if ms, err := c.Messages(ctx, Filter{Q: "shipped", Limit: 1}); err != nil || len(ms) != 1 || ms[0].Channel != model.SMS {
 		t.Errorf("messages with q: %v %v", ms, err)
 	}

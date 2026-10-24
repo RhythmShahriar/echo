@@ -32,7 +32,7 @@ func (f found) empty() bool { return len(f.codes) == 0 && len(f.links) == 0 }
 // hide takes the codes and one-time link tokens f found out of the masked
 // message m. Masking catches "code: 482913" but not "482913 is your
 // code" or a token in a link's path (/reset-password/<token>); the code
-// must never be stored, and it changes on every send, so a comparison
+// must never be stored. It also changes on every send, so a comparison
 // would see it as a change.
 func (f found) hide(m *model.Message) {
 	var pairs []string

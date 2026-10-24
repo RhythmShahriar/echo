@@ -60,7 +60,7 @@ var (
 	before, after = 60, 30
 )
 
-// Extract returns the one-time codes in m, most likely first, and the
+// Extract returns the one-time codes in m (most likely first) and the
 // links of a known kind, in the order they appear. A code is 4 to 8
 // digits, or 6 to 8 capital letters and digits mixed, within a few words
 // of "code", "OTP", "PIN", "verification" or "one-time", or near the top
@@ -151,7 +151,7 @@ var pairs = map[string]string{"time": "one", "factor": "two"}
 // names one.
 const subjectLead = 500
 
-// find returns the codes in s, and whether s names a code at all. A code
+// find returns the codes in s and whether s names a code at all. A code
 // before lead needs no keyword near it. It reads s once, word by word:
 // regular expressions took 100 ms over 512 KiB.
 func find(s string, lead int) (codes []string, named bool) {
@@ -315,9 +315,9 @@ func urls(s string) []string {
 }
 
 // kindWords name a link's kind by the words of its path and query (split
-// at anything but letters and digits, and also taken in pairs, so
+// at anything but letters and digits and also taken in pairs, so
 // "sign-in" and "action=rp" count). They're checked in this order: a
-// reset link is often under /login, and so is a magic link.
+// reset link is often under /login, as is a magic link.
 var kindWords = []struct {
 	kind  string
 	words []string

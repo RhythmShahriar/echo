@@ -154,7 +154,7 @@ var capabilities = []string{
 	"leases",      // begin answers a lease that end takes
 	"issues",      // every message carries the checks' findings
 	"late",        // untagged mail dated before the open action is credited to the one before
-	"search",      // /v1/messages takes q, limit and before, and since as a duration
+	"search",      // /v1/messages takes q, limit and before; since takes a duration
 	"events",      // GET /v1/events streams changes; DELETE /v1/messages/{id}
 	"attachments", // emails list their files: name, type, size and sha256
 	"codes",       // GET /v1/messages/latest answers one-time codes and links

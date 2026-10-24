@@ -31,7 +31,7 @@ func TestParseMIMEAttachments(t *testing.T) {
 			{Name: "banner.png", Type: "image/png", Size: 49, SHA256: pngSHA, Inline: true},
 		}},
 		{"nested.eml", "Thanks for your order.", "<p>Thanks for your order.</p>", []model.Attachment{pdf,
-			// Named in Content-Type only; a text part, but attached.
+			// Named in Content-Type only: a text part that is attached.
 			{Name: "items.csv", Type: "text/csv", Size: 13, SHA256: "9a3bc98e874391edfb0afa1ce132d62839884971d8cd44b3eb787f9741ec21c9"}}},
 		{"rfc2231.eml", "Anbei die Rechnung.", "", []model.Attachment{
 			{Name: "Rechnung Nr. 42 Müller.pdf", Type: "application/pdf", Size: 77, SHA256: pdfSHA}}},

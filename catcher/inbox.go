@@ -232,10 +232,10 @@ func (in *Inbox) attribute(m *model.Message) {
 // late finds the closed action an untagged message belongs to although it
 // arrived during a later one: a queued mail sent after the action's quiet
 // period was over. It needs the time the message was written (its Date
-// header), and that time must fall before every open action began and
+// header). That time must fall before every open action began and
 // after the closed action began; otherwise the message is attributed by
 // arrival as usual. Only the last closed action of each open run is a
-// candidate, and only one may fit. Called with in.mu held.
+// candidate. Only one may fit. Called with in.mu held.
 func (in *Inbox) late(m model.Message) (scope, bool) {
 	if len(in.scopes) == 0 {
 		return scope{}, false

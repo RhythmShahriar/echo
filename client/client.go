@@ -156,7 +156,7 @@ type Event struct {
 
 // Events streams the changes in Echo's inbox from now on, until ctx ends
 // or the connection drops; the channel is closed then. Call it again to
-// reconnect, and read the messages again since some may be missed in
+// reconnect. Read the messages again then, since some may be missed in
 // between.
 func (c *Client) Events(ctx context.Context) (<-chan Event, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.URL+"/v1/events", nil)

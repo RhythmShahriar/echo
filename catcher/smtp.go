@@ -111,8 +111,9 @@ func mailer(h map[string]string) string {
 }
 
 // ParseMIME reads an RFC 5322 message: headers, addresses, subject, the
-// first text and HTML parts, and the name, type, decoded size and SHA-256
-// of every attachment and named inline part (never their content).
+// first text and HTML parts. It also records the name, type, decoded size
+// and SHA-256 of every attachment and named inline part (never their
+// content).
 func ParseMIME(raw []byte) (model.Message, error) {
 	var m model.Message
 	r, err := mail.CreateReader(bytes.NewReader(raw))

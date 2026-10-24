@@ -76,8 +76,8 @@ func TestLateMailNeedsANewerActionOfTheSameRun(t *testing.T) {
 	in.now = c.now
 	in.End(in.Begin("r1", "a1"))
 	c.move(10 * time.Second)
-	// Another run's action is open, and r1 has none: the old date doesn't
-	// make r1's mail late, and the open action gets it as before.
+	// Another run's action is open while r1 has none: the old date doesn't
+	// make r1's mail late. The open action gets it as before.
 	in.Begin("r2", "b1")
 	c.move(5 * time.Second)
 	if m := in.Add(dated(c.date(-12 * time.Second))); m.Run != "r2" || m.Attribution != "" {
