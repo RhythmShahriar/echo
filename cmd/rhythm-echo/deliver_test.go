@@ -65,6 +65,27 @@ func TestReplayCommand(t *testing.T) {
 	}
 }
 
+// TestReplayRefusesProduction: a site under production: gets no replay
+// from the command line either, even on a local address.
+func TestReplayRefusesProduction(t *testing.T) {
+	secret := strings.Join([]string{"wh", "sec_", "CliProdSigningSecret0123456789"}, "")
+	t.Setenv("ECHO_STRIPE_WEBHOOK_SECRET", secret)
+	echoSrv := httptest.NewServer(catcher.NewServer(catcher.NewInbox(100), catcher.Config{Version: "test"}))
+	defer echoSrv.Close()
+	var hits atomic.Int32
+	live := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { hits.Add(1) }))
+	defer live.Close()
+	t.Chdir(t.TempDir())
+	writeConfig(t, "site: http://staging.test\nproduction: [\""+live.URL+"\"]\n")
+	code, out, errOut := runCLI(t, "replay", "stripe/charge.refunded", "--to", live.URL+"/hook", "--url", echoSrv.URL, "--plain")
+	if code != exitUsage || !strings.Contains(errOut, "under production") {
+		t.Errorf("replay to production: %d\n%s\n%s", code, out, errOut)
+	}
+	if n := hits.Load(); n != 0 {
+		t.Errorf("the live site got %d requests", n)
+	}
+}
+
 // stripeShop is a staging shop's webhook endpoint: it checks the Stripe
 // signature and, like a payment plugin, emails the customer through
 // Echo, tagged with the run. seen, when set, gets each body it accepts.

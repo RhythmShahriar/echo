@@ -414,7 +414,7 @@ func cmdReplay(s *session) int {
 		}
 		headersMap[strings.TrimSpace(name)] = strings.TrimSpace(value)
 	}
-	opts := replay.Options{SecretEnv: *secretEnv, Staging: s.cfg.Staging, Scan: scanConfigs(s.projectDir(), s.cfgPath)}
+	opts := replay.Options{SecretEnv: *secretEnv, Staging: s.cfg.Staging, Production: s.cfg.Production, Scan: scanConfigs(s.projectDir(), s.cfgPath)}
 	if err := replay.SecretReady(ev, opts); err != nil {
 		return s.fail(err) // a usage error, before the header
 	}
@@ -426,7 +426,7 @@ func cmdReplay(s *session) int {
 	s.view.Header(version, secrets.Redact(target))
 	s.view.Step("Event", ev.Name+" ("+ev.Scheme+")")
 	res, err := replay.Send(s.ctx, ev, replay.Target{URL: target, Headers: headersMap},
-		replay.Options{SecretEnv: opts.SecretEnv, Staging: opts.Staging, Scan: opts.Scan, Run: runID, Action: action, RunKey: s.runKey(h)})
+		replay.Options{SecretEnv: opts.SecretEnv, Staging: opts.Staging, Production: opts.Production, Scan: opts.Scan, Run: runID, Action: action, RunKey: s.runKey(h)})
 	if err != nil {
 		return s.fail(err)
 	}
@@ -476,7 +476,7 @@ func replayer(cfg config.Config, dir, cfgPath, runKey string) runner.Replayer {
 		}
 		r, act, _ := strings.Cut(run, "/")
 		res, err := replay.Send(ctx, ev, replay.Target{URL: to}, replay.Options{SecretEnv: a.Secret, Staging: cfg.Staging,
-			Scan: scanConfigs(dir, cfgPath), Run: r, Action: act, RunKey: runKey})
+			Production: cfg.Production, Scan: scanConfigs(dir, cfgPath), Run: r, Action: act, RunKey: runKey})
 		if err != nil {
 			return err
 		}
