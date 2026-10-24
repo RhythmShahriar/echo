@@ -109,8 +109,8 @@ func (u *UI) Protect(next http.Handler) http.Handler {
 	})
 }
 
-// allowed refuses r when its Host isn't this machine (unless AnyHost) or
-// when another page sent it, and says whether r may go on.
+// allowed reports whether r may go on. It answers r with 403 when its
+// Host isn't this machine (unless AnyHost) or when another page sent it.
 func (u *UI) allowed(w http.ResponseWriter, r *http.Request) bool {
 	if !u.o.AnyHost && !loopbackHost(r.Host) {
 		http.Error(w, "Echo Inbox answers only to localhost", http.StatusForbidden)
