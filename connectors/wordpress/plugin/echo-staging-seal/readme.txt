@@ -21,9 +21,11 @@ A staging copy of a shop still emails customers, texts them, charges cards and f
 * **Tools > Echo** shows what Echo stopped, per plugin and channel: WooCommerce 12 emails, Twilio 3 SMS.
 * **Snapshot and compare around updates.** "Snapshot before updating" and "Compare since last update", or from WP-CLI:
 
-`wp echo snapshot before-updates && wp plugin update --all && wp echo compare`
+`wp echo snapshot before-updates && wp plugin update --all && wp echo compare --snapshot=before-updates`
 
 The compare tells you which emails, SMS and webhooks an update stopped sending or changed.
+
+Echo Staging Seal is released under the MIT license, a GPL-compatible license.
 
 == Installation ==
 
