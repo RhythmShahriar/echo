@@ -350,3 +350,46 @@ func TestCaptureMasksEverySecret(t *testing.T) {
 		})
 	}
 }
+
+// TestUpdateHeadersWhileReading: an Update that sets a header in place
+// doesn't touch the map a reader got from Get, List or the API (go test
+// -race finds the write otherwise; without -race the map can fault).
+func TestUpdateHeadersWhileReading(t *testing.T) {
+	s := NewServer(NewInbox(100), Config{})
+	srv := httptest.NewServer(s)
+	defer srv.Close()
+	d := post(t, srv, wire.Capture{Version: 1, Kind: "email", Email: &wire.Email{To: []string{"a@example.com"}, Subject: "Hi",
+		Raw: "From: a@shop.test\r\nTo: a@example.com\r\nSubject: Hi\r\nX-Mailer: test\r\n\r\nHello\r\n"}})
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for i := range 200 {
+			s.Inbox.Update(d.ID, func(m *model.Message) {
+				if m.Headers == nil {
+					m.Headers = map[string]string{}
+				}
+				m.Headers["X-Echo-Spamassassin"] = strings.Repeat("x", i%7)
+			})
+		}
+	}()
+	for {
+		select {
+		case <-done:
+			m, _ := s.Inbox.Get(d.ID)
+			if _, ok := m.Headers["X-Echo-Spamassassin"]; !ok {
+				t.Errorf("the header isn't kept: %v", m.Headers)
+			}
+			return
+		default:
+		}
+		m, _ := s.Inbox.Get(d.ID)
+		_, _ = json.Marshal(m)
+		for _, l := range s.Inbox.List(Filter{}) {
+			_, _ = json.Marshal(l)
+		}
+		resp, err := http.Get(srv.URL + "/v1/messages/" + d.ID)
+		if err == nil {
+			_ = resp.Body.Close()
+		}
+	}
+}

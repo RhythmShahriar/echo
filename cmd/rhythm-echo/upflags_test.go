@@ -22,6 +22,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/RhythmShahriar/echo/catcher"
 	"github.com/RhythmShahriar/echo/check"
 	"github.com/RhythmShahriar/echo/client"
 	"github.com/RhythmShahriar/echo/config"
@@ -392,7 +393,7 @@ func TestUpChecksFollowTheConfig(t *testing.T) {
 func TestUpHelpListsItsNewFlags(t *testing.T) {
 	_, out, _ := runCLI(t, "up", "--help")
 	for _, f := range []string{"--private-network", "--free-ports", "--login <user:pass>", "--sites <file>", "--store <dir>",
-		"--keep <n>", "--keep-for <d>", "--spamassassin <addr>"} {
+		"--keep <n>", "--keep-for <d>", "--spamassassin <addr>", "--hostname <name>"} {
 		if !strings.Contains(out, f) {
 			t.Errorf("up --help lacks %s:\n%s", f, out)
 		}
@@ -534,5 +535,41 @@ func TestUpHostnameFlag(t *testing.T) {
 	upEnv(t)
 	if code, _, errOut := runCLI(t, "up", "--hostname", "echo:8025", "--listen", wiringPorts(t, 1)[0], "--smtp", "off"); code != exitUsage {
 		t.Errorf("exit %d: %s", code, errOut)
+	}
+}
+
+// TestSpamScorerWhileReading: the scorer's verdicts land while the API
+// serves the same messages (go test -race found the scorer writing the
+// map a reader held).
+func TestSpamScorerWhileReading(t *testing.T) {
+	inbox := catcher.NewInbox(100)
+	srv := httptest.NewServer(catcher.NewServer(inbox, catcher.Config{}))
+	defer srv.Close()
+	sc := newSpamScorer(fakeSpamd(t, "2.1"), inbox)
+	var ids []string
+	for i := range 10 {
+		m := inbox.Add(model.Message{Channel: model.Email, Subject: fmt.Sprint("Mail ", i), Headers: map[string]string{"X-Mailer": "test"}})
+		ids = append(ids, m.ID)
+		sc.score(m)
+	}
+	done := make(chan struct{})
+	go func() { sc.wait(); close(done) }()
+	for read := true; read; {
+		select {
+		case <-done:
+			read = false
+		default:
+		}
+		for _, id := range ids {
+			if resp, err := http.Get(srv.URL + "/v1/messages/" + id); err == nil { //nolint:noctx // test
+				_, _ = io.Copy(io.Discard, resp.Body)
+				_ = resp.Body.Close()
+			}
+		}
+	}
+	for _, id := range ids {
+		if m, _ := inbox.Get(id); m.Headers[check.SpamHeader] == "" {
+			t.Errorf("%s has no verdict: %v", id, m.Headers)
+		}
 	}
 }

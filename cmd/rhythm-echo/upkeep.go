@@ -290,10 +290,13 @@ func (sc *spamScorer) score(m model.Message) {
 		res, err := compat.SpamCheck(context.Background(), sc.addr, relay.Message(m))
 		value := check.SpamValue(res, err)
 		sc.inbox.Update(m.ID, func(mm *model.Message) {
-			if mm.Headers == nil {
-				mm.Headers = map[string]string{}
+			// A new map: a reader may hold the old one (Inbox.Get).
+			h := maps.Clone(mm.Headers)
+			if h == nil {
+				h = map[string]string{}
 			}
-			mm.Headers[check.SpamHeader] = value
+			h[check.SpamHeader] = value
+			mm.Headers = h
 		})
 	}()
 }

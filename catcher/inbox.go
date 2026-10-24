@@ -7,6 +7,7 @@
 package catcher
 
 import (
+	"maps"
 	"cmp"
 	"context"
 	"crypto/rand"
@@ -555,12 +556,16 @@ func (in *Inbox) add(m model.Message, f found) model.Message {
 
 // Update changes the message with id (e.g. to attach the response once an
 // observed request is sent). It reports whether the message was found.
+// fn may set Headers in place: it gets its own copy of the map, since
+// Get and List hand out messages that share theirs and readers use them
+// outside the lock.
 func (in *Inbox) Update(id string, fn func(*model.Message)) bool {
 	in.mu.Lock()
 	var out model.Message
 	e, found := in.index[id]
 	if found {
 		before := size(e.m)
+		e.m.Headers = maps.Clone(e.m.Headers)
 		fn(&e.m)
 		if in.check != nil { // a failed send is a problem the capture didn't have
 			e.m.Issues = in.check(e.m)
