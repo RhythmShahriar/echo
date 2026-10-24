@@ -85,8 +85,9 @@ func cmdDoctor(s *session) int {
 	}
 
 	site := strings.TrimRight(s.cfg.Site, "/")
-	reason, live := productionReason(s.cfg, s.cfg.Site)
-	if reason != "" {
+	reason := productionReason(s.cfg, s.cfg.Site)
+	live := reason != ""
+	if live {
 		d.fail("Site", reason)
 	}
 	dir := s.projectDir()
@@ -470,61 +471,21 @@ func serviceAtURL(ctx context.Context, base string) string {
 }
 
 // productionReason says why site counts as a live site under the
-// config's production: list, or "" when it doesn't; live is false when
-// an entry only catches it by accident. It names the entry
-// and says only what Echo does about it today: http actions refuse a URL
-// that starts with an entry exactly as written; command actions run all
-// the same. Replays never read the list; they send only to staging:
-// and local addresses. An entry that differs only in case, port or a
-// subdomain is not matched by the actions, so doctor says so rather
-// than promise a refusal. A prefix of another host's URL is matched,
-// which refuses a staging site's actions, so doctor names that too.
-//
-// This stands in for config.ProductionReason until that is released.
-func productionReason(cfg config.Config, site string) (reason string, live bool) {
+// config's production: list, or "" when it doesn't. It matches the way
+// snapshot, compare, run and replay do (config.ProductionEntry): the
+// host in any case, :80 and :443 as no port, subdomains, and a port or
+// path only when the entry names one. Those commands refuse such a site
+// before any action, command actions included, so doctor says that.
+func productionReason(cfg config.Config, site string) string {
 	if site == "" {
-		return "", false
+		return ""
 	}
-	// Actions ask for site plus a path, so an entry ending in / that
-	// equals site with a / added matches them too.
-	withSlash := strings.TrimRight(site, "/") + "/"
-	for _, p := range cfg.Production {
-		if p == "" {
-			continue
-		}
-		prefix, same := strings.HasPrefix(site, p) || strings.HasPrefix(withSlash, p), sameSite(site, p)
-		if prefix && !same {
-			// https://shop.example is a prefix of https://shop.example.staging.test.
-			return fmt.Sprintf("%s is another host but starts with production: entry %s, so its http actions are "+
-				"refused; end the entry with a / to match only that site", site, p), false
-		}
-		if prefix {
-			return fmt.Sprintf("%s is listed under production: (%s). http actions to it are refused while command actions "+
-				"still run against it; point site: at a staging copy", site, p), true
-		}
-		if same {
-			return fmt.Sprintf("%s looks like production: entry %s. Actions match an entry exactly as written, "+
-				"so they would run against it; point site: at a staging copy or write the entry as %s", site, p, site), true
-		}
+	e := config.ProductionEntry(cfg.Production, site)
+	if e == "" {
+		return ""
 	}
-	return "", false
-}
-
-// sameSite reports whether a and b name the same host, or a is on a
-// subdomain of b, ignoring case, scheme and port.
-func sameSite(a, b string) bool {
-	host := func(raw string) string {
-		if !strings.Contains(raw, "://") {
-			raw = "https://" + raw
-		}
-		u, err := url.Parse(raw)
-		if err != nil {
-			return ""
-		}
-		return strings.TrimSuffix(strings.ToLower(u.Hostname()), ".")
-	}
-	ha, hb := host(a), host(b)
-	return ha != "" && hb != "" && (ha == hb || strings.HasSuffix(ha, "."+hb))
+	return fmt.Sprintf("%s matches %q under production: snapshot, compare and run refuse it before any action "+
+		"(command actions too) and replays never go to it; point site: at a staging copy", site, e)
 }
 
 // shellWaitDelay is how long a canceled command's output may stay open.
