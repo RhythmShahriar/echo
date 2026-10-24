@@ -1,0 +1,224 @@
+{
+  "tools": [
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
+      "description": "Lists what the site sent that Echo captured (email, SMS, webhooks, chat, analytics, payments), newest first: one line of fields per message. Use get_message for the whole message.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "description": "Only messages from this action ID (as in a run: action:checkout).",
+            "type": "string"
+          },
+          "channel": {
+            "description": "Only this channel.",
+            "enum": [
+              "email",
+              "sms",
+              "whatsapp",
+              "chat",
+              "webhook",
+              "analytics",
+              "payment",
+              "push",
+              "http"
+            ],
+            "type": "string"
+          },
+          "limit": {
+            "description": "At most this many (default 20).",
+            "maximum": 200,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "run": {
+            "description": "Only messages from this run ID.",
+            "type": "string"
+          },
+          "since": {
+            "description": "Only messages captured since then: a duration back from now (\"15m\", \"2h\") or an RFC 3339 time.",
+            "type": "string"
+          },
+          "to": {
+            "description": "Only messages to a recipient containing this text (case-insensitive).",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "name": "list_messages",
+      "title": "List captured messages"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
+      "description": "Returns one captured message with every field: recipients, subject, text, HTML, headers, body and Echo's answer. \"latest\" is the newest.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "description": "The message ID from list_messages, or \"latest\".",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "type": "object"
+      },
+      "name": "get_message",
+      "title": "Get one message"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
+      "description": "Finds the newest email or SMS with a one-time code (login, sign-up, 2FA) and returns the code alone.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "channel": {
+            "description": "Only this channel.",
+            "enum": [
+              "email",
+              "sms",
+              "whatsapp"
+            ],
+            "type": "string"
+          },
+          "since": {
+            "description": "Only messages captured since then: a duration back from now (\"15m\", \"2h\") or an RFC 3339 time.",
+            "type": "string"
+          },
+          "to": {
+            "description": "Only messages to a recipient containing this text.",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "name": "latest_code",
+      "title": "Latest one-time code"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": true,
+        "readOnlyHint": false
+      },
+      "description": "Runs actions from .echo/config.yaml against the site (form posts, commands, replayed webhooks) and returns what each sent and the issues found.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "actions": {
+            "description": "Names of actions in .echo/config.yaml to run; all of them when empty.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "name": "run_action",
+      "title": "Run actions"
+    },
+    {
+      "annotations": {
+        "destructiveHint": true,
+        "idempotentHint": false,
+        "openWorldHint": true,
+        "readOnlyHint": false
+      },
+      "description": "Runs the actions and saves what they sent as a snapshot, the baseline compare checks against. Take one before a change.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "actions": {
+            "description": "Names of actions in .echo/config.yaml to run; all of them when empty.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "name": {
+            "description": "Snapshot name: letters, digits, dots, dashes and underscores (default: the time).",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "name": "snapshot",
+      "title": "Take a snapshot"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": true,
+        "readOnlyHint": false
+      },
+      "description": "Runs the actions again and compares what they sent with a snapshot: what broke, what is new, what changed, what was fixed.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "actions": {
+            "description": "Names of actions in .echo/config.yaml to run; all of them when empty.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "snapshot": {
+            "description": "Snapshot name (default: the latest).",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "name": "compare",
+      "title": "Compare with a snapshot"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true,
+        "readOnlyHint": true
+      },
+      "description": "Checks the DNS records mail from a domain depends on (SPF, DKIM, DMARC, MX, MTA-STS, TLS-RPT, BIMI) and returns them with the issues found.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "domain": {
+            "description": "The domain mail comes from, like shop.com.",
+            "type": "string"
+          },
+          "provider": {
+            "description": "The service that sends its mail, when known: sendgrid, mailgun, ses, postmark…",
+            "type": "string"
+          }
+        },
+        "required": [
+          "domain"
+        ],
+        "type": "object"
+      },
+      "name": "check_domain",
+      "title": "Check a sending domain"
+    }
+  ]
+}
