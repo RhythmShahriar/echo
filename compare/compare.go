@@ -541,6 +541,9 @@ type grouper struct {
 
 // groupKey is what makes two changes the same change.
 func groupKey(c model.Change) string {
+	if strings.HasPrefix(c.Check, "message/attachment-") {
+		return attachmentGroupKey(c)
+	}
 	if hs := ChangeDiff(c); hs != nil {
 		// The full texts differ in test data from action to action; the
 		// edit is what makes two changes the same.

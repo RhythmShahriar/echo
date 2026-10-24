@@ -208,7 +208,7 @@ func attachments(b, a model.Message, what string) []model.Change {
 		idx := at[k]
 		if len(idx) == 0 {
 			out = append(out, model.Change{Class: model.Broke, Check: "message/attachment-lost", Channel: a.Channel,
-				Title:  fmt.Sprintf("%s no longer attaches %s", what, x),
+				Title:  fmt.Sprintf("%s no longer attaches %s", what, x.Name),
 				Fix:    "Something stopped attaching the file: check the plugin's attachment setting and that the file is still made.",
 				Before: x.String(), After: "not attached"})
 			continue
@@ -223,7 +223,7 @@ func attachments(b, a model.Message, what string) []model.Change {
 	for i, x := range aa {
 		if !used[i] {
 			out = append(out, model.Change{Class: model.New, Check: "message/attachment-new", Channel: a.Channel,
-				Title: fmt.Sprintf("%s now attaches %s", what, x), Before: "not attached", After: x.String()})
+				Title: fmt.Sprintf("%s now attaches %s", what, x.Name), Before: "not attached", After: x.String()})
 		}
 	}
 	return out
@@ -232,7 +232,10 @@ func attachments(b, a model.Message, what string) []model.Change {
 // attachmentChange compares one attachment across runs. An empty file is
 // BROKE. Other changes count only when the name is the same: a file
 // named after the order (invoice-43.pdf) differs from the snapshot's
-// (invoice-42.pdf) every run.
+// (invoice-42.pdf) every run. New bytes alone aren't a change either:
+// generated files (a PDF invoice above all) embed their creation time and
+// an ID, so their hash differs on every run. The file changed when its
+// size moves by more than a tenth.
 func attachmentChange(b, a Attachment, what string) (model.Change, bool) {
 	if b.Size < 0 || a.Size < 0 {
 		return model.Change{}, false // cut: nothing to compare
@@ -248,11 +251,30 @@ func attachmentChange(b, a Attachment, what string) (model.Change, bool) {
 			Before: b.Type, After: a.Type, Fix: "Check the file still opens where it's read; if the change is intended, take a new snapshot."}, true
 	case b.Name != a.Name:
 		return model.Change{}, false
-	case b.SHA256 != a.SHA256 || b.Size != a.Size:
+	case sizeMoved(b.Size, a.Size):
 		return model.Change{Class: model.Changed, Check: "message/attachment-changed", Title: fmt.Sprintf("%s: attachment %s changed", what, a.Name),
 			Before: byteSize(b.Size) + ", sha256 " + b.SHA256[:min(12, len(b.SHA256))],
 			After:  byteSize(a.Size) + ", sha256 " + a.SHA256[:min(12, len(a.SHA256))],
 			Fix:    "Open the new file; if the change is intended, take a new snapshot."}, true
 	}
 	return model.Change{}, false
+}
+
+// sizeMoved reports whether an attachment's size changed by more than a
+// tenth of what it was, which a new timestamp or ID inside it doesn't do.
+func sizeMoved(before, after int64) bool {
+	d := after - before
+	if d < 0 {
+		d = -d
+	}
+	return d*10 > before
+}
+
+// attachmentGroupKey is groupKey for attachment changes: the title with
+// its numbers as # (invoice-42.pdf and invoice-43.pdf are the same file
+// from run to run) and without the sizes and hashes in Before and After.
+// The same lost file then groups across actions and its Key still
+// accepts it on the next run.
+func attachmentGroupKey(c model.Change) string {
+	return c.Class + "|" + c.Check + "|" + strings.ToLower(digits.ReplaceAllString(c.Title, "#"))
 }

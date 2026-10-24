@@ -114,25 +114,56 @@ func TestAttachmentChanges(t *testing.T) {
 		want   string
 	}{
 		{"lost", []file{inv}, nil,
-			"broke message/attachment-lost: Email to buyer@example.com no longer attaches invoice-42.pdf (application/pdf, 84 KB)"},
+			"broke message/attachment-lost: Email to buyer@example.com no longer attaches invoice-42.pdf"},
 		{"still attached", []file{inv}, []file{inv}, ""},
 		{"changed", []file{inv}, []file{pdf("invoice-42.pdf", "%PDF other")},
+			"changed message/attachment-changed: Email to buyer@example.com: attachment invoice-42.pdf changed"},
+		// A PDF made again with a new date and ID inside: new bytes, about
+		// the same size.
+		{"regenerated", []file{inv}, []file{pdf("invoice-42.pdf", strings.Repeat("%PDF ", 16840)+"ID=9f")}, ""},
+		{"same size", []file{inv}, []file{pdf("invoice-42.pdf", strings.Repeat("%PDX ", 16843))}, ""},
+		{"grew by a tenth", []file{inv}, []file{pdf("invoice-42.pdf", strings.Repeat("%PDF ", 18600))},
 			"changed message/attachment-changed: Email to buyer@example.com: attachment invoice-42.pdf changed"},
 		{"empty now", []file{inv}, []file{pdf("invoice-42.pdf", "")},
 			"broke message/attachment-changed: Email to buyer@example.com: attachment invoice-42.pdf is empty"},
 		{"added", nil, []file{inv},
-			"new message/attachment-new: Email to buyer@example.com now attaches invoice-42.pdf (application/pdf, 84 KB)"},
+			"new message/attachment-new: Email to buyer@example.com now attaches invoice-42.pdf"},
 		{"none either side", nil, nil, ""},
 		{"renamed by number", []file{inv}, []file{pdf("invoice-43.pdf", "%PDF another order")}, ""},
 		{"renamed", []file{inv}, []file{pdf("receipt-42.pdf", "%PDF")},
-			"broke message/attachment-lost: Email to buyer@example.com no longer attaches invoice-42.pdf (application/pdf, 84 KB)\n" +
-				"new message/attachment-new: Email to buyer@example.com now attaches receipt-42.pdf (application/pdf, 4 bytes)"},
+			"broke message/attachment-lost: Email to buyer@example.com no longer attaches invoice-42.pdf\n" +
+				"new message/attachment-new: Email to buyer@example.com now attaches receipt-42.pdf"},
 		{"other type", []file{inv}, []file{{"Content-Type: text/html; name=\"invoice-42.pdf\"", []byte("<p>")}},
 			"changed message/attachment-changed: Email to buyer@example.com: attachment invoice-42.pdf changed type"},
 	} {
 		if got := attachmentChanges(mimeEmail(tc.before...), mimeEmail(tc.after...)); got != tc.want {
 			t.Errorf("%s:\n got %s\nwant %s", tc.name, got, tc.want)
 		}
+	}
+}
+
+// TestAttachmentKey: the same lost file groups across actions and keeps
+// its Key when the order number and size in it move.
+func TestAttachmentKey(t *testing.T) {
+	lost := func(n int, size string) model.Change {
+		name := fmt.Sprintf("invoice-%d.pdf", n)
+		return model.Change{Class: model.Broke, Check: "message/attachment-lost",
+			Title:  "Email to buyer@example.com no longer attaches " + name,
+			Before: name + " (application/pdf, " + size + ")", After: "not attached"}
+	}
+	var g grouper
+	g.add(lost(42, "84 KB"), "Checkout")
+	g.add(lost(43, "85 KB"), "Order again")
+	if got := g.list(); len(got) != 1 || len(got[0].Actions) != 2 {
+		t.Errorf("the same lost file in two actions: %+v", got)
+	}
+	if Key(lost(42, "84 KB")) != Key(lost(57, "91 KB")) {
+		t.Error("the key moves with the order number or size")
+	}
+	other := lost(42, "84 KB")
+	other.Title = "Email to buyer@example.com no longer attaches receipt-42.pdf"
+	if Key(other) == Key(lost(42, "84 KB")) {
+		t.Error("two different files share a key")
 	}
 }
 
