@@ -37,6 +37,16 @@ func sampleRun() *model.Run {
 	}
 }
 
+// comparedRun is sampleRun with every action working, as the run behind a
+// comparison that compared them all.
+func comparedRun() *model.Run {
+	r := sampleRun()
+	for i := range r.Actions {
+		r.Actions[i].Error = ""
+	}
+	return r
+}
+
 func sampleComparison() *model.Comparison {
 	return &model.Comparison{Schema: model.Schema, Version: "1.0.0", Actions: 2,
 		Before: model.RunRef{Name: "before-update", Started: time.Now().Add(-2 * time.Hour)},
@@ -51,7 +61,7 @@ func sampleComparison() *model.Comparison {
 
 func TestFailOnAndTally(t *testing.T) {
 	run := sampleRun()
-	c := Result{Run: run, Comparison: sampleComparison()}
+	c := Result{Run: comparedRun(), Comparison: sampleComparison()}
 	if !FailOn(c, "broke") || !FailOn(c, "changed") || FailOn(c, "") {
 		t.Error("FailOn for comparisons")
 	}
@@ -73,7 +83,7 @@ func TestFailOnAndTally(t *testing.T) {
 func TestPlainOutputs(t *testing.T) {
 	var buf bytes.Buffer
 	p := NewPretty(&buf, &buf, PrettyOptions{Plain: true})
-	p.Summary(Result{Run: sampleRun(), Comparison: sampleComparison()}, "report: x.html")
+	p.Summary(Result{Run: comparedRun(), Comparison: sampleComparison()}, "report: x.html")
 	out := buf.String()
 	for _, want := range []string{"[BROKE] Email to admin@shop.test is no longer sent - Contact form, Quote form", "1 → 0",
 		"fix: Check the mail plugin.", "[FIXED] PHP error printed in email", "Something broke - 1 broke, 1 new, 1 changed, 1 fixed",
@@ -111,7 +121,7 @@ func TestPrettyRendersWithoutPanics(t *testing.T) {
 	for i := range r.Actions {
 		p.Action(&r.Actions[i], i+1, len(r.Actions))
 	}
-	p.Summary(Result{Run: r, Comparison: sampleComparison()}, "hint")
+	p.Summary(Result{Run: comparedRun(), Comparison: sampleComparison()}, "hint")
 	p.Summary(Result{Run: r}, "")
 	if !strings.Contains(buf.String(), "ECHO") {
 		t.Error("no panel")
@@ -119,7 +129,7 @@ func TestPrettyRendersWithoutPanics(t *testing.T) {
 }
 
 func TestMachineFormats(t *testing.T) {
-	r := Result{Run: sampleRun(), Comparison: sampleComparison()}
+	r := Result{Run: comparedRun(), Comparison: sampleComparison()}
 	var buf bytes.Buffer
 	if err := JSON(&buf, r); err != nil {
 		t.Fatal(err)
@@ -140,7 +150,7 @@ func TestMachineFormats(t *testing.T) {
 		t.Fatal(err)
 	}
 	var s junitSuites
-	if xml.Unmarshal(buf.Bytes(), &s) != nil || s.Failures != 2 || s.Tests != 4 {
+	if xml.Unmarshal(buf.Bytes(), &s) != nil || s.Failures != 1 || s.Tests != 4 { // the default: BROKE only
 		t.Errorf("junit: %d failures of %d", s.Failures, s.Tests)
 	}
 	buf.Reset()
@@ -157,7 +167,7 @@ func TestHTMLIsSafeAndComplete(t *testing.T) {
 		t.Fatal(err)
 	}
 	out := buf.String()
-	for _, want := range []string{"Something broke", "Email to admin@shop.test is no longer sent", `<iframe sandbox`,
+	for _, want := range []string{"Could not compare: 1 of 2 actions failed in this run", "Email to admin@shop.test is no longer sent", `<iframe sandbox`,
 		"Thanks {first_name}", "&#34;a&#34;: 1", "500 oops", "The action failed: exit status 1"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("html lacks %q", want)

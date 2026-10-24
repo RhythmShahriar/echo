@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="{{.CSP}}">
 <meta name="generator" content="rhythm-echo {{.Version}}">
 <title>{{.Title}}</title>
 <style>
@@ -55,6 +56,12 @@ h2 { font-size: 13px; letter-spacing: .1em; text-transform: uppercase; color: va
 .where { color: var(--muted); font: 12px/1.6 var(--mono); flex: none; max-width: 40%; text-align: right; overflow-wrap: anywhere; }
 .facts { color: var(--muted); font-size: 13px; margin-top: 8px; overflow-wrap: anywhere; }
 .facts code { font: 12.5px var(--mono); background: var(--soft); border-radius: 5px; padding: 1px 5px; color: var(--text); }
+.diff .hunk { color: var(--muted); font: 12.5px var(--mono); margin-top: 10px; overflow-wrap: anywhere; }
+.diff pre { margin: 4px 0 0; padding: 8px 0; background: var(--soft); border-radius: 8px; font: 12.5px/1.5 var(--mono); overflow-x: auto; }
+.diff pre ins, .diff pre del, .diff pre span { display: block; padding: 0 12px; text-decoration: none; white-space: pre-wrap; overflow-wrap: anywhere; }
+.diff pre span { color: var(--muted); }
+.diff pre ins { background: color-mix(in srgb, var(--fixed) 16%, transparent); }
+.diff pre del { background: color-mix(in srgb, var(--broke) 16%, transparent); }
 .fix { margin: 10px 0 0; padding: 9px 12px; background: var(--soft); border-radius: 8px; font-size: 14px; }
 .fix::before { content: "→ "; color: var(--dot); font-weight: 700; }
 details.action { background: var(--card); border: 1px solid var(--line); border-radius: 12px; margin-bottom: 10px; }
@@ -75,6 +82,8 @@ details.action > summary span { color: var(--muted); font-size: 13px; }
 .time, .via { color: var(--muted); font: 12px var(--mono); }
 .subject { margin: 6px 0 0 28px; font-weight: 600; overflow-wrap: anywhere; }
 .preview { margin: 10px 0 0 28px; }
+.remote { border: 1px solid var(--line); background: var(--card); color: var(--muted); border-radius: 8px; padding: 3px 8px; margin-bottom: 6px; cursor: pointer; font: inherit; font-size: 12px; }
+.remote:disabled { cursor: default; opacity: .7; }
 .preview iframe { width: 100%; height: 360px; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
 .bubble { display: inline-block; max-width: 520px; background: var(--soft); border-radius: 16px 16px 16px 4px; padding: 10px 14px; white-space: pre-wrap; overflow-wrap: anywhere; }
 pre { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font: 12.5px/1.5 var(--mono); background: var(--soft); border-radius: 8px; padding: 10px 12px; max-height: 360px; overflow: auto; }
@@ -105,7 +114,8 @@ footer { margin-top: 44px; color: var(--muted); font-size: 12px; display: flex; 
   {{if .Compared}}
     {{if .Changes}}<h2>Changes</h2>{{range .Changes}}
     <article class="item k-{{.Key}}"><div class="head"><h3><span class="badge">{{.Label}}</span>{{.Title}}</h3><div class="where">{{.Where}}</div></div>
-      {{if or .BeforeAfter .Detail}}<div class="facts">{{if .BeforeAfter}}<code>{{.BeforeAfter}}</code> {{end}}{{.Detail}}</div>{{end}}
+      {{if or (and .BeforeAfter (not .Diff)) .Detail}}<div class="facts">{{if and .BeforeAfter (not .Diff)}}<code>{{.BeforeAfter}}</code> {{end}}{{.Detail}}</div>{{end}}
+      {{if .Diff}}<div class="diff">{{range .Diff}}<div class="hunk">{{.Summary}}</div><pre>{{range .Lines}}{{if eq .Op "add"}}<ins>+ {{.Text}}</ins>{{else if eq .Op "del"}}<del>- {{.Text}}</del>{{else}}<span>  {{.Text}}</span>{{end}}{{end}}</pre>{{end}}</div>{{end}}
       {{if gt (len .Actions) 1}}<div class="facts">{{range $i, $a := .Actions}}{{if $i}}, {{end}}{{$a}}{{end}}</div>{{end}}
       {{if .Fix}}<p class="fix">{{.Fix}}</p>{{end}}</article>{{end}}
     {{else}}<div class="empty"><b>No differences</b>Every action sends what it sent in the snapshot.</div>{{end}}
@@ -127,8 +137,9 @@ footer { margin-top: 44px; color: var(--muted); font-size: 12px; display: flex; 
         <div class="row"><span class="time">{{.Time}}</span>{{if .From}}<span class="via">from {{.From}}</span>{{end}}{{if .Via}}<span class="via">via {{.Via}}</span>{{end}}{{if .Method}}<span class="via">{{.Method}} {{.URL}}</span>{{end}}</div>
         {{if .Subject}}<div class="subject">{{.Subject}}</div>{{end}}
         {{if .Event}}<div class="subject">event: {{.Event}}</div>{{end}}
+        {{if .Attachments}}<div class="row">{{range .Attachments}}<span class="via">attaches {{.}}</span>{{end}}</div>{{end}}
         <div class="preview">
-          {{if .HTML}}<iframe sandbox title="Email preview" srcdoc="{{.HTML}}"></iframe>
+          {{if .HTML}}{{if .Remote}}<button class="remote" type="button" data-remote>Load remote images</button>{{end}}<iframe sandbox title="Email preview" srcdoc="{{.HTML}}"></iframe>
           {{else if and (eq .Channel "email") .Text}}<pre>{{.Text}}</pre>
           {{else if .Text}}<div class="bubble">{{.Text}}</div>
           {{else if .Body}}<pre>{{.Body}}</pre>{{end}}
@@ -144,6 +155,11 @@ footer { margin-top: 44px; color: var(--muted); font-size: 12px; display: flex; 
 
   <footer><span>Made with ♪ rhythm echo {{.Version}}. In seal mode nothing was really sent: Echo answered for the services.</span><span>rythm.sh/echo</span></footer>
 </div>
+{{/* The CSP allows this script by its hash (html.go), so keep it the
+only one and free of template actions. html/template strips JS comments,
+which would change the hash: explain things here instead. The data-remote
+buttons swap an email preview's blocking policy for one that allows
+remote images, for that message only. */}}
 <script>
 (function () {
   var root = document.documentElement;
@@ -153,6 +169,17 @@ footer { margin-top: 44px; color: var(--muted); font-size: 12px; display: flex; 
     var next = dark ? "light" : "dark";
     root.setAttribute("data-theme", next);
     try { localStorage.setItem("echo-theme", next); } catch (e) {}
+  });
+  var blocked = "default-src 'none'; img-src data:; style-src 'unsafe-inline'";
+  var allowed = "default-src 'none'; img-src data: https: http:; style-src 'unsafe-inline'";
+  Array.prototype.forEach.call(document.querySelectorAll("[data-remote]"), function (b) {
+    b.addEventListener("click", function () {
+      var f = b.nextElementSibling;
+      if (!f || f.tagName !== "IFRAME") return;
+      f.srcdoc = f.srcdoc.replace(blocked, allowed);
+      b.disabled = true;
+      b.textContent = "Remote images loaded";
+    });
   });
 })();
 </script>

@@ -12,6 +12,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/RhythmShahriar/echo/check"
+	"github.com/RhythmShahriar/echo/compare"
 	"github.com/RhythmShahriar/echo/model"
 	"github.com/RhythmShahriar/rhythm/kit/ui"
 )
@@ -85,9 +86,10 @@ func (p *Pretty) Header(version, target string) {
 		return
 	}
 	if p.o.Plain {
-		fmt.Fprintf(p.w, "rhythm echo %s - %s\n\n", version, target)
+		fmt.Fprintf(p.w, "rhythm echo %s - %s\n\n", version, Safe(target))
 		return
 	}
+	target = Safe(target)
 	left := ui.Brand.Render("♪") + " " + bold.Render("rhythm echo") + " " + muted.Render(version)
 	gap := max(2, width-lipgloss.Width(left)-lipgloss.Width(target))
 	fmt.Fprintf(p.w, "\n  %s%s%s\n  %s\n\n", left, strings.Repeat(" ", gap), muted.Render(target), muted.Render(strings.Repeat("─", width)))
@@ -98,6 +100,7 @@ func (p *Pretty) Step(label, value string) {
 	if p.o.Quiet {
 		return
 	}
+	value = Safe(value)
 	if p.o.Plain {
 		fmt.Fprintf(p.w, "%s: %s\n", label, value)
 		return
@@ -107,6 +110,7 @@ func (p *Pretty) Step(label, value string) {
 
 // Log prints a note to stderr.
 func (p *Pretty) Log(msg string) {
+	msg = Safe(msg)
 	if p.o.Plain {
 		fmt.Fprintln(p.errw, msg)
 		return
@@ -134,9 +138,15 @@ func (p *Pretty) Message(m model.Message) {
 			what += " " + pathOf(m.URL)
 		}
 	}
-	kind := check.Kind(m) // the destination is shown next to it
+	// Everything here comes from the site: make it safe to print.
+	to, what = Safe(to), Safe(what)
+	kind := Safe(check.Kind(m)) // the destination is shown next to it
+	files := attachmentList(m)
 	if p.o.Plain {
 		fmt.Fprintf(p.w, "%s %s to %s: %s [%s]\n", m.At.Local().Format("15:04:05"), kind, to, what, m.Status)
+		if files != "" {
+			fmt.Fprintf(p.w, "  attaches %s\n", files)
+		}
 		return
 	}
 	glyph := channelGlyph[m.Channel]
@@ -144,8 +154,11 @@ func (p *Pretty) Message(m model.Message) {
 	status := lipgloss.NewStyle().Foreground(statusColor(m.Status)).Render(string(m.Status))
 	body := ui.Truncate("→ "+to, 30) + "  " + muted.Render(ui.Truncate(what, 40))
 	fmt.Fprintln(p.w, ui.Pad(head, 40)+body+"  "+status)
+	if files != "" {
+		fmt.Fprintln(p.w, muted.Render("            attaches "+ui.Truncate(files, width-21)))
+	}
 	if m.Error != "" && p.o.Verbose {
-		fmt.Fprintln(p.w, muted.Render("            "+m.Error))
+		fmt.Fprintln(p.w, muted.Render("            "+Safe(m.Error)))
 	}
 }
 
@@ -169,10 +182,11 @@ func (p *Pretty) Action(a *model.Action, done, total int) {
 		got = Tally(&model.Run{Actions: []model.Action{*a}})
 	}
 	short := unmet(a)
+	label, failure := Safe(a.Label), Safe(a.Error)
 	if p.o.Plain {
-		line := fmt.Sprintf("[%d/%d] %s: %s", done, total, a.Label, got)
+		line := fmt.Sprintf("[%d/%d] %s: %s", done, total, label, got)
 		if a.Error != "" {
-			line += " (failed: " + a.Error + ")"
+			line += " (failed: " + failure + ")"
 		} else if short {
 			line += " (fewer than expected)"
 		}
@@ -186,9 +200,9 @@ func (p *Pretty) Action(a *model.Action, done, total int) {
 	if short && a.Error == "" {
 		got += ", fewer than expected"
 	}
-	fmt.Fprintf(p.w, "  %s %s %s\n", mark, ui.Pad(bold.Render(ui.Truncate(a.Label, 34)), 36), muted.Render(got))
+	fmt.Fprintf(p.w, "  %s %s %s\n", mark, ui.Pad(bold.Render(ui.Truncate(label, 34)), 36), muted.Render(got))
 	if a.Error != "" {
-		fmt.Fprintln(p.w, "    "+muted.Render(ui.Truncate(a.Error, width-4)))
+		fmt.Fprintln(p.w, "    "+muted.Render(ui.Truncate(failure, width-4)))
 	}
 	if p.o.Verbose {
 		for _, m := range a.Messages {
@@ -218,15 +232,20 @@ func (p *Pretty) comparison(r Result, hint string) {
 		}
 		for _, class := range model.Classes {
 			for _, ch := range groups[class] {
-				fmt.Fprintf(p.w, "[%s] %s - %s\n", classInfo[class].Label, ch.Title, actionsLabel(ch.Actions, 3))
-				if ba := beforeAfter(ch); ba != "" {
-					fmt.Fprintf(p.w, "  %s\n", ba)
+				fmt.Fprintf(p.w, "[%s] %s - %s\n", classInfo[class].Label, Safe(ch.Title), Safe(actionsLabel(ch.Actions, 3)))
+				if !p.diff(ch, "  ") {
+					if ba := beforeAfter(ch); ba != "" {
+						fmt.Fprintf(p.w, "  %s\n", Safe(ba))
+					}
 				}
 				if ch.Detail != "" {
-					fmt.Fprintf(p.w, "  %s\n", firstLine(ch.Detail))
+					fmt.Fprintf(p.w, "  %s\n", Safe(firstLine(ch.Detail)))
 				}
 				if fix := firstLine(ch.Fix); fix != "" && class != model.Fixed {
-					fmt.Fprintf(p.w, "  fix: %s\n", fix)
+					fmt.Fprintf(p.w, "  fix: %s\n", Safe(fix))
+				}
+				if p.o.Verbose {
+					fmt.Fprintf(p.w, "  key: %s\n", compare.Key(ch))
 				}
 			}
 		}
@@ -237,7 +256,7 @@ func (p *Pretty) comparison(r Result, hint string) {
 		for _, class := range model.Classes {
 			parts = append(parts, fmt.Sprintf("%d %s", c.Count(class), class))
 		}
-		fmt.Fprintf(p.w, "\n%s - %s - %s compared, %s\n", verdict(c), strings.Join(parts, ", "), plural(c.Actions, "action", "actions"), Tally(r.Run))
+		fmt.Fprintf(p.w, "\n%s - %s - %s compared, %s\n", verdict(r), strings.Join(parts, ", "), plural(c.Actions, "action", "actions"), Tally(r.Run))
 		p.notes(c.Warnings)
 		if hint != "" {
 			fmt.Fprintln(p.w, hint)
@@ -256,10 +275,16 @@ func (p *Pretty) comparison(r Result, hint string) {
 		for _, ch := range cs {
 			if class == model.Broke || class == model.New {
 				fmt.Fprintln(p.w, card(ui.Badge(classInfo[class].Label, ClassColor(class), true, badgeWidth), ClassColor(class), ch.Title,
-					countLabel(ch.Actions), []string{actionsLabel(ch.Actions, 3), beforeAfter(ch), firstLine(ch.Detail)}, ch.Fix))
+					countLabel(ch.Actions), []string{actionsLabel(ch.Actions, 3), beforeAfter(ch), firstLine(ch.Detail), p.key(ch)}, ch.Fix))
 				fmt.Fprintln(p.w)
 			} else {
 				fmt.Fprintln(p.w, line(lipgloss.NewStyle().Foreground(ClassColor(class)).Bold(true).Render(classInfo[class].Glyph), ch.Title, countLabel(ch.Actions)))
+				if class == model.Changed {
+					p.diff(ch, "       ")
+				}
+				if k := p.key(ch); k != "" {
+					fmt.Fprintf(p.w, "       %s\n", muted.Render(k))
+				}
 			}
 		}
 		if class == model.Changed || class == model.Fixed {
@@ -269,7 +294,7 @@ func (p *Pretty) comparison(r Result, hint string) {
 	if p.o.Quiet {
 		return
 	}
-	fmt.Fprintln(p.w, comparePanel(c))
+	fmt.Fprintln(p.w, comparePanel(r))
 	fmt.Fprintf(p.w, "  %s\n", muted.Render(fmt.Sprintf("%s compared with %s · %s", plural(c.Actions, "action", "actions"), snapshotName(c.Before), Tally(r.Run))))
 	p.notes(c.Warnings)
 	if hint != "" {
@@ -286,12 +311,12 @@ func (p *Pretty) run(r Result, hint string) {
 			fmt.Fprintln(p.w)
 		}
 		for _, i := range issues {
-			fmt.Fprintf(p.w, "[%s] %s - %s\n", strings.ToUpper(string(i.Level)), i.Title, actionsLabel(i.Actions, 3))
+			fmt.Fprintf(p.w, "[%s] %s - %s\n", strings.ToUpper(string(i.Level)), Safe(i.Title), Safe(actionsLabel(i.Actions, 3)))
 			if i.Detail != "" {
-				fmt.Fprintf(p.w, "  %s\n", firstLine(i.Detail))
+				fmt.Fprintf(p.w, "  %s\n", Safe(firstLine(i.Detail)))
 			}
 			if fix := firstLine(i.Fix); fix != "" && i.Level != model.Notice {
-				fmt.Fprintf(p.w, "  fix: %s\n", fix)
+				fmt.Fprintf(p.w, "  fix: %s\n", Safe(fix))
 			}
 		}
 		if p.o.Quiet {
@@ -301,9 +326,9 @@ func (p *Pretty) run(r Result, hint string) {
 			plural(counts[model.Warning], "warning", "warnings"), plural(counts[model.Notice], "notice", "notices"))
 		if r.Run.Mode == "check" {
 			// check and headers read DNS and files; they run no actions.
-			fmt.Fprintf(p.w, "\n%s - %s\n", capitalize(runVerdict(r.Run, counts)), levels)
+			fmt.Fprintf(p.w, "\n%s - %s\n", check.Capitalize(runVerdict(r.Run, counts)), levels)
 		} else {
-			fmt.Fprintf(p.w, "\n%s - %s - %s, %s\n", capitalize(runVerdict(r.Run, counts)), levels,
+			fmt.Fprintf(p.w, "\n%s - %s - %s, %s\n", check.Capitalize(runVerdict(r.Run, counts)), levels,
 				plural(len(r.Run.Actions), "action", "actions"), Tally(r.Run))
 		}
 		p.notes(r.Run.Warnings)
@@ -359,6 +384,7 @@ func (p *Pretty) run(r Result, hint string) {
 
 func (p *Pretty) notes(ns []string) {
 	for i, n := range ns {
+		n = Safe(n)
 		if i == 5 {
 			n = fmt.Sprintf("…and %d more notes in the report", len(ns)-5)
 		}
@@ -374,7 +400,10 @@ func (p *Pretty) notes(ns []string) {
 }
 
 // card renders an important change or issue with its details and fix.
+// Its text may come from captured messages (a subject in a title), so
+// it's made safe here.
 func card(badge string, color lipgloss.Color, title, where string, details []string, fix string) string {
+	title, where, fix = Safe(title), Safe(where), Safe(fix)
 	titleCol := width - indent - 2
 	head := badge + "  "
 	listed := true
@@ -387,6 +416,7 @@ func card(badge string, color lipgloss.Color, title, where string, details []str
 	body := []string{head}
 	pad := strings.Repeat(" ", indent)
 	for i, d := range details {
+		d = Safe(d)
 		if d == "" || (i == 0 && listed && d == where) {
 			continue
 		}
@@ -399,13 +429,70 @@ func card(badge string, color lipgloss.Color, title, where string, details []str
 	return rail.Render(strings.Join(body, "\n"))
 }
 
+// diff prints the hunks of a text or payload change under it, each as
+// "line 9 added: …" and its lines with 2 lines of context: the first
+// hunk, or every hunk with -v. It reports whether ch had a diff.
+func (p *Pretty) diff(ch model.Change, pad string) bool {
+	hs := compare.ChangeDiff(ch)
+	if len(hs) == 0 {
+		return false
+	}
+	shown := hs
+	if !p.o.Verbose {
+		shown = hs[:1]
+	}
+	add := lipgloss.NewStyle().Foreground(ClassColor(model.Fixed))
+	del := lipgloss.NewStyle().Foreground(ClassColor(model.Broke))
+	for _, h := range shown {
+		summary, lines := Safe(h.Summary()), hunkText(h)
+		if p.o.Plain {
+			fmt.Fprintf(p.w, "%s%s\n", pad, summary)
+			for _, l := range lines {
+				fmt.Fprintf(p.w, "%s  %s\n", pad, l)
+			}
+			continue
+		}
+		fmt.Fprintf(p.w, "%s%s\n", pad, ui.Truncate(summary, width-len(pad)))
+		for i, l := range lines {
+			l = ui.Truncate(l, width-len(pad)-2)
+			switch h[i].Op {
+			case compare.OpAdd:
+				l = add.Render(l)
+			case compare.OpDel:
+				l = del.Render(l)
+			default:
+				l = muted.Render(l)
+			}
+			fmt.Fprintf(p.w, "%s  %s\n", pad, l)
+		}
+	}
+	if more := len(hs) - len(shown); more > 0 {
+		hint := "+" + plural(more, "more place changed", "more places changed") + " (-v shows them all)"
+		if !p.o.Plain {
+			hint = muted.Render(hint)
+		}
+		fmt.Fprintf(p.w, "%s%s\n", pad, hint)
+	}
+	return true
+}
+
+// key is "key: 3f9a2c1b" with -v, the name that accepts the change as
+// intended (compare.Accept) and "" otherwise.
+func (p *Pretty) key(ch model.Change) string {
+	if !p.o.Verbose {
+		return ""
+	}
+	return "key: " + compare.Key(ch)
+}
+
 func line(marker, title, right string) string {
-	right = ui.Truncate(right, 28)
-	t := ui.Truncate(title, width-8-len(right)-2)
+	right = ui.Truncate(Safe(right), 28)
+	t := ui.Truncate(Safe(title), width-8-len(right)-2)
 	return "    " + marker + "  " + ui.Pad(t, width-6-lipgloss.Width(right)) + muted.Render(right)
 }
 
-func comparePanel(c *model.Comparison) string {
+func comparePanel(r Result) string {
+	c := r.Comparison
 	color := lipgloss.Color(ui.Ok)
 	switch {
 	case c.Count(model.Broke) > 0:
@@ -415,7 +502,7 @@ func comparePanel(c *model.Comparison) string {
 	case c.Count(model.Changed) > 0:
 		color = ClassColor(model.Changed)
 	}
-	head := bold.Render("ECHO") + "   " + lipgloss.NewStyle().Foreground(color).Bold(true).Render(verdict(c))
+	head := bold.Render("ECHO") + "   " + lipgloss.NewStyle().Foreground(color).Bold(true).Render(verdict(r))
 	var parts []string
 	for _, class := range model.Classes {
 		n := c.Count(class)
@@ -437,9 +524,9 @@ func runPanel(r *model.Run, counts map[model.Level]int) string {
 		color = LevelColor(model.Warning)
 	}
 	title := "ECHO"
-	verdictText := capitalize(runVerdict(r, counts))
+	verdictText := check.Capitalize(runVerdict(r, counts))
 	if r.Name != "" {
-		title, verdictText = "SNAPSHOT "+strings.ToUpper(r.Name), "saved"
+		title, verdictText = "SNAPSHOT "+Safe(strings.ToUpper(r.Name)), "saved"
 	}
 	head := bold.Render(title) + "   " + lipgloss.NewStyle().Foreground(color).Bold(true).Render(verdictText)
 	var parts []string
@@ -472,7 +559,7 @@ func refName(r model.RunRef, relative bool) string {
 		when = " (" + r.Started.UTC().Format("2 Jan 2006 15:04 MST") + ")"
 	}
 	if r.Name != "" {
-		return fmt.Sprintf("snapshot %q%s", r.Name, when)
+		return fmt.Sprintf("snapshot %q%s", Safe(r.Name), when)
 	}
 	return "the earlier run" + when
 }

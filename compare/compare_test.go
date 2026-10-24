@@ -62,7 +62,7 @@ func TestChangesWithinAMessage(t *testing.T) {
 		email("admin@shop.com", "Order #1043 received", "Total: 25.00"),
 	}
 	got := titles(Messages(b, a))
-	if !strings.Contains(got, "changed: Webhook to hooks.zapier.com: payload lost fields") {
+	if !strings.Contains(got, "broke: Webhook to hooks.zapier.com: payload lost fields") {
 		t.Errorf("lost field not reported:\n%s", got)
 	}
 	if strings.Contains(got, "subject changed") || strings.Contains(got, "text changed") {
@@ -244,5 +244,46 @@ func TestNewActionIssues(t *testing.T) {
 	got := titles(Compare(run(), after, "", "", "test").Changes)
 	if !strings.Contains(got, "broke: Unfilled placeholder {first_name}") {
 		t.Errorf("a new action's problems must be reported:\n%s", got)
+	}
+}
+
+func TestFailedActionsAreNeverTheSame(t *testing.T) {
+	down := model.Action{ID: "a", Label: "Contact form", Error: "dial tcp 127.0.0.1:20449: connect: connection refused"}
+	works := model.Action{ID: "a", Label: "Contact form", Messages: []model.Message{email("admin@shop.com", "New lead", "x")}}
+
+	// Down at both ends: not "the same" and nothing else is compared.
+	c := Compare(run(down), run(down), "", "", "test")
+	if got := titles(c.Changes); got != "broke: Action still fails" {
+		t.Errorf("down at both ends:\n%s", got)
+	}
+	if ch := c.Changes[0]; ch.Check != ActionFailed || ch.Detail != down.Error || ch.Actions[0] != "Contact form" || c.Actions != 1 {
+		t.Errorf("change = %+v, actions = %d", ch, c.Actions)
+	}
+
+	// Newly failing.
+	c = Compare(run(works), run(down), "", "", "test")
+	if got := titles(c.Changes); got != "broke: Action fails" {
+		t.Errorf("newly failing:\n%s", got)
+	}
+
+	// A new action that fails is a failure too, not "nothing sent".
+	c = Compare(run(), run(down), "", "", "test")
+	if got := titles(c.Changes); got != "broke: Action fails" || c.Actions != 0 {
+		t.Errorf("new and failing:\n%s", got)
+	}
+
+	// Fixed since the snapshot: FIXED and what it sends now isn't listed
+	// as new, since the snapshot has nothing to compare it with.
+	c = Compare(run(down), run(works), "", "", "test")
+	if got := titles(c.Changes); got != "fixed: Action fails" {
+		t.Errorf("fixed in the compared run:\n%s", got)
+	}
+	if w := strings.Join(c.Warnings, "\n"); w != `"Contact form" failed in the snapshot, so what it sends now wasn't compared: take a new snapshot` {
+		t.Errorf("warnings = %q", w)
+	}
+
+	// Working at both ends: no change.
+	if c = Compare(run(works), run(works), "", "", "test"); len(c.Changes) != 0 {
+		t.Errorf("working at both ends:\n%s", titles(c.Changes))
 	}
 }

@@ -1,0 +1,130 @@
+{
+  "schema": "rhythm-echo/v1",
+  "kind": "comparison",
+  "tool": "rhythm-echo",
+  "version": "1.0.0",
+  "complete": true,
+  "summary": {
+    "broke": 1,
+    "new": 0,
+    "changed": 1,
+    "fixed": 0,
+    "errors": 1,
+    "warnings": 0,
+    "notices": 0,
+    "actions": 2,
+    "messages": 3,
+    "failed_actions": 0
+  },
+  "verdict": "findings",
+  "data": {
+    "schema": "rhythm-echo/v1",
+    "tool": "rhythm-echo",
+    "version": "1.0.0",
+    "before": {
+      "name": "before-update",
+      "dir": ".echo/snapshots/before-update",
+      "started": "2026-10-24T07:00:00Z"
+    },
+    "after": {
+      "dir": ".echo/runs/20261024-090000",
+      "started": "2026-10-24T09:00:00Z"
+    },
+    "changes": [
+      {
+        "class": "broke",
+        "check": "message/missing",
+        "title": "Email to admin@shop.test is no longer sent",
+        "fix": "Check the mail plugin.",
+        "actions": [
+          "Contact form"
+        ],
+        "before": "sent",
+        "after": "not sent"
+      },
+      {
+        "class": "changed",
+        "check": "message/text",
+        "title": "Email to the test submitter: text changed",
+        "fix": "Read the new text; if the change is intended, take a new snapshot.",
+        "actions": [
+          "Contact form"
+        ],
+        "before": "Thanks for your wholesale order; we'll invoice you when it ships. Thanks for your wholesale order; we'll invoice you when it ships. Thanks for your wholesale order; we'll invoice you when it ships. Thanks for your wholesale order; we'll invoice you when it ships. ",
+        "after": "Thanks for your wholesale order; we'll invoice you when it ships. Thanks for your wholesale order; we'll invoice you when it ships. Thanks for your wholesale order; we'll invoice you when it ships. Thanks for your wholesale order; we'll invoice you when it ships. \nOrder total: $42.00"
+      }
+    ],
+    "created": "2026-10-24T09:00:00Z",
+    "actions": [
+      {
+        "id": "action:contact",
+        "label": "Contact form",
+        "kind": "http",
+        "messages": [
+          {
+            "id": "m1",
+            "channel": "email",
+            "from": "wordpress@shop.test",
+            "to": [
+              "admin@shop.test"
+            ],
+            "subject": "New message",
+            "html": "<p>Hi</p><script>alert(1)</script>",
+            "status": "faked",
+            "source": {
+              "via": ""
+            },
+            "at": "2026-10-24T09:00:00Z"
+          },
+          {
+            "id": "m2",
+            "channel": "sms",
+            "provider": "twilio",
+            "to": [
+              "+15551230000"
+            ],
+            "text": "Thanks {first_name}",
+            "status": "faked",
+            "source": {
+              "via": ""
+            },
+            "at": "2026-10-24T09:00:00Z"
+          },
+          {
+            "id": "m3",
+            "channel": "webhook",
+            "method": "POST",
+            "url": "https://hooks.zapier.com/hooks/catch/1/x/",
+            "body": "{\"a\":1}",
+            "response": {
+              "status": 500,
+              "body": "oops"
+            },
+            "status": "failed",
+            "source": {
+              "via": ""
+            },
+            "at": "2026-10-24T09:00:00Z"
+          }
+        ],
+        "issues": [
+          {
+            "check": "content/x",
+            "level": "error",
+            "title": "Unfilled placeholder {first_name} in Twilio SMS",
+            "fix": "Do this.",
+            "key": "content/x|Unfilled placeholder {first_name} in Twilio SMS"
+          }
+        ],
+        "duration_ms": 0
+      },
+      {
+        "id": "action:order",
+        "label": "Completed order",
+        "kind": "command",
+        "messages": null,
+        "duration_ms": 0
+      }
+    ]
+  }
+}

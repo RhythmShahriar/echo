@@ -12,6 +12,7 @@ package dns
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net"
 	"net/http"
 	"sort"
@@ -56,27 +57,38 @@ type Options struct {
 
 // Report is what Check found: the parsed records as facts, and the issues.
 type Report struct {
-	Domain    string        `json:"domain"`
-	OrgDomain string        `json:"org_domain"`
-	Sender    *Sender       `json:"sender,omitempty"`
-	SPF       *SPF          `json:"spf,omitempty"`
-	DKIM      []DKIMKey     `json:"dkim,omitempty"`
-	DMARC     *DMARC        `json:"dmarc,omitempty"`
-	MX        []string      `json:"mx,omitempty"`
-	NullMX    bool          `json:"null_mx,omitempty"`
-	MTASTS    *MTASTS       `json:"mta_sts,omitempty"`
-	TLSRPT    string        `json:"tls_rpt,omitempty"`
-	BIMI      string        `json:"bimi,omitempty"`
-	Issues    []model.Issue `json:"issues"`
+	Domain    string    `json:"domain"`
+	OrgDomain string    `json:"org_domain"`
+	Sender    *Sender   `json:"sender,omitempty"`
+	SPF       *SPF      `json:"spf,omitempty"`
+	DKIM      []DKIMKey `json:"dkim,omitempty"`
+	DMARC     *DMARC    `json:"dmarc,omitempty"`
+	MX        []string  `json:"mx,omitempty"`
+	NullMX    bool      `json:"null_mx,omitempty"`
+	MTASTS    *MTASTS   `json:"mta_sts,omitempty"`
+	TLSRPT    string    `json:"tls_rpt,omitempty"`
+	BIMI      string    `json:"bimi,omitempty"`
+	// Unreachable is true when no lookup got an answer from the resolver
+	// (a timeout or a refused connection every time). Issues then holds
+	// one error about the resolver and no record was checked.
+	Unreachable bool          `json:"unreachable,omitempty"`
+	Resolver    string        `json:"resolver,omitempty"` // the server asked, when Unreachable
+	Issues      []model.Issue `json:"issues"`
 }
 
-// Check runs every deliverability check for domain.
+// Check runs every deliverability check for domain. Each query gets 3 s
+// and the whole check 15 s; when no lookup gets an answer at all, the
+// report says so once (Unreachable) instead of a warning per record.
 func Check(ctx context.Context, domain string, o Options) Report {
 	domain = normalize(domain)
-	c := &checker{ctx: ctx, r: o.Resolver, o: o, rep: Report{Domain: domain, OrgDomain: OrgDomain(domain), Sender: o.Sender}}
-	if c.r == nil {
-		c.r = System
+	r := o.Resolver
+	if r == nil {
+		r = System
 	}
+	budget, cancel := context.WithTimeout(ctx, checkBudget)
+	defer cancel()
+	t := &tracked{r: r}
+	c := &checker{ctx: budget, r: t, o: o, rep: Report{Domain: domain, OrgDomain: OrgDomain(domain), Sender: o.Sender}}
 	c.spf()
 	c.dkim()
 	c.dmarc()
@@ -84,6 +96,11 @@ func Check(ctx context.Context, domain string, o Options) Report {
 	c.mtaSTS()
 	c.tlsRPT()
 	c.bimi()
+	// A canceled parent (the user stopped the run) is not the resolver's
+	// fault, so it keeps the per-record warnings.
+	if t.unreachable() && ctx.Err() == nil {
+		c.unreachable(r, t.first)
+	}
 	sort.SliceStable(c.rep.Issues, func(i, j int) bool { return c.rep.Issues[i].Level.Rank() < c.rep.Issues[j].Level.Rank() })
 	if c.rep.Issues == nil {
 		c.rep.Issues = []model.Issue{}
@@ -96,6 +113,24 @@ type checker struct {
 	r   Resolver
 	o   Options
 	rep Report
+}
+
+// unreachable replaces whatever the checks found with one error that
+// points at the resolver: every record "failed" for the same reason, and
+// the domain's own nameservers were never asked.
+func (c *checker) unreachable(r Resolver, first error) {
+	addr := serverOf(r, first)
+	c.rep = Report{Domain: c.rep.Domain, OrgDomain: c.rep.OrgDomain, Sender: c.rep.Sender, Unreachable: true, Resolver: addr}
+	title, fix := "Could not reach the system resolver",
+		"Check this machine's DNS settings and network connection, or pass --resolver host:port to ask another DNS server."
+	if addr != "" {
+		title = "Could not reach the resolver " + addr
+	}
+	if _, ok := r.(*Server); ok {
+		fix = "Check that a DNS server is running at " + addr + " and answers queries from this machine, or leave out --resolver to use the system's."
+	}
+	c.issue("resolver", model.Error, title,
+		fmt.Sprintf("No DNS lookup for %s got an answer, so none of its mail records was checked. First failure: %v", c.rep.Domain, first), fix)
 }
 
 func (c *checker) issue(check string, level model.Level, title, detail, fix string) {

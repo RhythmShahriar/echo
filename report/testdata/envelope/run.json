@@ -1,0 +1,102 @@
+{
+  "schema": "rhythm-echo/v1",
+  "kind": "run",
+  "tool": "rhythm-echo",
+  "version": "1.0.0",
+  "complete": false,
+  "summary": {
+    "broke": 0,
+    "new": 0,
+    "changed": 0,
+    "fixed": 0,
+    "errors": 1,
+    "warnings": 0,
+    "notices": 0,
+    "actions": 2,
+    "messages": 3,
+    "failed_actions": 1
+  },
+  "verdict": "error",
+  "data": {
+    "schema": "rhythm-echo/v1",
+    "tool": "rhythm-echo",
+    "version": "1.0.0",
+    "id": "",
+    "target": "https://staging.shop.test",
+    "mode": "seal",
+    "started": "2026-10-24T09:00:00Z",
+    "duration_ms": 4200,
+    "actions": [
+      {
+        "id": "action:contact",
+        "label": "Contact form",
+        "kind": "http",
+        "messages": [
+          {
+            "id": "m1",
+            "channel": "email",
+            "from": "wordpress@shop.test",
+            "to": [
+              "admin@shop.test"
+            ],
+            "subject": "New message",
+            "html": "<p>Hi</p><script>alert(1)</script>",
+            "status": "faked",
+            "source": {
+              "via": ""
+            },
+            "at": "2026-10-24T09:00:00Z"
+          },
+          {
+            "id": "m2",
+            "channel": "sms",
+            "provider": "twilio",
+            "to": [
+              "+15551230000"
+            ],
+            "text": "Thanks {first_name}",
+            "status": "faked",
+            "source": {
+              "via": ""
+            },
+            "at": "2026-10-24T09:00:00Z"
+          },
+          {
+            "id": "m3",
+            "channel": "webhook",
+            "method": "POST",
+            "url": "https://hooks.zapier.com/hooks/catch/1/x/",
+            "body": "{\"a\":1}",
+            "response": {
+              "status": 500,
+              "body": "oops"
+            },
+            "status": "failed",
+            "source": {
+              "via": ""
+            },
+            "at": "2026-10-24T09:00:00Z"
+          }
+        ],
+        "issues": [
+          {
+            "check": "content/x",
+            "level": "error",
+            "title": "Unfilled placeholder {first_name} in Twilio SMS",
+            "fix": "Do this.",
+            "key": "content/x|Unfilled placeholder {first_name} in Twilio SMS"
+          }
+        ],
+        "duration_ms": 0
+      },
+      {
+        "id": "action:order",
+        "label": "Completed order",
+        "kind": "command",
+        "messages": null,
+        "error": "exit status 1",
+        "duration_ms": 0
+      }
+    ]
+  }
+}

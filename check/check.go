@@ -9,14 +9,15 @@
 package check
 
 import (
+	"cmp"
 	"encoding/json"
 	"fmt"
-	"net"
 	"net/url"
 	"path"
 	"regexp"
 	"slices"
 	"strings"
+	"unicode"
 	"unicode/utf8"
 
 	"github.com/RhythmShahriar/echo/model"
@@ -28,115 +29,49 @@ type Options struct {
 	SiteHost        string   // the site being checked: links to it are fine
 	SiteDomain      string   // the domain mail should come from; defaults to SiteHost without "www."
 	AllowRecipients []string // globs of addresses or numbers that may really be messaged (observe mode)
+	Rules           []Rule   // custom rules, run after the registered ones; CustomRules makes them from the config
+	// Checks tunes rules by check ID, as `checks:` in the config does: Off
+	// drops a check's issues, "notice", "warning" or "error" sets their
+	// level and "broke" makes them errors. "changed" only matters to a
+	// comparison, so it keeps the level.
+	Checks map[string]string
 }
 
-// Message returns the problems in m.
+// Off turns a check off in Options.Checks.
+const Off = "off"
+
+// tune applies o.Checks to an issue: false when its check is off.
+func (o Options) tune(i *model.Issue) bool {
+	switch set := strings.ToLower(o.Checks[i.Check]); set {
+	case Off:
+		return false
+	case string(model.Error), string(model.Warning), string(model.Notice):
+		i.Level = model.Level(set)
+	case model.Broke:
+		i.Level = model.Error
+	}
+	return true
+}
+
+// Message returns the problems in m: what every registered rule that
+// looks at m's channel finds, then o.Rules (custom rules from the
+// project's config), as tuned by o.Checks.
 func Message(m model.Message, o Options) []model.Issue {
 	var out []model.Issue
-	add := func(i model.Issue) {
-		i.Message = m.ID
-		i.Identify()
-		out = append(out, i)
-	}
-	what := Describe(m)
-
-	if m.Status == model.Failed {
-		title := fmt.Sprintf("%s fails", capitalize(what))
-		if m.Response != nil && m.Response.Status > 0 {
-			title = fmt.Sprintf("%s fails (HTTP %d)", capitalize(what), m.Response.Status)
-		}
-		add(model.Issue{Check: "send/failed", Level: model.Error, Title: title, Detail: firstNonEmpty(m.Error, responseText(m)),
-			Fix: "Check the sender's settings (API key, SMTP login, endpoint URL) and the provider's error above."})
-	}
-
-	text := visibleText(m)
-	if m.Channel == model.Email || m.Channel == model.SMS || m.Channel == model.WhatsApp || m.Channel == model.Chat {
-		for _, tag := range placeholders(m.Subject + "\n" + text) {
-			add(model.Issue{Check: "content/placeholder", Level: model.Error,
-				Title:  fmt.Sprintf("Unfilled placeholder %s in %s", tag, what),
-				Detail: "The template still contains the placeholder, so readers see it instead of their data.",
-				Fix:    "Check the tag's spelling against the plugin's list of tags, and that the data it needs exists when the message is sent."})
-		}
-		if e := phpError(text); e != "" {
-			add(model.Issue{Check: "content/php-error", Level: model.Error, Title: fmt.Sprintf("PHP error printed in %s", what), Detail: e,
-				Fix: "Fix the code the error points at, and turn display_errors off so errors never reach messages."})
-		}
-		if bad := mojibake(m.Subject + text); bad != "" {
-			add(model.Issue{Check: "content/encoding", Level: model.Warning, Title: fmt.Sprintf("Garbled characters in %s", what),
-				Detail: fmt.Sprintf("found %q: text was encoded twice", bad),
-				Fix:    "Make sure the message is built and sent as UTF-8 (the mailer's charset and the template file's encoding)."})
-		}
-		for _, h := range devLinks(m, o) {
-			add(model.Issue{Check: "content/dev-link", Level: model.Warning, Title: fmt.Sprintf("%s links to a development address (%s)", capitalize(what), h),
-				Fix: "Build links from the site's configured URL, not a hard-coded or local one."})
-		}
-	}
-
-	switch m.Channel {
-	case model.Email:
-		if strings.TrimSpace(m.Subject) == "" {
-			add(model.Issue{Check: "email/no-subject", Level: model.Warning, Title: "Email has no subject",
-				Fix: "Give the notification a subject; many filters treat mail without one as spam."})
-		}
-		if strings.TrimSpace(m.Text) == "" && strings.TrimSpace(m.HTML) == "" {
-			add(model.Issue{Check: "email/empty", Level: model.Error, Title: "Email is empty",
-				Fix: "The template rendered nothing: check the notification's message setting and the variables it uses."})
-		}
-		if m.HTML != "" && strings.TrimSpace(m.Text) == "" {
-			add(model.Issue{Check: "email/no-text", Level: model.Notice, Title: "Email has no plain-text part",
-				Fix: "Send a text alternative too; some clients and spam filters prefer it."})
-		}
-		if len(m.HTML) > 102*1024 {
-			add(model.Issue{Check: "email/clipped", Level: model.Warning, Title: "Email is too big for Gmail and gets clipped",
-				Detail: fmt.Sprintf("%d KB of HTML; Gmail clips messages over 102 KB", len(m.HTML)/1024),
-				Fix:    "Trim inline CSS and markup, or move content behind links."})
-		}
-		if d := domainOf(m.From); d != "" && o.domain() != "" && !isDevHost(o.domain()) && net.ParseIP(o.domain()) == nil && !sameOrg(d, o.domain()) {
-			add(model.Issue{Check: "email/from-domain", Level: model.Notice, Title: fmt.Sprintf("Email is sent from another domain (%s)", d),
-				Detail: "the site is " + o.domain(),
-				Fix:    "Send from an address on your own domain, or make sure its SPF, DKIM and DMARC cover this sender."})
-		}
-	case model.SMS, model.WhatsApp:
-		for _, to := range m.To {
-			if to != "" && !e164.MatchString(to) {
-				add(model.Issue{Check: "sms/number", Level: model.Warning, Title: "Message sent to a number that isn't in international format",
-					Detail: to, Fix: "Store and send numbers in E.164 form, e.g. +4915112345678."})
+	for _, rs := range [][]Rule{Rules(), o.Rules} {
+		for _, r := range rs {
+			if !r.Applies(m.Channel) {
+				continue
 			}
-		}
-		if m.Channel == model.SMS && m.Text != "" {
-			enc, parts := segments(m.Text)
-			switch {
-			case parts > 3:
-				add(model.Issue{Check: "sms/parts", Level: model.Warning, Title: "SMS needs more than 3 parts",
-					Detail: fmt.Sprintf("%d parts (%s); each part is charged", parts, enc), Fix: "Shorten the message, or avoid characters that force UCS-2 (emoji, curly quotes)."})
-			case parts > 1:
-				add(model.Issue{Check: "sms/parts", Level: model.Notice, Title: "SMS needs more than one part",
-					Detail: fmt.Sprintf("%d parts (%s); each part is charged", parts, enc), Fix: "Keep SMS under 160 GSM-7 characters (70 with emoji or other Unicode)."})
-			}
-		}
-	case model.Webhook:
-		if isJSON(m) && !validJSON(m.Body) && !strings.HasSuffix(m.Body, "…(truncated)") {
-			add(model.Issue{Check: "webhook/json", Level: model.Warning, Title: fmt.Sprintf("%s sends invalid JSON", capitalize(what)),
-				Fix: "The payload says it's JSON but doesn't parse; check how it's built (json_encode errors, stray output)."})
-		}
-		if m.Provider == "woocommerce" && m.Headers["x-wc-webhook-signature"] == "" {
-			add(model.Issue{Check: "webhook/signature", Level: model.Warning, Title: "WooCommerce webhook is sent without a signature",
-				Fix: "Set a secret on the webhook (WooCommerce → Settings → Advanced → Webhooks) so receivers can verify it."})
-		}
-	}
-	// Whatever happened to the message: a sealed site's payload says what
-	// the live site would send.
-	if m.Channel != model.Email && strings.Contains(m.Body, "•••••") {
-		add(model.Issue{Check: "content/secret", Level: model.Warning, Title: fmt.Sprintf("%s carries a credential in its body", capitalize(what)),
-			Fix: "Don't put API keys or passwords in payloads; send them in an Authorization header, or not at all."})
-	}
-
-	if m.Status == model.Sent {
-		for _, r := range append(append(slices.Clone(m.To), m.CC...), m.BCC...) {
-			if realRecipient(r) && !o.allowed(r) {
-				add(model.Issue{Check: "seal/real-recipient", Level: model.Warning, Title: fmt.Sprintf("%s really sent to an address outside the allowlist", capitalize(what)),
-					Detail: r, Fix: "Run sealed on staging (rhythm echo up), or add test recipients to allow_recipients."})
-				break
+			for _, i := range r.Run(m, o) {
+				i.Check = cmp.Or(i.Check, r.ID)
+				i.Level = cmp.Or(i.Level, r.Level)
+				if !o.tune(&i) {
+					continue
+				}
+				i.Message = m.ID
+				i.Identify()
+				out = append(out, i)
 			}
 		}
 	}
@@ -354,18 +289,6 @@ func (o Options) domain() string {
 	return strings.TrimPrefix(strings.ToLower(o.SiteHost), "www.")
 }
 
-// sameOrg compares the last two labels of each domain: good enough to
-// tell mail.shop.com from shop.com, without a public suffix list here.
-func sameOrg(a, b string) bool { return lastLabels(a, 2) == lastLabels(b, 2) }
-
-func lastLabels(d string, n int) string {
-	parts := strings.Split(d, ".")
-	if len(parts) <= n {
-		return d
-	}
-	return strings.Join(parts[len(parts)-n:], ".")
-}
-
 // realRecipient reports whether a recipient looks like a real person rather than a
 // test address.
 func realRecipient(r string) bool {
@@ -394,9 +317,12 @@ func firstNonEmpty(s ...string) string {
 	return ""
 }
 
-func capitalize(s string) string {
-	if s == "" {
+// Capitalize upper-cases the first letter of s, a whole rune, so a title
+// that starts with "élan" reads "Élan".
+func Capitalize(s string) string {
+	r, n := utf8.DecodeRuneInString(s)
+	if n == 0 || r == utf8.RuneError {
 		return s
 	}
-	return strings.ToUpper(s[:1]) + s[1:]
+	return string(unicode.ToTitle(r)) + s[n:]
 }

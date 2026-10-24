@@ -1,0 +1,434 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/RhythmShahriar/echo/report/schema/doctor.schema.json",
+  "title": "rhythm-echo/v1 doctor",
+  "description": "What `--json` writes for the doctor's checks. New optional fields may be added without a new schema name.",
+  "type": "object",
+  "required": [
+    "schema",
+    "kind",
+    "tool",
+    "version",
+    "complete",
+    "summary",
+    "verdict",
+    "data"
+  ],
+  "properties": {
+    "schema": {
+      "const": "rhythm-echo/v1"
+    },
+    "kind": {
+      "const": "doctor"
+    },
+    "tool": {
+      "const": "rhythm-echo"
+    },
+    "version": {
+      "type": "string"
+    },
+    "complete": {
+      "type": "boolean"
+    },
+    "summary": {
+      "type": "object",
+      "required": [
+        "broke",
+        "new",
+        "changed",
+        "fixed",
+        "errors",
+        "warnings",
+        "notices",
+        "actions",
+        "messages",
+        "failed_actions"
+      ],
+      "properties": {
+        "broke": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "new": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "changed": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "fixed": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "errors": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "warnings": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "notices": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "actions": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "messages": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "failed_actions": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "verdict": {
+      "enum": [
+        "ok",
+        "findings",
+        "error"
+      ]
+    },
+    "data": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "name",
+          "status"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "ok",
+              "warning",
+              "error"
+            ]
+          },
+          "detail": {
+            "type": "string"
+          },
+          "fix": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "issue": {
+      "type": "object",
+      "required": [
+        "check",
+        "level",
+        "title",
+        "key"
+      ],
+      "properties": {
+        "check": {
+          "type": "string"
+        },
+        "level": {
+          "enum": [
+            "error",
+            "warning",
+            "notice"
+          ]
+        },
+        "title": {
+          "type": "string"
+        },
+        "detail": {
+          "type": "string"
+        },
+        "fix": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        },
+        "key": {
+          "type": "string"
+        },
+        "actions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "response": {
+      "type": "object",
+      "required": [
+        "status"
+      ],
+      "properties": {
+        "status": {
+          "type": "integer"
+        },
+        "body": {
+          "type": "string"
+        }
+      }
+    },
+    "source": {
+      "type": "object",
+      "required": [
+        "via"
+      ],
+      "properties": {
+        "via": {
+          "type": "string"
+        },
+        "stack": {
+          "type": "string"
+        },
+        "plugin": {
+          "type": "string"
+        },
+        "hook": {
+          "type": "string"
+        },
+        "host": {
+          "type": "string"
+        }
+      }
+    },
+    "message": {
+      "type": "object",
+      "required": [
+        "id",
+        "channel",
+        "status",
+        "source",
+        "at"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "run": {
+          "type": "string"
+        },
+        "action": {
+          "type": "string"
+        },
+        "channel": {
+          "enum": [
+            "email",
+            "sms",
+            "whatsapp",
+            "webhook",
+            "chat",
+            "analytics",
+            "payment",
+            "push",
+            "http"
+          ]
+        },
+        "provider": {
+          "type": "string"
+        },
+        "from": {
+          "type": "string"
+        },
+        "to": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "cc": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "bcc": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "reply_to": {
+          "type": "string"
+        },
+        "subject": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        },
+        "html": {
+          "type": "string"
+        },
+        "event": {
+          "type": "string"
+        },
+        "method": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        },
+        "headers": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "body": {
+          "type": "string"
+        },
+        "response": {
+          "$ref": "#/$defs/response"
+        },
+        "status": {
+          "enum": [
+            "sent",
+            "faked",
+            "blocked",
+            "failed"
+          ]
+        },
+        "error": {
+          "type": "string"
+        },
+        "source": {
+          "$ref": "#/$defs/source"
+        },
+        "at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "action": {
+      "type": "object",
+      "required": [
+        "id",
+        "label",
+        "kind",
+        "messages",
+        "duration_ms"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "messages": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/$defs/message"
+          }
+        },
+        "issues": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/issue"
+          }
+        },
+        "error": {
+          "type": "string"
+        },
+        "duration_ms": {
+          "type": "number"
+        }
+      }
+    },
+    "change": {
+      "type": "object",
+      "required": [
+        "class",
+        "check",
+        "title",
+        "actions"
+      ],
+      "properties": {
+        "class": {
+          "enum": [
+            "broke",
+            "new",
+            "changed",
+            "fixed"
+          ]
+        },
+        "check": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "detail": {
+          "type": "string"
+        },
+        "fix": {
+          "type": "string"
+        },
+        "actions": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "channel": {
+          "type": "string"
+        },
+        "before": {
+          "type": "string",
+          "description": "the full value, never shortened"
+        },
+        "after": {
+          "type": "string",
+          "description": "the full value, never shortened"
+        },
+        "score": {
+          "type": "number"
+        }
+      }
+    },
+    "runref": {
+      "type": "object",
+      "required": [
+        "dir",
+        "started"
+      ],
+      "properties": {
+        "target": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "dir": {
+          "type": "string"
+        },
+        "started": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    }
+  }
+}

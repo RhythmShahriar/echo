@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src &#39;none&#39;; style-src &#39;unsafe-inline&#39;; img-src data:; base-uri &#39;none&#39;; form-action &#39;none&#39;">
+<meta name="generator" content="rhythm-echo 1.0.0">
+<title>https://staging.shop.test · Something broke after updates</title>
+<style>
+@page { size: A4; margin: 16mm 14mm; }
+:root {
+  --brand: #2563EB; --bg: #FFFFFF; --text: #100F0D; --muted: #6B7280; --line: #E7E5E4; --soft: #F5F5F4;
+  --broke: #DC2626; --new: #EA580C; --changed: #CA8A04; --fixed: #059669; --ok: #059669; --none: #6B7280;
+  --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+* { box-sizing: border-box; }
+html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.5 var(--sans); }
+.wrap { max-width: 860px; margin: 0 auto; padding: 24px 16px 48px; }
+header { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-bottom: 14px; border-bottom: 3px solid var(--brand); }
+.from { display: flex; align-items: center; gap: 12px; font-weight: 700; font-size: 17px; }
+.from img { max-height: 44px; max-width: 180px; }
+.meta { color: var(--muted); font-size: 13px; text-align: right; overflow-wrap: anywhere; }
+.meta b { color: var(--text); }
+.hero { padding: 26px 0 8px; }
+.eyebrow { text-transform: uppercase; letter-spacing: .12em; font-size: 11px; color: var(--muted); font-weight: 600; }
+h1 { font-size: 30px; line-height: 1.15; margin: 6px 0; letter-spacing: -.02em; }
+h1::before { content: ""; display: inline-block; width: .4em; height: .4em; border-radius: 50%; margin-right: .3em; vertical-align: .14em; background: var(--tone); }
+.tone-broke { --tone: var(--broke); } .tone-new { --tone: var(--new); } .tone-changed { --tone: var(--changed); } .tone-ok { --tone: var(--ok); } .tone-none { --tone: var(--none); }
+.sub { color: var(--muted); margin: 0; }
+.totals { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+.total { --c: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 4px 12px 4px 9px; font-size: 13px; }
+.total b { color: var(--c); margin-right: 4px; }
+.k-broke { --c: var(--broke); } .k-new { --c: var(--new); } .k-changed { --c: var(--changed); } .k-fixed { --c: var(--fixed); } .k-ok { --c: var(--ok); } .k-none { --c: var(--none); }
+h2 { font-size: 12px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin: 30px 0 10px; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th { text-align: left; color: var(--muted); font-weight: 600; border-bottom: 1px solid var(--line); padding: 6px 8px; }
+td { border-bottom: 1px solid var(--line); padding: 8px; vertical-align: top; overflow-wrap: anywhere; }
+td.result { font-weight: 600; color: var(--c); }
+tr { break-inside: avoid; }
+section.run { break-inside: avoid; margin-bottom: 16px; }
+section.run h3 { font-size: 14px; margin: 0 0 6px; }
+section.run h3 span { color: var(--muted); font-weight: 500; }
+ul.changes { list-style: none; margin: 0; padding: 0; }
+ul.changes li { border-left: 3px solid var(--c); padding: 4px 10px; margin: 0 0 6px; background: var(--soft); border-radius: 0 6px 6px 0; overflow-wrap: anywhere; }
+.badge { font-size: 10.5px; font-weight: 700; letter-spacing: .08em; color: var(--c); margin-right: 6px; }
+.facts { color: var(--muted); font-size: 12.5px; }
+.facts code { font: 12px var(--mono); }
+.empty { color: var(--muted); border: 1px dashed var(--line); border-radius: 10px; padding: 24px; text-align: center; }
+footer { margin-top: 36px; color: var(--muted); font-size: 11.5px; border-top: 1px solid var(--line); padding-top: 10px; }
+@media (max-width: 640px) { header { flex-wrap: wrap; } .meta { text-align: left; } table { font-size: 12px; } }
+@media print { .wrap { max-width: none; padding: 0; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="from"><span>Northwind Studio</span></div>
+    <div class="meta"><b>https://staging.shop.test</b><br>Email and webhook report · 24 Sep to 24 Oct 2026</div>
+  </header>
+
+  <div class="hero tone-broke">
+    <div class="eyebrow">Did the site keep sending what it should?</div>
+    <h1>Something broke after updates</h1>
+    <p class="sub">2 comparisons · 2 runs · 6 messages checked</p>
+    <div class="totals"><span class="total k-broke"><b>✗ 1</b>BROKE</span><span class="total k-new"><b>▲ 0</b>NEW</span><span class="total k-changed"><b>■ 1</b>CHANGED</span><span class="total k-fixed"><b>✓ 0</b>FIXED</span></div>
+  </div>
+
+  <h2>Runs</h2>
+  <table>
+    <thead><tr><th>When</th><th>Compared with</th><th>Result</th><th>Messages</th></tr></thead>
+    <tbody>
+      <tr class="k-ok"><td>Sat 17 Oct 2026, 09:00</td><td>before-update (17 Oct)</td><td class="result">Everything is still sent the same way</td><td>1 email, 1 SMS, 1 webhook</td></tr>
+      <tr class="k-broke"><td>Sat 24 Oct 2026, 09:00</td><td>before-update (24 Oct)</td><td class="result">Something broke</td><td>1 email, 1 SMS, 1 webhook</td></tr>
+    </tbody>
+  </table>
+
+  <h2>What changed</h2>
+  <section class="run"><h3>Sat 24 Oct 2026, 09:00 <span>against before-update (24 Oct)</span></h3>
+    <ul class="changes">
+      <li class="k-broke"><span class="badge">BROKE</span>Email to admin@shop.test is no longer sent<div class="facts">Contact form · <code>sent → not sent</code></div></li>
+      <li class="k-changed"><span class="badge">CHANGED</span>Email to the test submitter: subject changed<div class="facts">2 actions · <code>Thanks → Thank you</code></div></li>
+    </ul></section>
+
+  <footer>Checked with rhythm echo 1.0.0: each run captures what the site sends (emails, SMS, webhooks) and compares it with a snapshot taken before the updates.</footer>
+</div>
+</body>
+</html>
