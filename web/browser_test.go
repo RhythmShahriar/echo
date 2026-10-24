@@ -103,10 +103,17 @@ func TestBrowserSmoke(t *testing.T) {
 	})`
 	deadline := time.Now().Add(15 * time.Second)
 	for {
-		if err := json.Unmarshal([]byte(c.eval(probe)), &got); err != nil {
-			t.Fatal(err)
+		// On a cold Chrome start the first probes can run before the page
+		// has a DOM, or during navigation, and come back empty: not ready
+		// yet rather than a failure.
+		err := json.Unmarshal([]byte(c.eval(probe)), &got)
+		if err == nil && got.Rows == 50 && got.Title != "" && got.Frame != "" {
+			break
 		}
-		if got.Rows == 50 && got.Title != "" && got.Frame != "" || time.Now().After(deadline) {
+		if time.Now().After(deadline) {
+			if err != nil {
+				t.Fatalf("probing the page: %v", err)
+			}
 			break
 		}
 		time.Sleep(100 * time.Millisecond)
