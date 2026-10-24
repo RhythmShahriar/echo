@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="360" viewBox="0 0 1280 360" role="img" aria-label="rhythm echo: is your site still saying what it should?">
+  <rect width="1280" height="360" rx="24" fill="#100F0D"/>
+  <!-- ripples: everything the site sends goes out; the outermost, in the signal color, is the one Echo catches -->
+  <circle cx="1000" cy="180" r="8" fill="#3A3631"/>
+  <path d="M1014.1,163.1 A22,22 0 0 1 1014.1,196.9" fill="none" stroke="#3A3631" stroke-width="4" stroke-linecap="round"/>
+  <path d="M1028.3,146.3 A44,44 0 0 1 1028.3,213.7" fill="none" stroke="#3A3631" stroke-width="4" stroke-linecap="round"/>
+  <path d="M1043.7,127.9 A68,68 0 0 1 1043.7,232.1" fill="none" stroke="#3A3631" stroke-width="4" stroke-linecap="round"/>
+  <path d="M1060.4,108.0 A94,94 0 0 1 1060.4,252.0" fill="none" stroke="#3A3631" stroke-width="4" stroke-linecap="round"/>
+  <path d="M1078.4,86.5 A122,122 0 0 1 1078.4,273.5" fill="none" stroke="#3A3631" stroke-width="4" stroke-linecap="round"/>
+  <path d="M1097.7,63.6 A152,152 0 0 1 1097.7,296.4" fill="none" stroke="#FF7C52" stroke-width="6" stroke-linecap="round"/>
+  <text x="96" y="104" font-family="'JetBrains Mono', 'SF Mono', Menlo, Consolas, 'DejaVu Sans Mono', monospace" font-size="26" letter-spacing="3" fill="#9A9690">RHYTHM</text>
+  <text x="90" y="196" font-family="Inter, 'Segoe UI', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif" font-size="104" font-weight="800" letter-spacing="-4" fill="#FFFFFF">echo<tspan fill="#FF7C52">.</tspan></text>
+  <text x="96" y="330" font-family="Inter, 'Segoe UI', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif" font-size="28" font-weight="500" fill="#9A9690">Is your site still saying what it should? Every email, SMS and webhook, checked.</text>
+</svg>
