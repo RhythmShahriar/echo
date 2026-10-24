@@ -177,6 +177,11 @@ func RunWindow(ctx context.Context, o WindowOptions) []Result {
 	if o.Log == nil {
 		o.Log = io.Discard
 	}
+	// Runs and comparisons record their folders: absolute, so a report
+	// run from another folder (report --store ../store) finds them.
+	if abs, err := filepath.Abs(o.Store); err == nil {
+		o.Store = abs
+	}
 	var out []Result
 	for _, site := range o.Sites {
 		if ctx.Err() != nil {
@@ -390,7 +395,8 @@ func verdict(c *model.Comparison) string {
 }
 
 // History returns a site's window results since t, oldest first. It is
-// what an agency report summarizes.
+// what an agency report summarizes. Each result's Dir is the window's
+// folder under hubStore, wherever the window ran from.
 func History(hubStore, site string, since time.Time) ([]Result, error) {
 	if !ValidSiteID(site) {
 		return nil, fmt.Errorf("site %q: an id is letters, digits, dots, dashes and underscores", site)
@@ -411,6 +417,12 @@ func History(hubStore, site string, since time.Time) ([]Result, error) {
 		}
 		var r Result
 		if json.Unmarshal(b, &r) == nil && !r.Started.Before(since) {
+			if r.Dir != "" {
+				// Where it is now: a window saved with a relative store
+				// (schedule --store store) recorded a path that only
+				// works from the folder it ran in.
+				r.Dir = filepath.Join(runs, e.Name())
+			}
 			out = append(out, r)
 		}
 	}

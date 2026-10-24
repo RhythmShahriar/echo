@@ -6,6 +6,7 @@ package hub
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
@@ -18,7 +19,9 @@ import (
 
 	"github.com/RhythmShahriar/echo/client"
 	"github.com/RhythmShahriar/echo/config"
+	"github.com/RhythmShahriar/echo/model"
 	"github.com/RhythmShahriar/echo/runner"
+	storepkg "github.com/RhythmShahriar/echo/store"
 	"github.com/RhythmShahriar/echo/wire"
 )
 
@@ -112,7 +115,11 @@ func TestRunWindow(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	store := t.TempDir()
+	// A relative store, as in schedule --store store: what the window
+	// records must still work from another folder.
+	base := t.TempDir()
+	t.Chdir(base)
+	store := "store"
 	h, err := New(Options{Store: store, Sites: sites, Version: "test"})
 	if err != nil {
 		t.Fatal(err)
@@ -170,10 +177,26 @@ func TestRunWindow(t *testing.T) {
 			}
 		}
 	}
+	for _, r := range results {
+		c, err := storepkg.LoadComparison(r.Dir)
+		if err != nil || !filepath.IsAbs(r.Dir) || !filepath.IsAbs(c.Before.Dir) || !filepath.IsAbs(c.After.Dir) {
+			t.Errorf("%s: want absolute folders, got %q, %q and %q (%v)", r.Site, r.Dir, c.Before.Dir, c.After.Dir, err)
+		}
+	}
 	hist, err := History(store, "client-a", time.Now().Add(-time.Hour))
 	if err != nil || len(hist) != 1 || hist[0].Counts["broke"] != 1 {
 		t.Errorf("history: %+v %v", hist, err)
 	}
+	// report --site client-a --store ../store, from a sibling folder.
+	t.Chdir(t.TempDir())
+	hist, err = History(filepath.Join(base, "store"), "client-a", time.Now().Add(-time.Hour))
+	if err != nil || len(hist) != 1 {
+		t.Fatalf("history from elsewhere: %+v %v", hist, err)
+	}
+	if _, err := storepkg.LoadRun(hist[0].Dir); err != nil {
+		t.Errorf("history from elsewhere: %v", err)
+	}
+	t.Chdir(base)
 	if hist, _ := History(store, "client-a", time.Now().Add(time.Hour)); len(hist) != 0 {
 		t.Errorf("history since later: %+v", hist)
 	}
@@ -341,7 +364,11 @@ func TestWindowFollowsTheSiteConfig(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	store := t.TempDir()
+	// A relative store, as in schedule --store store: what the window
+	// records must still work from another folder.
+	base := t.TempDir()
+	t.Chdir(base)
+	store := "store"
 	h, err := New(Options{Store: store, Sites: sites, Version: "test"})
 	if err != nil {
 		t.Fatal(err)
@@ -422,5 +449,33 @@ func TestWindowFollowsTheSiteConfig(t *testing.T) {
 	run, err := os.ReadFile(filepath.Join(a.Dir, "run.json"))
 	if err != nil || strings.Contains(string(run), "not found") {
 		t.Errorf("client-a's run: %v\n%s", err, run)
+	}
+}
+
+// TestHistoryResolvesAnOldRelativeDir: a window an older Echo saved with
+// schedule --store store recorded store/sites/... as its folder. History
+// reads it from another folder as the window's folder under the store.
+func TestHistoryResolvesAnOldRelativeDir(t *testing.T) {
+	base := t.TempDir()
+	dir := filepath.Join(base, "store", "sites", "client-a", "runs", "20261025-020000")
+	run := &model.Run{Schema: model.Schema, Tool: "rhythm-echo", ID: "r1", Started: time.Now().UTC()}
+	if err := storepkg.SaveRun(dir, run); err != nil {
+		t.Fatal(err)
+	}
+	r := Result{Site: "client-a", Started: time.Now().UTC(), Dir: "store/sites/client-a/runs/20261025-020000"}
+	b, err := json.Marshal(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "schedule.json"), b, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(t.TempDir())
+	hist, err := History(filepath.Join(base, "store"), "client-a", time.Now().Add(-time.Hour))
+	if err != nil || len(hist) != 1 || hist[0].Dir != dir {
+		t.Fatalf("history: %+v %v, want the folder %s", hist, err, dir)
+	}
+	if _, err := storepkg.LoadRun(hist[0].Dir); err != nil {
+		t.Error(err)
 	}
 }
