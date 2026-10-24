@@ -48,18 +48,26 @@ func cmdUp(s *session) int {
 	// (in reverse) on every way out.
 	var stack cleanups
 	defer stack.run()
-	ln, err := net.Listen("tcp", cfg.Listen)
+	smtpAddr := ""
+	if smtpOn {
+		smtpAddr = cfg.SMTP
+	}
+	ln, sl, err := listenPair(cfg.Listen, smtpAddr)
 	if err != nil {
-		return s.fail(fmt.Errorf("listening on %s: %w (is Echo already running? see: rhythm echo doctor)", cfg.Listen, err))
+		// Mailpit or another catcher may hold the ports: offer a free
+		// pair. --free-ports (cli lane, X18) will pass true here.
+		if ln, sl, err = moveAside(s, &cfg.Listen, &smtpAddr, err, false); err != nil {
+			return s.fail(err)
+		}
+		if smtpOn {
+			cfg.SMTP = smtpAddr
+		}
 	}
 	stack.push(func(context.Context) { _ = ln.Close() })
-	var sl, pl net.Listener
-	if smtpOn {
-		if sl, err = net.Listen("tcp", cfg.SMTP); err != nil {
-			return s.fail(fmt.Errorf("SMTP on %s: %w", cfg.SMTP, err))
-		}
+	if sl != nil {
 		stack.push(func(context.Context) { _ = sl.Close() })
 	}
+	var pl net.Listener
 	if proxyOn {
 		if pl, err = net.Listen("tcp", cfg.Proxy); err != nil {
 			return s.fail(fmt.Errorf("proxy on %s: %w", cfg.Proxy, err))

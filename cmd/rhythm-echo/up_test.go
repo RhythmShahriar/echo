@@ -12,6 +12,8 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -19,6 +21,7 @@ import (
 
 	"github.com/RhythmShahriar/echo/catcher"
 	"github.com/RhythmShahriar/echo/check"
+	"github.com/RhythmShahriar/echo/config"
 	"github.com/RhythmShahriar/echo/model"
 	"github.com/RhythmShahriar/echo/report"
 	"github.com/RhythmShahriar/echo/wire"
@@ -241,7 +244,10 @@ func startUp(t *testing.T, args ...string) (out, errOut *syncBuffer, stop func()
 		resp, err := http.Get("http://" + p.cfg.Listen + "/v1/health") //nolint:noctx // test
 		if err == nil {
 			_ = resp.Body.Close()
-			break
+			// The API serves before the banner is printed: wait for that too.
+			if strings.Contains(out.String(), "API:") {
+				break
+			}
 		}
 		if i > 100 {
 			stop()
@@ -441,5 +447,298 @@ func TestLiveLogReprintsChangedIssues(t *testing.T) {
 	l.add(m) // same status, new problem
 	if !strings.Contains(out.String(), "Issues: unfilled {name}, PHP error") {
 		t.Errorf("changed issues not printed:\n%s", out.String())
+	}
+}
+
+// fakeMailpit serves Mailpit's /api/v1/info and page on addr, and its
+// SMTP greeting on smtp when that isn't "".
+func fakeMailpit(t *testing.T, addr, smtp string) {
+	t.Helper()
+	ln, err := net.Listen("tcp", addr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v1/info", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"Version":"v1.21.0","LatestVersion":"","Database":"/data/mailpit.db","DatabaseSize":4096,"Messages":0,"Unread":0,"Tags":{},"RuntimeStats":{"Uptime":12}}`)
+	})
+	srv := &http.Server{Handler: mux, ReadHeaderTimeout: time.Second}
+	go func() { _ = srv.Serve(ln) }()
+	t.Cleanup(func() { _ = srv.Close() })
+	if smtp != "" {
+		fakeBanner(t, smtp, "220 4f2a Mailpit ESMTP Service ready\r\n")
+	}
+}
+
+// fakeBanner greets every connection on addr with banner.
+func fakeBanner(t *testing.T, addr, banner string) {
+	t.Helper()
+	l, err := net.Listen("tcp", addr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = l.Close() })
+	go func() {
+		for {
+			c, err := l.Accept()
+			if err != nil {
+				return
+			}
+			_, _ = io.WriteString(c, banner)
+			_ = c.Close()
+		}
+	}()
+}
+
+// moveFreeBase points the free-pair search at ports these tests may use.
+func moveFreeBase(t *testing.T) {
+	t.Helper()
+	old := freeBase
+	freeBase = [2]int{20410, 20415}
+	t.Cleanup(func() { freeBase = old })
+}
+
+func TestUpNamesMailpitOnItsPorts(t *testing.T) {
+	upEnv(t)
+	moveFreeBase(t)
+	ports := freePorts(t, 2)
+	fakeMailpit(t, ports[0], ports[1])
+	api, smtp, ok := nextFreePair("127.0.0.1", true)
+	if !ok {
+		t.Skip("no free pair")
+	}
+	code, out, errOut := runCLI(t, "up", "--plain", "--listen", ports[0], "--smtp", ports[1])
+	want := "Mailpit is already on " + ports[0] + "; run Echo next to it: rhythm echo up --listen " + api + " --smtp " + smtp
+	if code != exitError || !strings.Contains(errOut, want) {
+		t.Fatalf("exit %d, stderr %q; want 3 and %q", code, errOut, want)
+	}
+	if strings.Contains(errOut, "doctor") || strings.Contains(out, "API") {
+		t.Errorf("blamed Echo or printed the banner:\n%s%s", out, errOut)
+	}
+	if _, err := os.Stat(".echo/config.yaml"); err == nil {
+		t.Error("wrote the config without being asked")
+	}
+}
+
+func TestUpNamesAnUnknownProgram(t *testing.T) {
+	upEnv(t)
+	moveFreeBase(t)
+	ports := freePorts(t, 2)
+	busy, err := net.Listen("tcp", ports[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = busy.Close() }()
+	code, _, errOut := runCLI(t, "up", "--plain", "--listen", ports[0], "--smtp", ports[1])
+	if code != exitError || !strings.Contains(errOut, "listening on "+ports[0]) || !strings.Contains(errOut, "(another program has this port); run Echo next to it: rhythm echo up --listen 127.0.0.1:20410") {
+		t.Fatalf("exit %d, stderr %q", code, errOut)
+	}
+}
+
+func TestIdentifyBusyPorts(t *testing.T) {
+	ports := freePorts(t, 8)
+	page := func(addr, body string) {
+		ln, err := net.Listen("tcp", addr)
+		if err != nil {
+			t.Fatal(err)
+		}
+		srv := &http.Server{ReadHeaderTimeout: time.Second, Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path != "/" {
+				http.NotFound(w, r)
+				return
+			}
+			_, _ = io.WriteString(w, body)
+		})}
+		go func() { _ = srv.Serve(ln) }()
+		t.Cleanup(func() { _ = srv.Close() })
+	}
+	fakeMailpit(t, ports[0], "")
+	page(ports[1], "<!doctype html><title>MailHog</title>")
+	page(ports[2], "<html><head><title>MailDev</title></head></html>")
+	page(ports[3], "<html><title>Shop admin</title></html>")
+	fakeBanner(t, ports[4], "220 mailhog.example ESMTP MailHog\r\n")
+	fakeBanner(t, ports[5], "220 echo.local ESMTP Service Ready\r\n")
+	fakeBanner(t, ports[6], "220 mx.shop.test ESMTP Postfix\r\n")
+	h, _ := testUpHandler(testToken)
+	ln, err := net.Listen("tcp", ports[7])
+	if err != nil {
+		t.Fatal(err)
+	}
+	echo := &http.Server{Handler: h, ReadHeaderTimeout: time.Second}
+	go func() { _ = echo.Serve(ln) }()
+	defer func() { _ = echo.Close() }()
+	for _, c := range []struct {
+		addr string
+		smtp bool
+		want string
+	}{
+		{ports[0], false, "Mailpit"},
+		{ports[1], false, "MailHog"},
+		{ports[2], false, "MailDev"},
+		{ports[3], false, ""},
+		{ports[4], true, "MailHog"},
+		{ports[5], true, "Echo"},
+		{ports[6], true, ""},
+		{ports[7], false, "Echo"}, // with a token: the 401 names X-Echo-Token
+		{strings.Replace(ports[0], "127.0.0.1", "0.0.0.0", 1), false, "Mailpit"},
+	} {
+		if got := identify(c.addr, c.smtp); got != c.want {
+			t.Errorf("identify(%s, smtp=%v) = %q, want %q", c.addr, c.smtp, got, c.want)
+		}
+	}
+}
+
+func TestNextFreePairSkipsBusyPorts(t *testing.T) {
+	moveFreeBase(t)
+	for _, p := range []string{"127.0.0.1:20410", "127.0.0.1:20416"} {
+		l, err := net.Listen("tcp", p)
+		if err != nil {
+			t.Skipf("%s: %v", p, err)
+		}
+		defer func() { _ = l.Close() }()
+	}
+	api, smtp, ok := nextFreePair("127.0.0.1", true)
+	if !ok || api != "127.0.0.1:20412" || smtp != "127.0.0.1:20417" {
+		t.Errorf("pair = %s %s %v, want 20412 and 20417 (20410 and 20416 are taken)", api, smtp, ok)
+	}
+	if api, _, _ := nextFreePair("127.0.0.1", false); api != "127.0.0.1:20411" {
+		t.Errorf("without SMTP: %s, want 20411", api)
+	}
+}
+
+func TestSetAddressesKeepsTheRestOfTheFile(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, ".echo", "config.yaml")
+	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(config.Template), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := setAddresses(path, "127.0.0.1:18025", "127.0.0.1:11025"); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := config.Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Listen != "127.0.0.1:18025" || cfg.SMTP != "127.0.0.1:11025" {
+		t.Errorf("listen %s, smtp %s", cfg.Listen, cfg.SMTP)
+	}
+	got, _ := os.ReadFile(path)
+	want := strings.Replace(strings.Replace(config.Template,
+		"listen: 127.0.0.1:8025  # API", "listen: 127.0.0.1:18025 # API", 1),
+		"smtp: 127.0.0.1:1025    # SMTP", "smtp: 127.0.0.1:11025   # SMTP", 1)
+	if string(got) != want {
+		t.Errorf("file changed beyond the two lines:\n%s", got)
+	}
+
+	// No file yet: one is made with just the addresses.
+	fresh := filepath.Join(dir, "new", "config.yaml")
+	if err := setAddresses(fresh, "127.0.0.1:18026", ""); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := os.ReadFile(fresh); string(got) != "listen: 127.0.0.1:18026\n" {
+		t.Errorf("new file = %q", got)
+	}
+}
+
+func TestUpMovesAsideWhenAsked(t *testing.T) {
+	upEnv(t)
+	moveFreeBase(t)
+	ports := freePorts(t, 2)
+	fakeMailpit(t, ports[0], ports[1])
+	if err := os.WriteFile("artisan", []byte("#!/usr/bin/env php\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var asked string
+	old := askFreePorts
+	askFreePorts = func(_ *session, q string) bool { asked = q; return true }
+	t.Cleanup(func() { askFreePorts = old })
+	api, smtp, ok := nextFreePair("127.0.0.1", true)
+	if !ok {
+		t.Skip("no free pair")
+	}
+
+	p, err := parse([]string{"--plain", "--listen", ports[0], "--smtp", ports[1]})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out, errOut syncBuffer
+	s := p.begin(&out, &errOut)
+	ctx, cancel := context.WithCancel(context.Background())
+	s.ctx = ctx
+	done := make(chan int, 1)
+	go func() { done <- cmdUp(s) }()
+	for i := 0; !strings.Contains(out.String(), "API:"); i++ {
+		if i > 200 {
+			cancel()
+			t.Fatalf("up never started:\n%s%s", out.String(), errOut.String())
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	resp, err := http.Get("http://" + api + "/v1/health") //nolint:noctx // test
+	if err != nil {
+		t.Fatalf("Echo isn't on %s: %v", api, err)
+	}
+	_ = resp.Body.Close()
+	cancel()
+	if code := <-done; code != exitOK {
+		t.Errorf("exit %d", code)
+	}
+	s.stop()
+
+	if !strings.Contains(asked, "Mailpit is already on "+ports[0]+". Run Echo on "+api+" and "+smtp+" instead and save them to .echo/config.yaml?") {
+		t.Errorf("asked %q", asked)
+	}
+	for _, want := range []string{
+		"Mailpit is already on " + ports[0] + ". Echo runs on " + api + " and " + smtp + " instead.",
+		"Saved to .echo/config.yaml",
+		"  RHYTHM_ECHO_URL=http://" + api,
+		"  RHYTHM_ECHO_SMTP=" + smtp,
+		"  MAIL_PORT=" + strings.TrimPrefix(smtp, "127.0.0.1:"),
+	} {
+		if !strings.Contains(errOut.String(), want) {
+			t.Errorf("stderr lacks %q:\n%s", want, errOut.String())
+		}
+	}
+	if !strings.Contains(out.String(), "API: http://"+api) || !strings.Contains(out.String(), "SMTP: "+smtp) {
+		t.Errorf("banner:\n%s", out.String())
+	}
+	cfg, err := config.Load(".echo/config.yaml")
+	if err != nil || cfg.Listen != api || cfg.SMTP != smtp {
+		t.Errorf("saved config: %+v, %v", cfg, err)
+	}
+}
+
+func TestEnvLinesPerStack(t *testing.T) {
+	eqLines := func(got []string, want ...string) {
+		t.Helper()
+		if strings.Join(got, "\n") != strings.Join(want, "\n") {
+			t.Errorf("got\n%s\nwant\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
+		}
+	}
+	base := []string{"RHYTHM_ECHO_URL=http://127.0.0.1:18025", "RHYTHM_ECHO_SMTP=127.0.0.1:11025"}
+	eqLines(envLines("laravel", "127.0.0.1:18025", "127.0.0.1:11025", "/bin/rhythm-echo"),
+		append(base, "MAIL_MAILER=smtp", "MAIL_HOST=127.0.0.1", "MAIL_PORT=11025   (Laravel .env)")...)
+	eqLines(envLines("wordpress", "127.0.0.1:18025", "127.0.0.1:11025", "/bin/rhythm-echo"),
+		append(base, `sendmail_path = "RHYTHM_ECHO_SMTP=127.0.0.1:11025 /bin/rhythm-echo sendmail -t -i"   (php.ini)`)...)
+	eqLines(envLines("next", "127.0.0.1:18025", "127.0.0.1:11025", ""), base...)
+	eqLines(envLines("laravel", "127.0.0.1:18025", "", ""), base[0])
+}
+
+func TestGuessStack(t *testing.T) {
+	for _, c := range []struct{ file, want string }{
+		{"wp-config.php", "wordpress"}, {"artisan", "laravel"}, {"next.config.mjs", "next"},
+		{"package.json", "node"}, {"index.php", "php"}, {"README.md", ""},
+	} {
+		dir := t.TempDir()
+		if err := os.WriteFile(filepath.Join(dir, c.file), nil, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if got := guessStack(dir); got != c.want {
+			t.Errorf("%s: %q, want %q", c.file, got, c.want)
+		}
 	}
 }
