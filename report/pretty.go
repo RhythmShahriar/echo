@@ -307,9 +307,9 @@ func (p *Pretty) run(r Result, hint string) {
 			plural(counts[model.Warning], "warning", "warnings"), plural(counts[model.Notice], "notice", "notices"))
 		if r.Run.Mode == "check" {
 			// check and headers read DNS and files; they run no actions.
-			fmt.Fprintf(p.w, "\n%s - %s\n", capitalize(runVerdict(r.Run, counts)), levels)
+			fmt.Fprintf(p.w, "\n%s - %s\n", check.Capitalize(runVerdict(r.Run, counts)), levels)
 		} else {
-			fmt.Fprintf(p.w, "\n%s - %s - %s, %s\n", capitalize(runVerdict(r.Run, counts)), levels,
+			fmt.Fprintf(p.w, "\n%s - %s - %s, %s\n", check.Capitalize(runVerdict(r.Run, counts)), levels,
 				plural(len(r.Run.Actions), "action", "actions"), Tally(r.Run))
 		}
 		p.notes(r.Run.Warnings)
@@ -449,7 +449,7 @@ func runPanel(r *model.Run, counts map[model.Level]int) string {
 		color = LevelColor(model.Warning)
 	}
 	title := "ECHO"
-	verdictText := capitalize(runVerdict(r, counts))
+	verdictText := check.Capitalize(runVerdict(r, counts))
 	if r.Name != "" {
 		title, verdictText = "SNAPSHOT "+Safe(strings.ToUpper(r.Name)), "saved"
 	}

@@ -123,26 +123,26 @@ func messages(before, after []model.Message) (out []model.Change, notes []string
 		switch {
 		case len(lost) > 0 && len(a) > 0 && !distinct(lost, paired):
 			out = append(out, model.Change{Class: model.Changed, Check: "message/fewer", Channel: lost[0].Channel,
-				Title:  fmt.Sprintf("%s is sent fewer times", capitalize(label(lost[0].Message, multi))),
+				Title:  fmt.Sprintf("%s is sent fewer times", check.Capitalize(label(lost[0].Message, multi))),
 				Before: times(len(b)), After: times(len(a))})
 		case len(added) > 0 && len(b) > 0 && !distinct(added, paired):
 			// The same message again: a duplicate send (a hook firing twice).
 			out = append(out, model.Change{Class: model.Changed, Check: "message/more", Channel: added[0].Channel,
-				Title:  fmt.Sprintf("%s is sent more times", capitalize(label(added[0].Message, multi))),
+				Title:  fmt.Sprintf("%s is sent more times", check.Capitalize(label(added[0].Message, multi))),
 				Fix:    "Something now sends it again: check for a hook or plugin that fires twice.",
 				Before: times(len(b)), After: times(len(a))})
 			added = nil
 		default:
 			for _, m := range lost {
 				out = append(out, model.Change{Class: model.Broke, Check: "message/missing", Channel: m.Channel,
-					Title:  fmt.Sprintf("%s is no longer sent", capitalize(label(m.Message, multi))),
+					Title:  fmt.Sprintf("%s is no longer sent", check.Capitalize(label(m.Message, multi))),
 					Fix:    "Something in the change stopped this message: check the plugin or code that sends it, and its settings.",
 					Before: "sent", After: "not sent"})
 			}
 		}
 		for _, m := range added {
 			out = append(out, model.Change{Class: model.New, Check: "message/new", Channel: m.Channel,
-				Title: fmt.Sprintf("%s is now sent", capitalize(label(m.Message, multi))), Detail: preview(m.Message)})
+				Title: fmt.Sprintf("%s is now sent", check.Capitalize(label(m.Message, multi))), Detail: preview(m.Message)})
 		}
 	}
 	return out, notes
@@ -234,7 +234,7 @@ func truncated(m model.Message) bool { return strings.HasSuffix(m.Body, truncate
 // content compares two matched messages. note says what couldn't be
 // compared.
 func content(b, a model.Message) (out []model.Change, note string) {
-	what := capitalize(identityLabel(a))
+	what := check.Capitalize(identityLabel(a))
 	ch := func(check, title, before, after, fix string) {
 		out = append(out, model.Change{Class: model.Changed, Check: check, Channel: a.Channel, Title: title, Before: before, After: after, Fix: fix})
 	}
@@ -610,11 +610,4 @@ func limit(s []string, n int) []string {
 		return append(s[:n:n], fmt.Sprintf("+%d more", len(s)-n))
 	}
 	return s
-}
-
-func capitalize(s string) string {
-	if s == "" {
-		return s
-	}
-	return strings.ToUpper(s[:1]) + s[1:]
 }

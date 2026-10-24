@@ -131,3 +131,32 @@ func TestDescribeUsesDisplayNames(t *testing.T) {
 		}
 	}
 }
+
+func TestFromDomainUsesThePublicSuffixList(t *testing.T) {
+	for _, tc := range []struct {
+		from, site string
+		notice     bool
+	}{
+		{"orders@other.co.uk", "shop.co.uk", true},
+		{"orders@mail.shop.co.uk", "shop.co.uk", false},
+		{"orders@shop.co.uk", "www.shop.co.uk", false},
+		{"orders@other.com.au", "shop.com.au", true},
+		{"orders@mail.shop.com", "shop.com", false},
+		{"orders@sendgrid.net", "shop.com", true},
+	} {
+		m := model.Message{Channel: model.Email, Status: model.Faked, From: tc.from, To: []string{"buyer@gmail.com"},
+			Subject: "Your order", Text: "Thanks", HTML: "<p>Thanks</p>"}
+		got := strings.Contains(titles(Message(m, Options{SiteHost: tc.site})), "email/from-domain")
+		if got != tc.notice {
+			t.Errorf("from %s on %s: notice = %v, want %v", tc.from, tc.site, got, tc.notice)
+		}
+	}
+}
+
+func TestCapitalize(t *testing.T) {
+	for in, want := range map[string]string{"": "", "élan": "Élan", "email": "Email", "Webhook": "Webhook", "1 email": "1 email", "ǆungla": "ǅungla", "\xffx": "\xffx"} {
+		if got := Capitalize(in); got != want {
+			t.Errorf("Capitalize(%q) = %q, want %q", in, got, want)
+		}
+	}
+}

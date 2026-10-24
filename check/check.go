@@ -17,8 +17,10 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"unicode"
 	"unicode/utf8"
 
+	"github.com/RhythmShahriar/echo/dns"
 	"github.com/RhythmShahriar/echo/model"
 	"github.com/RhythmShahriar/echo/recognize"
 )
@@ -41,9 +43,9 @@ func Message(m model.Message, o Options) []model.Issue {
 	what := Describe(m)
 
 	if m.Status == model.Failed {
-		title := fmt.Sprintf("%s fails", capitalize(what))
+		title := fmt.Sprintf("%s fails", Capitalize(what))
 		if m.Response != nil && m.Response.Status > 0 {
-			title = fmt.Sprintf("%s fails (HTTP %d)", capitalize(what), m.Response.Status)
+			title = fmt.Sprintf("%s fails (HTTP %d)", Capitalize(what), m.Response.Status)
 		}
 		add(model.Issue{Check: "send/failed", Level: model.Error, Title: title, Detail: firstNonEmpty(m.Error, responseText(m)),
 			Fix: "Check the sender's settings (API key, SMTP login, endpoint URL) and the provider's error above."})
@@ -67,7 +69,7 @@ func Message(m model.Message, o Options) []model.Issue {
 				Fix:    "Make sure the message is built and sent as UTF-8 (the mailer's charset and the template file's encoding)."})
 		}
 		for _, h := range devLinks(m, o) {
-			add(model.Issue{Check: "content/dev-link", Level: model.Warning, Title: fmt.Sprintf("%s links to a development address (%s)", capitalize(what), h),
+			add(model.Issue{Check: "content/dev-link", Level: model.Warning, Title: fmt.Sprintf("%s links to a development address (%s)", Capitalize(what), h),
 				Fix: "Build links from the site's configured URL, not a hard-coded or local one."})
 		}
 	}
@@ -91,7 +93,7 @@ func Message(m model.Message, o Options) []model.Issue {
 				Detail: fmt.Sprintf("%d KB of HTML; Gmail clips messages over 102 KB", len(m.HTML)/1024),
 				Fix:    "Trim inline CSS and markup, or move content behind links."})
 		}
-		if d := domainOf(m.From); d != "" && o.domain() != "" && !isDevHost(o.domain()) && net.ParseIP(o.domain()) == nil && !sameOrg(d, o.domain()) {
+		if d := domainOf(m.From); d != "" && o.domain() != "" && !isDevHost(o.domain()) && net.ParseIP(o.domain()) == nil && dns.OrgDomain(d) != dns.OrgDomain(o.domain()) {
 			add(model.Issue{Check: "email/from-domain", Level: model.Notice, Title: fmt.Sprintf("Email is sent from another domain (%s)", d),
 				Detail: "the site is " + o.domain(),
 				Fix:    "Send from an address on your own domain, or make sure its SPF, DKIM and DMARC cover this sender."})
@@ -116,7 +118,7 @@ func Message(m model.Message, o Options) []model.Issue {
 		}
 	case model.Webhook:
 		if isJSON(m) && !validJSON(m.Body) && !strings.HasSuffix(m.Body, "…(truncated)") {
-			add(model.Issue{Check: "webhook/json", Level: model.Warning, Title: fmt.Sprintf("%s sends invalid JSON", capitalize(what)),
+			add(model.Issue{Check: "webhook/json", Level: model.Warning, Title: fmt.Sprintf("%s sends invalid JSON", Capitalize(what)),
 				Fix: "The payload says it's JSON but doesn't parse; check how it's built (json_encode errors, stray output)."})
 		}
 		if m.Provider == "woocommerce" && m.Headers["x-wc-webhook-signature"] == "" {
@@ -127,14 +129,14 @@ func Message(m model.Message, o Options) []model.Issue {
 	// Whatever happened to the message: a sealed site's payload says what
 	// the live site would send.
 	if m.Channel != model.Email && strings.Contains(m.Body, "•••••") {
-		add(model.Issue{Check: "content/secret", Level: model.Warning, Title: fmt.Sprintf("%s carries a credential in its body", capitalize(what)),
+		add(model.Issue{Check: "content/secret", Level: model.Warning, Title: fmt.Sprintf("%s carries a credential in its body", Capitalize(what)),
 			Fix: "Don't put API keys or passwords in payloads; send them in an Authorization header, or not at all."})
 	}
 
 	if m.Status == model.Sent {
 		for _, r := range append(append(slices.Clone(m.To), m.CC...), m.BCC...) {
 			if realRecipient(r) && !o.allowed(r) {
-				add(model.Issue{Check: "seal/real-recipient", Level: model.Warning, Title: fmt.Sprintf("%s really sent to an address outside the allowlist", capitalize(what)),
+				add(model.Issue{Check: "seal/real-recipient", Level: model.Warning, Title: fmt.Sprintf("%s really sent to an address outside the allowlist", Capitalize(what)),
 					Detail: r, Fix: "Run sealed on staging (rhythm echo up), or add test recipients to allow_recipients."})
 				break
 			}
@@ -354,18 +356,6 @@ func (o Options) domain() string {
 	return strings.TrimPrefix(strings.ToLower(o.SiteHost), "www.")
 }
 
-// sameOrg compares the last two labels of each domain: good enough to
-// tell mail.shop.com from shop.com, without a public suffix list here.
-func sameOrg(a, b string) bool { return lastLabels(a, 2) == lastLabels(b, 2) }
-
-func lastLabels(d string, n int) string {
-	parts := strings.Split(d, ".")
-	if len(parts) <= n {
-		return d
-	}
-	return strings.Join(parts[len(parts)-n:], ".")
-}
-
 // realRecipient reports whether a recipient looks like a real person rather than a
 // test address.
 func realRecipient(r string) bool {
@@ -394,9 +384,12 @@ func firstNonEmpty(s ...string) string {
 	return ""
 }
 
-func capitalize(s string) string {
-	if s == "" {
+// Capitalize upper-cases the first letter of s, a whole rune, so a title
+// that starts with "élan" reads "Élan".
+func Capitalize(s string) string {
+	r, n := utf8.DecodeRuneInString(s)
+	if n == 0 || r == utf8.RuneError {
 		return s
 	}
-	return strings.ToUpper(s[:1]) + s[1:]
+	return string(unicode.ToTitle(r)) + s[n:]
 }

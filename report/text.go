@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/RhythmShahriar/echo/check"
 	"github.com/RhythmShahriar/echo/model"
 )
 
@@ -50,7 +51,7 @@ func Markdown(w io.Writer, r Result) error {
 				continue
 			}
 			info := classInfo[class]
-			fmt.Fprintf(&b, "### %s %s (%d)\n\n_%s._\n\n| Change | Actions | Before → after | Fix |\n|---|---|---|---|\n", info.Glyph, info.Label, len(cs), capitalize(info.Blurb))
+			fmt.Fprintf(&b, "### %s %s (%d)\n\n_%s._\n\n| Change | Actions | Before → after | Fix |\n|---|---|---|---|\n", info.Glyph, info.Label, len(cs), check.Capitalize(info.Blurb))
 			for _, ch := range cs {
 				title := cell(ch.Title)
 				if ch.Detail != "" {
@@ -68,7 +69,7 @@ func Markdown(w io.Writer, r Result) error {
 	} else {
 		issues := Issues(run)
 		counts := Counts(issues)
-		fmt.Fprintf(&b, "**%s.** %s run; %s sent.\n\n", capitalize(runVerdict(run, counts)), plural(len(run.Actions), "action", "actions"), Tally(run))
+		fmt.Fprintf(&b, "**%s.** %s run; %s sent.\n\n", check.Capitalize(runVerdict(run, counts)), plural(len(run.Actions), "action", "actions"), Tally(run))
 		b.WriteString("| Action | Sent | Issues |\n|---|---|---:|\n")
 		for _, a := range run.Actions {
 			sent := Tally(&model.Run{Actions: []model.Action{a}})

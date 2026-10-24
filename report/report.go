@@ -224,13 +224,6 @@ func firstLine(s string) string {
 	return s
 }
 
-func capitalize(s string) string {
-	if s == "" {
-		return s
-	}
-	return strings.ToUpper(s[:1]) + s[1:]
-}
-
 // verdict answers "is my site still saying what it should?". When
 // actions failed in the compared run it can't be answered.
 func verdict(r Result) string {
