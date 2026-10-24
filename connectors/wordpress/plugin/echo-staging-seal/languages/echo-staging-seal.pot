@@ -9,15 +9,15 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"POT-Creation-Date: 2026-10-24T11:28:55+00:00\n"
+"POT-Creation-Date: 2026-10-24T11:55:59+00:00\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "X-Generator: WP-CLI 2.12.0\n"
 "X-Domain: echo-staging-seal\n"
 
 #. Plugin Name of the plugin
 #: echo-staging-seal.php
-#: includes/class-echo-staging-seal.php:263
-#: includes/class-echo-staging-seal.php:350
+#: includes/class-echo-staging-seal.php:265
+#: includes/class-echo-staging-seal.php:368
 msgid "Echo Staging Seal"
 msgstr ""
 
@@ -40,216 +40,230 @@ msgstr ""
 msgid "Sorry, you are not allowed to change Echo's settings."
 msgstr ""
 
-#: includes/class-echo-staging-seal.php:192
+#: includes/class-echo-staging-seal.php:194
 msgid "This is a sealed copy"
 msgstr ""
 
-#: includes/class-echo-staging-seal.php:193
+#: includes/class-echo-staging-seal.php:195
 msgid "Echo is observing: sends go out"
 msgstr ""
 
-#: includes/class-echo-staging-seal.php:197
+#: includes/class-echo-staging-seal.php:199
 msgid "Rhythm Echo catches every email, SMS, webhook and API call here: nothing reaches real people."
 msgstr ""
 
-#: includes/class-echo-staging-seal.php:198
+#: includes/class-echo-staging-seal.php:200
 msgid "Rhythm Echo records every send here and lets it go out for real."
 msgstr ""
 
-#: includes/class-echo-staging-seal.php:250
+#: includes/class-echo-staging-seal.php:252
 msgid "Echo Staging Seal is active but not sealing:"
 msgstr ""
 
-#: includes/class-echo-staging-seal.php:251
+#: includes/class-echo-staging-seal.php:253
 msgid "WordPress says this is production, so Echo stays out of the way. On a staging copy set WP_ENVIRONMENT_TYPE to staging, development or local in wp-config.php."
 msgstr ""
 
-#: includes/class-echo-staging-seal.php:264
+#: includes/class-echo-staging-seal.php:266
 msgid "Echo"
 msgstr ""
 
 #. translators: %s: Echo's answer, like "HTTP 403"
-#: includes/class-echo-staging-seal.php:327
+#: includes/class-echo-staging-seal.php:338
+#, php-format
+msgid "Echo refused to list messages (%s): this site's token can only send captures. See what was stopped in the hub's inbox."
+msgstr ""
+
+#. translators: %s: Echo's answer, like "HTTP 403"
+#: includes/class-echo-staging-seal.php:345
 #, php-format
 msgid "Echo refused to list messages (%s): set the token Echo was started with."
 msgstr ""
 
 #. translators: %s: the error, like "Connection refused"
-#: includes/class-echo-staging-seal.php:333
+#: includes/class-echo-staging-seal.php:351
 #, php-format
 msgid "Echo could not be reached (%s)."
 msgstr ""
 
-#: includes/class-echo-staging-seal.php:348
+#: includes/class-echo-staging-seal.php:366
 msgid "Sorry, you are not allowed to see Echo."
 msgstr ""
 
-#: includes/class-echo-staging-seal.php:363
+#: includes/class-echo-staging-seal.php:381
 msgid "Settings saved."
 msgstr ""
 
-#: includes/class-echo-staging-seal.php:366
+#: includes/class-echo-staging-seal.php:384
 msgid "The Rhythm Echo mu-plugin is installed and runs the seal, with its own settings file. The settings below do not reach it."
 msgstr ""
 
-#: includes/class-echo-staging-seal.php:373
+#: includes/class-echo-staging-seal.php:391
 msgid "Not sealing: WordPress says this is production."
 msgstr ""
 
-#: includes/class-echo-staging-seal.php:375
+#: includes/class-echo-staging-seal.php:393
 msgid "Sealed: nothing leaves this site. Echo answers for every service."
 msgstr ""
 
-#: includes/class-echo-staging-seal.php:377
+#: includes/class-echo-staging-seal.php:395
 msgid "Observing: every send is recorded and goes out for real."
 msgstr ""
 
 #. translators: %s: Echo's URL
-#: includes/class-echo-staging-seal.php:381
+#: includes/class-echo-staging-seal.php:399
 #, php-format
 msgid "Echo: %s"
 msgstr ""
 
-#: includes/class-echo-staging-seal.php:385
+#: includes/class-echo-staging-seal.php:403
 msgid "Sends stopped"
 msgstr ""
 
-#: includes/class-echo-staging-seal.php:392
+#: includes/class-echo-staging-seal.php:410
 msgid "Echo has not stopped anything from this site yet."
 msgstr ""
 
-#: includes/class-echo-staging-seal.php:395
+#: includes/class-echo-staging-seal.php:413
 msgid "Plugin"
 msgstr ""
 
-#: includes/class-echo-staging-seal.php:395
+#: includes/class-echo-staging-seal.php:413
 msgid "Channel"
 msgstr ""
 
-#: includes/class-echo-staging-seal.php:395
+#: includes/class-echo-staging-seal.php:413
 msgid "Faked"
 msgstr ""
 
-#: includes/class-echo-staging-seal.php:395
+#: includes/class-echo-staging-seal.php:413
 msgid "Blocked"
 msgstr ""
 
-#: includes/class-echo-staging-seal.php:399
+#: includes/class-echo-staging-seal.php:417
 msgid "(unknown)"
 msgstr ""
 
-#: includes/class-echo-staging-seal.php:406
+#: includes/class-echo-staging-seal.php:424
 msgid "Faked: Echo answered instead of the real service. Blocked: Echo refused the request."
 msgstr ""
 
-#: includes/class-echo-staging-seal.php:410
+#: includes/class-echo-staging-seal.php:428
 msgid "Updates"
 msgstr ""
 
-#: includes/class-echo-staging-seal.php:411
+#: includes/class-echo-staging-seal.php:429
 msgid "Snapshot what every action sends before you update plugins, then compare after."
 msgstr ""
 
-#: includes/class-echo-staging-seal.php:415
+#: includes/class-echo-staging-seal.php:433
 msgid "Snapshot before updating"
 msgstr ""
 
-#: includes/class-echo-staging-seal.php:416
+#: includes/class-echo-staging-seal.php:434
 msgid "Compare since last update"
 msgstr ""
 
-#: includes/class-echo-staging-seal.php:426
+#: includes/class-echo-staging-seal.php:444
 msgid "Run these where Echo is installed instead:"
 msgstr ""
 
 #. translators: 1: the command, 2: its exit code
-#: includes/class-echo-staging-seal.php:432
+#: includes/class-echo-staging-seal.php:450
 #, php-format
 msgid "%1$s (exit code %2$d)"
 msgstr ""
 
-#: includes/class-echo-staging-seal.php:440
+#: includes/class-echo-staging-seal.php:458
 msgid "Settings"
 msgstr ""
 
-#: includes/class-echo-staging-seal.php:447
+#: includes/class-echo-staging-seal.php:465
 msgid "Echo URL"
 msgstr ""
 
-#: includes/class-echo-staging-seal.php:449
+#: includes/class-echo-staging-seal.php:467
 msgid "Echo's API as this site reaches it."
 msgstr ""
 
-#: includes/class-echo-staging-seal.php:453
+#: includes/class-echo-staging-seal.php:471
 msgid "Token"
 msgstr ""
 
-#: includes/class-echo-staging-seal.php:454
+#: includes/class-echo-staging-seal.php:472
 msgid "(set: leave blank to keep it)"
 msgstr ""
 
-#: includes/class-echo-staging-seal.php:455
+#: includes/class-echo-staging-seal.php:473
 msgid "Clear"
 msgstr ""
 
-#: includes/class-echo-staging-seal.php:456
+#: includes/class-echo-staging-seal.php:474
 msgid "The token Echo was started with (rhythm echo up --token). It is sent over plain HTTP: use it only where the path to Echo is trusted."
 msgstr ""
 
-#: includes/class-echo-staging-seal.php:461
+#: includes/class-echo-staging-seal.php:478
+msgid "Site ID"
+msgstr ""
+
+#: includes/class-echo-staging-seal.php:480
+msgid "Only when one Echo serves many sites (an agency hub): names this site in everything it sends. Lowercase letters, digits, dashes and underscores."
+msgstr ""
+
+#: includes/class-echo-staging-seal.php:485
 msgid "When Echo is down"
 msgstr ""
 
-#: includes/class-echo-staging-seal.php:463
+#: includes/class-echo-staging-seal.php:487
 msgid "Seal: send nothing"
 msgstr ""
 
-#: includes/class-echo-staging-seal.php:465
+#: includes/class-echo-staging-seal.php:489
 msgid "Observe: send anyway"
 msgstr ""
 
-#: includes/class-echo-staging-seal.php:466
+#: includes/class-echo-staging-seal.php:490
 msgid "While Echo answers, it decides. This only matters when it cannot be reached."
 msgstr ""
 
-#: includes/class-echo-staging-seal.php:471
+#: includes/class-echo-staging-seal.php:495
 msgid "rhythm-echo"
 msgstr ""
 
-#: includes/class-echo-staging-seal.php:472
+#: includes/class-echo-staging-seal.php:496
 msgid "not set"
 msgstr ""
 
-#: includes/class-echo-staging-seal.php:473
+#: includes/class-echo-staging-seal.php:497
 msgid "Set RHYTHM_ECHO_BIN (the binary) and RHYTHM_ECHO_PROJECT (the folder with .echo/config.yaml) in wp-config.php to run snapshots and compares from here."
 msgstr ""
 
-#: includes/class-echo-staging-seal.php:476
+#: includes/class-echo-staging-seal.php:500
 msgid "Save settings"
 msgstr ""
 
-#: includes/class-echo-staging-seal.php:489
+#: includes/class-echo-staging-seal.php:513
 msgid "No rhythm-echo binary is set (RHYTHM_ECHO_BIN in wp-config.php)."
 msgstr ""
 
-#: includes/class-echo-staging-seal.php:492
+#: includes/class-echo-staging-seal.php:516
 msgid "This server does not allow proc_open, so the commands cannot run from here."
 msgstr ""
 
 #. translators: %s: the path
-#: includes/class-echo-staging-seal.php:496
+#: includes/class-echo-staging-seal.php:520
 #, php-format
 msgid "%s is not an executable file."
 msgstr ""
 
-#: includes/class-echo-staging-seal.php:544
+#: includes/class-echo-staging-seal.php:568
 msgid "rhythm-echo could not be started."
 msgstr ""
 
-#: includes/class-echo-staging-seal.php:594
+#: includes/class-echo-staging-seal.php:618
 msgid "Sorry, you are not allowed to run Echo."
 msgstr ""
 
-#: includes/class-echo-staging-seal.php:601
+#: includes/class-echo-staging-seal.php:625
 msgid "Unknown command."
 msgstr ""

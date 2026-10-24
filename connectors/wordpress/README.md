@@ -15,10 +15,16 @@ It sends wire version 2. An older Echo that refuses it gets asked which version 
 
 First found wins:
 
-1. `define()` constants in wp-config.php: `RHYTHM_ECHO_URL`, `RHYTHM_ECHO_TOKEN`, `RHYTHM_ECHO_MODE`, `RHYTHM_ECHO_FORCE`, `RHYTHM_ECHO_PROXY`, `RHYTHM_ECHO_CA`.
+1. `define()` constants in wp-config.php: `RHYTHM_ECHO_URL`, `RHYTHM_ECHO_TOKEN`, `RHYTHM_ECHO_WRITE_TOKEN`, `RHYTHM_ECHO_SITE_ID`, `RHYTHM_ECHO_MODE`, `RHYTHM_ECHO_FORCE`, `RHYTHM_ECHO_PROXY`, `RHYTHM_ECHO_CA`.
 2. The same names in the environment.
 3. `wp-content/mu-plugins/rhythm-echo/settings.php`, written by the installer. Both forms read it, so a plugin update never loses it.
-4. Echo Staging Seal only: what Tools > Echo saved (URL, token, the mode for when Echo is down).
+4. Echo Staging Seal only: what Tools > Echo saved (URL, token, site ID, the mode for when Echo is down).
+
+`RHYTHM_ECHO_SITE_ID` names the site in every capture (`source.site`) when one Echo serves many sites (an agency hub). `RHYTHM_ECHO_WRITE_TOKEN` is a token that can send captures and nothing else: it is sent as `X-Echo-Token` instead of `RHYTHM_ECHO_TOKEN`. Without `RHYTHM_ECHO_TOKEN` it also checks `X-Echo-Run` signatures and guards the doctor routes. Tools > Echo can't list messages with a write token: it says to look in the hub's inbox.
+
+**The token over a network.** The token travels as a plain HTTP header. Echo's answers are trusted as they come. On loopback or a private network you control that is fine. When the site reaches Echo across a network you don't trust, put TLS in front of Echo and use an `https://` URL: anyone on the path could otherwise read the token or answer for Echo.
+
+**Downloads are never faked.** A request that streams to a file (`stream => true`: plugin and theme updates, `download_url()`, backups) gets `WP_Error` `http_request_failed` with "Rhythm Echo: sealed by Echo, so <host> was not downloaded. Echo answers for services, not with files." when Echo would fake it. No file is written. It is still captured. Allowed downloads go through as before.
 
 Echo Staging Seal's buttons and `wp echo` commands run the `rhythm-echo` binary named by `RHYTHM_ECHO_BIN`, in the folder `RHYTHM_ECHO_PROJECT` (the one with `.echo/config.yaml`). Those two come from the first three sources only, never from the admin screens, so an administrator account alone cannot pick a program for the server to run.
 

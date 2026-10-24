@@ -59,7 +59,7 @@ async function echoFetch(orig: typeof fetch, input: RequestInfo | URL, init: Req
   const base: Omit<Capture, 'v' | 'phase'> = {
     kind: 'http',
     run: ctx.run,
-    source: { via: 'node', stack: 'node', hook: 'fetch', plugin: plugin || undefined, host: siteHost(url.hostname, url.port, cfg) },
+    source: { via: 'node', stack: 'node', hook: 'fetch', plugin: plugin || undefined, host: siteHost(url.hostname, url.port, cfg), site: cfg.siteId || undefined },
   };
   const d = await send({
     ...base,

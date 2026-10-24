@@ -484,6 +484,47 @@ func TestDockerWordPress(t *testing.T) {
 		}
 	})
 
+	// security #17: a fake body must never become a file, such as a plugin
+	// update zip someone on the path to Echo answered with.
+	t.Run("a streamed download is refused, not faked", func(t *testing.T) {
+		s := r.seal()
+		out := r.get(t, "download", nil)
+		for _, k := range []string{"error", "download_url_error"} {
+			if !strings.Contains(fmt.Sprint(out[k]), "sealed by Echo, so downloads.example.test was not downloaded") {
+				t.Errorf("%s = %v", k, out[k])
+			}
+		}
+		if out["file"] != false || out["download_url_file"] != false {
+			t.Errorf("a file was written: %v", out)
+		}
+		if n := len(s.Inbox.List(catcher.Filter{})); n != 2 {
+			t.Errorf("captured %d downloads, want 2 (each is still recorded)", n)
+		}
+	})
+
+	t.Run("a hub site names itself", func(t *testing.T) {
+		st, err := conformance.New(conformance.Options{Token: token, Expect: []string{"site", "http-before"}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		r.install(t, Settings{SiteID: "client-a"})
+		r.standin.Store(st)
+		defer func() {
+			r.standin.Store(nil)
+			r.install(t, Settings{})
+		}()
+		r.get(t, "twilio", nil)
+		if rep := st.Report(); !rep.OK {
+			var b strings.Builder
+			rep.Table(&b)
+			t.Errorf("site ID:\n%s", b.String())
+		}
+		msgs := st.Catcher().Inbox.List(catcher.Filter{})
+		if len(msgs) != 1 {
+			t.Fatalf("captured %d", len(msgs))
+		}
+	})
+
 	t.Run("an Echo that speaks wire 1 gets wire 1", func(t *testing.T) {
 		st, err := conformance.New(conformance.Options{Token: token, Wire: 1, Expect: []string{"http-before", "wire-1"}})
 		if err != nil {
@@ -590,7 +631,7 @@ func testPlugin(t *testing.T, r *rig) {
 	if m == nil {
 		t.Fatal("no nonce on the settings form")
 	}
-	form := url.Values{"action": {"echo_staging_seal_settings"}, "echo_url": {"http://echo.test:8025/"}, "echo_mode": {"observe"}, "echo_token": {"saved-token"}}
+	form := url.Values{"action": {"echo_staging_seal_settings"}, "echo_url": {"http://echo.test:8025/"}, "echo_mode": {"observe"}, "echo_token": {"saved-token"}, "echo_site_id": {"client-b"}}
 	if status, _ := r.browse(t, admin, http.MethodPost, post, form); status != http.StatusForbidden {
 		t.Errorf("settings without a nonce: HTTP %d, want 403", status)
 	}
@@ -602,12 +643,13 @@ func testPlugin(t *testing.T, r *rig) {
 	}
 	var saved map[string]string
 	if err := json.Unmarshal([]byte(r.wp(t, nil, "option", "get", "echo_staging_seal_settings", "--format=json")), &saved); err != nil ||
-		saved["url"] != "http://echo.test:8025" || saved["mode"] != "observe" || saved["token"] != "saved-token" {
+		saved["url"] != "http://echo.test:8025" || saved["mode"] != "observe" || saved["token"] != "saved-token" || saved["site_id"] != "client-b" {
 		t.Errorf("saved settings = %v (%v)", saved, err)
 	}
-	// The installer's settings file wins over the screen's.
-	if ping := r.rest(t, "ping", nil); ping["echo"].(map[string]any)["url"] != r.echoURL {
-		t.Errorf("ping echo = %v", ping["echo"])
+	// The installer's settings file wins over the screen's; the screen
+	// fills what the file leaves out, such as the site ID.
+	if ping := r.rest(t, "ping", nil); ping["echo"].(map[string]any)["url"] != r.echoURL || ping["site_id"] != "client-b" {
+		t.Errorf("ping = %v", ping)
 	}
 
 	// The banner follows the mode Echo reports.
@@ -1012,6 +1054,7 @@ x-hosts: &hosts
   - hooks.slack.com:127.0.0.1
   - api.stripe.com:127.0.0.1
   - canary.echo.invalid:127.0.0.1
+  - downloads.example.test:127.0.0.1
 services:
   db:
     image: mariadb:10.11

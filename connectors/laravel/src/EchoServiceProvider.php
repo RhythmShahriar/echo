@@ -35,7 +35,11 @@ class EchoServiceProvider extends ServiceProvider
         $this->app->singleton(EchoClient::class, function ($app) {
             $c = $app['config']['rhythm-echo'];
 
-            return new EchoClient((string) $c['url'], $c['token'] ?? null, (float) ($c['timeout'] ?? 2.0));
+            // A write token, when set, is what goes to Echo: it can send
+            // captures and nothing else.
+            $token = ($c['write_token'] ?? '') ?: ($c['token'] ?? null);
+
+            return new EchoClient((string) $c['url'], $token, (float) ($c['timeout'] ?? 2.0));
         });
         $this->app->singleton(Connector::class, fn ($app) => new Connector($app, $app->make(EchoClient::class), $app['config']['rhythm-echo']));
 

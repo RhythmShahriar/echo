@@ -14,6 +14,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/RhythmShahriar/echo/wire"
 )
 
 func site(t *testing.T) string {
@@ -454,5 +456,49 @@ func TestMailAttachments(t *testing.T) {
 	callPHP(t, `{}`, "email_from_atts", &bare, mail)
 	if _, ok := bare["attachments"]; ok {
 		t.Errorf("attachments without files: %v", bare["attachments"])
+	}
+}
+
+// A hub site: the write token goes to Echo while the token (else the
+// write token) checks runs. The site ID comes from the environment, a
+// constant or the settings file.
+func TestHubSettings(t *testing.T) {
+	type cfg struct {
+		Token     string `json:"token"`
+		SendToken string `json:"send_token"`
+		SiteID    string `json:"site_id"`
+	}
+	for _, tc := range []struct {
+		name, setup string
+		want        cfg
+	}{
+		{"write token only", `{"getenv":{"RHYTHM_ECHO_WRITE_TOKEN":"w","RHYTHM_ECHO_SITE_ID":"client-a"}}`, cfg{"w", "w", "client-a"}},
+		{"both tokens", `{"token":"t","getenv":{"RHYTHM_ECHO_WRITE_TOKEN":"w"}}`, cfg{"t", "w", ""}},
+		{"token only", `{"token":"t"}`, cfg{"t", "t", ""}},
+	} {
+		var got cfg
+		callPHP(t, tc.setup, "config", &got)
+		if got != tc.want {
+			t.Errorf("%s: config = %+v, want %+v", tc.name, got, tc.want)
+		}
+	}
+	// With only a write token, Echo signs this site's runs with it.
+	var run string
+	callPHP(t, `{"getenv":{"RHYTHM_ECHO_WRITE_TOKEN":"w"}}`, "accept_run", &run, wire.SignRun("w", "hub1", "checkout"), "203.0.113.9", false)
+	if run != "hub1/checkout" {
+		t.Errorf("a run signed with the write token = %q", run)
+	}
+}
+
+// The settings file carries the hub fields for the installer.
+func TestSettingsPHPHubFields(t *testing.T) {
+	b, err := SettingsPHP(Settings{WriteToken: "w", SiteID: "client-a"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{`'write_token' => 'w'`, `'site_id' => 'client-a'`} {
+		if !strings.Contains(string(b), want) {
+			t.Errorf("no %s in\n%s", want, b)
+		}
 	}
 }

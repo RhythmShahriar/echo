@@ -14,7 +14,7 @@ export async function send(c: Omit<Capture, 'v'>): Promise<Decision | null> {
   const f = s.origFetch ?? globalThis.fetch;
   if (!cfg || !f) return null;
   const headers: Record<string, string> = { 'content-type': 'application/json' };
-  if (cfg.token) headers[TOKEN_HEADER] = cfg.token;
+  if (cfg.sendToken) headers[TOKEN_HEADER] = cfg.sendToken;
   const post = (v: number) =>
     f(`${cfg.url}/v1/capture`, {
       method: 'POST',

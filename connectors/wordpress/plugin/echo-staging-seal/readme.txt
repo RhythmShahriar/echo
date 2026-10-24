@@ -53,6 +53,14 @@ Nothing. WordPress says a site is production when WP_ENVIRONMENT_TYPE is not set
 
 The token travels as a plain HTTP header. Keep Echo on the same machine, a private network or behind TLS when the site reaches it over a network you don't trust.
 
+= Can one Echo serve many sites? =
+
+Yes. Give each site a Site ID in Tools > Echo (or RHYTHM_ECHO_SITE_ID in wp-config.php) and, if the hub hands them out, its own write token (RHYTHM_ECHO_WRITE_TOKEN), which can send captures but not read them.
+
+= Can a plugin update still download? =
+
+Downloads that Echo allows go through. Downloads Echo would fake (a sealed site's plugin or theme update, a backup) fail with "sealed by Echo" instead, so a stand-in answer is never saved as a file.
+
 = Which mails and requests are caught? =
 
 Everything that goes through wp_mail() and the WordPress HTTP API. Raw cURL calls made by some SDKs skip the HTTP API; set RHYTHM_ECHO_PROXY to route those through Echo's proxy.

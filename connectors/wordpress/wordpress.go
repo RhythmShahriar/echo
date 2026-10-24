@@ -86,9 +86,16 @@ const marker = "rhythm-echo-connector"
 // http://127.0.0.1:8025, sealed.
 type Settings struct {
 	URL   string // Echo's capture API as the site reaches it, e.g. http://host.docker.internal:8025
-	Token string // sent as X-Echo-Token; also guards the plugin's REST routes
-	Mode  string // seal or observe: only decides what happens when Echo can't be reached (seal fails closed)
-	Force bool   // run even when WordPress says this is production
+	Token string // sent as X-Echo-Token; also guards the plugin's REST routes and checks X-Echo-Run
+	// WriteToken is a token that can only send captures (a hub's per-site
+	// token). It is sent instead of Token; without Token it also does
+	// Token's other jobs.
+	WriteToken string
+	// SiteID names the site in every capture (source.site) when one Echo
+	// serves many.
+	SiteID string
+	Mode   string // seal or observe: only decides what happens when Echo can't be reached (seal fails closed)
+	Force  bool   // run even when WordPress says this is production
 	// Proxy is Echo's HTTP(S) proxy as the site reaches it, e.g.
 	// http://127.0.0.1:8026. When set, the plugin points raw cURL at it
 	// (https_proxy, http_proxy, no_proxy for the site, Echo and loopback),
@@ -119,7 +126,7 @@ func SettingsPHP(s Settings) ([]byte, error) {
 	b.WriteString("<?php\n// Rhythm Echo connector settings, written by `rhythm echo install wordpress`.\n")
 	b.WriteString("// RHYTHM_ECHO_* constants and environment variables override these.\n")
 	b.WriteString("// " + marker + "\nreturn array(\n")
-	for _, kv := range [][2]string{{"url", s.URL}, {"token", s.Token}, {"mode", s.Mode}, {"proxy", s.Proxy}, {"ca", s.CA}, {"bin", s.Bin}, {"project", s.Project}} {
+	for _, kv := range [][2]string{{"url", s.URL}, {"token", s.Token}, {"write_token", s.WriteToken}, {"site_id", s.SiteID}, {"mode", s.Mode}, {"proxy", s.Proxy}, {"ca", s.CA}, {"bin", s.Bin}, {"project", s.Project}} {
 		if kv[1] != "" {
 			fmt.Fprintf(&b, "\t%s => %s,\n", phpString(kv[0]), phpString(kv[1]))
 		}

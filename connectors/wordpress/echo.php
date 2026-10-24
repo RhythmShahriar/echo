@@ -44,12 +44,23 @@
  *   request (SDKs that skip the HTTP API) goes through Echo's proxy, and
  *   RHYTHM_ECHO_CA (Echo's CA PEM) is added to the HTTP API's CA bundle.
  *
+ * - Streamed downloads (stream => true: plugin and theme updates,
+ *   download_url()) are never faked: a fake would be saved as the file.
+ *   When Echo would fake one, the request fails with "sealed by Echo".
+ * - Token: sent as plain HTTP to Echo. Beyond loopback or a private
+ *   network, put TLS in front of Echo: anyone on the path can read the
+ *   token and answer for Echo.
+ * - Hub: RHYTHM_ECHO_SITE_ID names this site in every capture
+ *   (source.site) when one Echo serves many. RHYTHM_ECHO_WRITE_TOKEN is a
+ *   token that can only send captures. It is sent instead of
+ *   RHYTHM_ECHO_TOKEN; without one it also checks X-Echo-Run.
+ *
  * Settings, first found wins: define() constants RHYTHM_ECHO_URL,
- * RHYTHM_ECHO_TOKEN, RHYTHM_ECHO_MODE, RHYTHM_ECHO_FORCE, RHYTHM_ECHO_PROXY,
- * RHYTHM_ECHO_CA; the same names in
- * the environment; mu-plugins/rhythm-echo/settings.php (written by the
- * installer, returns an array); inside Echo Staging Seal, what its
- * settings screen saved.
+ * RHYTHM_ECHO_TOKEN, RHYTHM_ECHO_WRITE_TOKEN, RHYTHM_ECHO_SITE_ID,
+ * RHYTHM_ECHO_MODE, RHYTHM_ECHO_FORCE, RHYTHM_ECHO_PROXY, RHYTHM_ECHO_CA;
+ * the same names in the environment; mu-plugins/rhythm-echo/settings.php
+ * (written by the installer, returns an array); inside Echo Staging Seal,
+ * what its settings screen saved.
  *
  * PHP 7.4 or later, WordPress 5.7 or later.
  */
@@ -80,7 +91,7 @@ final class Rhythm_Echo {
 	const CANARY_EMAIL = 'canary@echo.invalid';
 	const CANARY_URL   = 'https://canary.echo.invalid/';
 
-	/** @var array{url: string, token: string, mode: string, force: bool, proxy: string, ca: string}|null */
+	/** @var array{url: string, token: string, send_token: string, site_id: string, mode: string, force: bool, proxy: string, ca: string}|null */
 	private static $config = null;
 
 	/** @var bool */
@@ -185,7 +196,13 @@ final class Rhythm_Echo {
 	// Settings.
 
 	/**
-	 * @return array{url: string, token: string, mode: string, force: bool, proxy: string, ca: string}
+	 * The settings. token is what X-Echo-Run signatures and the doctor
+	 * routes are checked with: RHYTHM_ECHO_TOKEN, else the write token.
+	 * send_token is what goes to Echo as X-Echo-Token: RHYTHM_ECHO_WRITE_TOKEN
+	 * (a hub's per-site token, which can send captures and nothing else),
+	 * else the token.
+	 *
+	 * @return array{url: string, token: string, send_token: string, site_id: string, mode: string, force: bool, proxy: string, ca: string}
 	 */
 	public static function config(): array {
 		if ( null !== self::$config ) {
@@ -200,15 +217,19 @@ final class Rhythm_Echo {
 				$file = $filtered;
 			}
 		}
-		$url  = self::setting( 'RHYTHM_ECHO_URL', $file, 'url' );
-		$mode = strtolower( self::setting( 'RHYTHM_ECHO_MODE', $file, 'mode' ) );
+		$url          = self::setting( 'RHYTHM_ECHO_URL', $file, 'url' );
+		$mode         = strtolower( self::setting( 'RHYTHM_ECHO_MODE', $file, 'mode' ) );
+		$token        = self::setting( 'RHYTHM_ECHO_TOKEN', $file, 'token' );
+		$write        = self::setting( 'RHYTHM_ECHO_WRITE_TOKEN', $file, 'write_token' );
 		self::$config = array(
-			'url'   => '' !== $url ? rtrim( $url, '/' ) : 'http://127.0.0.1:8025',
-			'token' => self::setting( 'RHYTHM_ECHO_TOKEN', $file, 'token' ),
-			'mode'  => 'observe' === $mode ? 'observe' : 'seal',
-			'force' => self::truthy( self::setting( 'RHYTHM_ECHO_FORCE', $file, 'force' ) ),
-			'proxy' => self::setting( 'RHYTHM_ECHO_PROXY', $file, 'proxy' ),
-			'ca'    => self::setting( 'RHYTHM_ECHO_CA', $file, 'ca' ),
+			'url'        => '' !== $url ? rtrim( $url, '/' ) : 'http://127.0.0.1:8025',
+			'token'      => '' !== $token ? $token : $write,
+			'send_token' => '' !== $write ? $write : $token,
+			'site_id'    => self::setting( 'RHYTHM_ECHO_SITE_ID', $file, 'site_id' ),
+			'mode'       => 'observe' === $mode ? 'observe' : 'seal',
+			'force'      => self::truthy( self::setting( 'RHYTHM_ECHO_FORCE', $file, 'force' ) ),
+			'proxy'      => self::setting( 'RHYTHM_ECHO_PROXY', $file, 'proxy' ),
+			'ca'         => self::setting( 'RHYTHM_ECHO_CA', $file, 'ca' ),
 		);
 		return self::$config;
 	}
@@ -661,8 +682,14 @@ final class Rhythm_Echo {
 		}
 		$action = isset( $d['action'] ) ? (string) $d['action'] : '';
 		if ( 'fake' === $action ) {
+			if ( ! empty( $args['stream'] ) ) {
+				// A streamed request saves its body as a file: a plugin or
+				// theme update, a backup, an import. A stand-in body must
+				// never become one, whoever answered for Echo on the way.
+				return new WP_Error( 'http_request_failed', sprintf( 'Rhythm Echo: sealed by Echo, so %s was not downloaded. Echo answers for services, not with files.', (string) wp_parse_url( (string) $url, PHP_URL_HOST ) ) );
+			}
 			$r = isset( $d['response'] ) && is_array( $d['response'] ) ? $d['response'] : array();
-			return self::wp_response( $r, $args, (string) $url );
+			return self::wp_response( $r, (string) $url );
 		}
 		if ( 'allow' === $action ) {
 			if ( isset( $d['id'], $args['_rhythm_echo'] ) ) {
@@ -793,10 +820,9 @@ final class Rhythm_Echo {
 	 * own so wp_remote_retrieve_*() and SDK wrappers work unchanged.
 	 *
 	 * @param array<string, mixed> $r
-	 * @param array<string, mixed> $args
 	 * @return array<string, mixed>
 	 */
-	private static function wp_response( array $r, array $args, string $url ): array {
+	private static function wp_response( array $r, string $url ): array {
 		$status  = isset( $r['status'] ) ? (int) $r['status'] : 200;
 		$body    = isset( $r['body'] ) ? (string) $r['body'] : '';
 		$headers = array();
@@ -804,11 +830,6 @@ final class Rhythm_Echo {
 			foreach ( $r['headers'] as $k => $v ) {
 				$headers[ strtolower( (string) $k ) ] = (string) $v;
 			}
-		}
-		$filename = null;
-		if ( ! empty( $args['stream'] ) && ! empty( $args['filename'] ) ) {
-			$filename = (string) $args['filename'];
-			file_put_contents( $filename, $body ); // phpcs:ignore WordPress.WP.AlternativeFunctions
 		}
 		if ( class_exists( 'WpOrg\Requests\Utility\CaseInsensitiveDictionary' ) ) {
 			$dict = new WpOrg\Requests\Utility\CaseInsensitiveDictionary( $headers );
@@ -825,7 +846,7 @@ final class Rhythm_Echo {
 				'message' => get_status_header_desc( $status ),
 			),
 			'cookies'       => array(),
-			'filename'      => $filename,
+			'filename'      => null,
 			'http_response' => null,
 		);
 		if ( class_exists( 'WP_HTTP_Requests_Response' ) && class_exists( 'WpOrg\Requests\Response' ) ) {
@@ -837,7 +858,7 @@ final class Rhythm_Echo {
 			foreach ( $headers as $k => $v ) {
 				$rr->headers[ $k ] = $v;
 			}
-			$out['http_response'] = new WP_HTTP_Requests_Response( $rr, (string) $filename );
+			$out['http_response'] = new WP_HTTP_Requests_Response( $rr, '' );
 		}
 		return $out;
 	}
@@ -1536,6 +1557,10 @@ final class Rhythm_Echo {
 				'host'   => $port ? $host . ':' . $port : $host,
 			),
 		);
+		$site = self::config()['site_id'];
+		if ( '' !== $site ) {
+			$c['source']['site'] = $site;
+		}
 		return array_merge( $c, $fields );
 	}
 
@@ -1636,7 +1661,7 @@ final class Rhythm_Echo {
 	public static function call( string $method, string $path, string $body = '', ?string $token = null ): array {
 		$cfg     = self::config();
 		$url     = $cfg['url'] . $path;
-		$token   = null !== $token ? $token : $cfg['token'];
+		$token   = null !== $token ? $token : $cfg['send_token'];
 		$headers = array( 'Content-Type: application/json', 'User-Agent: rhythm-echo-wordpress/' . self::VERSION );
 		if ( '' !== $token ) {
 			$headers[] = 'X-Echo-Token: ' . $token;
@@ -1828,6 +1853,7 @@ final class Rhythm_Echo {
 			'ca'          => '' !== $cfg['ca'] && is_readable( $cfg['ca'] ),
 			'warnings'    => self::$warnings,
 			'site'        => home_url(),
+			'site_id'     => $cfg['site_id'],
 			'run'         => self::run(),
 			'echo'        => array(
 				'url'       => $cfg['url'],

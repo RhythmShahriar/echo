@@ -201,6 +201,18 @@ func TestPluginStopped(t *testing.T) {
 	if s := fmt.Sprint(got); s != want {
 		t.Errorf("stopped = %s, want %s", s, want)
 	}
+
+	// On a hub, another site's messages are not this site's; ones without
+	// a site (an older connector) still count.
+	hub := []any{
+		map[string]any{"status": "faked", "channel": "email", "source": map[string]any{"plugin": "woocommerce", "site": "client-a"}},
+		map[string]any{"status": "faked", "channel": "email", "source": map[string]any{"plugin": "woocommerce", "site": "client-b"}},
+		map[string]any{"status": "faked", "channel": "sms", "source": map[string]any{"plugin": "twilio-sms"}},
+	}
+	callPHP(t, pluginClass, "Echo_Staging_Seal::stopped", &got, hub, "client-a")
+	if s := fmt.Sprint(got); s != "[{twilio-sms sms 1 0} {woocommerce email 1 0}]" {
+		t.Errorf("stopped for client-a = %s", s)
+	}
 }
 
 // The buttons and wp echo run rhythm-echo with these arguments. A

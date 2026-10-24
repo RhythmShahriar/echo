@@ -148,7 +148,7 @@ async function deliver(mailer: Mailer, orig: SendMail, data: MailData, plugin: s
   const d = await send({
     kind: 'email',
     run: ctx.run,
-    source: { via: 'node', stack: 'node', hook: 'nodemailer', plugin: plugin || undefined, host: state().cfg?.site[0] },
+    source: { via: 'node', stack: 'node', hook: 'nodemailer', plugin: plugin || undefined, host: state().cfg?.site[0], site: state().cfg?.siteId || undefined },
     email,
   });
   if (!d) {

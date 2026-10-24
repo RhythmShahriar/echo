@@ -112,7 +112,7 @@ class Connector
      */
     public function acceptRun(string $value, string $remote, bool $forwarded): string
     {
-        $token = (string) ($this->config['token'] ?? '');
+        $token = $this->runToken();
         [$run, $action, $ok] = Wire::verifyRun($token, $value);
         if ($run === '') {
             $this->runIgnored('ignored an X-Echo-Run whose signature does not verify ('.($token !== '' ? 'not signed with this token' : 'RHYTHM_ECHO_TOKEN is not set here').')');
@@ -136,6 +136,15 @@ class Connector
         ));
 
         return '';
+    }
+
+    /**
+     * What X-Echo-Run signatures are checked with: RHYTHM_ECHO_TOKEN, else
+     * the write token (Echo signs a hub site's runs with that site's token).
+     */
+    private function runToken(): string
+    {
+        return (string) (($this->config['token'] ?? '') ?: ($this->config['write_token'] ?? ''));
     }
 
     private function runIgnored(string $message): void
@@ -204,6 +213,7 @@ class Connector
             'plugin' => $source['plugin'] ?? '',
             'hook' => $source['hook'] ?? '',
             'host' => $this->siteHost(),
+            'site' => trim((string) ($this->config['site_id'] ?? '')),
         ], fn ($v) => $v !== '');
 
         $wire = $this->client->wire();

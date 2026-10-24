@@ -9,8 +9,22 @@ export const DEFAULT_URL = 'http://127.0.0.1:8025';
 export interface Options {
   /** Echo's capture API. Default: RHYTHM_ECHO_URL or http://127.0.0.1:8025. */
   url?: string;
-  /** Sent as X-Echo-Token. Default: RHYTHM_ECHO_TOKEN. */
+  /**
+   * Echo's token: what X-Echo-Run signatures are checked with, also sent
+   * as X-Echo-Token unless writeToken is set. Default: RHYTHM_ECHO_TOKEN.
+   */
   token?: string;
+  /**
+   * A token that may only send captures (a hub's per-site token). Sent as
+   * X-Echo-Token instead of token; with no token it also checks run
+   * signatures. Default: RHYTHM_ECHO_WRITE_TOKEN.
+   */
+  writeToken?: string;
+  /**
+   * This site's ID when one Echo serves many sites, sent as source.site.
+   * Default: RHYTHM_ECHO_SITE_ID.
+   */
+  siteId?: string;
   /** Activate even where the production guard says no. Default: RHYTHM_ECHO_FORCE. */
   force?: boolean;
   /**
@@ -37,7 +51,12 @@ export interface Options {
 export interface Config {
   url: string;
   echoHost: string;
+  /** What X-Echo-Run signatures are checked with: the token, else the write token. */
   token: string;
+  /** What is sent as X-Echo-Token: the write token, else the token. */
+  sendToken: string;
+  /** source.site on every capture; empty when not set. */
+  siteId: string;
   force: boolean;
   /** The site's own hosts, first the one reported as source.host. Empty when none is configured. */
   site: string[];
@@ -73,10 +92,14 @@ export function resolveConfig(o: Options = {}, e: Env = env()): Config {
         .filter(Boolean),
     ),
   ];
+  const token = o.token ?? e.RHYTHM_ECHO_TOKEN ?? '';
+  const writeToken = o.writeToken ?? e.RHYTHM_ECHO_WRITE_TOKEN ?? '';
   return {
     url,
     echoHost,
-    token: o.token ?? e.RHYTHM_ECHO_TOKEN ?? '',
+    token: token || writeToken,
+    sendToken: writeToken || token,
+    siteId: (o.siteId ?? e.RHYTHM_ECHO_SITE_ID ?? '').trim(),
     force: o.force ?? truthy(e.RHYTHM_ECHO_FORCE),
     site,
     captureLoopback: o.captureLoopback ?? false,

@@ -23,7 +23,9 @@ Everything can be set from the environment. If you want the file, run `php artis
 |---|---|---|---|
 | `enabled` | `RHYTHM_ECHO_ENABLED` | unset | Unset means on, except in `production` and `testing`. Set it to `true` to capture in your test suite. |
 | `url` | `RHYTHM_ECHO_URL` | `http://127.0.0.1:8025` | Where Echo listens. |
-| `token` | `RHYTHM_ECHO_TOKEN` | none | Sent as `X-Echo-Token` when Echo listens beyond loopback. |
+| `token` | `RHYTHM_ECHO_TOKEN` | none | Sent as `X-Echo-Token` when Echo listens beyond loopback. `X-Echo-Run` signatures are checked with it. |
+| `write_token` | `RHYTHM_ECHO_WRITE_TOKEN` | none | A token that can send captures and nothing else (a hub's per-site token). Sent as `X-Echo-Token` instead of `token`. Without `token` it also checks `X-Echo-Run` signatures. |
+| `site_id` | `RHYTHM_ECHO_SITE_ID` | none | Names the site in every capture (`source.site`) when one Echo serves many. |
 | `force` | `RHYTHM_ECHO_FORCE` | `false` | Run even when `APP_ENV=production`. Only for a production-like box that isn't production. |
 | `mode` | `RHYTHM_ECHO_MODE` | `seal` | What to assume when Echo can't be reached. `seal` fails closed and `observe` lets traffic through. When Echo answers, its own mode decides. |
 | `timeout` | `RHYTHM_ECHO_TIMEOUT` | `2` | Seconds to wait for Echo. |
@@ -32,6 +34,8 @@ Everything can be set from the environment. If you want the file, run `php artis
 **Production guard.** When `app()->environment('production')`, the connector does nothing unless `force` is set. `php artisan echo:status` says why it's off.
 
 **Testing.** The app's own test suite keeps its `Mail::fake()` and `Http::fake()` untouched, because `testing` is off by default.
+
+**The token over a network.** The token travels as a plain HTTP header. Echo's answers are trusted as they come. On loopback or a private network you control that is fine. When the site reaches Echo across a network you don't trust (a hub on another host, a tunnel), put TLS in front of Echo and use an `https://` URL: anyone on the path could otherwise read the token or answer for Echo.
 
 ## What it covers
 

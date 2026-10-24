@@ -159,6 +159,16 @@ function echo_fixture_curl( $url, $env ) {
 	return $out;
 }
 
+/**
+ * download_url(), as the plugin updater calls it.
+ *
+ * @return string|WP_Error
+ */
+function download_url_echo_fixture() {
+	require_once ABSPATH . 'wp-admin/includes/file.php';
+	return download_url( 'https://downloads.example.test/theme/storefront.4.5.zip', 5 );
+}
+
 add_action(
 	'init',
 	static function () {
@@ -214,6 +224,21 @@ add_action(
 				$out['bundle'] = $bundle;
 				$out['core']   = false !== strpos( $pem, (string) file_get_contents( ABSPATH . WPINC . '/certificates/ca-bundle.crt' ) );
 				$out['echo']   = false !== strpos( $pem, 'ECHO-TEST-CA' );
+				break;
+			case 'download':
+				// A plugin update's download: core streams the zip to a file.
+				// Sealed, Echo would fake it, so the connector must refuse it
+				// and write nothing.
+				$file = get_temp_dir() . 'echo-fixture-update-' . wp_generate_password( 6, false ) . '.zip';
+				$r    = wp_remote_get( 'https://downloads.example.test/plugin/shop-addon.1.2.zip', array( 'stream' => true, 'filename' => $file, 'timeout' => 5 ) );
+				$out  = array(
+					'error' => is_wp_error( $r ) ? $r->get_error_message() : '',
+					'file'  => file_exists( $file ),
+				);
+				// download_url() itself makes the file first, then streams into it.
+				$tmp = download_url_echo_fixture();
+				$out['download_url_error'] = is_wp_error( $tmp ) ? $tmp->get_error_message() : '';
+				$out['download_url_file']  = is_string( $tmp ) && file_exists( $tmp );
 				break;
 			case 'curl':
 				$out = echo_fixture_curl( (string) $_GET['url'], isset( $_GET['proxy'] ) ? (string) $_GET['proxy'] : '' );

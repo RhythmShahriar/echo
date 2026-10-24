@@ -186,7 +186,7 @@ function hold(req: http.ClientRequest, plan: Plan, protocol: string, hook: strin
       base = {
         kind: 'http',
         run: ctx.run,
-        source: { via: 'node', stack: 'node', hook, plugin: plugin || undefined, host: siteHost(target.hostname, target.port, cfg) },
+        source: { via: 'node', stack: 'node', hook, plugin: plugin || undefined, host: siteHost(target.hostname, target.port, cfg), site: cfg.siteId || undefined },
       };
       d = await send({
         ...base,

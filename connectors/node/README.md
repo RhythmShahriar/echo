@@ -109,7 +109,7 @@ The codes and links are read from the message as Echo caught it, before masking.
 | `RHYTHM_ECHO_SITE` | none | The site's own hosts or URLs, comma separated. `VERCEL_URL`, `VERCEL_BRANCH_URL` and `NEXT_PUBLIC_SITE_URL` count too. Calls to them are captured and Echo lets them through as sent. |
 | `RHYTHM_ECHO_RUN` | none | `<run>/<action>` for work done outside a request. Echo's action runner sets it. |
 
-`register(options)` accepts the same settings in code (`url`, `token`, `force`, `site`) as well as:
+`register(options)` accepts the same settings in code (`url`, `token`, `force`, `site`, plus `siteId` and `writeToken` below) as well as:
 
 - `maxBody`: bytes of each body kept, default 256 KiB
 - `timeout`: milliseconds to wait for Echo, default 5000
@@ -138,6 +138,21 @@ When active, it logs one line per runtime:
 ```
 [rhythm-echo] active (VERCEL_ENV=preview, nodejs): capturing fetch, http, https, nodemailer via https://echo.example.test
 ```
+
+### The token over a network
+
+The token travels as a plain HTTP header. Echo's answers are trusted as they come. On loopback or a private network you control that is fine. When the site reaches Echo across a network you don't trust (a tunnel to a preview, a hub on another host), put TLS in front of Echo and use an `https://` URL: anyone on the path could otherwise read the token or answer for Echo.
+
+### One Echo for many sites
+
+When one Echo serves many sites (an agency hub), give each site an ID and, if the hub has them, its own write token:
+
+| Variable | Meaning |
+|---|---|
+| `RHYTHM_ECHO_SITE_ID` | Names the site in every capture (`source.site`). |
+| `RHYTHM_ECHO_WRITE_TOKEN` | A token that can send captures and nothing else. It is sent as `X-Echo-Token` instead of `RHYTHM_ECHO_TOKEN`. Without `RHYTHM_ECHO_TOKEN` it also checks `X-Echo-Run` signatures, so Echo signs this site's runs with it. |
+
+In code: `register({ siteId, writeToken })`. Both are new in wire 2 and left out for an Echo that speaks wire 1.
 
 ### Fail closed
 

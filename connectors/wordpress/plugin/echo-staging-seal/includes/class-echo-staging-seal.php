@@ -89,7 +89,7 @@ final class Echo_Staging_Seal {
 	// Settings.
 
 	/**
-	 * What the settings screen saved: url, token, mode.
+	 * What the settings screen saved: url, token, mode, site_id.
 	 *
 	 * @return array<string, string>
 	 */
@@ -97,7 +97,7 @@ final class Echo_Staging_Seal {
 		$saved = get_option( self::OPTION, array() );
 		$out   = array();
 		if ( is_array( $saved ) ) {
-			foreach ( array( 'url', 'token', 'mode' ) as $key ) {
+			foreach ( array( 'url', 'token', 'mode', 'site_id' ) as $key ) {
 				if ( isset( $saved[ $key ] ) && is_string( $saved[ $key ] ) && '' !== $saved[ $key ] ) {
 					$out[ $key ] = $saved[ $key ];
 				}
@@ -152,9 +152,11 @@ final class Echo_Staging_Seal {
 		$url   = esc_url_raw( trim( sanitize_text_field( self::posted( 'echo_url' ) ) ), array( 'http', 'https' ) );
 		$mode  = sanitize_key( self::posted( 'echo_mode' ) );
 		$token = trim( sanitize_text_field( self::posted( 'echo_token' ) ) );
+		$site  = sanitize_key( self::posted( 'echo_site_id' ) );
 		$new   = array(
-			'url'  => untrailingslashit( $url ),
-			'mode' => 'observe' === $mode ? 'observe' : 'seal',
+			'url'     => untrailingslashit( $url ),
+			'mode'    => 'observe' === $mode ? 'observe' : 'seal',
+			'site_id' => $site,
 		);
 		// A blank token field keeps the saved token: it is never shown again.
 		$new['token'] = '' !== self::posted( 'echo_token_clear' ) ? '' : ( '' !== $token ? $token : ( $saved['token'] ?? '' ) );
@@ -271,15 +273,21 @@ final class Echo_Staging_Seal {
 	/**
 	 * Counts what Echo stopped, by plugin and channel: faked (Echo
 	 * answered instead) and blocked (refused). Messages that went out
-	 * (observe mode) or failed are left out.
+	 * (observe mode) or failed are left out. So are other sites' when
+	 * this one has a site ID and Echo serves many.
 	 *
 	 * @param array<mixed> $messages Echo's /v1/messages.
+	 * @param string       $site     this site's ID, or "".
 	 * @return list<array{plugin: string, channel: string, faked: int, blocked: int}>
 	 */
-	public static function stopped( array $messages ): array {
+	public static function stopped( array $messages, string $site = '' ): array {
 		$rows = array();
 		foreach ( $messages as $m ) {
 			if ( ! is_array( $m ) ) {
+				continue;
+			}
+			$from = isset( $m['source'] ) && is_array( $m['source'] ) && isset( $m['source']['site'] ) && is_string( $m['source']['site'] ) ? $m['source']['site'] : '';
+			if ( '' !== $site && '' !== $from && $from !== $site ) {
 				continue;
 			}
 			$status = isset( $m['status'] ) && is_string( $m['status'] ) ? $m['status'] : '';
@@ -317,9 +325,19 @@ final class Echo_Staging_Seal {
 	 * @return array{rows: list<array{plugin: string, channel: string, faked: int, blocked: int}>, error: string}
 	 */
 	private static function log(): array {
+		$cfg                         = Rhythm_Echo::config();
 		list( $status, $body, $err ) = Rhythm_Echo::call( 'GET', '/v1/messages' );
 		if ( 200 !== $status ) {
 			$why = '' !== $err ? $err : 'HTTP ' . $status;
+			// A hub site holds a write token, which Echo lets send but not read.
+			$hub = $cfg['send_token'] !== $cfg['token'] || '' !== $cfg['site_id'];
+			if ( 403 === $status && $hub ) {
+				return array(
+					'rows'  => array(),
+					/* translators: %s: Echo's answer, like "HTTP 403" */
+					'error' => sprintf( __( 'Echo refused to list messages (%s): this site\'s token can only send captures. See what was stopped in the hub\'s inbox.', 'echo-staging-seal' ), $why ),
+				);
+			}
 			if ( 401 === $status || 403 === $status ) {
 				return array(
 					'rows'  => array(),
@@ -335,7 +353,7 @@ final class Echo_Staging_Seal {
 		}
 		$messages = json_decode( $body, true );
 		return array(
-			'rows'  => self::stopped( is_array( $messages ) ? $messages : array() ),
+			'rows'  => self::stopped( is_array( $messages ) ? $messages : array(), $cfg['site_id'] ),
 			'error' => '',
 		);
 	}
@@ -454,6 +472,12 @@ final class Echo_Staging_Seal {
 			esc_attr( '' !== $cfg['token'] ? __( '(set: leave blank to keep it)', 'echo-staging-seal' ) : '' ),
 			esc_html__( 'Clear', 'echo-staging-seal' ),
 			esc_html__( 'The token Echo was started with (rhythm echo up --token). It is sent over plain HTTP: use it only where the path to Echo is trusted.', 'echo-staging-seal' )
+		);
+		printf(
+			'<tr><th scope="row"><label for="echo_site_id">%s</label></th><td><input type="text" class="regular-text" id="echo_site_id" name="echo_site_id" value="%s" placeholder="client-a"><p class="description">%s</p></td></tr>',
+			esc_html__( 'Site ID', 'echo-staging-seal' ),
+			esc_attr( $saved['site_id'] ?? '' ),
+			esc_html__( 'Only when one Echo serves many sites (an agency hub): names this site in everything it sends. Lowercase letters, digits, dashes and underscores.', 'echo-staging-seal' )
 		);
 		$mode = $saved['mode'] ?? 'seal';
 		printf(
