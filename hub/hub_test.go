@@ -161,6 +161,8 @@ func TestTokensAndSites(t *testing.T) {
 			`{"version":1,"kind":"email","phase":"after","id":"` + decision.ID + `","error":"bounced"}`, http.StatusForbidden},
 		{"read token reads one", http.MethodGet, "/v1/messages/" + decision.ID, read, "", http.StatusOK},
 		{"unknown site", http.MethodGet, "/v1/messages?site=client-z", read, "", http.StatusNotFound},
+		{"since isn't a time", http.MethodGet, "/v1/messages?since=30d", read, "", http.StatusBadRequest},
+		{"since is a time", http.MethodGet, "/v1/messages?since=2026-10-24T12:00:00Z", read, "", http.StatusOK},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if code, body := do(t, tc.method, base+tc.path, tc.token, tc.body); code != tc.want {
@@ -180,6 +182,10 @@ func TestTokensAndSites(t *testing.T) {
 	_, body = do(t, http.MethodGet, base+"/v1/messages?site=client-b&channel=email", read, "")
 	if got := strings.Join(subjects(t, body), ","); got != "From B" {
 		t.Errorf("site and channel filter gives %q", got)
+	}
+	_, body = do(t, http.MethodGet, base+"/v1/messages?since=2999-01-01T00:00:00Z", read, "")
+	if got := subjects(t, body); len(got) != 0 {
+		t.Errorf("since in the future gives %q", got)
 	}
 	_, body = do(t, http.MethodGet, base+"/v1/sites", read, "")
 	var rows []SiteInfo

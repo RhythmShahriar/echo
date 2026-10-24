@@ -289,9 +289,14 @@ func (h *Hub) list(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	f := catcher.Filter{Run: q.Get("run"), Action: q.Get("action"), Channel: model.Channel(q.Get("channel")), To: q.Get("to")}
 	if s := q.Get("since"); s != "" {
-		if t, err := time.Parse(time.RFC3339Nano, s); err == nil {
-			f.Since = t
+		t, err := time.Parse(time.RFC3339Nano, s)
+		if err != nil {
+			// Ignoring it would answer with every message, which a
+			// caller asking for recent mail would read as recent.
+			http.Error(w, fmt.Sprintf("since %q isn't an RFC 3339 time, like 2026-10-24T12:00:00Z", s), http.StatusBadRequest)
+			return
 		}
+		f.Since = t
 	}
 	site := q.Get("site")
 	if site != "" {
