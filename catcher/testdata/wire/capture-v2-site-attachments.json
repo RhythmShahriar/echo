@@ -1,0 +1,38 @@
+{
+  "name": "wire 2 fields",
+  "about": "Wire 2 adds source.site (the site's ID on a shared Echo) and email.attachments (name, type, size and SHA-256, never content).",
+  "valid": true,
+  "mode": "seal",
+  "echo": "up",
+  "capture": {
+    "v": 2,
+    "kind": "email",
+    "source": {
+      "via": "wordpress",
+      "hook": "wp_mail",
+      "host": "shop.test",
+      "site": "client-a"
+    },
+    "email": {
+      "from": "shop@shop.test",
+      "to": [
+        "ann@example.test"
+      ],
+      "subject": "Your receipt",
+      "text": "Thanks for your order.",
+      "attachments": [
+        {
+          "name": "invoice.pdf",
+          "type": "application/pdf",
+          "size": 13,
+          "sha256": "7f0b1c0a44b0a5d1b8d0b6c1c1e0b0f1e2d3c4b5a69788796a5b4c3d2e1f0a9b"
+        }
+      ]
+    }
+  },
+  "decision": {
+    "mode": "seal",
+    "action": "fake"
+  },
+  "connector": "fake"
+}

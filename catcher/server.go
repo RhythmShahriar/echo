@@ -218,7 +218,7 @@ func requestSite(r *http.Request) string {
 }
 
 // capabilities are the API features this catcher has beyond wire version
-// 1, so a client can tell a newer Echo from an older one.
+// 1, so a client or connector can tell a newer Echo from an older one.
 var capabilities = []string{
 	"leases",      // begin answers a lease that end takes
 	"issues",      // every message carries the checks' findings
@@ -229,6 +229,8 @@ var capabilities = []string{
 	"codes",       // GET /v1/messages/latest answers one-time codes and links
 	"exclusive",   // begin takes "exclusive": true and waits for other actions
 	"site-tokens", // per-site write tokens and a read token can split the single token
+	"sites",       // a capture may name its site in source.site (wire 2)
+	"signed-runs", // a run value may be signed: "<run>/<action>.<sig>" (wire 2)
 }
 
 // health is what GET /v1/health answers, in this order.
@@ -246,23 +248,27 @@ type health struct {
 }
 
 func (s *Server) health(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusOK, health{Tool: "rhythm-echo", Version: s.cfg.Version, Mode: s.cfg.Mode, Wire: wire.Version,
+	writeJSON(w, http.StatusOK, health{Tool: "rhythm-echo", Version: s.cfg.Version, Mode: s.cfg.Mode, Wire: wireMax,
 		SMTP: s.cfg.SMTPAddr, Proxy: s.cfg.ProxyAddr, BootID: s.cfg.BootID, Store: s.cfg.Store,
 		Capabilities: capabilities, Providers: recognize.Providers()})
 }
 
 // capture records an email or an HTTP request and decides its fate.
 func (s *Server) capture(w http.ResponseWriter, r *http.Request) {
+	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, MaxCapture))
+	if _, ok := errors.AsType[*http.MaxBytesError](err); ok {
+		http.Error(w, fmt.Sprintf("capture too large: Echo accepts up to %d MiB", MaxCapture>>20), http.StatusRequestEntityTooLarge)
+		return
+	}
 	var c wire.Capture
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, MaxCapture)).Decode(&c); err != nil {
-		if _, ok := errors.AsType[*http.MaxBytesError](err); ok {
-			http.Error(w, fmt.Sprintf("capture too large: Echo accepts up to %d MiB", MaxCapture>>20), http.StatusRequestEntityTooLarge)
-			return
-		}
+	if err == nil {
+		err = json.Unmarshal(body, &c)
+	}
+	if err != nil {
 		http.Error(w, "bad capture: "+err.Error(), http.StatusBadRequest)
 		return
 	}
-	d, err := s.captureFor(c, requestSite(r))
+	d, err := s.captureFor(c, decodeExtras(body), requestSite(r))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -272,17 +278,24 @@ func (s *Server) capture(w http.ResponseWriter, r *http.Request) {
 
 // Capture records c and returns the decision. Connectors reach it through
 // the API; the SMTP sink and the proxy call it directly.
-func (s *Server) Capture(c wire.Capture) (wire.Decision, error) { return s.captureFor(c, "") }
+func (s *Server) Capture(c wire.Capture) (wire.Decision, error) {
+	return s.captureFor(c, extras{}, "")
+}
 
-// captureFor is Capture for a site's write token: site marks what's
-// captured; an after phase only updates that site's own messages.
-func (s *Server) captureFor(c wire.Capture, site string) (wire.Decision, error) {
-	if c.Version > wire.Version {
-		return wire.Decision{}, errors.New("this connector is newer than Echo; run: rhythm update")
+// captureFor is Capture with the wire 2 fields x and the site of the
+// write token the capture came with. That site marks what's captured
+// over the one the capture names, and an after phase only updates that
+// site's own messages.
+func (s *Server) captureFor(c wire.Capture, x extras, site string) (wire.Decision, error) {
+	if err := checkVersion(c.Version); err != nil {
+		return wire.Decision{}, err
 	}
-	run, action, _ := strings.Cut(c.Run, "/")
+	run, action := splitRun(c.Run, s.runTokens(site))
 	src := model.Source{Via: c.Source.Via, Stack: c.Source.Stack, Plugin: c.Source.Plugin, Hook: c.Source.Hook, Host: c.Source.Host,
 		Site: site}
+	if src.Site == "" {
+		src.Site = s.fitAny(x.Source.Site, mask.Text)
+	}
 	if c.Phase == wire.After && c.ID != "" && site != "" {
 		if m, ok := s.Inbox.Get(c.ID); ok && m.Source.Site != site {
 			return wire.Decision{}, errors.New("no message with that ID was captured by this site")
@@ -309,7 +322,7 @@ func (s *Server) captureFor(c wire.Capture, site string) (wire.Decision, error) 
 			s.pit.smtpAccepted.Add(1)
 			s.pit.smtpBytes.Add(int64(len(c.Email.Raw)))
 		}
-		m, f := s.email(c.Email)
+		m, f := s.email(c.Email, x.attachments())
 		m.Run, m.Action, m.Source = run, action, src
 		// Mail handed to Echo's own SMTP sink or sendmail stand-in ends
 		// there in every mode: nothing delivers it, so it's never "sent".
@@ -430,8 +443,9 @@ func (s *Server) allowed(host, site string) bool {
 }
 
 // email turns a captured email into a masked message, with the codes and
-// links read from it before masking.
-func (s *Server) email(e *wire.Email) (model.Message, found) {
+// links read from it before masking. files are the attachments the
+// connector described, used when its raw MIME, if any, lists none.
+func (s *Server) email(e *wire.Email, files []model.Attachment) (model.Message, found) {
 	m := model.Message{Channel: model.Email, Provider: "", From: e.From, To: e.To, CC: e.CC, BCC: e.BCC,
 		ReplyTo: e.ReplyTo, Subject: e.Subject, Text: e.Text, HTML: e.HTML, Headers: lower(e.Headers)}
 	if e.Raw != "" {
@@ -443,6 +457,9 @@ func (s *Server) email(e *wire.Email) (model.Message, found) {
 		// Decoded first: a reset link in a base64 part is invisible to
 		// every rule.
 		m.Body = s.fit(&m, e.Raw, mask.MIME)
+	}
+	if m.Attachments == nil {
+		m.Attachments = files
 	}
 	if m.Attachments == nil {
 		m.Attachments = headerAttachments(m.Headers["x-echo-attachments"])
