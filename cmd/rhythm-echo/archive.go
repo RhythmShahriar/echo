@@ -19,17 +19,23 @@ import (
 	"time"
 
 	"github.com/RhythmShahriar/echo/model"
+	"github.com/RhythmShahriar/echo/report"
 	"github.com/RhythmShahriar/echo/store"
 )
 
-// Limits on what an archive may unpack to. A snapshot is a run.json and
-// an HTML report, a few MB at most; the limits stop a crafted archive
-// from filling the disk.
+// Limits on what an archive may hold. A snapshot is a run.json and an
+// HTML report, a few MB at most; the limits stop a crafted archive from
+// filling the disk or keeping Echo busy.
 const (
-	archiveMaxFiles = 1000
+	archiveMaxFiles = 100
 	archiveMaxFile  = 64 << 20
-	archiveMaxTotal = 256 << 20
+	archiveMaxTotal = 128 << 20
 )
+
+// archiveKeeps are the files unpackSnapshot writes. Anything else in an
+// archive is skipped: a report.html from someone else's archive would
+// run its scripts when opened from disk, so import writes its own.
+var archiveKeeps = []string{"run.json", "comparison.json"}
 
 // exportSnapshot writes the snapshot in dir to w as a gzipped tar, every
 // file under name/ (run.json, report.html and anything else saved with
@@ -81,11 +87,12 @@ func exportSnapshot(w io.Writer, dir, name string) error {
 // to fix, so it exits 2.
 var errArchive = errors.New("not a snapshot archive")
 
-// unpackSnapshot unpacks an archive from exportSnapshot into dest (which
-// must exist) and returns the snapshot's name in it. Every entry must sit
-// under one top folder with a valid snapshot name, be a plain file or
-// folder and stay inside dest: absolute paths, .. and links are refused
-// before anything is written outside dest.
+// unpackSnapshot unpacks the run.json (and comparison.json) of an archive
+// from exportSnapshot into dest (which must exist) and returns the
+// snapshot's name in it. Every entry must sit under one top folder with
+// a valid snapshot name, be a plain file or folder and stay inside dest:
+// absolute paths, .. and links are refused before anything is written
+// outside dest. Other entries are checked the same way, then skipped.
 func unpackSnapshot(r io.Reader, dest string) (string, error) {
 	gz, err := gzip.NewReader(r)
 	if err != nil {
@@ -114,12 +121,8 @@ func unpackSnapshot(r io.Reader, dest string) (string, error) {
 			return "", fmt.Errorf("%w: it holds more than one snapshot (%s and %s)", errArchive, top, first)
 		}
 		top = first
-		target := filepath.Join(dest, filepath.FromSlash(rest))
 		switch h.Typeflag {
 		case tar.TypeDir:
-			if err := os.MkdirAll(target, 0o700); err != nil {
-				return "", err
-			}
 			continue
 		case tar.TypeReg:
 		default:
@@ -130,7 +133,10 @@ func unpackSnapshot(r io.Reader, dest string) (string, error) {
 		if files > archiveMaxFiles || h.Size > archiveMaxFile || total > archiveMaxTotal {
 			return "", fmt.Errorf("%w: it's larger than a snapshot can be", errArchive)
 		}
-		if err := writeEntry(target, tr, h.Size); err != nil {
+		if !slices.Contains(archiveKeeps, rest) {
+			continue
+		}
+		if err := writeEntry(filepath.Join(dest, rest), tr, h.Size); err != nil {
 			return "", err
 		}
 	}
@@ -142,9 +148,6 @@ func unpackSnapshot(r io.Reader, dest string) (string, error) {
 
 // writeEntry writes size bytes from r to a new 0600 file at target.
 func writeEntry(target string, r io.Reader, size int64) error {
-	if err := os.MkdirAll(filepath.Dir(target), 0o700); err != nil {
-		return err
-	}
 	f, err := os.OpenFile(target, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600) //nolint:gosec // checked to be inside dest
 	if err != nil {
 		return err
@@ -160,7 +163,8 @@ func writeEntry(target string, r io.Reader, size int64) error {
 // (or, when name is "", under the name it was exported with) and makes it
 // the latest. An existing snapshot of that name is replaced only when
 // replace is set. The archive is unpacked next to the snapshots and
-// checked to hold a run Echo can read before it takes a snapshot's place.
+// checked to hold a run Echo can read before it takes a snapshot's place,
+// and its HTML report is written anew from that run.
 func importSnapshot(st store.Store, file, name string, replace bool) (string, error) {
 	f, err := os.Open(file) //nolint:gosec // the user names the archive
 	if err != nil {
@@ -193,6 +197,11 @@ func importSnapshot(st store.Store, file, name string, replace bool) (string, er
 		if err := store.SaveRun(tmp, run); err != nil {
 			return "", err
 		}
+	}
+	if err := writeFile(filepath.Join(tmp, "report.html"), func(w io.Writer) error {
+		return report.HTML(w, report.Result{Run: run, Dir: tmp})
+	}); err != nil {
+		return "", err
 	}
 	if _, err := st.Promote(tmp, name); err != nil {
 		return "", err

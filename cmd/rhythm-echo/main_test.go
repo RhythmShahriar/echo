@@ -1619,6 +1619,22 @@ func TestImportRefusesArchivesThatEscape(t *testing.T) {
 	if names, _ := os.ReadDir(filepath.Join(config.Dir, "snapshots")); len(names) > 0 {
 		t.Errorf("a refused import left %v behind", names)
 	}
+	// Only the run comes in: the archive's own report.html and other
+	// files are dropped and the report is written anew.
+	for _, name := range []string{"base/report.html", "base/extra/page.html"} {
+		tgz := evilArchive(t, tar.Header{Typeflag: tar.TypeReg, Name: name, Mode: 0o600}, "<script>pwned()</script>")
+		if code, _, errOut := runCLI(t, "snapshot", "--import", tgz, "--force"); code != exitOK {
+			t.Fatalf("import with %s: %d %q", name, code, errOut)
+		}
+		dir := filepath.Join(config.Dir, "snapshots", "base")
+		if b, err := os.ReadFile(filepath.Join(dir, "report.html")); err != nil || strings.Contains(string(b), "pwned") {
+			t.Errorf("import with %s: report.html %v, holds the archive's: %t", name, err, strings.Contains(string(b), "pwned"))
+		}
+		if _, err := os.Stat(filepath.Join(dir, "extra")); err == nil {
+			t.Errorf("import with %s kept extra/", name)
+		}
+	}
+
 	notGz := filepath.Join(root, "plain.tgz")
 	_ = os.WriteFile(notGz, []byte("not gzip"), 0o600)
 	if code, _, errOut := runCLI(t, "snapshot", "--import", notGz); code != exitUsage || !strings.Contains(errOut, "not a snapshot archive") {
