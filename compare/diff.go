@@ -64,7 +64,7 @@ func ChangeDiff(c model.Change) []Hunk {
 }
 
 // diffCache keeps the hunks of recent texts. Grouping, Key and every
-// report format ask for the same change's diff, and normalizing each line
+// report format ask for the same change's diff. Normalizing each line
 // plus Myers on two 256 KiB texts is worth doing once. A model.Change has
 // no field to keep them in yet, so they are cached by the texts' hash.
 type diffCache struct {
