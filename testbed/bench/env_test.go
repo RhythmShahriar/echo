@@ -137,7 +137,7 @@ func TestEvaluateEnv(t *testing.T) {
 	if r := runEnv(context.Background(), p, EnvScenario{ID: "e98", Probe: "colliding-names", Needs: "testbed"}); r.Echo.Outcome != NotRun {
 		t.Errorf("a testbed scenario without the testbed: %+v", r.Echo)
 	}
-	if r := runEnv(context.Background(), p, EnvScenario{ID: "e97", Probe: "windows", Needs: "windows"}); r.Echo.Outcome != NotRun {
+	if r := runEnv(context.Background(), p, EnvScenario{ID: "e97", Probe: "windows", Needs: "windows"}); r.Echo.Outcome != NotRun || !strings.Contains(r.Echo.Detail, "not this probe") {
 		t.Errorf("a Windows scenario elsewhere: %+v", r.Echo)
 	}
 }
@@ -227,6 +227,46 @@ func TestDiffResults(t *testing.T) {
 	out.Reset()
 	if same, err := diffResults(a, c, &out); err != nil || same || out.String() != "e01: echo caught | echo missed\n" {
 		t.Errorf("a, c: %v %v %q", same, err, out.String())
+	}
+	// Two empty or aborted runs agree on nothing, so they don't pass.
+	empty := write("empty.json", Results{})
+	for _, pair := range [][2]string{{empty, empty}, {a, empty}, {empty, a}} {
+		if same, err := diffResults(pair[0], pair[1], io.Discard); err == nil || same || !strings.Contains(err.Error(), "empty.json: no scenario outcomes") {
+			t.Errorf("%s, %s: %v %v", filepath.Base(pair[0]), filepath.Base(pair[1]), same, err)
+		}
+	}
+}
+
+// TestToolVersionsPinned checks that the versions docs/benchmark.md names
+// for Buggregator and Staging Shield are the ones testbed/Makefile and
+// docker-compose.yml set up, so two runs judge the same releases.
+func TestToolVersionsPinned(t *testing.T) {
+	dir, _ := testbedDir(t)
+	read := func(name string) string {
+		data, err := os.ReadFile(filepath.Join(dir, name)) //nolint:gosec // a file of the testbed
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(data)
+	}
+	makefile, compose := read("Makefile"), read("docker-compose.yml")
+	for _, want := range []struct{ file, text, in string }{
+		{"Makefile", "export BUGGREGATOR_VERSION ?= " + buggregatorVersion + "\n", makefile},
+		{"Makefile", "staging-shield,$(TOOLS))," + stagingShieldVersion + ")\n", makefile},
+		{"docker-compose.yml", "ghcr.io/buggregator/server:${BUGGREGATOR_VERSION:-" + buggregatorVersion + "}", compose},
+	} {
+		if !strings.Contains(want.in, want.text) {
+			t.Errorf("%s doesn't have %q", want.file, want.text)
+		}
+	}
+	if s := strings.ToLower(makefile + compose); strings.Contains(s, "latest") {
+		t.Error("a floating latest tag is set up for the benchmark")
+	}
+	if a := (buggregator{}).About(); !strings.Contains(a, "server:"+buggregatorVersion) {
+		t.Errorf("Buggregator's About doesn't name its version: %s", a)
+	}
+	if a := (stagingShield{}).About(); !strings.Contains(a, stagingShieldVersion) {
+		t.Errorf("Staging Shield's About doesn't name its version: %s", a)
 	}
 }
 
@@ -411,7 +451,7 @@ func TestStagingShieldAgainstAStub(t *testing.T) {
 			defer mu.Unlock()
 			switch strings.Join(args[1:], " ") {
 			case "plugin get staging-shield --field=version":
-				return 0, "1.0.2\n"
+				return 0, stagingShieldVersion + "\n"
 			case "plugin activate staging-shield":
 				active = true
 			case "plugin deactivate staging-shield":
@@ -440,6 +480,11 @@ func TestStagingShieldAgainstAStub(t *testing.T) {
 		}}
 	if err := tool.Ready(context.Background()); err != nil {
 		t.Fatal(err)
+	}
+	other := tool
+	other.run = func(context.Context, string, ...string) (int, string) { return 0, "1.1.0\n" }
+	if err := other.Ready(context.Background()); err == nil || !strings.Contains(err.Error(), "staging-shield 1.1.0 is installed") {
+		t.Errorf("Ready with another version: %v", err)
 	}
 	if r := tool.Judge(context.Background(), Scenario{ID: "s01", Area: "lost", Channel: "email"}, nil, nil, ""); r.Outcome != CantSee {
 		t.Errorf("a lost email: %+v", r)

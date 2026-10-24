@@ -36,11 +36,15 @@ type stagingShield struct {
 	action func(ctx context.Context, dir, action string) error
 }
 
+// stagingShieldVersion is the plugin version the benchmark is run with:
+// STAGING_SHIELD in testbed/Makefile.
+const stagingShieldVersion = "1.0.2"
+
 func (stagingShield) Name() string  { return "staging-shield" }
 func (stagingShield) Title() string { return "Staging Shield" }
 
 func (stagingShield) About() string {
-	return "**Staging Shield** (free, from wordpress.org; its version is in the run's log) is a WordPress plugin that detects a staging copy and stops its email. " +
+	return "**Staging Shield** (" + stagingShieldVersion + ", free, from wordpress.org) is a WordPress plugin that detects a staging copy and stops its email. " +
 		"It keeps no record of what a site sends and no baseline, so a lost, changed or new message is **can't see** for it. " +
 		"For the staging scenarios the benchmark activates it in the testbed's WordPress, runs the scenario's action in its broken state with Echo observing " +
 		"(so mail really goes out, to the testbed's Mailpit) and counts it **caught** when the email to the real address did not leave."
@@ -57,7 +61,9 @@ func (t stagingShield) Ready(ctx context.Context) error {
 	if code != 0 {
 		return fmt.Errorf("staging-shield isn't installed in the testbed's WordPress (make -C testbed up TOOLS=staging-shield): %s", strings.TrimSpace(out))
 	}
-	fmt.Fprintf(os.Stderr, "staging-shield %s\n", strings.TrimSpace(out))
+	if v := strings.TrimSpace(out); v != stagingShieldVersion {
+		return fmt.Errorf("staging-shield %s is installed, the benchmark is run with %s (make -C testbed up TOOLS=staging-shield)", v, stagingShieldVersion)
+	}
 	return nil
 }
 

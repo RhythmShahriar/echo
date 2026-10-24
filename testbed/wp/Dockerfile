@@ -5,8 +5,8 @@ FROM wordpress:6.8.3-php8.3-apache
 COPY --from=cli /usr/local/bin/wp /usr/local/bin/wp
 
 # The Staging Shield plugin from wordpress.org, for the benchmark's column:
-# STAGING_SHIELD=latest (make up TOOLS=staging-shield) or a version such
-# as 1.0.2. It is copied in with WordPress and stays inactive until the
+# a version such as 1.0.2 (make up TOOLS=staging-shield pins the one the
+# benchmark uses) or latest. It is copied in with WordPress and stays inactive until the
 # benchmark activates it. Empty (the default): not downloaded.
 ARG STAGING_SHIELD=
 RUN if [ -n "$STAGING_SHIELD" ]; then \

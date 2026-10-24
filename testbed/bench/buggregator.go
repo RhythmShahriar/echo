@@ -31,11 +31,15 @@ const (
 // site wouldn't be.
 type buggregator struct{ api, smtp string }
 
+// buggregatorVersion is the Buggregator image tag the benchmark is run
+// with: BUGGREGATOR_VERSION in testbed/Makefile and docker-compose.yml.
+const buggregatorVersion = "2.4.1"
+
 func (buggregator) Name() string  { return "buggregator" }
 func (buggregator) Title() string { return "Buggregator" }
 
 func (buggregator) About() string {
-	return "**Buggregator** (`ghcr.io/buggregator/server`, see testbed/docker-compose.yml for the version) is a debug hub for PHP with an SMTP catcher, " +
+	return "**Buggregator** (`ghcr.io/buggregator/server:" + buggregatorVersion + "`) is a debug hub for PHP with an SMTP catcher, " +
 		"HTTP dumps and an SMS module. Its SMTP inbox is judged as Mailpit's is: the same emails go in over SMTP and come back through its API " +
 		"(`GET /api/events?type=smtp`, cleared between states). Its HTTP dump and SMS modules only receive what a site is re-pointed to send them, " +
 		"one SDK at a time, which a staging copy of a live site isn't: SMS, chat, webhooks, analytics and DNS are **can't see**."

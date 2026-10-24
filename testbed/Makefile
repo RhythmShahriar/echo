@@ -24,7 +24,11 @@ export TESTBED_TOKEN := $(TOKEN)
 
 TOOLS ?= echo mailpit
 export COMPOSE_PROFILES := $(if $(filter buggregator,$(TOOLS)),buggregator)
-export STAGING_SHIELD ?= $(if $(filter staging-shield,$(TOOLS)),latest)
+# The versions of the other tools the benchmark is run with, so two runs
+# (or a run from a clean checkout) judge the same releases. testbed/bench
+# names them in docs/benchmark.md and checks they match.
+export BUGGREGATOR_VERSION ?= 2.4.1
+export STAGING_SHIELD ?= $(if $(filter staging-shield,$(TOOLS)),1.0.2)
 WORK  := bench/work
 VHS   ?= vhs
 

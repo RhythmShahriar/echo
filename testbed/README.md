@@ -133,7 +133,7 @@ make -C testbed demo        # the 60-second demo, docs/assets/demo.gif (needs VH
 make -C testbed down
 ```
 
-`TOOLS` names what is judged besides Echo. `buggregator` starts Buggregator (`ghcr.io/buggregator/server`, `BUGGREGATOR_VERSION` picks the tag) on 127.0.0.1:18857 (API) and 18858 (SMTP); `staging-shield` downloads the Staging Shield plugin from wordpress.org into the WordPress image when it is built (`STAGING_SHIELD=1.0.2` pins a version), inactive until the benchmark activates it. Without `TOOLS`, `make up` sets up Mailpit only, as before.
+`TOOLS` names what is judged besides Echo. `buggregator` starts Buggregator (`ghcr.io/buggregator/server`, `BUGGREGATOR_VERSION` picks the tag, 2.4.1 by default) on 127.0.0.1:18857 (API) and 18858 (SMTP); `staging-shield` downloads the Staging Shield plugin from wordpress.org into the WordPress image when it is built (version 1.0.2 unless `STAGING_SHIELD` names another), inactive until the benchmark activates it. Without `TOOLS`, `make up` sets up Mailpit only, as before.
 
 For each scenario, the harness in [`bench/`](bench/) does the following, in `testbed/bench/work/<id>/`:
 

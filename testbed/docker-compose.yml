@@ -186,7 +186,7 @@ services:
   # Buggregator, the benchmark's Buggregator column: only with
   # make up TOOLS=buggregator (the compose profile of the same name).
   buggregator:
-    image: ghcr.io/buggregator/server:${BUGGREGATOR_VERSION:-latest}
+    image: ghcr.io/buggregator/server:${BUGGREGATOR_VERSION:-2.4.1}
     profiles: [buggregator]
     networks: [sealed]
 

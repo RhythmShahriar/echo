@@ -34,7 +34,9 @@ func outcomes(r Results) map[string]string {
 }
 
 // diffResults compares the outcomes in two results.json files, writes
-// each difference to w and reports whether there were none.
+// each difference to w and reports whether there were none. A file with
+// no site or environment outcomes is an error: two empty or aborted runs
+// prove nothing.
 func diffResults(a, b string, w io.Writer) (bool, error) {
 	ra, err := readResults(a)
 	if err != nil {
@@ -45,6 +47,14 @@ func diffResults(a, b string, w io.Writer) (bool, error) {
 		return false, err
 	}
 	oa, ob := outcomes(ra), outcomes(rb)
+	for _, f := range []struct {
+		path string
+		n    int
+	}{{a, len(oa)}, {b, len(ob)}} {
+		if f.n == 0 {
+			return false, fmt.Errorf("%s: no scenario outcomes; was the run aborted?", f.path)
+		}
+	}
 	ids := slices.Sorted(maps.Keys(oa))
 	for id := range ob {
 		if !slices.Contains(ids, id) {

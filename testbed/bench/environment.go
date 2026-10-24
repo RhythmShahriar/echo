@@ -168,7 +168,7 @@ func runEnv(ctx context.Context, p *ProbeEnv, s EnvScenario) EnvOutcome {
 		out.Echo = Result{Outcome: Failed, Detail: "no probe named " + s.Probe}
 		return out
 	case s.Needs == "windows" && !p.Windows:
-		out.Echo = Result{Outcome: NotRun, Detail: "needs a Windows machine; CI's go-windows job runs a real snapshot and compare there"}
+		out.Echo = Result{Outcome: NotRun, Detail: "needs a Windows machine; this probe runs only there (CI's go-windows job tests snapshot and compare in ./cmd/..., not this probe)"}
 		return out
 	case s.Needs == "testbed" && p.Site == nil:
 		out.Echo = Result{Outcome: NotRun, Detail: "needs the Docker testbed (make -C testbed up)"}
