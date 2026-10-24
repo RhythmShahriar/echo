@@ -2,53 +2,79 @@
 
 # Echo benchmark
 
-The testbed (`testbed/`) is a WordPress shop, a Laravel app, a Next.js app and a plain-PHP page with 20 scenarios in which a site stops saying what it should. Each scenario has a good state and a broken state, switched by `testbed/toggle.sh`. For every scenario the benchmark sets the good state, runs the scenario's action with `rhythm-echo snapshot --action`, breaks the scenario, runs it again with `rhythm-echo compare --action` and checks the comparison for the change listed in `testbed/scenarios.yaml`.
+The testbed (`testbed/`) is a WordPress shop, a Laravel app, a Next.js app and a plain-PHP page with 20 scenarios in which a site stops saying what it should and 15 in which the environment around Echo goes wrong. Each scenario has a good state and a broken state. For every site scenario the benchmark sets the good state, runs the scenario's action with `rhythm-echo snapshot --action`, breaks the scenario, runs it again with `rhythm-echo compare --action` and checks the comparison for the change listed in `testbed/scenarios.yaml`. For every environment scenario a probe sets up each state, runs Echo's commands and checks what they printed, their exit codes and their verdicts.
 
-We wrote both Echo and the testbed, so read this as a regression suite with a scoreboard, not an independent review: every scenario is something we built Echo to catch. Each one is still a real failure mode, in a real WordPress, Laravel or Next.js and it passes only when Echo reports the expected change through its normal commands.
+We wrote both Echo and the testbed, so read this as a regression suite with a scoreboard, not an independent review: every scenario is something we built Echo to catch. Each one is still a real failure mode, in a real WordPress, Laravel or Next.js, and it passes only when Echo reports the expected change through its normal commands. The other tools run on the same states, and anyone can rerun it all from a clean checkout (see [Run it](#run-it)).
 
-**Echo caught 20 of 20 scenarios.**
+**Echo caught 20 of 20 site scenarios and 12 of 15 environment scenarios.**
 
-Run on 2026-10-24 with rhythm-echo dev (linux/amd64); the run took 4m42s.
+Run on 2026-10-24 with rhythm-echo dev (linux/amd64); the run took 10m47s.
 
-| # | Area | Scenario | Stack | Expected | Echo | Mailpit | MessagePit |
-|---|---|---|---|---|---|---|---|
-| s01 | Lost messages | The contact form stops emailing the shop owner | wordpress | BROKE message/missing “owner@shop.example.com is no longer sent” | **caught** | missed | not run |
-| s02 | Lost messages | The contact form's autoresponder is lost | wordpress | BROKE message/missing “to the test submitter is no longer sent” | **caught** | missed | not run |
-| s03 | Lost messages | The owner's order SMS is gone after a plugin update | wordpress | BROKE message/missing “Twilio SMS to +447700900123 is no longer sent” | **caught** | can't see | not run |
-| s04 | Lost messages | The new-order Slack alert is removed | wordpress | BROKE message/missing “Slack message is no longer sent” | **caught** | can't see | not run |
-| s05 | Lost messages | The GA4 purchase event is missing | wordpress | BROKE message/missing “GA4 event "purchase" is no longer sent” | **caught** | can't see | not run |
-| s06 | Lost messages | Laravel's queued order email is stuck (the job throws) | laravel | BROKE message/missing “email to the test submitter is no longer sent” | **caught** | missed | not run |
-| s07 | Lost messages | The Next.js welcome email (Resend) now throws | next | BROKE message/missing “Resend email to the test submitter is no longer sent” | **caught** | missed | not run |
-| s08 | Lost messages | The receipt is never sent because cron is off | wordpress | BROKE message/missing “email to the test submitter is no longer sent” | **caught** | missed | not run |
-| s09 | Wrong content | The owner's notification goes to the wrong address | wordpress | NEW message/new “webmaster@old-agency.example.net is now sent”<br>or BROKE message/missing “owner@shop.example.com is no longer sent” | **caught** | **caught** | not run |
-| s10 | Wrong content | A merge tag is left unreplaced in the receipt | wordpress | BROKE content/placeholder “{customer_first_name}” | **caught** | **caught** | not run |
-| s11 | Wrong content | A PHP warning is printed into the order email (plain PHP) | php | BROKE content/php-error “PHP error printed in email” | **caught** | **caught** | not run |
-| s12 | Wrong content | The receipt links to the staging site | wordpress | NEW content/dev-link “staging.shop.test” | **caught** | **caught** | not run |
-| s13 | Wrong content | The order SMS is now 3 segments | wordpress | NEW sms/parts “more than one part” | **caught** | can't see | not run |
-| s14 | Wrong content | A field is removed from the order webhook payload | wordpress | CHANGED message/fields-lost “payload lost fields” | **caught** | can't see | not run |
-| s15 | Integrations | The Zapier hook URL changed | wordpress | BROKE message/missing “Zapier webhook to hooks.zapier.com/hooks/catch/1234567/ab” | **caught** | can't see | not run |
-| s16 | Integrations | The order webhook to the CRM fails (and WooCommerce disables it after five failures) (observe mode) | wordpress | BROKE message/failing “now fails”<br>or BROKE send/failed “fails (HTTP 500)” | **caught** | can't see | not run |
-| s17 | Deliverability | The From domain changes and breaks DMARC alignment | wordpress | BROKE dns/dmarc “fails DMARC alignment” | **caught** | missed | not run |
-| s18 | Deliverability | SPF needs more than 10 DNS lookups | wordpress | BROKE dns/spf “more than 10 DNS lookups” | **caught** | can't see | not run |
-| s19 | Staging safety | A staging refresh brings a real customer address (observe mode) | wordpress | NEW seal/real-recipient “really sent to an address outside the allowlist” | **caught** | **caught** | not run |
-| s20 | Inbound | A Stripe payment no longer triggers the payment email | wordpress | BROKE message/missing “email to jamie@example.net is no longer sent” | **caught** | missed | not run |
+## Site scenarios
+
+| # | Area | Scenario | Stack | Expected | Echo | Mailpit | Buggregator | Staging Shield |
+|---|---|---|---|---|---|---|---|---|
+| s01 | Lost messages | The contact form stops emailing the shop owner | wordpress | BROKE message/missing “owner@shop.example.com is no longer sent” | **caught** | missed | not run | not run |
+| s02 | Lost messages | The contact form's autoresponder is lost | wordpress | BROKE message/missing “to the test submitter is no longer sent” | **caught** | missed | not run | not run |
+| s03 | Lost messages | The owner's order SMS is gone after a plugin update | wordpress | BROKE message/missing “Twilio SMS to +447700900123 is no longer sent” | **caught** | can't see | not run | not run |
+| s04 | Lost messages | The new-order Slack alert is removed | wordpress | BROKE message/missing “Slack message is no longer sent” | **caught** | can't see | not run | not run |
+| s05 | Lost messages | The GA4 purchase event is missing | wordpress | BROKE message/missing “GA4 event "purchase" is no longer sent” | **caught** | can't see | not run | not run |
+| s06 | Lost messages | Laravel's queued order email is stuck (the job throws) | laravel | BROKE message/missing “email to the test submitter is no longer sent” | **caught** | missed | not run | not run |
+| s07 | Lost messages | The Next.js welcome email (Resend) now throws | next | BROKE message/missing “Resend email to the test submitter is no longer sent” | **caught** | missed | not run | not run |
+| s08 | Lost messages | The receipt is never sent because cron is off | wordpress | BROKE message/missing “email to the test submitter is no longer sent” | **caught** | missed | not run | not run |
+| s09 | Wrong content | The owner's notification goes to the wrong address | wordpress | NEW message/new “webmaster@old-agency.example.net is now sent”<br>or BROKE message/missing “owner@shop.example.com is no longer sent” | **caught** | **caught** | not run | not run |
+| s10 | Wrong content | A merge tag is left unreplaced in the receipt | wordpress | BROKE content/placeholder “{customer_first_name}” | **caught** | **caught** | not run | not run |
+| s11 | Wrong content | A PHP warning is printed into the order email (plain PHP) | php | BROKE content/php-error “PHP error printed in email” | **caught** | **caught** | not run | not run |
+| s12 | Wrong content | The receipt links to the staging site | wordpress | NEW content/dev-link “staging.shop.test” | **caught** | **caught** | not run | not run |
+| s13 | Wrong content | The order SMS is now 3 segments | wordpress | NEW sms/parts “more than one part” | **caught** | can't see | not run | not run |
+| s14 | Wrong content | A field is removed from the order webhook payload | wordpress | BROKE message/fields-lost “payload lost fields” | **caught** | can't see | not run | not run |
+| s15 | Integrations | The Zapier hook URL changed | wordpress | BROKE message/missing “Zapier webhook to hooks.zapier.com/hooks/catch/1234567/ab” | **caught** | can't see | not run | not run |
+| s16 | Integrations | The order webhook to the CRM fails (and WooCommerce disables it after five failures) (observe mode) | wordpress | BROKE message/failing “now fails”<br>or BROKE send/failed “fails (HTTP 500)” | **caught** | can't see | not run | not run |
+| s17 | Deliverability | The From domain changes and breaks DMARC alignment | wordpress | BROKE dns/dmarc “fails DMARC alignment” | **caught** | missed | not run | not run |
+| s18 | Deliverability | SPF needs more than 10 DNS lookups | wordpress | BROKE dns/spf “more than 10 DNS lookups” | **caught** | can't see | not run | not run |
+| s19 | Staging safety | A staging refresh brings a real customer address (observe mode) | wordpress | NEW seal/real-recipient “really sent to an address outside the allowlist” | **caught** | **caught** | not run | not run |
+| s20 | Inbound | A Stripe payment no longer triggers the payment email | wordpress | BROKE message/missing “email to jamie@example.net is no longer sent” | **caught** | missed | not run | not run |
 
 **caught**: the expected change was reported · found, as X: the problem was reported in another class · missed · can't see: outside what the tool captures · error: the tool failed (see Details) · not run: the tool wasn't available
+
+## Environment scenarios
+
+| # | Scenario | Needs | Broken state | Echo must | Echo |
+|---|---|---|---|---|---|
+| e01 | The site is down at snapshot and at compare | local | the fixture site stops answering: before the snapshot, then before the compare against a snapshot taken while it was up | snapshot: exit 3, says “every action failed”<br>compare: exit 3, verdict error, never “nothing broke”, never “all clear” | **caught** |
+| e02 | Two compares run at once against one Echo | local | two projects compare at the same moment, as two CI jobs would; one site tags all its mail, the other sends the owner's copy over plain SMTP with no run | compare a: exit 0, never “foreign mail”, never “messages could not be tied”, no BROKE<br>compare b: exit 0, says “1 message could not be tied”, never “foreign mail”, never “messages could not be tied” | **caught** |
+| e03 | A token-protected Echo on 0.0.0.0, as the GitHub Action's service container runs it | local | Echo listens on 0.0.0.0 with a token and is asked from another container (Host: echo:23200), instead of on loopback without one | up without a token: exit 2, says “set --token”<br>requests: says “live view without the token: 401”, says “live view with the token: 200”, says “API without the token: 401”, says “API with the token: 200” | **caught** |
+| e04 | The queue sends the receipt later than quiet | local | the receipt goes through a queue that sends it 2.5 s after checkout, while the next action runs; quiet is 1 s | compare: exit 0, says “after the action ended and is counted with it”, no BROKE | **caught** |
+| e05 | The PDF invoice is no longer attached | local | the invoice plugin stops attaching invoice-1042.pdf after an update; the receipt itself is still sent | compare: exit 0, BROKE message/attachment-lost “invoice-1042.pdf” | **caught** |
+| e06 | A large newsletter through the Laravel connector | testbed | the newsletter grows to 2 MB of HTML with a 5 MB PDF; the connector waits 2 s for Echo (laravel/overlay/routes/web.php) | snapshot: exit 0, says “message: email to”, never “[blocked]”, never “[failed]”, never “action error” | **caught** |
+| e07 | Echo restarts in the middle of a compare | local | Echo is stopped and started again while the first of two actions runs; its inbox is in memory | compare: says “echo restarted during the run” | **caught** |
+| e08 | The sites can't reach Echo while it is sealed | testbed | Echo moves off the ports the gate forwards (18863-18865), so every connector and the sendmail stand-in fail to reach it; the CLI still can | wordpress: says “can't reach echo”, BROKE message/missing<br>laravel: says “can't reach echo”, BROKE message/missing<br>next: says “can't reach echo”, BROKE message/missing<br>php: never “nothing broke”, BROKE message/missing | missed |
+| e09 | Order numbers, dates and links change on every run | testbed | s10, s11 and s12 broken, whose emails carry an order number and a date that differ on every run, compared with their good state | s10: BROKE content/placeholder “{customer_first_name}”, no CHANGED<br>s11: BROKE content/php-error “PHP error”, no CHANGED<br>s12: NEW content/dev-link “staging.shop.test”, no CHANGED | missed |
+| e10 | Connector and Echo versions differ | testbed | the WordPress connector of Echo 1.0.0 (wire 1) against this Echo, then this connector against Echo 1.0.0, both built from this repository | old connector: exit 0, says “message: email to”, never “action error”<br>old Echo: exit 0, says “message: email to”, never “action error” | **caught** |
+| e11 | The snapshot was taken by an older Echo | local | the baseline is a real snapshot from each released schema (bench/testdata/runs/<version>/run.json), from before an upgrade | compare: exit 0, never “take a new snapshot”, never “incompatible”, no BROKE | **caught** |
+| e12 | Two action names collide | local | a second action is named contact-form next to Contact form, so both would get the ID action:contact-form | snapshot: exit 2, says “both get the ID action:contact-form” | **caught** |
+| e13 | Snapshot and compare on a Windows runner | windows | on Windows, a command action (cmd /C), a flush command and an HTTP action; the command stops sending its email | compare: exit 0, BROKE message/missing “ann@shop.test” | not run |
+| e14 | The DNS resolver is down for the deliverability checks | local | check on s17's and s18's From domains while the resolver refuses queries, then while it takes them and never answers | s17: exit 3, says “could not reach the resolver”<br>s18: exit 3, says “could not reach the resolver”<br>silent: exit 3, says “could not reach the resolver”, never “slower than 30 s” | **caught** |
+| e15 | Right-to-left, CJK and bidi override text | local | the order email has a CJK subject, Arabic and Hebrew text and a name wrapped in a right-to-left override (U+202E), the same at snapshot and compare | snapshot: exit 0, never “content/mojibake”, never “content/placeholder”<br>list: exit 0, says “\u202e”, never “‮”<br>compare: exit 0, no BROKE/NEW/CHANGED | **caught** |
+
+**caught**: every check of the broken state held (and the good state's held too) · missed: one didn't (see Details) · error: the good state failed its own checks or the probe couldn't run · not run: it needs a machine or the testbed this run didn't have
 
 ## How the other tools are judged
 
 - **Mailpit** (`axllent/mailpit:v1.29.2`) is the usual staging mail catcher: it receives mail over SMTP and shows it in an inbox. It has no notion of a baseline, so it can't report a change; the question here is whether a person reading the Mailpit inbox would have seen the problem. For each state, the benchmark delivers into the testbed's Mailpit, over SMTP, the emails Echo captured that the site would have handed to an SMTP server (mail sent through a provider's API, such as Resend's, never reaches an SMTP catcher), then reads them back through Mailpit's API. It counts as **caught** when the broken-state inbox visibly shows the problem (the scenario's `mailpit` text is in a message's From, To, Subject or body and wasn't in the good state's). A message that is no longer sent is a **miss**: the inbox just has one email fewer. SMS, chat, webhooks, analytics and DNS are **can't see**.
-- **MessagePit** is not run: it has no published Docker image (`docker search messagepit` finds none) or release binary we could run without building it, so its column says "not run" rather than guessing.
+- **Buggregator** (`ghcr.io/buggregator/server:2.4.1`) is a debug hub for PHP with an SMTP catcher, HTTP dumps and an SMS module. Its SMTP inbox is judged as Mailpit's is: the same emails go in over SMTP and come back through its API (`GET /api/events?type=smtp`, cleared between states). Its HTTP dump and SMS modules only receive what a site is re-pointed to send them, one SDK at a time, which a staging copy of a live site isn't: SMS, chat, webhooks, analytics and DNS are **can't see**. Not run this time: buggregator isn't reachable at http://127.0.0.1:18857 (make -C testbed up TOOLS=buggregator): GET http://127.0.0.1:18857/api/events?type=smtp: 502 Bad Gateway.
+- **Staging Shield** (1.0.2, free, from wordpress.org) is a WordPress plugin that detects a staging copy and stops its email. It keeps no record of what a site sends and no baseline, so a lost, changed or new message is **can't see** for it. For the staging scenarios the benchmark activates it in the testbed's WordPress, runs the scenario's action in its broken state with Echo observing (so mail really goes out, to the testbed's Mailpit) and counts it **caught** when the email to the real address did not leave. A control run first, with the plugin inactive, must deliver that email to Mailpit, or the scenario is an error rather than a catch. Not run this time: staging-shield isn't installed in the testbed's WordPress (make -C testbed up TOOLS=staging-shield): Error: The 'staging-shield' plugin could not be found..
+- **MessagePit** is not run: it has no published Docker image (`docker search messagepit` finds none) or release binary we could run without building it, so it has no column rather than a guess.
 
 ## Details
 
 ### Lost messages
 
-**s01 The contact form stops emailing the shop owner** (wordpress, action “Contact form”, seal mode, 14 s). Broken state: the 2.0 update reset “Notify the site owner” to off (wp/plugins/testbed-forms).
+**s01 The contact form stops emailing the shop owner** (wordpress, action “Contact form”, seal mode, 43 s). Broken state: the 2.0 update reset “Notify the site owner” to off (wp/plugins/testbed-forms).
 Echo: BROKE message/missing: Email to owner@shop.example.com is no longer sent (sent → not sent). Also reported: BROKE expect/unmet: Sent fewer emails than expected.
 Mailpit: the inbox has 1 email instead of 2; Mailpit keeps no baseline, so nothing says one is missing.
 
-**s02 The contact form's autoresponder is lost** (wordpress, action “Contact form”, seal mode, 14 s). Broken state: the same update switched the autoresponder off (wp/plugins/testbed-forms).
+**s02 The contact form's autoresponder is lost** (wordpress, action “Contact form”, seal mode, 43 s). Broken state: the same update switched the autoresponder off (wp/plugins/testbed-forms).
 Echo: BROKE message/missing: Email to the test submitter is no longer sent (sent → not sent). Also reported: BROKE expect/unmet: Sent fewer emails than expected.
 Mailpit: the inbox has 1 email instead of 2; Mailpit keeps no baseline, so nothing says one is missing.
 
@@ -64,7 +90,7 @@ Mailpit: Mailpit only receives email; chat messages never reach it.
 Echo: BROKE message/missing: GA4 event "purchase" is no longer sent (sent → not sent).
 Mailpit: Mailpit only receives email; analytics events never reach it.
 
-**s06 Laravel's queued order email is stuck (the job throws)** (laravel, action “Laravel subscription order”, seal mode, 14 s). Broken state: the Mailable names a view that doesn't exist, so the queued job fails in the worker (laravel/overlay/app/Mail/OrderConfirmation.php).
+**s06 Laravel's queued order email is stuck (the job throws)** (laravel, action “Laravel subscription order”, seal mode, 15 s). Broken state: the Mailable names a view that doesn't exist, so the queued job fails in the worker (laravel/overlay/app/Mail/OrderConfirmation.php).
 Echo: BROKE message/missing: Email to the test submitter is no longer sent (sent → not sent).
 Mailpit: the inbox has 0 emails instead of 1; Mailpit keeps no baseline, so nothing says one is missing.
 
@@ -72,53 +98,77 @@ Mailpit: the inbox has 0 emails instead of 1; Mailpit keeps no baseline, so noth
 Echo: BROKE message/missing: Resend email to the test submitter is no longer sent (sent → not sent).
 Mailpit: 1 email in the inbox and the problem isn't visible there.
 
-**s08 The receipt is never sent because cron is off** (wordpress, action “Checkout”, seal mode, 14 s). Broken state: the server's crontab line fails (wp: not found), so WP-Cron never runs the deferred receipt (bin/cron, Echo's flush).
+**s08 The receipt is never sent because cron is off** (wordpress, action “Checkout”, seal mode, 15 s). Broken state: the server's crontab line fails (wp: not found), so WP-Cron never runs the deferred receipt (bin/cron, Echo's flush).
 Echo: BROKE message/missing: Email to the test submitter is no longer sent (sent → not sent).
 Mailpit: the inbox has 0 emails instead of 1; Mailpit keeps no baseline, so nothing says one is missing.
 
 ### Wrong content
 
-**s09 The owner's notification goes to the wrong address** (wordpress, action “Contact form”, seal mode, 14 s). Broken state: a migration overwrote the admin email with the old agency's address (wp/plugins/testbed-forms).
+**s09 The owner's notification goes to the wrong address** (wordpress, action “Contact form”, seal mode, 13 s). Broken state: a migration overwrote the admin email with the old agency's address (wp/plugins/testbed-forms).
 Echo: BROKE message/missing: Email to owner@shop.example.com is no longer sent (sent → not sent).
 Mailpit: the inbox shows "webmaster@old-agency.example.net" in “New message from the contact form”.
 
 **s10 A merge tag is left unreplaced in the receipt** (wordpress, action “Checkout”, seal mode, 14 s). Broken state: the 2.0 receipt template uses {customer_first_name}, a tag the mailer doesn't know (wp/plugins/testbed-shop).
-Echo: BROKE content/placeholder: Unfilled placeholder {customer_first_name} in email. Also reported: CHANGED message/text: Email to the test submitter: text changed (Hi echo-test, Thanks for your order #1041. 1 × Colombia Huila, 1 kg $39.99 1 × V60 filters, 100 $10.00 Total: $49.99 Vi… → Hi {customer_first_name}, Thanks for your order #1042. 1 × Colombia Huila, 1 kg $39.99 1 × V60 filters, 100 $10.00 Tota…).
-Mailpit: the inbox shows "{customer_first_name}" in “Your Bean & Leaf order #1042”.
+Echo: BROKE content/placeholder: Unfilled placeholder {customer_first_name} in email.
+Mailpit: the inbox shows "{customer_first_name}" in “Your Bean & Leaf order #1010”.
 
-**s11 A PHP warning is printed into the order email (plain PHP)** (php, action “Wholesale order (plain PHP)”, seal mode, 14 s). Broken state: the new receipt template prints $total, which the page never sets, with display_errors on (php/site/templates/receipt-2.php).
-Echo: BROKE content/php-error: PHP error printed in email. Also reported: CHANGED message/text: Email to the test submitter: text changed (Hello echo-test 84e59e, Thanks for your wholesale order W-7797 for Corner Café. 1 x Espresso blend, 5 kg $89.00 2 x Dec… → Hello echo-test ef02d3, Thanks for your wholesale order W-2905 for Corner Café. 1 x Espresso blend, 5 kg $89.00 2 x Dec…).
-Mailpit: the inbox shows "Warning: Undefined variable" in “Wholesale order W-2905 received”.
+**s11 A PHP warning is printed into the order email (plain PHP)** (php, action “Wholesale order (plain PHP)”, seal mode, 15 s). Broken state: the new receipt template prints $total, which the page never sets, with display_errors on (php/site/templates/receipt-2.php).
+Echo: BROKE content/php-error: PHP error printed in email.
+Mailpit: the inbox shows "Warning: Undefined variable" in “Wholesale order W-3976 received”.
 
-**s12 The receipt links to the staging site** (wordpress, action “Checkout”, seal mode, 14 s). Broken state: the order link is built from a URL copied from staging (wp/plugins/testbed-shop).
-Echo: NEW content/dev-link: Email links to a development address (staging.shop.test). Also reported: CHANGED message/text: Email to the test submitter: text changed (Hi echo-test, Thanks for your order #1043. 1 × Colombia Huila, 1 kg $39.99 1 × V60 filters, 100 $10.00 Total: $49.99 Vi… → Hi echo-test, Thanks for your order #1044. 1 × Colombia Huila, 1 kg $39.99 1 × V60 filters, 100 $10.00 Total: $49.99 Vi…).
-Mailpit: the inbox shows "staging.shop.test" in “Your Bean & Leaf order #1044”.
+**s12 The receipt links to the staging site** (wordpress, action “Checkout”, seal mode, 15 s). Broken state: the order link is built from a URL copied from staging (wp/plugins/testbed-shop).
+Echo: NEW content/dev-link: Email links to a development address (staging.shop.test). Also reported: CHANGED message/text: Email to the test submitter: text changed (Hi echo-test,
+
+Thanks for your order #1011.
+
+  1 × Colombia Huila, 1 kg  $39.99
+  1 × V60 filters, 100  $10.00
+
+Total: $49.99
+
+View your order: https://shop.example.com/my-account/orders/1011/
+
+Bean & Leaf
+ → Hi echo-test,
+
+Thanks for your order #1012.
+
+  1 × Colombia Huila, 1 kg  $39.99
+  1 × V60 filters, 100  $10.00
+
+Total: $49.99
+
+View your order: https://staging.shop.test/my-account/orders/1012/
+
+Bean & Leaf
+).
+Mailpit: the inbox shows "staging.shop.test" in “Your Bean & Leaf order #1012”.
 
 **s13 The order SMS is now 3 segments** (wordpress, action “Checkout”, seal mode, 14 s). Broken state: the SMS gained a greeting with emoji and curly quotes: UCS-2, 3 parts (wp/plugins/testbed-shop).
-Echo: NEW sms/parts: SMS needs more than one part. Also reported: CHANGED message/text: Twilio SMS to the test number: text changed (Bean & Leaf: order #1045 is confirmed. Track it at https://shop.example.com/t/1045 → 🎉 Hi echo-test! Thanks so much for your order #1046 with Bean & Leaf ☕️ We’re roasting your beans now and they’ll ship …).
+Echo: NEW sms/parts: SMS needs more than one part. Also reported: CHANGED message/text: Twilio SMS to the test number: text changed (Bean & Leaf: order #1013 is confirmed. Track it at https://shop.example.com/t/1013 → 🎉 Hi echo-test! Thanks so much for your order #1014 with Bean & Leaf ☕️ We’re roasting your beans now and they’ll ship tomorrow. Track it any time at https://shop.example.com/t/1014 🚚).
 Mailpit: Mailpit only receives email; SMS never reach it.
 
 **s14 A field is removed from the order webhook payload** (wordpress, action “Checkout”, seal mode, 14 s). Broken state: order.created no longer carries billing.email (wp/plugins/testbed-shop).
-Echo: CHANGED message/fields-lost: WooCommerce webhook to gate ("order.created"): payload lost fields.
+Echo: BROKE message/fields-lost: WooCommerce webhook to gate ("order.created"): payload lost fields.
 Mailpit: Mailpit only receives email; webhooks never reach it.
 
 ### Integrations
 
-**s15 The Zapier hook URL changed** (wordpress, action “Contact form”, seal mode, 14 s). Broken state: the lead goes to a test Zap's catch hook instead of the live one (wp/plugins/testbed-forms).
+**s15 The Zapier hook URL changed** (wordpress, action “Contact form”, seal mode, 12 s). Broken state: the lead goes to a test Zap's catch hook instead of the live one (wp/plugins/testbed-forms).
 Echo: BROKE message/missing: Zapier webhook to hooks.zapier.com/hooks/catch/1234567/ab••••• is no longer sent (sent → not sent). Also reported: NEW message/new: Zapier webhook to hooks.zapier.com/hooks/catch/7654321/zx••••• is now sent.
 Mailpit: Mailpit only receives email; webhooks never reach it.
 
-**s16 The order webhook to the CRM fails (and WooCommerce disables it after five failures)** (wordpress, action “Order webhook to the CRM”, observe mode, 14 s). Broken state: the CRM's endpoint answers 500 (crm/index.php); the shop counts failures and disables the webhook after five, as WooCommerce does.
+**s16 The order webhook to the CRM fails (and WooCommerce disables it after five failures)** (wordpress, action “Order webhook to the CRM”, observe mode, 15 s). Broken state: the CRM's endpoint answers 500 (crm/index.php); the shop counts failures and disables the webhook after five, as WooCommerce does.
 Echo: BROKE message/failing: WooCommerce webhook to gate ("order.updated") now fails (sent → failed).
 Mailpit: Mailpit only receives email; webhooks never reach it.
 
 ### Deliverability
 
-**s17 The From domain changes and breaks DMARC alignment** (wordpress, action “Contact form”, seal mode, 14 s). Broken state: the autoresponder is sent from the newsletter domain, which SendGrid was never set up for (wp/plugins/testbed-forms, dns/zone.yaml).
+**s17 The From domain changes and breaks DMARC alignment** (wordpress, action “Contact form”, seal mode, 13 s). Broken state: the autoresponder is sent from the newsletter domain, which SendGrid was never set up for (wp/plugins/testbed-forms, dns/zone.yaml).
 Echo: BROKE dns/dmarc: Mail from the sending service fails DMARC alignment. Also reported: NEW email/from-domain: Email is sent from another domain (beanleaf-news.example.net); NEW dns/dkim: No DKIM key found for the sending service; CHANGED message/from: Email to the test submitter: sender changed (hello@shop.example.com → hello@beanleaf-news.example.net).
 Mailpit: 2 emails in the inbox and the problem isn't visible there.
 
-**s18 SPF needs more than 10 DNS lookups** (wordpress, action “Contact form”, seal mode, 14 s). Broken state: marketing added HubSpot, Brevo and Amazon SES to the SPF record: 11 includes (dns/zone.yaml).
+**s18 SPF needs more than 10 DNS lookups** (wordpress, action “Contact form”, seal mode, 12 s). Broken state: marketing added HubSpot, Brevo and Amazon SES to the SPF record: 11 includes (dns/zone.yaml).
 Echo: BROKE dns/spf: SPF needs more than 10 DNS lookups.
 Mailpit: Mailpit only receives email; DNS records never reach it.
 
@@ -134,14 +184,89 @@ Mailpit: the inbox shows "jamie.rivera@gmail.com" in “Your Bean & Leaf order #
 Echo: BROKE message/missing: Email to jamie@example.net is no longer sent (sent → not sent).
 Mailpit: the inbox has 0 emails instead of 1; Mailpit keeps no baseline, so nothing says one is missing.
 
+### Environment
+
+**e01 The site is down at snapshot and at compare** (needs local, probe `site-down`, 6 s). Broken state: the fixture site stops answering: before the snapshot, then before the compare against a snapshot taken while it was up.
+Echo: snapshot: exit 3, says “every action failed”; compare: exit 3, verdict error, never “nothing broke”, never “all clear”.
+
+**e02 Two compares run at once against one Echo** (needs local, probe `two-runs`, 18 s). Broken state: two projects compare at the same moment, as two CI jobs would; one site tags all its mail, the other sends the owner's copy over plain SMTP with no run.
+Echo: compare a: exit 0, never “foreign mail”, never “messages could not be tied”, no BROKE; compare b: exit 0, says “1 message could not be tied”, never “foreign mail”, never “messages could not be tied”.
+
+**e03 A token-protected Echo on 0.0.0.0, as the GitHub Action's service container runs it** (needs local, probe `token`, 0 s). Broken state: Echo listens on 0.0.0.0 with a token and is asked from another container (Host: echo:23200), instead of on loopback without one.
+Echo: up without a token: exit 2, says “set --token”; requests: says “live view without the token: 401”, says “live view with the token: 200”, says “API without the token: 401”, says “API with the token: 200”.
+
+**e04 The queue sends the receipt later than quiet** (needs local, probe `slow-queue`, 20 s). Broken state: the receipt goes through a queue that sends it 2.5 s after checkout, while the next action runs; quiet is 1 s.
+Echo: compare: exit 0, says “after the action ended and is counted with it”, no BROKE.
+
+**e05 The PDF invoice is no longer attached** (needs local, probe `attachment`, 4 s). Broken state: the invoice plugin stops attaching invoice-1042.pdf after an update; the receipt itself is still sent.
+Echo: compare: exit 0, BROKE message/attachment-lost “invoice-1042.pdf”.
+
+**e06 A large newsletter through the Laravel connector** (needs testbed, probe `large-laravel`, 12 s). Broken state: the newsletter grows to 2 MB of HTML with a 5 MB PDF; the connector waits 2 s for Echo (laravel/overlay/routes/web.php).
+Echo: snapshot: exit 0, says “message: email to”, never “[blocked]”, never “[failed]”, never “action error”.
+
+**e07 Echo restarts in the middle of a compare** (needs local, probe `restart`, 12 s). Broken state: Echo is stopped and started again while the first of two actions runs; its inbox is in memory.
+Echo: compare: says “echo restarted during the run”.
+
+**e08 The sites can't reach Echo while it is sealed** (needs testbed, probe `unreachable`, 107 s). Broken state: Echo moves off the ports the gate forwards (18863-18865), so every connector and the sendmail stand-in fail to reach it; the CLI still can.
+Echo: missed: laravel: doesn't say "can't reach echo".
+
+**e09 Order numbers, dates and links change on every run** (needs testbed, probe `noise`, 86 s). Broken state: s10, s11 and s12 broken, whose emails carry an order number and a date that differ on every run, compared with their good state.
+Echo: missed: s12: reports CHANGED message/text: Email to the test submitter: text changed (Hi echo-test,
+
+Thanks for your order #1023.
+
+  1 × Colombia Huila, 1 kg  $39.99
+  1 × V60 filters, 100  $10.00
+
+Total: $49.99
+
+View your order: https://shop.example.com/my-account/orders/1023/
+
+Bean & Leaf
+ → Hi echo-test,
+
+Thanks for your order #1024.
+
+  1 × Colombia Huila, 1 kg  $39.99
+  1 × V60 filters, 100  $10.00
+
+Total: $49.99
+
+View your order: https://staging.shop.test/my-account/orders/1024/
+
+Bean & Leaf
+).
+
+**e10 Connector and Echo versions differ** (needs testbed, probe `version-skew`, 19 s). Broken state: the WordPress connector of Echo 1.0.0 (wire 1) against this Echo, then this connector against Echo 1.0.0, both built from this repository.
+Echo: old connector: exit 0, says “message: email to”, never “action error”; old Echo: exit 0, says “message: email to”, never “action error”.
+
+**e11 The snapshot was taken by an older Echo** (needs local, probe `old-snapshot`, 3 s). Broken state: the baseline is a real snapshot from each released schema (bench/testdata/runs/<version>/run.json), from before an upgrade.
+Echo: compare: exit 0, never “take a new snapshot”, never “incompatible”, no BROKE.
+
+**e12 Two action names collide** (needs local, probe `colliding-names`, 2 s). Broken state: a second action is named contact-form next to Contact form, so both would get the ID action:contact-form.
+Echo: snapshot: exit 2, says “both get the ID action:contact-form”.
+
+**e13 Snapshot and compare on a Windows runner** (needs windows, probe `windows`, 0 s). Broken state: on Windows, a command action (cmd /C), a flush command and an HTTP action; the command stops sending its email.
+Echo: not run: needs a Windows machine; this probe runs only there (CI's go-windows job tests snapshot and compare in ./cmd/..., not this probe).
+
+**e14 The DNS resolver is down for the deliverability checks** (needs local, probe `resolver-down`, 15 s). Broken state: check on s17's and s18's From domains while the resolver refuses queries, then while it takes them and never answers.
+Echo: s17: exit 3, says “could not reach the resolver”; s18: exit 3, says “could not reach the resolver”; silent: exit 3, says “could not reach the resolver”, never “slower than 30 s”.
+
+**e15 Right-to-left, CJK and bidi override text** (needs local, probe `non-ascii`, 4 s). Broken state: the order email has a CJK subject, Arabic and Hebrew text and a name wrapped in a right-to-left override (U+202E), the same at snapshot and compare.
+Echo: snapshot: exit 0, never “content/mojibake”, never “content/placeholder”; list: exit 0, says “\u202e”, never “‮”; compare: exit 0, no BROKE/NEW/CHANGED.
+
 ## Run it
 
+From a clean checkout, with Docker (Compose v2) and Go:
+
 ```sh
-make build                 # bin/rhythm-echo
-make -C testbed up         # the sites on :18850-18855 (a few minutes the first time, then about 30 s)
-go run -tags testbed ./testbed/bench                 # Echo + Mailpit
-go run -tags testbed ./testbed/bench -only s05,s09   # some scenarios
+git clone https://github.com/RhythmShahriar/echo && cd echo
+make -C testbed up TOOLS="echo mailpit buggregator staging-shield"   # the sites on :18850-18858 (a few minutes the first time, then about 30 s)
+make -C testbed benchmark TOOLS="echo mailpit buggregator staging-shield"   # builds Echo, runs every scenario, writes docs/benchmark.md
+make -C testbed reproduce TOOLS="echo mailpit buggregator staging-shield"   # runs it twice and fails if any outcome differs
+go run -tags testbed ./testbed/bench -only s05,e05   # some scenarios
+go run -tags testbed ./testbed/bench -only env -tools none   # the environment scenarios; the local ones need no Docker
 make -C testbed down
 ```
 
-The benchmark starts its own Echo (`rhythm-echo up` on 0.0.0.0:18860-18862 with the testbed's token; the containers reach it through the testbed's gate) and a fixture DNS server on 127.0.0.1:18870 for the deliverability scenarios. Runs are kept in `testbed/bench/work/<id>/` (the snapshot, compare.json, DNS check output); `work/results.json` has every result.
+The benchmark starts its own Echo (`rhythm-echo up` on 0.0.0.0:18860-18862 with the token `make up` wrote to `testbed/runtime/token`, a fresh one each time and masked here; the containers reach it through the testbed's gate) and a fixture DNS server on 127.0.0.1:18870 for the deliverability scenarios. The local environment probes run their own Echo and fixtures on 127.0.0.1:23200-23239. The version skew scenario builds Echo v1.0.0 from its git tag, with its modules from the Go module cache or, when they aren't there, downloaded: its first run needs the network unless the cache is warm. Buggregator and Staging Shield are only set up with `TOOLS` naming them: Buggregator's image is pulled and Staging Shield is downloaded from wordpress.org into the WordPress image when it's built. Runs are kept in `testbed/bench/work/<id>/` (the snapshot, compare.json, DNS check output, each environment step's JSON); `work/results.json` has every result.
