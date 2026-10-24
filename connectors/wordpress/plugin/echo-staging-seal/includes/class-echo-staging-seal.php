@@ -115,13 +115,32 @@ final class Echo_Staging_Seal {
 	 * @return array<mixed>
 	 */
 	public static function connector_settings( $file ): array {
-		$file = is_array( $file ) ? $file : array();
+		$file   = is_array( $file ) ? $file : array();
+		$locked = self::url_locked( $file );
 		foreach ( self::stored() as $key => $value ) {
+			if ( 'url' === $key && $locked ) {
+				continue;
+			}
 			if ( ! isset( $file[ $key ] ) || '' === $file[ $key ] ) {
 				$file[ $key ] = $value;
 			}
 		}
 		return $file;
+	}
+
+	/**
+	 * Whether Echo's URL is kept off the settings screen. A token set in
+	 * wp-config.php, the environment or the installer's settings file goes
+	 * only to a URL set there too: otherwise an administrator account alone
+	 * could send that token elsewhere, or point the site at a server that
+	 * answers allow for every send.
+	 *
+	 * @param array<mixed> $file the installer's settings file.
+	 */
+	public static function url_locked( array $file ): bool {
+		$file = array_filter( $file, 'is_string', ARRAY_FILTER_USE_KEY );
+		return '' !== Rhythm_Echo::setting( 'RHYTHM_ECHO_TOKEN', $file, 'token' )
+			|| '' !== Rhythm_Echo::setting( 'RHYTHM_ECHO_WRITE_TOKEN', $file, 'write_token' );
 	}
 
 	/**
@@ -154,7 +173,8 @@ final class Echo_Staging_Seal {
 		$token = trim( sanitize_text_field( self::posted( 'echo_token' ) ) );
 		$site  = sanitize_key( self::posted( 'echo_site_id' ) );
 		$new   = array(
-			'url'     => untrailingslashit( $url ),
+			// A locked URL field is not posted: keep what was there.
+			'url'     => self::url_locked( Rhythm_Echo::settings_file() ) ? ( $saved['url'] ?? '' ) : untrailingslashit( $url ),
 			'mode'    => 'observe' === $mode ? 'observe' : 'seal',
 			'site_id' => $site,
 		);
@@ -460,12 +480,21 @@ final class Echo_Staging_Seal {
 		echo '<input type="hidden" name="action" value="echo_staging_seal_settings">';
 		wp_nonce_field( 'echo_staging_seal_settings' );
 		echo '<table class="form-table" role="presentation">';
-		printf(
-			'<tr><th scope="row"><label for="echo_url">%s</label></th><td><input type="url" class="regular-text" id="echo_url" name="echo_url" value="%s" placeholder="http://127.0.0.1:8025"><p class="description">%s</p></td></tr>',
-			esc_html__( 'Echo URL', 'echo-staging-seal' ),
-			esc_attr( $saved['url'] ?? '' ),
-			esc_html__( 'Echo\'s API as this site reaches it.', 'echo-staging-seal' )
-		);
+		if ( self::url_locked( Rhythm_Echo::settings_file() ) ) {
+			printf(
+				'<tr><th scope="row"><label for="echo_url">%s</label></th><td><input type="url" class="regular-text" id="echo_url" value="%s" readonly disabled><p class="description">%s</p></td></tr>',
+				esc_html__( 'Echo URL', 'echo-staging-seal' ),
+				esc_attr( $cfg['url'] ),
+				esc_html__( 'The token is set outside this screen (wp-config.php, the environment or the installer\'s settings file), so the URL it goes to is too: set RHYTHM_ECHO_URL there.', 'echo-staging-seal' )
+			);
+		} else {
+			printf(
+				'<tr><th scope="row"><label for="echo_url">%s</label></th><td><input type="url" class="regular-text" id="echo_url" name="echo_url" value="%s" placeholder="http://127.0.0.1:8025"><p class="description">%s</p></td></tr>',
+				esc_html__( 'Echo URL', 'echo-staging-seal' ),
+				esc_attr( $saved['url'] ?? '' ),
+				esc_html__( 'Echo\'s API as this site reaches it.', 'echo-staging-seal' )
+			);
+		}
 		printf(
 			'<tr><th scope="row"><label for="echo_token">%s</label></th><td><input type="password" class="regular-text" id="echo_token" name="echo_token" value="" autocomplete="off" placeholder="%s"> <label><input type="checkbox" name="echo_token_clear" value="1"> %s</label><p class="description">%s</p></td></tr>',
 			esc_html__( 'Token', 'echo-staging-seal' ),

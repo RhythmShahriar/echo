@@ -643,8 +643,14 @@ func testPlugin(t *testing.T, r *rig) {
 	}
 	var saved map[string]string
 	if err := json.Unmarshal([]byte(r.wp(t, nil, "option", "get", "echo_staging_seal_settings", "--format=json")), &saved); err != nil ||
-		saved["url"] != "http://echo.test:8025" || saved["mode"] != "observe" || saved["token"] != "saved-token" || saved["site_id"] != "client-b" {
+		saved["url"] != "" || saved["mode"] != "observe" || saved["token"] != "saved-token" || saved["site_id"] != "client-b" {
 		t.Errorf("saved settings = %v (%v)", saved, err)
+	}
+	// The installer's settings file sets the token, so the screen shows
+	// the URL read-only and a posted one is not saved: the token goes
+	// only where the file says.
+	if _, page := r.browse(t, admin, http.MethodGet, tools, nil); !strings.Contains(page, `id="echo_url" value="`+r.echoURL+`" readonly disabled`) {
+		t.Error("the URL field is not read-only while the token comes from the settings file")
 	}
 	// The installer's settings file wins over the screen's; the screen
 	// fills what the file leaves out, such as the site ID.

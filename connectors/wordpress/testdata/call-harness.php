@@ -12,10 +12,10 @@
 // one's result is printed.
 // The setup may set "env" (wp_get_environment_type, default development),
 // "token" (RHYTHM_ECHO_TOKEN), "server" ($_SERVER entries), "cookie"
-// ($_COOKIE entries), "getenv" (process environment) and "require" (more
-// files to load after the plugin, such as Echo Staging Seal's class). A
-// method named Class::method is called on that class instead of
-// Rhythm_Echo.
+// ($_COOKIE entries), "getenv" (process environment), "options"
+// (get_option values) and "require" (more files to load after the
+// plugin, such as Echo Staging Seal's class). A method named
+// Class::method is called on that class instead of Rhythm_Echo.
 
 list( , $plugin, $setup, $method, $args ) = $argv;
 $setup = (array) json_decode( $setup, true );
@@ -33,8 +33,12 @@ foreach ( (array) ( $setup['cookie'] ?? array() ) as $k => $v ) {
 foreach ( (array) ( $setup['getenv'] ?? array() ) as $k => $v ) {
 	putenv( "$k=$v" );
 }
-$GLOBALS['env'] = $setup['env'] ?? 'development';
+$GLOBALS['env']     = $setup['env'] ?? 'development';
+$GLOBALS['options'] = (array) ( $setup['options'] ?? array() );
 
+function get_option( $name, $fallback = false ) {
+	return $GLOBALS['options'][ $name ] ?? $fallback;
+}
 function add_action( $hook, $cb ) {}
 function add_filter( $hook, $cb ) {}
 function do_action( $hook, ...$args ) {}

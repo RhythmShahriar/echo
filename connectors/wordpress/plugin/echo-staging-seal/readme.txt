@@ -53,6 +53,8 @@ Nothing. WordPress says a site is production when WP_ENVIRONMENT_TYPE is not set
 
 The token travels as a plain HTTP header. Keep Echo on the same machine, a private network or behind TLS when the site reaches it over a network you don't trust.
 
+When the token is set in wp-config.php (RHYTHM_ECHO_TOKEN or RHYTHM_ECHO_WRITE_TOKEN), the environment or the installer's settings file, Tools > Echo shows Echo's URL read-only: set RHYTHM_ECHO_URL there too. An administrator account alone then cannot send the token to another server.
+
 = Can one Echo serve many sites? =
 
 Yes. Give each site a Site ID in Tools > Echo (or RHYTHM_ECHO_SITE_ID in wp-config.php) and, if the hub hands them out, its own write token (RHYTHM_ECHO_WRITE_TOKEN), which can send captures but not read them.

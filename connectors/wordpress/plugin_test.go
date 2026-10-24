@@ -240,3 +240,35 @@ func TestPluginArgv(t *testing.T) {
 		}
 	}
 }
+
+// A token set outside the settings screen goes only to a URL set there
+// too: the screen's saved URL is ignored then, so an administrator account
+// alone cannot send it to another server.
+func TestPluginURLLocked(t *testing.T) {
+	saved := `"options":{"echo_staging_seal_settings":{"url":"http://elsewhere.test:8025","token":"saved","site_id":"client-b"}}`
+	for _, tc := range []struct {
+		name, setup string
+		file        map[string]any
+		wantURL     string
+	}{
+		{"no outside token", "", map[string]any{}, "http://elsewhere.test:8025"},
+		{"token constant", `"token":"t",`, map[string]any{}, ""},
+		{"token env", `"getenv":{"RHYTHM_ECHO_TOKEN":"t"},`, map[string]any{}, ""},
+		{"write token env", `"getenv":{"RHYTHM_ECHO_WRITE_TOKEN":"w"},`, map[string]any{}, ""},
+		{"token in the settings file", "", map[string]any{"token": "t"}, ""},
+		{"file URL wins", "", map[string]any{"url": "http://127.0.0.1:8025", "token": "t"}, "http://127.0.0.1:8025"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			setup := `{` + tc.setup + saved + `,"require":["plugin/echo-staging-seal/includes/class-echo-staging-seal.php"]}`
+			var got map[string]any
+			callPHP(t, setup, "Echo_Staging_Seal::connector_settings", &got, tc.file)
+			if u, _ := got["url"].(string); u != tc.wantURL {
+				t.Errorf("url = %q, want %q", u, tc.wantURL)
+			}
+			// The rest of what the screen saved still fills the gaps.
+			if got["site_id"] != "client-b" {
+				t.Errorf("site_id = %v", got["site_id"])
+			}
+		})
+	}
+}
