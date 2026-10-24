@@ -11,10 +11,13 @@ permissions:
 jobs:
   # The shared workflows are pinned by commit; Dependabot can't bump a
   # branch, so move the SHA by hand when RhythmShahriar/.github changes.
+  # go runs vet and go test -race ./... on Linux, Windows and macOS.
   go:
-    uses: RhythmShahriar/.github/.github/workflows/ci-go.yml@d296f34c9b6629211c68561504d938c404afaf74 # master
+    uses: RhythmShahriar/.github/.github/workflows/ci-go.yml@fb09694450362b6d4b68c631182d78a69b653c83 # master
+    with:
+      os: '["ubuntu-latest", "windows-latest", "macos-latest"]'
   commitlint:
-    uses: RhythmShahriar/.github/.github/workflows/commitlint.yml@d296f34c9b6629211c68561504d938c404afaf74 # master
+    uses: RhythmShahriar/.github/.github/workflows/commitlint.yml@fb09694450362b6d4b68c631182d78a69b653c83 # master
   actionlint:
     runs-on: ubuntu-latest
     steps:
@@ -39,10 +42,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
         node: [20, 24]
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     defaults:
       run:
+        shell: bash
         working-directory: connectors/node
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -59,8 +64,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
         php: ["8.2", "8.3"]
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+        working-directory: connectors/laravel
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - uses: shivammathur/setup-php@bf6b4fbd49ca58e4608c9c89fba0b8d90bd2a39f # 2.35.5
@@ -69,15 +79,22 @@ jobs:
           tools: composer:v2
           coverage: none
       # The package Makefile runs PHP and Composer in Docker; on the runner
-      # they run natively, so the matrix picks the PHP version.
-      - run: make -C connectors/laravel install test COMPOSER=composer PHP=php
+      # they run natively (what make install phpunit analyse runs), so the
+      # matrix picks the PHP version and Windows needs no make.
+      - run: composer install --no-interaction --no-progress
+      - run: php vendor/bin/phpunit
       - if: matrix.php == '8.3'
-        run: make -C connectors/laravel analyse PHP=php
+        run: php -d memory_limit=1G vendor/bin/phpstan analyse --no-progress
 
-  # Windows: the store, config, runner and CLI tests plus a real snapshot
-  # and compare against the CI fixture under php -S (integrations/ci-fixture).
-  go-windows:
-    runs-on: windows-latest
+  # The CI fixture's real snapshot and compare under php -S
+  # (integrations/ci-fixture) and the Action's own test, with PHP set up
+  # on every OS (the go job's runners may not have it).
+  integrations-php:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
@@ -87,20 +104,7 @@ jobs:
         with:
           php-version: "8.3"
           coverage: none
-      - run: go test ./runner ./store ./config ./cmd/... ./integrations/...
-
-  go-macos:
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-      - uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
-        with:
-          go-version-file: go.mod
-      - uses: shivammathur/setup-php@bf6b4fbd49ca58e4608c9c89fba0b8d90bd2a39f # 2.35.5
-        with:
-          php-version: "8.3"
-          coverage: none
-      - run: go test -race ./...
+      - run: go test ./integrations/...
 
   # The container image: build it from the Dockerfile, send a mail over
   # SMTP and check the Mailpit API answers in Mailpit's shape.
