@@ -488,7 +488,7 @@ func replayer(cfg config.Config, dir, cfgPath string) runner.Replayer {
 // scanConfigs reads config files in reach (.env, wp-config.php) so replay
 // can refuse to run where live payment keys are configured: those in the
 // working folder, in the project folder dir when Echo's config was found
-// above it, and Echo's config itself.
+// above it and in Echo's config itself.
 func scanConfigs(dir, cfgPath string) map[string]string {
 	out := map[string]string{}
 	files := []string{".env", "wp-config.php", "../wp-config.php", cmp.Or(cfgPath, config.Path())}

@@ -956,7 +956,7 @@ const (
 )
 
 // envelope is the one JSON shape every command's --json writes: what it
-// is, counts and a verdict that read the same for every kind, and the
+// is, counts and a verdict that read the same for every kind, then the
 // command's own data.
 type envelope struct {
 	Schema   string      `json:"schema"`
@@ -1008,7 +1008,7 @@ type replayData struct {
 }
 
 // comparisonData is a comparison as an envelope holds it: "actions" is
-// the compared run's actions, as in a run, and their count is in the
+// the compared run's actions, as in a run; their count is in the
 // summary.
 type comparisonData struct {
 	*model.Comparison

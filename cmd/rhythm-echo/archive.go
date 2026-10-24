@@ -34,7 +34,7 @@ const (
 // exportSnapshot writes the snapshot in dir to w as a gzipped tar, every
 // file under name/ (run.json, report.html and anything else saved with
 // it). Entries are 0600 and owned by no one: the files hold captured
-// messages, and whoever unpacks them shouldn't get them world-readable.
+// messages, so whoever unpacks them shouldn't get them world-readable.
 func exportSnapshot(w io.Writer, dir, name string) error {
 	gz := gzip.NewWriter(w)
 	tw := tar.NewWriter(gz)
@@ -81,10 +81,10 @@ func exportSnapshot(w io.Writer, dir, name string) error {
 // to fix, so it exits 2.
 var errArchive = errors.New("not a snapshot archive")
 
-// unpackSnapshot unpacks an archive from exportSnapshot into dest, which
-// must exist, and returns the snapshot's name in it. Every entry must sit
+// unpackSnapshot unpacks an archive from exportSnapshot into dest (which
+// must exist) and returns the snapshot's name in it. Every entry must sit
 // under one top folder with a valid snapshot name, be a plain file or
-// folder, and stay inside dest: absolute paths, .. and links are refused
+// folder and stay inside dest: absolute paths, .. and links are refused
 // before anything is written outside dest.
 func unpackSnapshot(r io.Reader, dest string) (string, error) {
 	gz, err := gzip.NewReader(r)
@@ -156,9 +156,9 @@ func writeEntry(target string, r io.Reader, size int64) error {
 	return f.Close()
 }
 
-// importSnapshot adds the snapshot in the archive at file to st, as name
-// or, when name is "", the name it was exported with, and makes it the
-// latest. An existing snapshot of that name is replaced only when
+// importSnapshot adds the snapshot in the archive at file to st as name
+// (or, when name is "", under the name it was exported with) and makes it
+// the latest. An existing snapshot of that name is replaced only when
 // replace is set. The archive is unpacked next to the snapshots and
 // checked to hold a run Echo can read before it takes a snapshot's place.
 func importSnapshot(st store.Store, file, name string, replace bool) (string, error) {

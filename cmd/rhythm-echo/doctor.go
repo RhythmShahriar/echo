@@ -136,7 +136,7 @@ func (d *doctor) add(r doctorResult, label, detail string) {
 	d.s.doctorLine(r, label, detail)
 }
 
-// end prints the tally, or writes the checks with --json, and picks the
+// end prints the tally (or writes the checks with --json) and picks the
 // exit code.
 func (d *doctor) end() int {
 	if d.s.o.json {
@@ -247,8 +247,8 @@ func (d *doctor) laravel(dir string) {
 
 // nodeCanary is the script doctor runs with the Node connector loaded. It
 // sends nothing unless the connector is on and sealed: then the request
-// to Twilio's API stops at the connector, which asks Echo, and Echo
-// answers in Twilio's place. The numbers are Twilio's test numbers and
+// to Twilio's API stops at the connector, which asks Echo; Echo answers
+// in Twilio's place. The numbers are Twilio's test numbers and
 // the account doesn't exist, should it ever get out.
 const nodeCanary = `const s = globalThis[Symbol.for('rhythm.echo.state')];
 if (!s || !s.active) {
@@ -304,7 +304,7 @@ func (d *doctor) node(dir, stack, mode string) {
 	got, _ := s.echo.Wait(s.ctx, client.Filter{Run: d.run, Action: action}, 1, 500*time.Millisecond, 8*time.Second)
 	switch {
 	case len(got) == 0:
-		d.fail(label, "the connector is on, but the canary didn't arrive in Echo")
+		d.fail(label, "the connector is on; the canary didn't arrive in Echo")
 	case got[0].Status != model.Faked:
 		d.fail(label, fmt.Sprintf("the canary arrived %s, not faked: Echo should answer for Twilio", got[0].Status))
 	default:
