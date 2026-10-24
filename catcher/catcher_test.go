@@ -181,3 +181,19 @@ func TestEmailAfterPhaseUpdates(t *testing.T) {
 		t.Errorf("after phase: %+v", m)
 	}
 }
+
+func TestLivePaymentsBlockedAndInfrastructureSkipped(t *testing.T) {
+	s := NewServer(NewInbox(10), Config{})
+	srv := httptest.NewServer(s)
+	defer srv.Close()
+	live := strings.Join([]string{"Bearer sk", "_live_", "abcdefghijklmnop1234"}, "")
+	d := post(t, srv, wire.Capture{Version: 1, Kind: "http", Phase: wire.Before, HTTP: &wire.HTTP{Method: "POST",
+		URL: "https://api.stripe.com/v1/payment_intents", Headers: map[string]string{"Authorization": live}, Body: "amount=1000"}})
+	if m, _ := s.Inbox.Get(d.ID); m.Status != model.Blocked || d.Response == nil || d.Response.Status < 400 {
+		t.Errorf("live payment: %+v %+v", m, d.Response)
+	}
+	d = post(t, srv, wire.Capture{Version: 1, Kind: "http", Phase: wire.Before, HTTP: &wire.HTTP{Method: "GET", URL: "https://api.wordpress.org/core/version-check/1.7/"}})
+	if d.Action != wire.Allow || len(s.Inbox.List(Filter{})) != 1 {
+		t.Errorf("update checks pass through unrecorded: %+v, %d messages", d, len(s.Inbox.List(Filter{})))
+	}
+}

@@ -162,6 +162,11 @@ func (s *Server) http(c wire.Capture, run, action string, src model.Source) (wir
 	if err != nil || u.Host == "" {
 		return wire.Decision{}, errors.New("http capture: bad url")
 	}
+	// The platform's own housekeeping (update checks) isn't something the
+	// site says to anyone: let it through without recording it.
+	if infrastructure(u.Hostname()) {
+		return wire.Decision{Mode: s.cfg.Mode, Action: wire.Allow}, nil
+	}
 	req := recognize.Request{Method: strings.ToUpper(h.Method), URL: u, Headers: lower(h.Headers), Body: []byte(h.Body)}
 	m := model.Message{Run: run, Action: action, Source: src, Method: req.Method,
 		URL: secrets.Redact(h.URL), Headers: redactHeaders(req.Headers), Body: s.cut(secrets.Redact(h.Body))}
@@ -182,6 +187,9 @@ func (s *Server) http(c wire.Capture, run, action string, src model.Source) (wir
 	default:
 		f := recognize.FakeFor(rec, req, &m)
 		m.Status = model.Faked
+		if recognize.Refuses(rec, req) {
+			m.Status = model.Blocked // e.g. a live payment: answered with the provider's own refusal
+		}
 		m.Response = &model.Response{Status: f.Status, Body: s.cut(f.Body)}
 		d.Action, d.Response = wire.Fake, &wire.Response{Status: f.Status, Headers: f.Headers, Body: f.Body}
 	}
@@ -373,4 +381,18 @@ func hostOnly(h string) string {
 		return host
 	}
 	return h
+}
+
+// infrastructure hosts are platform update and API checks that sites make
+// on their own; capturing them would only add noise to every action.
+var infrastructureHosts = []string{"api.wordpress.org", "downloads.wordpress.org", "wordpress.org", "s.w.org", "planet.wordpress.org", "repo.packagist.org"}
+
+func infrastructure(host string) bool {
+	host = strings.ToLower(host)
+	for _, h := range infrastructureHosts {
+		if host == h {
+			return true
+		}
+	}
+	return false
 }

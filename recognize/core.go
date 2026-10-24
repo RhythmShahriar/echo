@@ -43,7 +43,7 @@ var twilio = Recognizer{
 		}
 	},
 	Fake: func(r Request, m *model.Message) Fake {
-		sid := "SM" + model.NewID(m.ID+"twilio") + strings.Repeat("0", 20)
+		sid := "SM" + model.NewID(fmt.Sprint(time.Now().UnixNano(), m.Text, first(m.To))) + strings.Repeat("0", 20)
 		body := fmt.Sprintf(`{"sid":%q,"status":"queued","to":%q,"from":%q,"body":%q,"date_created":%q,"num_segments":"1","error_code":null,"error_message":null}`,
 			sid[:34], first(m.To), m.From, m.Text, time.Now().UTC().Format(time.RFC1123Z))
 		return Fake{Status: 201, Headers: map[string]string{"content-type": "application/json"}, Body: body}
