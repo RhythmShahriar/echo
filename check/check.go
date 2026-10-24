@@ -33,7 +33,7 @@ func Message(m model.Message, o Options) []model.Issue {
 		i.Identify()
 		out = append(out, i)
 	}
-	what := describe(m)
+	what := Describe(m)
 
 	if m.Status == model.Failed {
 		title := fmt.Sprintf("%s fails", capitalize(what))
@@ -136,9 +136,9 @@ func Message(m model.Message, o Options) []model.Issue {
 	return out
 }
 
-// describe names a message for titles: "email", "Twilio SMS", "webhook to
+// Describe names a message for titles: "email", "Twilio SMS", "webhook to
 // hooks.zapier.com". Titles must stay stable, so no IDs or times.
-func describe(m model.Message) string {
+func Describe(m model.Message) string {
 	p := providerName(m.Provider)
 	switch m.Channel {
 	case model.Email:
