@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"net/http/httptest"
 	"os"
@@ -223,5 +224,33 @@ func TestReportAndDeleteAfterSnapshots(t *testing.T) {
 	}
 	if code, _, errOut := runCLI(t, "compare", "--url", srv.URL); code != exitUsage || !strings.Contains(errOut, "no snapshot yet") {
 		t.Errorf("compare with none left: %d %q", code, errOut)
+	}
+}
+
+func TestHelpListsEveryFlag(t *testing.T) {
+	var b bytes.Buffer
+	usage(&b)
+	help := b.String()
+	flagSet(&options{}).VisitAll(func(f *flag.Flag) {
+		want := "--" + f.Name + " "
+		if len(f.Name) == 1 {
+			want = "-" + f.Name + ", "
+		}
+		if !strings.Contains(help, want) && !strings.Contains(help, "--"+f.Name+"\n") {
+			t.Errorf("help doesn't list %s", strings.TrimSpace(want))
+		}
+	})
+	for _, f := range []string{"--mode", "--force", "--wp-cli", "--container", "--uninstall", "--ca", "--pem", "[--force]"} {
+		if !strings.Contains(help, f) {
+			t.Errorf("help doesn't list %s", f)
+		}
+	}
+	for _, code := range []string{"0    ok", "1    findings", "2    usage error", "3    couldn't run", "130  interrupted"} {
+		if !strings.Contains(help, code) {
+			t.Errorf("help doesn't explain exit code %q", code)
+		}
+	}
+	if code, _, errOut := runCLI(t, "ls", "--channel", "fax"); code != exitUsage || !strings.Contains(errOut, "email, sms") {
+		t.Errorf("unknown channel: %d %q", code, errOut)
 	}
 }

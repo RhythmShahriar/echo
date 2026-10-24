@@ -86,24 +86,28 @@ and API call a site sends, seal staging so nothing reaches real people, and
 compare what each action sends before and after a change.
 
 Usage:
+  rhythm echo                            pick what to do (on a terminal)
   rhythm echo up [flags]                 start the catcher (API :8025, SMTP :1025)
-  rhythm echo install <stack> [target]   connect a site: wordpress, laravel, next, node, generic
-                                         (wordpress: [path] --url --token --proxy --ca, or
-                                         --wp-cli, --container <name>, --uninstall)
+  rhythm echo install <stack> [path]     connect a site: wordpress, laravel, next, node, generic
   rhythm echo doctor                     check that every capture layer works
   rhythm echo watch                      show messages as they arrive
-  rhythm echo ls | show <id> | clear     list, inspect or delete captured messages
+  rhythm echo ls                         list captured messages (--json for all fields)
+  rhythm echo show <id>                  one message, as JSON
+  rhythm echo clear                      delete captured messages
   rhythm echo snapshot [--name N]        run the actions in .echo/config.yaml and save what they sent
   rhythm echo compare [--snapshot N]     run them again and show what changed
   rhythm echo run                        run the actions once, no comparison
-  rhythm echo report [run]               show the last result again (--open, -o)
-  rhythm echo snapshots                  list snapshots (delete <name> removes one)
+  rhythm echo report [run | snapshot]    show the last result again (--open, -o)
+  rhythm echo snapshots [delete <name>]  list snapshots, or delete one
   rhythm echo replay <event> --to <url>  send a signed test webhook (Stripe, Standard Webhooks…)
   rhythm echo check <domain>             SPF, DKIM, DMARC and MX for the domain you send from
-  rhythm echo headers <file.eml>         check a real received email's authentication
-  rhythm echo init                       write .echo/config.yaml to edit
-  rhythm echo ca                         print the proxy's CA certificate path (for HTTPS capture)
+  rhythm echo headers <file.eml | ->     check a real received email's authentication
+  rhythm echo init [--force]             write .echo/config.yaml to edit (--force replaces it)
+  rhythm echo ca [--pem]                 print the proxy's CA certificate path (--pem: the certificate)
+  rhythm echo sendmail [-t] [-i] [-f from] [rcpt…]
+                                         sendmail stand-in for sendmail_path; reads the message on stdin
   rhythm echo update                     nothing to refresh; kept for rhythm update
+  rhythm echo help | version
 
 Catcher (up):
       --seal                 nothing leaves; Echo answers for every service (default)
@@ -113,47 +117,83 @@ Catcher (up):
       --proxy <addr>         also run an HTTP(S) proxy, e.g. 127.0.0.1:8026
       --mitm                 decrypt HTTPS in the proxy (trust the CA: rhythm echo ca)
       --allow <hosts>        hosts reachable even when sealed, e.g. api.stripe.com
-      --token <t>            require this token (needed when listening beyond loopback)
+      --token <t>            require this token (RHYTHM_ECHO_TOKEN). Needed when the API,
+                             SMTP sink or proxy listens beyond loopback; the SMTP sink
+                             then asks for it as the password
+
+Install (install <stack>):
+      --url <url>            Echo's API as the site reaches it (default from .echo/config.yaml)
+      --token <t>            the token Echo was started with
+      --mode <m>             wordpress: seal or observe, what to do when Echo is down
+      --force                wordpress: run even where WordPress says production
+      --proxy <url>          wordpress: send raw cURL through Echo's proxy
+      --ca <path>            wordpress: Echo's CA certificate, as the site sees it
+      --wp-cli               wordpress: install through WP-CLI (wp eval-file)
+      --container <name>     wordpress: install with WP-CLI inside this Docker container
+      --uninstall            wordpress: remove the connector
+
+Messages (watch, ls, clear):
+      --channel <c>          only email, sms, whatsapp, webhook, chat, analytics, payment,
+                             push or http
+      --run <id>             only messages from this run
+      --to <address>         only messages to this recipient
 
 Output:
       --json --md --junit --html   report format
   -o, --output <file>        write the report to a file (format from the extension)
       --open                 open the HTML report when done
   -q, --quiet                results only
-      --plain                no color, boxes or glyphs
+      --plain                no color, boxes or glyphs (screen readers, logs)
+      --no-color             no color
   -v, --verbose              show every message
       --fail-on <level>      exit 1 on changes at or above broke, new or changed;
-                             for run and snapshot: issues at error, warning, notice
+                             for run, snapshot, check and headers: issues at or
+                             above error, warning or notice
+
+Actions (snapshot, compare, run):
+      --config <file>        settings (default .echo/config.yaml)
+      --url <url>            where Echo runs (default http://127.0.0.1:8025; RHYTHM_ECHO_URL)
+      --action <name>        run only this action (repeatable)
+      --name <name>          snapshot: its name (default the date and time)
+      --snapshot <name>      compare: which snapshot (default the latest)
 
 Replay (inbound webhooks, sent only to staging and local addresses, with Echo sealed):
       --to <url>             where to send (absolute, or relative to site:)
       --set <path=value>     override a field, e.g. data.object.amount=1999 (repeatable)
+  -H, --header <h>           extra header, "Name: value" (repeatable)
       --secret-env <NAME>    env var with the signing secret (default per scheme,
                              e.g. ECHO_STRIPE_WEBHOOK_SECRET)
       --scheme <s>           for JSON files: stripe, standard, github, woocommerce, hmac
+      --type <t>             for JSON files: the event type (default the payload's "type")
       --list                 list the built-in events
       --wait <d>             how long to collect what the site sends back (default 5s)
 
 Deliverability (check, headers; never sends anything):
       --from-mail <file.eml> learn the real sender from a received email
-      --provider <name>      or name it: sendgrid, mailgun, ses, postmark, resend…
+      --provider <name>      or name it: sendgrid, mailgun, postmark, ses, resend, brevo,
+                             mailchimp, mandrill, sparkpost, google, microsoft, php-mail
       --selector <s>         DKIM selector to check
+      --return-path <domain> the envelope sender's domain, which SPF checks
+      --smtp-host <host>     the server that hands mail out, a name or an IP
       --mta-sts-fetch        also fetch the MTA-STS policy file over HTTPS
+      --resolver <host:port> DNS server to ask (default the system's)
       --check                (headers) also run the DNS checks for the sender
       --hops                 (headers) show the route the message took
 
-Other:
-      --config <file>        settings (default .echo/config.yaml)
-      --url <url>            where Echo runs (default http://127.0.0.1:8025; RHYTHM_ECHO_URL)
-      --action <name>        run only this action (repeatable)
-
-Exit codes: 0 ok · 1 --fail-on hit · 2 usage error · 3 couldn't run · 130 interrupted
+Exit codes (as in Tuner and Soundcheck):
+  0    ok
+  1    findings: --fail-on hit, a doctor check failed, or the site rejected a replay
+  2    usage error: a wrong command line, or .echo/config.yaml asks for what isn't there
+  3    couldn't run: Echo not reachable, a file or network error
+  130  interrupted
+  sendmail exits with sendmail's codes instead (sysexits: 64 usage, 69 Echo unreachable…)
 
 Examples:
   rhythm echo up                                   # seal this machine's staging sites
   rhythm echo install wordpress /var/www/staging   # add the WordPress connector
   rhythm echo snapshot --name before-update
   rhythm echo compare --fail-on broke
-  rhythm soundcheck snapshot staging.shop.test --echo   # forms and flows, with messages
+  rhythm soundcheck snapshot staging.shop.test --echo --level inspect,click,submit
+                                                   # forms and flows, with what they send
 `)
 }

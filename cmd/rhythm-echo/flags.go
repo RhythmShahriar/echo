@@ -14,6 +14,7 @@ import (
 
 	"github.com/RhythmShahriar/echo/client"
 	"github.com/RhythmShahriar/echo/config"
+	"github.com/RhythmShahriar/echo/model"
 	"github.com/RhythmShahriar/echo/store"
 	"github.com/RhythmShahriar/rhythm/kit/cli"
 )
@@ -36,7 +37,6 @@ type options struct {
 	allow         cli.ListFlag
 
 	channel, runID, to string
-	all                bool
 
 	// check, headers and replay
 	fromMail, provider, selector, returnPath, smtpHost, resolver string
@@ -80,7 +80,6 @@ func flagSet(o *options) *flag.FlagSet {
 	fs.StringVar(&o.channel, "channel", "", "")
 	fs.StringVar(&o.runID, "run", "", "")
 	fs.StringVar(&o.to, "to", "", "")
-	fs.BoolVar(&o.all, "all", false, "")
 
 	fs.StringVar(&o.fromMail, "from-mail", "", "")
 	fs.StringVar(&o.provider, "provider", "", "")
@@ -171,6 +170,9 @@ func parse(args []string) (*plan, error) {
 			return nil, cli.Usagef("can't tell the format of %s; add --json, --md, --junit or --html", o.output)
 		}
 	}
+	if o.channel != "" && !slices.Contains(channels, model.Channel(o.channel)) {
+		return nil, cli.Usagef("--channel %q: use one of %s", o.channel, joinChannels())
+	}
 	if o.name != "" && !store.ValidName(o.name) {
 		return nil, cli.Usagef("--name %q: use letters, digits, dots, dashes and underscores", o.name)
 	}
@@ -178,6 +180,18 @@ func parse(args []string) (*plan, error) {
 	url := cmp.Or(o.url, os.Getenv("RHYTHM_ECHO_URL"), "http://"+p.cfg.Listen)
 	p.echo = client.New(url, cmp.Or(o.token, os.Getenv("RHYTHM_ECHO_TOKEN")))
 	return p, nil
+}
+
+// channels are the values --channel accepts.
+var channels = []model.Channel{model.Email, model.SMS, model.WhatsApp, model.Webhook, model.Chat, model.Analytics,
+	model.Payment, model.Push, model.HTTP}
+
+func joinChannels() string {
+	var names []string
+	for _, c := range channels {
+		names = append(names, string(c))
+	}
+	return strings.Join(names, ", ")
 }
 
 func formatFromExt(path string) string {
