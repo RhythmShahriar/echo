@@ -72,7 +72,7 @@ type Options struct {
 	MaxBody     int64                                                             // request body limit; default DefaultMaxBody
 	CaptureBody int                                                               // response bytes kept per capture; default DefaultCaptureBody
 	Transport   http.RoundTripper                                                 // forwards allowed requests; default: a direct transport that ignores proxy env vars and dials checked addresses
-	Dial        func(ctx context.Context, network, addr string) (net.Conn, error) // opens tunnels; default net.Dialer
+	Dial        func(ctx context.Context, network, addr string) (net.Conn, error) // opens tunnels; default net.Dialer, refusing names that resolve to a metadata endpoint while sealed
 }
 
 // Resolver resolves host names. *net.Resolver satisfies it.
@@ -114,14 +114,14 @@ func New(opt Options) (*Proxy, error) {
 	if opt.CaptureBody <= 0 {
 		opt.CaptureBody = DefaultCaptureBody
 	}
-	if opt.Dial == nil {
-		d := &net.Dialer{Timeout: 15 * time.Second, KeepAlive: 30 * time.Second}
-		opt.Dial = d.DialContext
-	}
 	if opt.Resolver == nil {
 		opt.Resolver = net.DefaultResolver
 	}
 	p := &Proxy{opt: opt, conns: newConnListener(), hijacked: map[net.Conn]struct{}{}}
+	if p.opt.Dial == nil {
+		d := &net.Dialer{Timeout: 15 * time.Second, KeepAlive: 30 * time.Second}
+		p.opt.Dial = p.sealedDial(d.DialContext)
+	}
 	if p.opt.Transport == nil {
 		p.opt.Transport = &http.Transport{
 			Proxy:                 nil, // never through HTTPS_PROXY: that may be us
@@ -325,13 +325,67 @@ func (p *Proxy) allowed(ctx context.Context, host string) (bool, context.Context
 
 func (p *Proxy) sealed() bool { return p.opt.Server.Mode() == catcher.Seal }
 
+// metadataNames are the names clouds give their metadata endpoint.
+var metadataNames = map[string]bool{
+	"metadata.google.internal":   true,
+	"metadata.goog":              true,
+	"instance-data.ec2.internal": true,
+}
+
 // metadata reports whether host is a cloud metadata endpoint (AWS, GCP,
 // Azure and others use 169.254.169.254; AWS also fd00:ec2::254, which is
-// a private ULA address). A sealed site must never read cloud credentials
-// from it.
+// a private ULA address), by address or by one of metadataNames. A sealed
+// site must never read cloud credentials from it. Any other name can
+// resolve there too: sealedDial catches those.
 func metadata(host string) bool {
-	ip := net.ParseIP(strings.Trim(host, "[]"))
+	host = strings.ToLower(strings.TrimSuffix(strings.Trim(host, "[]"), "."))
+	if metadataNames[host] {
+		return true
+	}
+	ip := net.ParseIP(host)
 	return ip != nil && (ip.Equal(net.IPv4(169, 254, 169, 254)) || ip.Equal(net.ParseIP("fd00:ec2::254")))
+}
+
+// errMetadata refuses a dial that would reach a metadata endpoint.
+var errMetadata = errors.New("refused: the name resolves to a cloud metadata endpoint, which a sealed site never reaches")
+
+// sealedDial wraps the default dialer. While sealed it resolves a name
+// itself and refuses it when any address is a metadata endpoint, then
+// dials the checked addresses so a second lookup can't answer otherwise.
+// A glob such as "*" lets any name through allowed, and any name (an
+// attacker's own among them) can point at 169.254.169.254.
+func (p *Proxy) sealedDial(dial func(ctx context.Context, network, addr string) (net.Conn, error)) func(ctx context.Context, network, addr string) (net.Conn, error) {
+	return func(ctx context.Context, network, addr string) (net.Conn, error) {
+		host, port, err := net.SplitHostPort(addr)
+		if err != nil || !p.sealed() {
+			return dial(ctx, network, addr)
+		}
+		if metadata(host) {
+			return nil, &net.OpError{Op: "dial", Net: network, Err: errMetadata}
+		}
+		if net.ParseIP(host) != nil {
+			return dial(ctx, network, addr)
+		}
+		addrs, err := p.opt.Resolver.LookupHost(ctx, host)
+		if err != nil {
+			return nil, err
+		}
+		for _, a := range addrs {
+			if metadata(a) {
+				p.opt.Log.Warn("refused a name that resolves to the metadata endpoint", "host", host, "addr", a)
+				return nil, &net.OpError{Op: "dial", Net: network, Err: errMetadata}
+			}
+		}
+		var errs []error
+		for _, a := range addrs {
+			c, err := dial(ctx, network, net.JoinHostPort(a, port))
+			if err == nil {
+				return c, nil
+			}
+			errs = append(errs, err)
+		}
+		return nil, errors.Join(errs...)
+	}
 }
 
 type pinKey struct{}

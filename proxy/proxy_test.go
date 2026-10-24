@@ -522,6 +522,117 @@ func TestSealedSingleLabelAndPrivateHosts(t *testing.T) {
 	}
 }
 
+// TestMetadataByName: a glob such as "*" lets any name through, but
+// never the clouds' own names for the metadata endpoint while sealed.
+func TestMetadataByName(t *testing.T) {
+	for _, mode := range []string{catcher.Seal, catcher.Observe} {
+		p, err := New(Options{Server: catcher.NewServer(catcher.NewInbox(1), catcher.Config{Mode: mode}),
+			Allow: []string{"*"}, Resolver: testNames})
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, host := range []string{"metadata.google.internal", "METADATA.Google.Internal.", "metadata.goog", "instance-data.ec2.internal"} {
+			if got, _ := p.allowed(context.Background(), host); got != (mode == catcher.Observe) {
+				t.Errorf("%s: allowed(%q) = %v", mode, host, got)
+			}
+		}
+		if got, _ := p.allowed(context.Background(), "shop.example"); !got {
+			t.Errorf("%s: the glob no longer allows other names", mode)
+		}
+		_ = p.Close()
+	}
+}
+
+// TestSealedDialRefusesNamesForMetadata: any name can resolve to
+// 169.254.169.254, so while sealed the default dialer resolves names
+// itself, refuses those and dials only the addresses it checked.
+func TestSealedDialRefusesNamesForMetadata(t *testing.T) {
+	names := fakeResolver{
+		"evil.test":  {"169.254.169.254"},
+		"evil6.test": {"10.0.0.1", "fd00:ec2::254"},
+		"ok.test":    {"127.0.0.1"},
+	}
+	for _, mode := range []string{catcher.Seal, catcher.Observe} {
+		p, err := New(Options{Server: catcher.NewServer(catcher.NewInbox(1), catcher.Config{Mode: mode}), Resolver: names})
+		if err != nil {
+			t.Fatal(err)
+		}
+		var dialed []string
+		dial := p.sealedDial(func(_ context.Context, network, addr string) (net.Conn, error) {
+			dialed = append(dialed, addr)
+			return nil, &net.OpError{Op: "dial", Net: network, Err: errNoNet{addr}}
+		})
+		for host, want := range map[string]string{
+			"evil.test:80":                "",
+			"evil6.test:80":               "",
+			"169.254.169.254:80":          "",
+			"metadata.google.internal:80": "",
+			"ok.test:8080":                "127.0.0.1:8080",
+			"10.0.0.9:80":                 "10.0.0.9:80",
+		} {
+			dialed = nil
+			_, err := dial(context.Background(), "tcp", host)
+			switch {
+			case mode == catcher.Observe:
+				if len(dialed) != 1 || dialed[0] != host {
+					t.Errorf("observe %s: dialed %v", host, dialed)
+				}
+			case want == "":
+				if !errors.Is(err, errMetadata) || len(dialed) != 0 {
+					t.Errorf("sealed %s: err %v, dialed %v", host, err, dialed)
+				}
+			default:
+				if len(dialed) != 1 || dialed[0] != want {
+					t.Errorf("sealed %s: dialed %v, want %s", host, dialed, want)
+				}
+			}
+		}
+		_ = p.Close()
+	}
+}
+
+// TestSealedGlobNeverForwardsToMetadata: with the catcher allowing "*",
+// a sealed request to a name for 169.254.169.254 never leaves, while a
+// name for a reachable address is forwarded to the address checked.
+func TestSealedGlobNeverForwardsToMetadata(t *testing.T) {
+	up := http.Server{ReadHeaderTimeout: time.Second, Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.WriteString(w, "reached "+r.Host)
+	})}
+	ul, _ := net.Listen("tcp", "127.0.0.1:0")
+	go func() { _ = up.Serve(ul) }()
+	t.Cleanup(func() { _ = up.Close() })
+	_, port, _ := net.SplitHostPort(ul.Addr().String())
+
+	p, err := New(Options{Server: catcher.NewServer(catcher.NewInbox(10), catcher.Config{Mode: catcher.Seal, Allow: []string{"*"}}),
+		Resolver: fakeResolver{"evil.test": {"169.254.169.254"}, "ok.test": {"127.0.0.1"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	l, _ := net.Listen("tcp", "127.0.0.1:0")
+	go func() { _ = p.Serve(l) }()
+	t.Cleanup(func() { _ = p.Close() })
+	pu, _ := url.Parse("http://" + l.Addr().String())
+	tr := &http.Transport{Proxy: http.ProxyURL(pu)}
+	t.Cleanup(tr.CloseIdleConnections)
+	c := &http.Client{Transport: tr, Timeout: 5 * time.Second}
+	get := func(rawURL string) (int, string) {
+		t.Helper()
+		resp, err := c.Get(rawURL) //nolint:noctx // test
+		if err != nil {
+			t.Fatal(err)
+		}
+		b, _ := io.ReadAll(resp.Body)
+		_ = resp.Body.Close()
+		return resp.StatusCode, string(b)
+	}
+	if status, body := get("http://ok.test:" + port + "/"); status != 200 || body != "reached ok.test:"+port {
+		t.Errorf("ok.test: %d %s", status, body)
+	}
+	if status, body := get("http://evil.test:" + port + "/latest/meta-data/"); status == 200 || strings.Contains(body, "reached") {
+		t.Errorf("evil.test: %d %s", status, body)
+	}
+}
+
 func TestWriteFake(t *testing.T) {
 	rec := &recorder{header: http.Header{}}
 	writeFake(rec, wire.Decision{ID: "m1", Response: &wire.Response{Status: 202, Headers: map[string]string{"X-A": "b"}, Body: "{}"}})
