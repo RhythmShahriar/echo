@@ -19,10 +19,18 @@ class EchoClient
     private Client $http;
 
     /**
+     * How long an older wire version is kept before the newest is tried
+     * again, in seconds. A queue worker outlives an Echo upgrade and would
+     * otherwise keep dropping what the older wire lacks.
+     */
+    public const WIRE_RECHECK = 3600;
+
+    /**
      * The wire version each Echo speaks, by URL, once one refused a newer
-     * capture. Kept for the process, so a queue worker asks once.
+     * capture, with when that was learned. Kept for the process, so a queue
+     * worker asks about once an hour.
      *
-     * @var array<string, int>
+     * @var array<string, array{0: int, 1: int}>
      */
     private static array $wire = [];
 
@@ -66,7 +74,7 @@ class EchoClient
      */
     public function capture(array $capture): array
     {
-        $version = self::$wire[$this->url] ?? Wire::VERSION;
+        $version = $this->wire();
         try {
             $decision = $this->call('POST', 'v1/capture', Wire::forVersion($capture, $version));
         } catch (EchoUnreachable $e) {
@@ -76,7 +84,7 @@ class EchoClient
             if ($older === null) {
                 throw $e;
             }
-            self::$wire[$this->url] = $older;
+            self::$wire[$this->url] = [$older, time()];
             $decision = $this->call('POST', 'v1/capture', Wire::forVersion($capture, $older));
         }
 
@@ -107,7 +115,14 @@ class EchoClient
      */
     public function wire(): int
     {
-        return self::$wire[$this->url] ?? Wire::VERSION;
+        [$version, $at] = self::$wire[$this->url] ?? [Wire::VERSION, 0];
+        if ($version !== Wire::VERSION && time() - $at >= self::WIRE_RECHECK) {
+            unset(self::$wire[$this->url]);
+
+            return Wire::VERSION;
+        }
+
+        return $version;
     }
 
     /**

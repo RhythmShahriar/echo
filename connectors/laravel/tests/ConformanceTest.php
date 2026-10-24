@@ -8,7 +8,9 @@ use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
 use PHPUnit\Framework\Attributes\DataProvider;
+use ReflectionProperty;
 use Rhythm\Echo\Connector;
+use Rhythm\Echo\EchoClient;
 use Rhythm\Echo\EchoUnreachable;
 use Rhythm\Echo\Tests\Fixtures\WireSchema;
 use Rhythm\Echo\Wire;
@@ -104,6 +106,23 @@ class ConformanceTest extends TestCase
         $this->assertSame([1, 1], array_column($this->captures('email'), 'v'));
         $this->assertSame(1, $this->healthCalls());
         $this->assertSame(0, $this->delivered());
+    }
+
+    public function test_the_newest_wire_is_tried_again_after_an_hour(): void
+    {
+        $this->wire(1);
+        Mail::raw('one', fn ($m) => $m->to('a@example.test')->subject('One'));
+        // Echo is upgraded; within the hour the older version stays.
+        $this->wire(2);
+        Mail::raw('two', fn ($m) => $m->to('a@example.test')->subject('Two'));
+        $this->assertSame([1, 1], array_column($this->captures('email'), 'v'));
+
+        $wire = new ReflectionProperty(EchoClient::class, 'wire');
+        $wire->setValue(null, array_map(fn (array $w) => [$w[0], $w[1] - EchoClient::WIRE_RECHECK], $wire->getValue()));
+        Mail::raw('three', fn ($m) => $m->to('a@example.test')->subject('Three'));
+
+        $this->assertSame([1, 1, 2], array_column($this->captures('email'), 'v'));
+        $this->assertSame(Wire::VERSION, $this->app->make(Connector::class)->client()->wire());
     }
 
     public function test_wire_1_leaves_out_what_it_lacks(): void
