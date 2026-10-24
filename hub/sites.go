@@ -98,6 +98,36 @@ func LoadSites(path string, getenv func(string) string) (*Sites, error) {
 	return &s, nil
 }
 
+// MinToken is the shortest token Echo takes when it listens beyond
+// loopback: token checks aren't rate limited, so a short one can be
+// guessed from the network. TokenHint says how to make one.
+const (
+	MinToken  = 16
+	TokenHint = "make one with: openssl rand -hex 16"
+)
+
+// ShortTokens names the variables (the read token's, then each site's)
+// whose token is shorter than MinToken.
+func (s *Sites) ShortTokens() []string {
+	var out []string
+	if len(s.readToken) < MinToken {
+		out = append(out, s.ReadTokenEnv)
+	}
+	for _, site := range s.Sites {
+		if len(site.token) < MinToken {
+			out = append(out, site.TokenEnv)
+		}
+	}
+	return out
+}
+
+// ShortTokenError says that the variables in short hold tokens too
+// short for an Echo that listens on addr, beyond loopback.
+func ShortTokenError(short []string, addr string) error {
+	return fmt.Errorf("%s: shorter than %d characters, which can be guessed while %s is reachable from other machines; %s",
+		strings.Join(short, ", "), MinToken, addr, TokenHint)
+}
+
 // ReadToken is the read token, from the variable read_token_env names.
 func (s *Sites) ReadToken() string { return s.readToken }
 

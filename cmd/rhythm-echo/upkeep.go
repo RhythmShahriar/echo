@@ -110,7 +110,8 @@ type upSites struct {
 	read  string
 	write map[string]string // token → site ID
 	ids   []string
-	env   string // the read token's variable
+	env   string   // the read token's variable
+	short []string // the variables whose token is shorter than hub.MinToken
 }
 
 // loadSites reads --sites: a sites.yaml as rhythm echo hub reads it. The
@@ -127,7 +128,7 @@ func loadSites(s *session) (*upSites, error) {
 	if s.o.token != "" && s.o.token != ss.ReadToken() {
 		return nil, usageErr("--token: with --sites the read token is %s's; leave --token off", ss.ReadTokenEnv)
 	}
-	u := &upSites{read: ss.ReadToken(), write: ss.WriteTokens(), env: ss.ReadTokenEnv}
+	u := &upSites{read: ss.ReadToken(), write: ss.WriteTokens(), env: ss.ReadTokenEnv, short: ss.ShortTokens()}
 	for _, site := range ss.Sites {
 		u.ids = append(u.ids, site.ID)
 	}

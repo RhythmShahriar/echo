@@ -7,7 +7,7 @@
 # moves Mailpit aside and has it pass every message on to Echo.
 # Settings go in .ddev/.env.echo:
 #   ddev dotenv set .ddev/.env.echo --echo-docker-image=ghcr.io/rhythmshahriar/echo:1.2.3
-#   ddev dotenv set .ddev/.env.echo --rhythm-echo-token=change-me
+#   ddev dotenv set .ddev/.env.echo --rhythm-echo-token=$(openssl rand -hex 16)
 services:
   echo:
     container_name: ddev-${DDEV_SITENAME}-echo

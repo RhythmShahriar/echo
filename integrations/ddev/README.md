@@ -41,11 +41,13 @@ without a token because the DDEV network is private. It then answers
 only to its service name (`echo`), IP addresses and the project's names
 (`RHYTHM_ECHO_HOSTNAMES=$DDEV_HOSTNAME` in the add-on), so a web page can't
 reach it through a name of its own. To require a token, set
-`RHYTHM_ECHO_TOKEN` for both services:
+`RHYTHM_ECHO_TOKEN` for both services. Echo refuses a token shorter than
+16 characters when it listens beyond loopback, as it does here:
 
 ```sh
-ddev config --web-environment-add=RHYTHM_ECHO_URL=http://echo:8025,RHYTHM_ECHO_TOKEN=change-me
-ddev dotenv set .ddev/.env.echo --rhythm-echo-token=change-me
+token=$(openssl rand -hex 16)
+ddev config --web-environment-add=RHYTHM_ECHO_URL=http://echo:8025,RHYTHM_ECHO_TOKEN=$token
+ddev dotenv set .ddev/.env.echo --rhythm-echo-token=$token
 ```
 
 With a token, Echo's SMTP sink wants it as the password. Mailpit's relay
@@ -53,8 +55,8 @@ can't give it: Mailpit logs in with Go's PLAIN login, which won't
 send a password to a host other than localhost without TLS. So `mail()`
 and SMTP to `localhost:1025` then stop at Mailpit. Point the app's mailer
 at Echo instead, with any username and the token as the password (in
-Laravel: `MAIL_HOST=echo`, `MAIL_PORT=1025`, `MAIL_USERNAME=echo`,
-`MAIL_PASSWORD=change-me`), or leave the token unset on DDEV's private
+Laravel: `MAIL_HOST=echo`, `MAIL_PORT=1025`, `MAIL_USERNAME=echo` and
+`MAIL_PASSWORD` set to the token), or leave the token unset on DDEV's private
 network.
 
 ## Another image

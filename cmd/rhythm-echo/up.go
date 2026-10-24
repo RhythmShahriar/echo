@@ -23,6 +23,7 @@ import (
 	"github.com/RhythmShahriar/echo/catcher"
 	"github.com/RhythmShahriar/echo/check"
 	"github.com/RhythmShahriar/echo/config"
+	"github.com/RhythmShahriar/echo/hub"
 	"github.com/RhythmShahriar/echo/model"
 	"github.com/RhythmShahriar/echo/proxy"
 	"github.com/RhythmShahriar/echo/report"
@@ -76,6 +77,9 @@ func cmdUp(s *session) int {
 			return s.fail(usageErr("%v", err))
 		}
 		open = append(open, l.addr)
+	}
+	if err := shortToken(token, sites, []string{cfg.Listen, cfg.SMTP, cfg.Proxy}); err != nil {
+		return s.fail(err)
 	}
 	names, err := upHostnames(s.o.hostnames)
 	if err != nil {
@@ -392,6 +396,29 @@ func upLogin(flag string) (*web.Login, string, error) {
 		return nil, from, usageErr("%s: %v", from, err)
 	}
 	return l, from, nil
+}
+
+// shortToken refuses a token shorter than hub.MinToken (the --sites
+// file's tokens too) when one of addrs, the API, SMTP sink and proxy,
+// is reachable from other machines. "" and "off" are addresses not
+// served.
+func shortToken(token string, sites *upSites, addrs []string) error {
+	var short []string
+	switch {
+	case sites != nil:
+		short = sites.short
+	case token != "" && len(token) < hub.MinToken:
+		short = []string{"--token (or RHYTHM_ECHO_TOKEN)"}
+	}
+	if len(short) == 0 {
+		return nil
+	}
+	for _, addr := range addrs {
+		if addr != "" && addr != "off" && !loopback(addr) {
+			return usageErr("%v", hub.ShortTokenError(short, addr))
+		}
+	}
+	return nil
 }
 
 // loginNeedsToken refuses a login without a token on a --listen address

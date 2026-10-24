@@ -231,7 +231,7 @@ func TestImage(t *testing.T) {
 	t.Run("state volume", func(t *testing.T) {
 		vol := "rhythm-echo-test-" + random()
 		t.Cleanup(func() { _ = exec.Command("docker", "volume", "rm", "-f", vol).Run() })
-		run := []string{"-e", "RHYTHM_ECHO_TOKEN=tok", "-p", "127.0.0.1:" + proxyPort + ":8026", "-v", vol + ":" + stateDir}
+		run := []string{"-e", "RHYTHM_ECHO_TOKEN=image-proxy-token", "-p", "127.0.0.1:" + proxyPort + ":8026", "-v", vol + ":" + stateDir}
 		args := []string{"--listen=0.0.0.0:8025", "--smtp=0.0.0.0:1025", "--proxy=0.0.0.0:8026", "--mitm"}
 		first := start(t, tag, run, args...)
 		before := caSerial(t)

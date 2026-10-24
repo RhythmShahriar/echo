@@ -951,6 +951,16 @@ func TestPrivateNetworkRefusesAPublicInterface(t *testing.T) {
 	if code != exitUsage || !strings.Contains(errOut, "--listen 0.0.0.0:20400 is reachable from a public address (203.0.113.5 on eth0)") {
 		t.Errorf("exit %d: %s", code, errOut)
 	}
+	// A token shorter than 16 characters is refused beyond loopback.
+	t.Setenv("RHYTHM_ECHO_TOKEN", "short")
+	code, _, errOut = runCLI(t, "up", "--listen", "0.0.0.0:22304", "--smtp", "off")
+	if code != exitUsage || !strings.Contains(errOut, "--token (or RHYTHM_ECHO_TOKEN): shorter than 16 characters, which can be guessed while 0.0.0.0:22304 is reachable") {
+		t.Errorf("a short token: exit %d: %s", code, errOut)
+	}
+	if err := shortToken("short", nil, []string{"127.0.0.1:8025", "off", ""}); err != nil {
+		t.Errorf("a short token on loopback: %v", err)
+	}
+	t.Setenv("RHYTHM_ECHO_TOKEN", "")
 	// Without --private-network the old refusal stands.
 	t.Setenv(privateNetworkEnv, "")
 	code, _, errOut = runCLI(t, "up", "--listen", "0.0.0.0:20400", "--smtp", "off")

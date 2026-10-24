@@ -32,7 +32,8 @@ const Usage = `usage: rhythm echo hub --store DIR --sites FILE [flags]
 
 One Echo for many staging sites. Each site sends with its own write token
 (captures only); the read token sees every site. The inbox is kept in the
-store across restarts.
+store across restarts. When the API or SMTP sink listens beyond loopback,
+every token needs 16 characters or more (openssl rand -hex 16).
 
   --store <dir>        where the inbox, TLS files and results are kept (required)
   --sites <file>       sites.yaml: id, token_env, config and schedule per site (required)
@@ -107,6 +108,13 @@ func Main(args []string, _ io.Reader, _ io.Writer, stderr io.Writer) int {
 	sites, err := LoadSites(*sitesFile, os.Getenv)
 	if err != nil {
 		return usage("%v", err)
+	}
+	if short := sites.ShortTokens(); len(short) > 0 {
+		for _, addr := range []string{*listen, *smtpAddr} {
+			if addr != "" && addr != "off" && !loopback(addr) {
+				return usage("%v", ShortTokenError(short, addr))
+			}
+		}
 	}
 	mode := "seal"
 	if *observe {

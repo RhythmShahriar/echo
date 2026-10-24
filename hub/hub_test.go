@@ -17,6 +17,7 @@ import (
 	"net/smtp"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -629,6 +630,34 @@ func TestMainUsage(t *testing.T) {
 	var errb bytes.Buffer
 	if code := Main([]string{"--help"}, nil, io.Discard, &errb); code != 0 || !strings.Contains(errb.String(), "usage: rhythm echo hub") {
 		t.Errorf("--help: %d %q", code, errb.String())
+	}
+}
+
+// TestShortTokens: a hub that listens beyond loopback refuses tokens
+// shorter than MinToken and says which variables hold them.
+func TestShortTokens(t *testing.T) {
+	dir := t.TempDir()
+	path := writeSites(t, dir)
+	env := map[string]string{"READ": "read-token-0001", "TOKEN_A": "short", "TOKEN_B": "write-token-bbbb"}
+	sites, err := LoadSites(path, func(k string) string { return env[k] })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := sites.ShortTokens(); !slices.Equal(got, []string{"READ", "TOKEN_A"}) {
+		t.Errorf("ShortTokens = %q", got)
+	}
+	for k, v := range env {
+		t.Setenv(k, v)
+	}
+	for _, args := range [][]string{
+		{"--listen", "0.0.0.0:22305", "--smtp", "off"},
+		{"--listen", "127.0.0.1:22305", "--smtp", "0.0.0.0:22306"},
+	} {
+		var errb bytes.Buffer
+		code := Main(append([]string{"--store", dir, "--sites", path}, args...), nil, io.Discard, &errb)
+		if code != 2 || !strings.Contains(errb.String(), "READ, TOKEN_A: shorter than 16 characters") || !strings.Contains(errb.String(), "openssl rand -hex 16") {
+			t.Errorf("%q: %d %s", args, code, errb.String())
+		}
 	}
 }
 

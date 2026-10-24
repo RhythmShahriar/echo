@@ -566,7 +566,7 @@ const (
 var commands = []cmdSpec{
 	{name: "up", aliases: []string{"start"}, use: "up [flags]", about: "start the catcher (API :8025, SMTP :1025)",
 		flags: flags([]flagUse{{"seal", ""}, {"observe", ""}, {"listen", ""}, {"smtp", ""}, {"proxy", ""}, {"mitm", ""}, {"allow", ""},
-			{"token", "require this token. Needed when the API, SMTP sink or proxy\nlistens beyond loopback; the SMTP sink then asks for it as\nthe password. Prefer RHYTHM_ECHO_TOKEN: other users can\nread a flag in ps"},
+			{"token", "require this token. Needed when the API, SMTP sink or proxy\nlistens beyond loopback, then 16 characters or more (openssl\nrand -hex 16); the SMTP sink asks for it as the password.\nPrefer RHYTHM_ECHO_TOKEN: other users can read a flag in ps"},
 			{"private-network", ""}, {"hostname", ""}, {"free-ports", ""}, {"login", ""}, {"sites", ""},
 			{"store", "keep what Echo catches in this folder, so a restart keeps it\n(default in memory; inbox: store: in the config)"},
 			{"keep", ""}, {"keep-for", ""}, {"spamassassin", ""},

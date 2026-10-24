@@ -232,9 +232,9 @@ Catcher (up):
       --mitm                 decrypt HTTPS in the proxy (trust the CA: rhythm echo ca)
       --allow <hosts>        hosts reachable even when sealed, e.g. api.stripe.com
       --token <t>            require this token. Needed when the API, SMTP sink or proxy
-                             listens beyond loopback; the SMTP sink then asks for it as
-                             the password. Prefer RHYTHM_ECHO_TOKEN: other users can
-                             read a flag in ps
+                             listens beyond loopback, then 16 characters or more (openssl
+                             rand -hex 16); the SMTP sink asks for it as the password.
+                             Prefer RHYTHM_ECHO_TOKEN: other users can read a flag in ps
       --private-network      listen beyond loopback without a token, on private (RFC 1918)
                              and container networks only; prints a warning
       --hostname <name>      also answer to this name without a token, e.g. *.ddev.site
