@@ -127,7 +127,7 @@ func TestHopsAndSignatures(t *testing.T) {
 	if len(r.Auth.Methods) != 4 || r.Auth.prop("spf", "smtp.mailfrom") != "bounces+4815162-ab12-jamie=example.net@em123.shop.example" {
 		t.Errorf("methods = %+v", r.Auth.Methods)
 	}
-	if r := Analyze(load(t, "mailchimp.eml")); r.Subject != "Autumn collection — just landed" {
+	if r := Analyze(load(t, "mailchimp.eml")); r.Subject != "Autumn collection \u2014 just landed" {
 		t.Errorf("subject = %q", r.Subject)
 	}
 }

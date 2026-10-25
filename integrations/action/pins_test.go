@@ -50,7 +50,7 @@ func TestUsesPinned(t *testing.T) {
 			case strings.HasPrefix(ref, "./"):
 			case ref == releaseWorkflow:
 				// The one ref that must not be a SHA: the release is signed by
-				// this workflow, and rhythm's verifier trusts its certificate
+				// this workflow. rhythm's verifier trusts its certificate
 				// only for release-go.yml@refs/heads/master.
 			case strings.HasPrefix(ref, "docker://"):
 				if !strings.Contains(ref, "@sha256:") {
