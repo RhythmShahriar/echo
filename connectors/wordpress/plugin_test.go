@@ -41,12 +41,12 @@ func TestPluginZipListsOnlyAllowedFiles(t *testing.T) {
 		files[f.Name] = b.Bytes()
 	}
 	want := []string{
+		"echo-staging-seal/LICENSE",
 		"echo-staging-seal/echo-staging-seal.php",
 		"echo-staging-seal/includes/class-echo-staging-seal-cli.php",
 		"echo-staging-seal/includes/class-echo-staging-seal.php",
 		"echo-staging-seal/includes/connector.php",
 		"echo-staging-seal/languages/echo-staging-seal.pot",
-		"echo-staging-seal/license.txt",
 		"echo-staging-seal/readme.txt",
 		"echo-staging-seal/uninstall.php",
 	}

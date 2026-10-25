@@ -4,7 +4,7 @@
 
 The testbed (`testbed/`) is a WordPress shop, a Laravel app, a Next.js app and a plain-PHP page with 20 scenarios in which a site stops saying what it should and 15 in which the environment around Echo goes wrong. Each scenario has a good state and a broken state. For every site scenario the benchmark sets the good state, runs the scenario's action with `rhythm-echo snapshot --action`, breaks the scenario, runs it again with `rhythm-echo compare --action` and checks the comparison for the change listed in `testbed/scenarios.yaml`. For every environment scenario a probe sets up each state, runs Echo's commands and checks what they printed, their exit codes and their verdicts.
 
-We wrote both Echo and the testbed, so read this as a regression suite with a scoreboard, not an independent review: every scenario is something we built Echo to catch. Each one is still a real failure mode, in a real WordPress, Laravel or Next.js, and it passes only when Echo reports the expected change through its normal commands. The other tools run on the same states, and anyone can rerun it all from a clean checkout (see [Run it](#run-it)).
+We wrote both Echo and the testbed, so read this as a regression suite with a scoreboard, not an independent review: every scenario is something we built Echo to catch. Each one is still a real failure mode in a real WordPress, Laravel or Next.js app. It passes only when Echo reports the expected change through its normal commands. The other tools run on the same states. Anyone can rerun it all from a clean checkout (see [Run it](#run-it)).
 
 **Echo caught 20 of 20 site scenarios and 14 of 15 environment scenarios.**
 

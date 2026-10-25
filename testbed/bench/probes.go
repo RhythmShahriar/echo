@@ -533,8 +533,8 @@ func nonASCII(ctx context.Context, p *ProbeEnv, broken bool) ([]Observation, err
 	dir := p.dir("shop")
 	subject, body := "Your order from Bean & Leaf", "Thanks Ali, your order 1042 is on its way."
 	if broken {
-		// "Order for <RLO>Ali<PDF>: ご注文ありがとうございます", RFC 2047 encoded, and
-		// Arabic and Hebrew text in the body.
+		// "Order for <RLO>Ali<PDF>: ご注文ありがとうございます", RFC 2047 encoded,
+		// plus Arabic and Hebrew text in the body.
 		subject = "=?UTF-8?B?" + b64("Order for \u202eAli\u202c: ご注文ありがとうございます") + "?="
 		body = "شكراً لطلبك رقم 1042 من Bean & Leaf.\nתודה על ההזמנה שלך.\n注文番号 1042 を発送しました。"
 	}

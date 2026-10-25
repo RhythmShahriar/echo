@@ -8,7 +8,7 @@ on:
 jobs:
   release:
     # Called at master on purpose: the cosign certificate records this
-    # ref, and rhythm's verifier trusts only release-go.yml@refs/heads/master
+    # ref. rhythm's verifier trusts only release-go.yml@refs/heads/master
     # (a commit pin makes `rhythm update` refuse the release). The run's own
     # ref must be the release tag, which a tag push gives.
     uses: RhythmShahriar/.github/.github/workflows/release-go.yml@master
