@@ -1,0 +1,20 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+# MailerSend Email API: POST /v1/email.
+provider: mailersend
+name: MailerSend
+channel: email
+host: api.mailersend.com
+path: /v1/email
+method: POST
+to: $.to[*].email
+cc: $.cc[*].email
+bcc: $.bcc[*].email
+from: $.from.email
+reply_to: $.reply_to.email
+subject: $.subject
+text: $.text
+html: $.html
+reply:
+  status: 202
