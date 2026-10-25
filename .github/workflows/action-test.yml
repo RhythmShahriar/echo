@@ -135,13 +135,15 @@ jobs:
           SUMMARY: ${{ steps.details.outputs.summary }}
         run: |
           cat "$SUMMARY"
-          grep -F 'Order W-1001 received' "$SUMMARY"
+          # What every Echo release's Markdown report shows unmasked.
+          grep -F customer@example.com "$SUMMARY"
+          grep -F 'New order W-1001' "$SUMMARY"
       - name: No artifact by default
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           names=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/artifacts" --jq '.artifacts[].name')
-          if printf '%s\n' "$names" | grep -qx echo-report; then echo "::error::the report was uploaded by default"; exit 1; fi
+          if printf '%s\n' "$names" | grep -qE '^echo-report(-[0-9]+)?$'; then echo "::error::the report was uploaded by default"; exit 1; fi
 
   # A site in a subfolder with an explicit config file. Echo is then left
   # running with mode up for a later step and stopped with mode stop.

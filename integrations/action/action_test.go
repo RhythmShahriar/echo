@@ -200,6 +200,13 @@ func TestActionMonorepo(t *testing.T) {
 		t.Fatalf("fail-on none failed: %+v\n%s", details.outputs, details.log)
 	}
 	contains(t, "detailed summary", details.summary, "New order W-1001")
+	// Each use keeps its own summary file: a later one doesn't overwrite it.
+	if details.outputs["summary"] == res.outputs["summary"] {
+		t.Errorf("two uses share the summary file %s", res.outputs["summary"])
+	}
+	if got, _ := os.ReadFile(res.outputs["summary"]); !strings.Contains(string(got), "**Something broke.**") || strings.Contains(string(got), "New order W-1001") {
+		t.Errorf("a later use changed the earlier summary:\n%s", got)
+	}
 	contains(t, "detailed step log", details.log, "Order form: 1 email")
 	if !slices.Contains(details.ran, "Upload reports") {
 		t.Errorf("upload: true didn't upload: %q", details.ran)

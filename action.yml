@@ -78,14 +78,16 @@ inputs:
     default: ""
   upload:
     description: >
-      Upload the HTML and JUnit reports as the echo-report workflow artifact. Off by default: the
+      Upload the HTML and JUnit reports as the echo-report workflow artifact (echo-report-2 and so
+      on for later uses of the Action in the same job). Off by default: the
       HTML report holds every captured recipient, subject and body; anyone can download the
       artifacts of a public repository's runs. The Action warns when it is on in a public repository.
     required: false
     default: "false"
   log:
     description: >
-      Upload Echo's log as the echo-log artifact when the step fails or finds something, masked
+      Upload Echo's log as the echo-log artifact (echo-log-2 and so on for later uses in the same
+      job) when the step fails or finds something, masked
       like the summary unless summary-details is true.
     required: false
     default: "true"
@@ -137,6 +139,17 @@ outputs:
 runs:
   using: composite
   steps:
+    # Each use in a job gets its own summary file and artifact names (the
+    # first keeps the plain ones), so mode up then stop, or a snapshot
+    # then a compare, can't overwrite each other's or fail the upload.
+    - name: Number this use
+      id: use
+      shell: bash
+      run: |
+        n=$(( $(cat "$RUNNER_TEMP/echo-uses" 2>/dev/null || echo 0) + 1 ))
+        echo "$n" > "$RUNNER_TEMP/echo-uses"
+        if [ "$n" -eq 1 ]; then echo "suffix="; else echo "suffix=-$n"; fi >> "$GITHUB_OUTPUT"
+
     - name: Install cosign
       if: inputs.mode != 'stop'
       uses: sigstore/cosign-installer@d58896d6a1865668819e1d91763c7751a165e159 # v3.9.2
@@ -192,10 +205,11 @@ runs:
         SMTP: ${{ inputs.smtp }}
         CONFIG: ${{ inputs.config }}
         SUMMARY: ${{ github.action_path }}/integrations/action/summary.sh
+        USE: ${{ steps.use.outputs.suffix }}
       run: |
         set -euo pipefail
         log="$RUNNER_TEMP/echo.log"
-        md="$RUNNER_TEMP/echo-summary.md"
+        md="$RUNNER_TEMP/echo-summary$USE.md"
         # A report from an earlier Echo step in this job must not reach this
         # step's pull request comment.
         rm -f "$RUNNER_TEMP/echo-report.json"
@@ -291,11 +305,12 @@ runs:
         DETAILS: ${{ inputs.summary-details }}
         PRIVATE: ${{ github.event.repository.private }}
         SUMMARY: ${{ github.action_path }}/integrations/action/summary.sh
+        USE: ${{ steps.use.outputs.suffix }}
       run: |
         # The runner starts bash with -e; this step reads exit codes itself.
         set +e -uo pipefail
         out="$RUNNER_TEMP/echo-report"
-        md="$RUNNER_TEMP/echo-summary.md"
+        md="$RUNNER_TEMP/echo-summary$USE.md"
         json="$RUNNER_TEMP/echo-report.json"
         errf="$RUNNER_TEMP/echo-error.txt"
         outf="$RUNNER_TEMP/echo-output.txt"
@@ -427,9 +442,12 @@ runs:
       if: always() && inputs.mode != 'up' && inputs.upload == 'true' && steps.check.outputs.report != ''
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
       with:
-        name: echo-report
+        name: echo-report${{ steps.use.outputs.suffix }}
         path: ${{ runner.temp }}/echo-report/
         if-no-files-found: ignore
+        # Matrix jobs share the run's artifact names: the last one wins
+        # instead of failing the step.
+        overwrite: true
 
     - name: Prepare the log
       id: log
@@ -452,9 +470,10 @@ runs:
       if: always() && steps.log.outputs.path != ''
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
       with:
-        name: echo-log
+        name: echo-log${{ steps.use.outputs.suffix }}
         path: ${{ steps.log.outputs.path }}
         if-no-files-found: ignore
+        overwrite: true
 
     - name: Comment on the pull request
       id: comment
