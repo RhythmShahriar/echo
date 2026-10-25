@@ -43,6 +43,9 @@ class Connector
      */
     private array $runLogged = [];
 
+    /**
+     * @param  array<string, mixed>  $config  the merged rhythm-echo config
+     */
     public function __construct(
         private readonly Application $app,
         private readonly EchoClient $client,
@@ -51,6 +54,7 @@ class Connector
     ) {
     }
 
+    /** The client every capture goes through. */
     public function client(): EchoClient
     {
         return $this->client;

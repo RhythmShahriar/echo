@@ -23,6 +23,10 @@ final class SealOnSending
     {
     }
 
+    /**
+     * Returns false to cancel the send when Echo keeps the message or,
+     * sealed, can't be reached; null lets it go on.
+     */
     public function handle(MessageSending $event): ?bool
     {
         if (! $this->echo->active()) {

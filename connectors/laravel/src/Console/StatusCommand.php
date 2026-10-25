@@ -19,6 +19,7 @@ class StatusCommand extends Command
 
     protected $description = 'Show whether Rhythm Echo captures this site and ping Echo';
 
+    /** Prints the status and pings Echo; it fails unless the connector is active and Echo answered. */
     public function handle(Connector $echo): int
     {
         $reason = $echo->inactiveReason();

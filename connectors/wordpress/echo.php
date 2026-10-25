@@ -166,6 +166,10 @@ final class Rhythm_Echo {
 		add_action( 'action_scheduler_failed_execution', array( __CLASS__, 'as_after' ) );
 	}
 
+	/**
+	 * Whether the connector captures on this request: false on production
+	 * unless forced.
+	 */
 	public static function active(): bool {
 		return self::$active;
 	}
@@ -279,14 +283,24 @@ final class Rhythm_Echo {
 		return in_array( strtolower( $v ), array( '1', 'true', 'yes', 'on' ), true );
 	}
 
+	/**
+	 * The site's environment type. Without wp_get_environment_type() (a
+	 * WordPress older than 5.5) it is production, so the connector stays off.
+	 */
 	public static function environment(): string {
 		return function_exists( 'wp_get_environment_type' ) ? wp_get_environment_type() : 'production';
 	}
 
+	/**
+	 * Whether a capture Echo didn't answer must stop the mail or request.
+	 * Anything but RHYTHM_ECHO_MODE=observe counts as sealed, so an
+	 * unreachable Echo fails closed and staging never reaches real people.
+	 */
 	public static function sealed(): bool {
 		return 'observe' !== self::config()['mode'];
 	}
 
+	/** Tells administrators on production that the connector is installed but off, with how to fix that. */
 	public static function production_notice(): void {
 		if ( ! current_user_can( 'manage_options' ) ) {
 			return;

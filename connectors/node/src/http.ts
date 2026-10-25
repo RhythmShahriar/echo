@@ -35,6 +35,11 @@ type AnyFn = (...args: unknown[]) => unknown;
 
 const REAL = Symbol('rhythm.echo.realAgent');
 
+/**
+ * installHTTP patches http.request and https.request and get once per
+ * process. A request is held until Echo decides; with no decision a sealed
+ * site's request fails like a refused connection.
+ */
 export function installHTTP(): void {
   const s = state();
   if (s.patched.has('http')) return;

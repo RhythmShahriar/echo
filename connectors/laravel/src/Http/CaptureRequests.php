@@ -32,10 +32,18 @@ final class CaptureRequests
     /** Bytes of a request or response body sent to Echo; it keeps 256 KiB. */
     private const MAX_BODY = 256 << 10;
 
+    /**
+     * @param  string  $hook  reported as source.hook: http for the Http client, guzzle for container-built clients
+     */
     public function __construct(private readonly Connector $echo, private readonly string $hook = 'http')
     {
     }
 
+    /**
+     * Wraps the next handler. With Echo unreachable, a sealed site's
+     * request is rejected as a connection failure rather than sent:
+     * staging must never reach a real service because Echo is down.
+     */
     public function __invoke(callable $handler): Closure
     {
         return function (RequestInterface $request, array $options) use ($handler): PromiseInterface {

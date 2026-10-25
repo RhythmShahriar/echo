@@ -173,6 +173,7 @@ function warnOnceSealed(): void {
   warnOnce('mail-sealed', 'Nodemailer: messages are captured by Echo and not sent (sealed)');
 }
 
+/** toEmail turns Nodemailer's message data into a wire email, credential headers masked; attachments are listed separately. */
 export function toEmail(m: MailData): Email {
   const headers: Record<string, string> = {};
   for (const [k, v] of Object.entries(m.headers ?? {})) {

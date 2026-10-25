@@ -25,6 +25,11 @@ export { currentRun, runFromHeaders, withEchoRun, type HeadersLike, type Request
 
 let nodeContext: (() => Context | undefined | null) | undefined;
 
+/**
+ * register installs the hooks for the runtime it runs in: fetch on the
+ * Edge, plus http, https and Nodemailer on Node. It resolves false when
+ * the production guard keeps the connector off.
+ */
 export async function register(o?: Options): Promise<boolean> {
   if (!activate(o)) return false;
   installFetch();

@@ -26,6 +26,7 @@ final class TrackRun
     {
     }
 
+    /** Remembers the request's accepted run, if any, then passes it on. */
     public function handle(Request $request, Closure $next): Response
     {
         if ($this->echo->active()) {

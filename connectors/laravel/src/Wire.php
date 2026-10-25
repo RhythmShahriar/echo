@@ -17,8 +17,10 @@ final class Wire
     /** The oldest wire version, spoken to an Echo that says so in /v1/health. */
     public const MIN_VERSION = 1;
 
+    /** Carries "<run>/<action>" from whatever triggered the request (header or cookie). */
     public const RUN_HEADER = 'X-Echo-Run';
 
+    /** Authenticates the connector when Echo listens beyond loopback. */
     public const TOKEN_HEADER = 'X-Echo-Token';
 
     /** Set by Echo's action runner on commands it runs: no request to read. */
@@ -31,18 +33,25 @@ final class Wire
      */
     public const MAX_RUN = 512;
 
+    /** An HTTP capture before sending: Echo decides. */
     public const BEFORE = 'before';
 
+    /** A capture after a real send: its response or error. */
     public const AFTER = 'after';
 
+    /** Decision: send it for real. */
     public const ALLOW = 'allow';
 
+    /** Decision: don't send; answer with Echo's response. */
     public const FAKE = 'fake';
 
+    /** Decision: don't send; fail it. */
     public const BLOCK = 'block';
 
+    /** Mode: nothing leaves except allowed hosts. */
     public const SEAL = 'seal';
 
+    /** Mode: everything is recorded and sent for real. */
     public const OBSERVE = 'observe';
 
     /** A run signature: 16 bytes in unpadded base64url, 22 characters. */

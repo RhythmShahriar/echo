@@ -20,14 +20,17 @@ use Throwable;
  */
 class CanaryCommand extends Command
 {
+    /** Where the canary HTTP call goes: .invalid never resolves. */
     public const URL = 'https://canary.echo.invalid/';
 
+    /** Who the canary mail goes to: .invalid never receives mail. */
     public const TO = 'canary@echo.invalid';
 
     protected $signature = 'echo:canary {--json : Print JSON for rhythm echo doctor}';
 
     protected $description = 'Send one test mail and one HTTP call through Rhythm Echo';
 
+    /** Sends both canaries and reports how each send went; doctor checks Echo caught them. */
     public function handle(Connector $echo): int
     {
         $result = ['active' => $echo->active(), 'run' => $echo->run(), 'mail' => null, 'http' => null];
