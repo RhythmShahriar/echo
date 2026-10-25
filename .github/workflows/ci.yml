@@ -14,12 +14,12 @@ jobs:
   # go runs vet and go test -race ./... on Linux, Windows and macOS, plus
   # the writing-style check (scripts/check-style.py) on Linux.
   go:
-    uses: RhythmShahriar/.github/.github/workflows/ci-go.yml@fb09694450362b6d4b68c631182d78a69b653c83 # master
+    uses: RhythmShahriar/.github/.github/workflows/ci-go.yml@4e1c576341190242c956652d00cea38d7918cd40 # master 2026-10-26
     with:
       os: '["ubuntu-latest", "windows-latest", "macos-latest"]'
       style: true
   commitlint:
-    uses: RhythmShahriar/.github/.github/workflows/commitlint.yml@fb09694450362b6d4b68c631182d78a69b653c83 # master
+    uses: RhythmShahriar/.github/.github/workflows/commitlint.yml@4e1c576341190242c956652d00cea38d7918cd40 # master 2026-10-26
   actionlint:
     runs-on: ubuntu-latest
     steps:
