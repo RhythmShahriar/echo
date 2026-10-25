@@ -1,0 +1,32 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+positive:
+  - name: send
+    url: https://api.mailersend.com/v1/email
+    body:
+      from: {email: orders@shop.test, name: Shop}
+      to: [{email: ann@example.com, name: Ann}]
+      cc: [{email: bob@example.com}]
+      bcc: [{email: cy@example.com}]
+      reply_to: {email: support@shop.test, name: Support}
+      subject: Your order, 1042
+      text: Thanks, Ann.
+      html: <p>Thanks, Ann.</p>
+    want:
+      channel: email
+      from: orders@shop.test
+      to: [ann@example.com]
+      cc: [bob@example.com]
+      bcc: [cy@example.com]
+      reply_to: support@shop.test
+      subject: Your order, 1042
+      text: Thanks, Ann.
+      html: <p>Thanks, Ann.</p>
+
+negative:
+  - name: domains API
+    method: GET
+    url: https://api.mailersend.com/v1/domains
+  - name: another host
+    url: https://api.mailersend.test/v1/email
