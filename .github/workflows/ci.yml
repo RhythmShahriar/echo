@@ -61,6 +61,8 @@ jobs:
       - run: npm test
 
   connectors-laravel:
+    # A test that hangs fails the job instead of holding a runner for hours.
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:

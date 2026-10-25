@@ -46,7 +46,8 @@ abstract class TestCase extends Testbench
         self::$state = sys_get_temp_dir().'/rhythm-echo-test-'.getmypid();
         @mkdir(self::$state, 0777, true);
         $cmd = [PHP_BINARY, '-S', '127.0.0.1:'.self::PORT, __DIR__.'/Fixtures/echo-server.php'];
-        self::$server = proc_open($cmd, [1 => ['file', '/dev/null', 'w'], 2 => ['file', '/dev/null', 'w']], $pipes,
+        $null = PHP_OS_FAMILY === 'Windows' ? 'NUL' : '/dev/null';
+        self::$server = proc_open($cmd, [1 => ['file', $null, 'w'], 2 => ['file', $null, 'w']], $pipes,
             null, ['ECHO_STATE' => self::$state] + getenv()) ?: null;
         for ($i = 0; $i < 50; $i++) {
             if (@fsockopen('127.0.0.1', self::PORT)) {
