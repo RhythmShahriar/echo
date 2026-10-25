@@ -32,11 +32,14 @@ func (h *Hub) SMTP(addr string, tlsCfg *tls.Config) *smtp.Server {
 // refuses more than its own 25 MiB limit.
 const maxMail = 25 << 20
 
+// siteBackend wraps the catcher's sink so every session must log in with
+// a site's write token before it may send.
 type siteBackend struct {
 	inner smtp.Backend
 	hub   *Hub
 }
 
+// NewSession wraps the sink's session in a siteSession.
 func (b siteBackend) NewSession(c *smtp.Conn) (smtp.Session, error) {
 	s, err := b.inner.NewSession(c)
 	if err != nil {
@@ -48,14 +51,19 @@ func (b siteBackend) NewSession(c *smtp.Conn) (smtp.Session, error) {
 var errNeedAuth = &smtp.SMTPError{Code: 530, EnhancedCode: smtp.EnhancedCode{5, 7, 0},
 	Message: "Authentication required: log in with any username and the site's write token as the password"}
 
+// siteSession is a sink session that takes no mail before AUTH and files
+// what it takes under the site that logged in.
 type siteSession struct {
 	smtp.Session
 	hub  *Hub
 	site string
 }
 
+// AuthMechanisms offers PLAIN only: the password is the write token.
 func (s *siteSession) AuthMechanisms() []string { return []string{sasl.Plain} }
 
+// Auth accepts a site's write token only: the hub's sink takes mail from
+// sites, each under its own token, so the read token can't send.
 func (s *siteSession) Auth(string) (sasl.Server, error) {
 	return sasl.NewPlainServer(func(_, _, password string) error {
 		site := s.hub.tokenSite(password)
@@ -70,6 +78,7 @@ func (s *siteSession) Auth(string) (sasl.Server, error) {
 	}), nil
 }
 
+// Mail refuses a sender before AUTH.
 func (s *siteSession) Mail(from string, o *smtp.MailOptions) error {
 	if s.site == "" {
 		return errNeedAuth
@@ -77,6 +86,7 @@ func (s *siteSession) Mail(from string, o *smtp.MailOptions) error {
 	return s.Session.Mail(from, o)
 }
 
+// Rcpt refuses a recipient before AUTH.
 func (s *siteSession) Rcpt(to string, o *smtp.RcptOptions) error {
 	if s.site == "" {
 		return errNeedAuth
@@ -84,6 +94,7 @@ func (s *siteSession) Rcpt(to string, o *smtp.RcptOptions) error {
 	return s.Session.Rcpt(to, o)
 }
 
+// Data refuses a message before AUTH, then captures it as the site's.
 func (s *siteSession) Data(r io.Reader) error {
 	if s.site == "" {
 		return errNeedAuth

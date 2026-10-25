@@ -54,7 +54,7 @@ type Config struct {
 	Inbox           *Inbox           `yaml:"inbox,omitempty"`            // where `up` keeps captures; default in memory
 	Relay           *Relay           `yaml:"relay,omitempty"`            // releasing a caught email to a real inbox, for client sign-off
 	Hub             *Reserved        `yaml:"hub,omitempty"`              // reserved for the agency hub; accepted and not read yet
-	Actions         []Action         `yaml:"actions,omitempty"`
+	Actions         []Action         `yaml:"actions,omitempty"`          // what snapshot and compare run, in order
 
 	lines positions // where each key was in the file, for error messages
 }
@@ -62,31 +62,35 @@ type Config struct {
 // Action is something that makes the site send messages. Exactly one of
 // HTTP, Command or Replay is set.
 type Action struct {
-	Name     string            `yaml:"name,omitempty"`
+	Name     string            `yaml:"name,omitempty"` // required; ActionID turns it into the ID compare matches runs on
 	HTTP     *HTTPAction       `yaml:"http,omitempty"`
 	Command  string            `yaml:"command,omitempty"` // run with sh -c (cmd /C on Windows); RHYTHM_ECHO_RUN is set
 	Replay   *ReplayAction     `yaml:"replay,omitempty"`
-	Env      map[string]string `yaml:"env,omitempty"`
+	Env      map[string]string `yaml:"env,omitempty"`      // added to the command's environment
 	Expect   Expect            `yaml:"expect,omitempty"`   // optional: fail the action unless these were sent
 	Ignore   []string          `yaml:"ignore,omitempty"`   // fields, headers or recipients compare leaves out (globs)
 	Quiet    *Duration         `yaml:"quiet,omitempty"`    // overrides the global quiet for this action; same limits
 	Parallel *bool             `yaml:"parallel,omitempty"` // false: never run beside another action; default true
 }
 
+// HTTPAction is a request Echo sends to the site, tagged with the run so
+// whatever it makes the site send is filed under this action.
 type HTTPAction struct {
-	Method  string            `yaml:"method,omitempty"`
-	URL     string            `yaml:"url,omitempty"` // absolute, or relative to site
+	Method  string            `yaml:"method,omitempty"` // default GET, or POST when there is a form, json or body
+	URL     string            `yaml:"url,omitempty"`    // absolute, or relative to site
 	Headers map[string]string `yaml:"headers,omitempty"`
 	Form    map[string]string `yaml:"form,omitempty"` // sent as application/x-www-form-urlencoded
 	JSON    any               `yaml:"json,omitempty"` // sent as application/json
-	Body    string            `yaml:"body,omitempty"`
+	Body    string            `yaml:"body,omitempty"` // sent as is, with whatever Content-Type Headers sets
 }
 
+// ReplayAction sends a signed provider event (a Stripe webhook, say) to
+// the site. Replay only sends to staging and local addresses.
 type ReplayAction struct {
-	Event  string            `yaml:"event,omitempty"` // e.g. payment_intent.succeeded, or a path to a JSON file
-	To     string            `yaml:"to,omitempty"`    // absolute, or relative to site
-	Set    map[string]string `yaml:"set,omitempty"`   // field overrides: data.object.amount: 1999
-	Secret string            `yaml:"secret_env,omitempty"`
+	Event  string            `yaml:"event,omitempty"`      // e.g. payment_intent.succeeded, or a path to a JSON file
+	To     string            `yaml:"to,omitempty"`         // absolute, or relative to site
+	Set    map[string]string `yaml:"set,omitempty"`        // field overrides: data.object.amount: 1999
+	Secret string            `yaml:"secret_env,omitempty"` // the variable holding the signing secret; the secret itself never goes in the config
 }
 
 // Expect lists what an action must send, by channel: a count
@@ -181,6 +185,7 @@ func channelList() string {
 // changed) or off to drop it.
 type Level string
 
+// Levels a check can be set to.
 const (
 	Off     Level = "off"
 	Notice  Level = "notice"
@@ -269,6 +274,7 @@ type Reserved struct{ node yaml.Node }
 // Node is the key's YAML as written.
 func (r *Reserved) Node() *yaml.Node { return &r.node }
 
+// UnmarshalYAML keeps the key's YAML as it is, unread.
 func (r *Reserved) UnmarshalYAML(n *yaml.Node) error {
 	r.node = *n
 	return nil
@@ -280,6 +286,8 @@ func (r Reserved) MarshalYAML() (any, error) { return &r.node, nil }
 // Duration reads "2s" style values as well as days ("14d").
 type Duration struct{ time.Duration }
 
+// UnmarshalYAML reads a duration like 2s or 14d, naming the line of a bad
+// one.
 func (d *Duration) UnmarshalYAML(n *yaml.Node) error {
 	v, err := parseDuration(n.Value)
 	if err != nil {

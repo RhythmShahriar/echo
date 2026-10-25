@@ -21,10 +21,10 @@ import (
 
 // Request is an outbound HTTP request as a connector or the proxy saw it.
 type Request struct {
-	Method  string
+	Method  string // uppercased
 	URL     *url.URL
 	Headers map[string]string // lowercased names
-	Body    []byte
+	Body    []byte            // raw, before masking: recognizers read keys and test modes from it
 }
 
 // Header returns a header value (names are case-insensitive).
@@ -55,9 +55,9 @@ func (r Request) Form() url.Values {
 // site's code carries on normally (WooCommerce disables a webhook after
 // five failures, SDKs throw on unexpected bodies).
 type Fake struct {
-	Status  int
-	Headers map[string]string
-	Body    string
+	Status  int               // the provider's status for success, or its refusal
+	Headers map[string]string // the provider's own, such as Content-Type
+	Body    string            // the provider's response shape
 }
 
 // Recognizer understands one provider's API.
@@ -67,7 +67,7 @@ type Recognizer struct {
 	// Name is the provider's display name ("Amazon SES"), for titles and
 	// reports. A provider with several recognizers names it on each.
 	Name    string
-	Channel model.Channel
+	Channel model.Channel // what its messages are filed as
 	// Hosts names the hosts the recognizer claims, for the catalog: a
 	// name covers its subdomains too ("api.twilio.com"), "*" stands for
 	// one or more labels ("email.*.amazonaws.com") and a pattern with a

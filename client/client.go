@@ -31,9 +31,9 @@ const DefaultURL = "http://127.0.0.1:8025"
 
 // Client is an Echo API client.
 type Client struct {
-	URL   string // e.g. http://127.0.0.1:8025
-	Token string
-	HTTP  *http.Client
+	URL   string       // e.g. http://127.0.0.1:8025
+	Token string       // sent in X-Echo-Token; needed once Echo listens beyond loopback
+	HTTP  *http.Client // its timeout is longer than the server's longest wait, so a wait answers before it
 }
 
 // New returns a client for base (DefaultURL when empty).
@@ -47,10 +47,10 @@ func New(base, token string) *Client {
 // Health is what /v1/health reports. An older Echo leaves out the fields
 // after Wire: they're then empty.
 type Health struct {
-	Tool    string `json:"tool"`
-	Version string `json:"version"`
-	Mode    string `json:"mode"`
-	Wire    int    `json:"wire"`
+	Tool    string `json:"tool"`    // always "rhythm-echo": anything else isn't Echo
+	Version string `json:"version"` // Echo's release
+	Mode    string `json:"mode"`    // seal or observe
+	Wire    int    `json:"wire"`    // the newest capture format Echo reads (wire.Version)
 	// SMTP and Proxy are where Echo's SMTP sink and proxy listen, such as
 	// "127.0.0.1:1025", or "off". Empty when Echo doesn't say.
 	SMTP  string `json:"smtp,omitempty"`
@@ -58,9 +58,9 @@ type Health struct {
 	// BootID changes every time Echo starts: a different one mid-run
 	// means Echo restarted and lost the messages it held in memory.
 	BootID       string   `json:"boot_id,omitempty"`
-	Store        string   `json:"store,omitempty"` // "memory" or "jsonl"
-	Capabilities []string `json:"capabilities,omitempty"`
-	Providers    []string `json:"providers"`
+	Store        string   `json:"store,omitempty"`        // "memory" or "jsonl"
+	Capabilities []string `json:"capabilities,omitempty"` // API features beyond the first release (see Supports)
+	Providers    []string `json:"providers"`              // the services Echo recognizes and fakes when sealed
 }
 
 // Supports reports whether Echo has the API feature name, such as
@@ -79,10 +79,10 @@ func (c *Client) Health(ctx context.Context) (Health, error) {
 
 // Filter selects messages.
 type Filter struct {
-	Run, Action string
-	Channel     model.Channel
-	To          string
-	Since       time.Time
+	Run, Action string        // as sent in X-Echo-Run
+	Channel     model.Channel // one channel, or all when empty
+	To          string        // part of a recipient, case-insensitive
+	Since       time.Time     // leaves out messages caught before it
 	// Q is a search, such as `to:buyer@example.com has:attachment
 	// subject:"order shipped"` (see catcher.ParseQuery). An Echo without
 	// the "search" capability ignores it.
@@ -115,7 +115,7 @@ func (c *Client) Messages(ctx context.Context, f Filter) ([]model.Message, error
 
 // Page is one page of messages, newest first.
 type Page struct {
-	Messages []model.Message `json:"messages"`
+	Messages []model.Message `json:"messages"`       // never nil, so it encodes as []
 	Next     string          `json:"next,omitempty"` // Filter.Before for the next page; empty on the last
 }
 
@@ -150,7 +150,7 @@ const (
 
 // Event is one change in Echo's inbox.
 type Event struct {
-	Type string `json:"type"`
+	Type string `json:"type"`         // one of the Event types above
 	ID   string `json:"id,omitempty"` // the message's
 }
 
@@ -208,8 +208,8 @@ func (c *Client) Events(ctx context.Context) (<-chan Event, error) {
 type LatestQuery struct {
 	To       string          // part of a recipient
 	Channels []model.Channel // any of these; e.g. email and sms
-	Run      string
-	Action   string
+	Run      string          // as sent in X-Echo-Run
+	Action   string          // as sent in X-Echo-Run
 	// Since leaves out messages from before it, such as the code from
 	// the previous login: set it to just before the step that sends.
 	Since time.Time
@@ -224,9 +224,9 @@ type LatestQuery struct {
 // masking: the one-time codes (most likely first) and the links of a
 // known kind. Message is the stored message, masked as always.
 type Latest struct {
-	Codes   []string      `json:"codes"`
-	Links   []codes.Link  `json:"links"`
-	Message model.Message `json:"message"`
+	Codes   []string      `json:"codes"`   // unmasked, most likely first
+	Links   []codes.Link  `json:"links"`   // unmasked, in the order they appear
+	Message model.Message `json:"message"` // masked: the codes in it are hidden
 }
 
 // Code returns the most likely one-time code, or "" when there's none.
@@ -382,8 +382,8 @@ var ErrNotRunning = errors.New("no Echo is running")
 
 // APIError is an answer from Echo other than success.
 type APIError struct {
-	Method, Path string
-	StatusCode   int
+	Method, Path string // the request Echo answered
+	StatusCode   int    // e.g. 404
 	Status       string // e.g. "404 Not Found"
 	Message      string // the body, trimmed
 }
@@ -404,6 +404,10 @@ func IsNotFound(err error) bool {
 	return errors.As(err, &ae) && ae.StatusCode == http.StatusNotFound
 }
 
+// do sends one API call with the token and decodes a JSON answer into
+// out. Nothing answering is ErrNotRunning, so callers can say "start
+// Echo" rather than print a dial error; any status from 300 up is an
+// *APIError.
 func (c *Client) do(ctx context.Context, method, path string, q url.Values, body, out any) error {
 	u := c.URL + path
 	if len(q) > 0 {

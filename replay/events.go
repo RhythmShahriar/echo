@@ -45,7 +45,7 @@ type Event struct {
 	Name   string `json:"name"`   // "stripe/payment_intent.succeeded", or the file path
 	Scheme string `json:"scheme"` // how it's signed
 	Type   string `json:"type"`   // event type or topic: payment_intent.succeeded, order.created, ping
-	Body   []byte `json:"-"`
+	Body   []byte `json:"-"`      // the payload, sent byte for byte as signed
 }
 
 // Events lists the library, sorted: "stripe/charge.refunded", ….

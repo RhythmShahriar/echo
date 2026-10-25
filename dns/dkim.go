@@ -15,14 +15,14 @@ import (
 
 // DKIMKey is a published DKIM public key.
 type DKIMKey struct {
-	Selector string `json:"selector"`
-	Domain   string `json:"domain"`
-	Name     string `json:"name"`            // selector._domainkey.domain
-	CNAME    string `json:"cname,omitempty"` // where the name points, for provider-hosted keys
-	KeyType  string `json:"key_type"`        // rsa, ed25519
-	Bits     int    `json:"bits,omitempty"`
-	Revoked  bool   `json:"revoked,omitempty"`
-	Problem  string `json:"problem,omitempty"`
+	Selector string `json:"selector"`          // s=
+	Domain   string `json:"domain"`            // d=
+	Name     string `json:"name"`              // selector._domainkey.domain
+	CNAME    string `json:"cname,omitempty"`   // where the name points, for provider-hosted keys
+	KeyType  string `json:"key_type"`          // rsa, ed25519
+	Bits     int    `json:"bits,omitempty"`    // RSA modulus size
+	Revoked  bool   `json:"revoked,omitempty"` // an empty p=: the key was withdrawn
+	Problem  string `json:"problem,omitempty"` // why the record is invalid; "" when it parses
 }
 
 var (

@@ -48,9 +48,9 @@ const (
 
 // Options configures the UI.
 type Options struct {
-	Inbox  *catcher.Inbox
-	Mode   string        // seal or observe, shown in the header
-	Checks check.Options // what content checks expect
+	Inbox  *catcher.Inbox // what the UI lists and deletes from
+	Mode   string         // seal or observe, shown in the header
+	Checks check.Options  // what content checks expect
 	// AnyHost serves requests whatever their Host header. Without it only
 	// loopback names are served, so a DNS-rebinding page can't read the
 	// inbox. up sets it when a token guards the listener.

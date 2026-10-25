@@ -51,9 +51,9 @@ var Scenarios = []Scenario{
 
 // Scenario is one kind of capture the stand-in recognizes.
 type Scenario struct {
-	Name  string
-	About string
-	Match func(wire.Capture) bool
+	Name  string                  // the ID Options.Expect lists and the report names
+	About string                  // what it is, for the report
+	Match func(wire.Capture) bool // whether a capture is one
 }
 
 // newer is what an Echo answers a capture from a newer wire version:
@@ -76,8 +76,8 @@ type Server struct {
 
 // Problem is a capture the stand-in refused, with why.
 type Problem struct {
-	Problems []string        `json:"problems"`
-	Capture  json.RawMessage `json:"capture"`
+	Problems []string        `json:"problems"` // each way it broke the schema
+	Capture  json.RawMessage `json:"capture"`  // as the connector sent it
 }
 
 // New returns a stand-in.
@@ -185,8 +185,8 @@ func (s *Server) capture(w http.ResponseWriter, r *http.Request) {
 // Report is what the stand-in saw: one row per check, then the refused
 // captures.
 type Report struct {
-	OK       bool      `json:"ok"`
-	Captures int       `json:"captures"`
+	OK       bool      `json:"ok"`       // no row failed
+	Captures int       `json:"captures"` // how many arrived, valid or not
 	Rows     []Row     `json:"rows"`
 	Problems []Problem `json:"problems,omitempty"`
 }

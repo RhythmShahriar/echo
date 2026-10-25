@@ -261,6 +261,12 @@ func shellQuote(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
 
+// installWordPress installs (or removes) the mu-plugin: by copying files
+// into target, through wp-cli on the site or through wp-cli in a Docker
+// container. The connector stays off where WordPress says production
+// (an unset WP_ENVIRONMENT_TYPE counts as production) unless forced, so
+// copying a site with it installed to the live server can't seal or
+// capture the live site's mail.
 func installWordPress(target string, s wordpress.Settings, wpcli bool, container string, uninstall bool, stdout, stderr io.Writer) int {
 	fail := func(err error) int {
 		fmt.Fprintln(stderr, "rhythm echo:", err)

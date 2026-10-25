@@ -58,10 +58,10 @@ type Brand struct {
 // checked only. Runs started before Since or after Until are left out;
 // the rest are shown oldest first.
 type AgencyInput struct {
-	Site  string
-	Since time.Time
+	Site  string    // the site's name or URL, for the title
+	Since time.Time // start of the period
 	Until time.Time // end of the period; zero means the last run's start
-	Runs  []Result
+	Runs  []Result  // in any order
 	Brand Brand
 	Zone  *time.Location // dates are shown in this zone; nil means time.Local
 }

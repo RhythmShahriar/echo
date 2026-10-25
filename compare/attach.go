@@ -26,7 +26,7 @@ import (
 // Attachment is a file an email carries: what compare checks is still
 // attached and whether it changed.
 type Attachment struct {
-	Name   string
+	Name   string // the file name; attachments pair on it, ignoring case and digits
 	Type   string // application/pdf
 	Size   int64  // decoded bytes; -1 when the stored email was cut inside it
 	SHA256 string // hex; "" when the size is unknown

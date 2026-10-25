@@ -51,10 +51,10 @@ const (
 // intercepted trust its certificate (CertPath); Echo signs a leaf for each
 // host they connect to. The key never leaves the machine.
 type CA struct {
-	Cert     *x509.Certificate
-	Key      *ecdsa.PrivateKey
-	PEM      []byte // the certificates to trust, PEM-encoded: what `rhythm echo ca --pem` prints
-	CertPath string // where PEM is stored, for NODE_EXTRA_CA_CERTS, REQUESTS_CA_BUNDLE, curl --cacert
+	Cert     *x509.Certificate // the root clients trust
+	Key      *ecdsa.PrivateKey // signs the leaves; written with mode 0600
+	PEM      []byte            // the certificates to trust, PEM-encoded: what `rhythm echo ca --pem` prints
+	CertPath string            // where PEM is stored, for NODE_EXTRA_CA_CERTS, REQUESTS_CA_BUNDLE, curl --cacert
 
 	// Notices says what LoadCA changed on disk (a move or a rotation), in
 	// sentences for the user. Empty when nothing changed.

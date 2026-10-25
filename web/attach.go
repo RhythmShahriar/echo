@@ -16,8 +16,8 @@ import (
 
 // Attachment is a file an email carries, as its MIME source names it.
 type Attachment struct {
-	Name string `json:"name"`
-	Type string `json:"type"`
+	Name string `json:"name"` // the part's file name, as stored
+	Type string `json:"type"` // the part's MIME type
 	Size int    `json:"size"` // bytes of the part as stored (still encoded, maybe cut)
 }
 

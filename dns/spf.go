@@ -24,8 +24,8 @@ const (
 type SPF struct {
 	Domain   string   `json:"domain"`
 	Record   string   `json:"record"`
-	Lookups  int      `json:"lookups"`
-	Voids    int      `json:"voids"`
+	Lookups  int      `json:"lookups"`            // DNS lookups evaluating it costs; RFC 7208 allows 10
+	Voids    int      `json:"voids"`              // lookups that found nothing; more than 2 fails
 	Includes []string `json:"includes,omitempty"` // every include and redirect, flattened
 	All      string   `json:"all,omitempty"`      // the final all term: -all, ~all, ?all, +all
 }

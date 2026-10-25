@@ -19,7 +19,8 @@ import (
 	"github.com/RhythmShahriar/echo/model"
 )
 
-// Manifest is testbed/scenarios.yaml.
+// Manifest is testbed/scenarios.yaml, whose header comment describes
+// every field of it and of the scenarios.
 type Manifest struct {
 	Sites       map[string]string `yaml:"sites"`
 	Reset       []string          `yaml:"reset"`
@@ -27,7 +28,8 @@ type Manifest struct {
 	Environment []EnvScenario     `yaml:"environment"`
 }
 
-// Scenario is one case of a site that stops saying what it should.
+// Scenario is one case of a site that stops saying what it should. Its
+// fields are the scenarios.yaml keys of the same names.
 type Scenario struct {
 	ID      string   `yaml:"id" json:"id"`
 	Name    string   `yaml:"name" json:"name"`

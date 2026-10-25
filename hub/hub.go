@@ -50,7 +50,7 @@ type Options struct {
 	Mode    string   // seal (default) or observe
 	Allow   []string // hosts reachable while sealed
 	Keep    int      // messages kept, oldest dropped first; default 10000
-	Version string
+	Version string   // Echo's version, in health and Echo Inbox
 }
 
 // Hub is the shared catcher: an http.Handler for the API and Echo Inbox
@@ -58,7 +58,7 @@ type Options struct {
 // site sent what (each message's Source.Site).
 type Hub struct {
 	o     Options
-	Inbox *catcher.Inbox
+	Inbox *catcher.Inbox // every site's messages, each marked with its site
 	srv   *catcher.Server
 	ui    *web.UI
 	inner string // the catcher's own token, sent on requests the hub let through
@@ -369,9 +369,9 @@ func (h *Hub) list(w http.ResponseWriter, r *http.Request) {
 // SiteInfo is one row of GET /v1/sites.
 type SiteInfo struct {
 	ID       string    `json:"id"`
-	Messages int       `json:"messages"`
-	Last     time.Time `json:"last,omitzero"`
-	Schedule string    `json:"schedule,omitempty"`
+	Messages int       `json:"messages"`           // how many the hub holds from the site
+	Last     time.Time `json:"last,omitzero"`      // when the newest arrived
+	Schedule string    `json:"schedule,omitempty"` // its update window, as written
 }
 
 func (h *Hub) sites(w http.ResponseWriter) {

@@ -18,8 +18,8 @@ import (
 // stored them. These rules cover what the kit's secrets.Redact misses in
 // captured mail and requests: credential headers by name, one-time links
 // (?code=, ?key=, ?token=…), Telegram bot tokens and /key/<x> paths. The
-// catcher's mask package (C3) has the full set; this file can call it once
-// that is merged.
+// mask package, which the catcher applies when it stores a message, has
+// the full set; these rules stay a second pass over what an agent reads.
 
 // keep is the most leading characters a masked value shows.
 const keep = 4
@@ -83,6 +83,9 @@ func maskText(s string) string {
 	return urlInText.ReplaceAllStringFunc(s, maskURL)
 }
 
+// maskURL masks a Telegram bot token in the path, key-shaped path
+// segments and secret query values, each showing at most keep leading
+// characters.
 func maskURL(u string) string {
 	u = telegramBot.ReplaceAllStringFunc(u, func(m string) string { return "bot" + secrets.Mask(m[3:], keep) })
 	u = keyPath.ReplaceAllStringFunc(u, func(m string) string {

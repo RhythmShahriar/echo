@@ -185,6 +185,10 @@ func loadProviders(fsys fs.FS, dir string) ([]declaredProvider, error) {
 	return out, nil
 }
 
+// loadProvider reads and checks one provider file, naming the key at
+// fault. A payment channel is refused outright: telling a live call from
+// a test one needs code. A YAML provider that guessed wrong could let a
+// real charge through.
 func loadProvider(fsys fs.FS, file string) (declaredProvider, error) {
 	p := declaredProvider{file: file}
 	b, err := fs.ReadFile(fsys, file)

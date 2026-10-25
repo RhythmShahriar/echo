@@ -30,7 +30,7 @@ import (
 // so removing one leaves nothing behind.
 const Incoming = ".incoming"
 
-// Store is a .echo folder.
+// Store is a .echo folder. Root is that folder's path, not the project's.
 type Store struct{ Root string }
 
 // safeName also rules out spaces, so a name can't end in one (Windows

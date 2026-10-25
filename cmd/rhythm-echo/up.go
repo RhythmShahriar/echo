@@ -49,6 +49,11 @@ func cmdUp(s *session) int {
 	smtpOn := cfg.SMTP != "" && cfg.SMTP != "off"
 	proxyOn := cfg.Proxy != "" && cfg.Proxy != "off"
 	private := s.o.privateNetwork || privateNetworkOn()
+	// Every listener beyond loopback needs the token. Without it anyone on
+	// the network could post captures into a baseline, read the inbox (and
+	// the login codes in it) or use the proxy as an open relay.
+	// --private-network relaxes that only for an address no public
+	// interface can reach (privateOnly).
 	var open []string // addresses served beyond loopback without a token
 	for _, l := range []struct {
 		on         bool
@@ -648,6 +653,7 @@ var listIfaces = func() ([]netIface, error) {
 	return out, nil
 }
 
+// lookupIPs resolves a listen host for privateOnly, with a 5 s limit.
 func lookupIPs(host string) ([]net.IP, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()

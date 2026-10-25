@@ -308,6 +308,7 @@ type BusyError struct {
 	Open      []string // run/action of each open action an exclusive one waited for
 }
 
+// Error names what kept the action from opening.
 func (e *BusyError) Error() string {
 	switch {
 	case e.Holder != "":
@@ -331,6 +332,9 @@ func (in *Inbox) BeginScope(ctx context.Context, o ScopeOptions) (string, error)
 	return in.beginScope(ctx, o, "")
 }
 
+// beginScope is BeginScope with the opener recorded as owner, so an End
+// without a lease closes that opener's oldest action (endOldest), never
+// another client's.
 func (in *Inbox) beginScope(ctx context.Context, o ScopeOptions, owner string) (string, error) {
 	if o.Run == "" && o.Action == "" {
 		return "", nil
@@ -778,8 +782,8 @@ const maxEvents = 4096
 
 // Event is one change to the inbox.
 type Event struct {
-	Seq  uint64 `json:"-"` // rises with every change; GET /v1/events sends it as the event ID
-	Type string `json:"type"`
+	Seq  uint64 `json:"-"`            // rises with every change; GET /v1/events sends it as the event ID
+	Type string `json:"type"`         // one of the Event types below
 	ID   string `json:"id,omitempty"` // the message's
 }
 

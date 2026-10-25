@@ -23,6 +23,7 @@ type tokenBackend struct {
 	sites  map[string]string // up --sites: a write token's site, which marks what it sends
 }
 
+// NewSession wraps the sink's session so nothing is accepted before AUTH.
 func (b tokenBackend) NewSession(c *smtp.Conn) (smtp.Session, error) {
 	s, err := b.inner.NewSession(c)
 	if err != nil {
@@ -34,6 +35,8 @@ func (b tokenBackend) NewSession(c *smtp.Conn) (smtp.Session, error) {
 var errNeedAuth = &smtp.SMTPError{Code: 530, EnhancedCode: smtp.EnhancedCode{5, 7, 0},
 	Message: "Authentication required: log in with any username and Echo's token as the password"}
 
+// tokenSession is a sink session that refuses MAIL, RCPT and DATA until
+// AUTH has given one of the tokens.
 type tokenSession struct {
 	smtp.Session
 	tokens []string
@@ -41,8 +44,11 @@ type tokenSession struct {
 	authed bool
 }
 
+// AuthMechanisms offers PLAIN only: the password is the token itself.
 func (s *tokenSession) AuthMechanisms() []string { return []string{sasl.Plain} }
 
+// Auth checks the password against every token. A site's write token
+// also marks what this session captures with that site.
 func (s *tokenSession) Auth(string) (sasl.Server, error) {
 	return sasl.NewPlainServer(func(_, _, password string) error {
 		ok := false
@@ -64,6 +70,7 @@ func (s *tokenSession) Auth(string) (sasl.Server, error) {
 	}), nil
 }
 
+// Mail refuses a sender before AUTH.
 func (s *tokenSession) Mail(from string, o *smtp.MailOptions) error {
 	if !s.authed {
 		return errNeedAuth
@@ -71,6 +78,7 @@ func (s *tokenSession) Mail(from string, o *smtp.MailOptions) error {
 	return s.Session.Mail(from, o)
 }
 
+// Rcpt refuses a recipient before AUTH.
 func (s *tokenSession) Rcpt(to string, o *smtp.RcptOptions) error {
 	if !s.authed {
 		return errNeedAuth
@@ -78,6 +86,7 @@ func (s *tokenSession) Rcpt(to string, o *smtp.RcptOptions) error {
 	return s.Session.Rcpt(to, o)
 }
 
+// Data refuses a message before AUTH.
 func (s *tokenSession) Data(r io.Reader) error {
 	if !s.authed {
 		return errNeedAuth
