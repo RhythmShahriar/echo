@@ -27,15 +27,18 @@ import (
 // the file fails instead. A symlinked config is rewritten where the link
 // points, so the link stays.
 func SetAddresses(path, listen, smtp, proxy string) error {
+	// Messages name path as the user gave it; file stays where the link
+	// points (on macOS a temp folder's /var is /private/var).
+	file := path
 	if real, err := filepath.EvalSymlinks(path); err == nil {
-		path = real
+		file = real
 	}
-	data, err := os.ReadFile(path) //nolint:gosec // the user's own project config
+	data, err := os.ReadFile(file) //nolint:gosec // the user's own project config
 	if err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return err
 	}
 	mode := fs.FileMode(0o644)
-	if st, err := os.Stat(path); err == nil {
+	if st, err := os.Stat(file); err == nil {
 		mode = st.Mode().Perm()
 	}
 	for _, kv := range [][2]string{{"listen", listen}, {"smtp", smtp}, {"proxy", proxy}} {
@@ -55,7 +58,7 @@ func SetAddresses(path, listen, smtp, proxy string) error {
 			return fmt.Errorf("rewriting %s: %s reads back as %q, not %q", path, kv[0], kv[2], kv[1])
 		}
 	}
-	tmp, err := os.CreateTemp(filepath.Dir(path), ".config-*.yaml")
+	tmp, err := os.CreateTemp(filepath.Dir(file), ".config-*.yaml")
 	if err != nil {
 		return err
 	}
@@ -70,7 +73,7 @@ func SetAddresses(path, listen, smtp, proxy string) error {
 	if err := os.Chmod(tmp.Name(), mode); err != nil {
 		return err
 	}
-	return os.Rename(tmp.Name(), path)
+	return os.Rename(tmp.Name(), file)
 }
 
 // setKey replaces the value of a top-level key in data, keeping the rest

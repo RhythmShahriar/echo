@@ -374,16 +374,37 @@ func dedupe(in []string) []string {
 	return out
 }
 
+// localUser is the envelope sender when neither -f nor From gives one:
+// the user at this host, as sendmail does.
 func localUser() string {
-	name := "nobody"
-	if u, err := user.Current(); err == nil && u.Username != "" {
-		name = u.Username
+	name := ""
+	if u, err := user.Current(); err == nil {
+		name = addrPart(u.Username)
+	}
+	if name == "" {
+		name = "nobody"
 	}
 	host, err := os.Hostname()
-	if err != nil || host == "" {
+	if host = addrPart(host); err != nil || host == "" {
 		host = "localhost"
 	}
 	return name + "@" + host
+}
+
+// addrPart keeps what an address may carry unquoted from a user or host
+// name. Windows names the user DOMAIN\user: a backslash or a space
+// would make the sink refuse MAIL FROM.
+func addrPart(s string) string {
+	if i := strings.LastIndexByte(s, '\\'); i >= 0 {
+		s = s[i+1:]
+	}
+	return strings.Map(func(r rune) rune {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9', strings.ContainsRune(".-_+", r):
+			return r
+		}
+		return -1
+	}, s)
 }
 
 var errUnreachable = errors.New("can't reach Echo")

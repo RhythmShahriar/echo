@@ -214,3 +214,17 @@ func TestHelp(t *testing.T) {
 		}
 	}
 }
+
+func TestAddrPartTakesAnAddressSafeName(t *testing.T) {
+	for in, want := range map[string]string{
+		`RUNNER\runneradmin`: "runneradmin",
+		"ann":                "ann",
+		"Ann Lee":            "AnnLee",
+		"build-01.local":     "build-01.local",
+		`DOMAIN\`:            "",
+	} {
+		if got := addrPart(in); got != want {
+			t.Errorf("addrPart(%q) = %q, want %q", in, got, want)
+		}
+	}
+}

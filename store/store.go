@@ -332,14 +332,21 @@ func (s Store) find(name string) string {
 		_, err := os.Stat(filepath.Join(s.Root, "snapshots", n, "run.json")) //nolint:gosec // n passed safeName or came from ReadDir
 		return err == nil
 	}
-	if has(name) {
-		return name
-	}
+	// The folder's own spelling wins: on macOS and Windows a Stat of
+	// BEFORE finds the folder before, which must still be named before.
 	names, _ := s.Snapshots()
+	for _, n := range names {
+		if n == name && has(n) {
+			return n
+		}
+	}
 	for _, n := range names {
 		if strings.EqualFold(n, name) && has(n) {
 			return n
 		}
+	}
+	if has(name) {
+		return name
 	}
 	return ""
 }
@@ -480,28 +487,48 @@ func older(dir string, d time.Duration) bool {
 // flows/ stay visible to git, to share with the team. It does nothing
 // outside a git repository.
 func (s Store) ExcludeFromGit() {
-	out, err := exec.Command("git", "rev-parse", "--git-path", "info/exclude").Output()
-	if err != nil {
-		return
-	}
-	path := strings.TrimSpace(string(out))
-	rootOut, err := exec.Command("git", "rev-parse", "--show-toplevel").Output()
-	if err != nil {
-		return
-	}
 	abs, err := filepath.Abs(s.Root)
 	if err != nil {
 		return
 	}
-	rel, err := filepath.Rel(strings.TrimSpace(string(rootOut)), abs)
-	if err != nil || strings.HasPrefix(rel, "..") {
+	// git runs in the store's parent folder and names paths from there,
+	// so no path git prints is compared with ours: on macOS the temporary
+	// folders sit behind a symlink (/var is /private/var) and on Windows
+	// git spells C:\Users\RUNNER~1 as C:/Users/runneradmin.
+	dir, name := filepath.Dir(abs), filepath.Base(abs)
+	// git needs a folder that exists: start from the nearest one.
+	for {
+		if fi, err := os.Stat(dir); err == nil && fi.IsDir() {
+			break
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return
+		}
+		name = filepath.Base(dir) + "/" + name
+		dir = parent
+	}
+	git := func(args ...string) (string, error) {
+		out, err := exec.Command("git", append([]string{"-C", dir}, args...)...).Output() //nolint:gosec // fixed git subcommands on our own store path
+		return strings.TrimSpace(string(out)), err
+	}
+	path, err := git("rev-parse", "--git-path", "info/exclude")
+	if err != nil {
+		return
+	}
+	if !filepath.IsAbs(path) {
+		path = filepath.Join(dir, path)
+	}
+	// The parent's path below the repository's top, "" at the top.
+	prefix, err := git("rev-parse", "--show-prefix")
+	if err != nil {
 		return
 	}
 	// Already ignored (e.g. inside a build or work folder): nothing to add.
-	if exec.Command("git", "check-ignore", "-q", abs).Run() == nil { //nolint:gosec // our own store path
+	if _, err := git("check-ignore", "-q", name); err == nil {
 		return
 	}
-	base := "/" + filepath.ToSlash(rel) + "/"
+	base := "/" + prefix + name + "/"
 	lines := []string{base + "snapshots/", base + "runs/", base + "snapshots/" + Incoming + "-*"}
 	existing, _ := os.ReadFile(path) //nolint:gosec // the repository's own exclude file
 	have := strings.Split(string(existing), "\n")

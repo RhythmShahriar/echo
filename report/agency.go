@@ -271,6 +271,10 @@ var installedBrowsers = func() []string {
 	return nil
 }
 
+// FindBrowser is the Chrome, Chromium or Edge that PDF prints with, ""
+// when there is none.
+func FindBrowser() string { return findBrowser() }
+
 // findBrowser is the Chrome, Chromium or Edge PDF prints with: one on
 // PATH, else one installed where installedBrowsers looks. "" when none.
 func findBrowser() string {
