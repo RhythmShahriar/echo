@@ -7,11 +7,11 @@ on:
     tags: ["v*"]
 jobs:
   release:
-    # Pinned by commit. The cosign certificate records this ref; the
-    # Action's verify-release.sh accepts a branch, tag or commit here. It
-    # also requires the run's own ref to be the release tag, which a tag
-    # push gives.
-    uses: RhythmShahriar/.github/.github/workflows/release-go.yml@d296f34c9b6629211c68561504d938c404afaf74 # master
+    # Called at master on purpose: the cosign certificate records this
+    # ref, and rhythm's verifier trusts only release-go.yml@refs/heads/master
+    # (a commit pin makes `rhythm update` refuse the release). The run's own
+    # ref must be the release tag, which a tag push gives.
+    uses: RhythmShahriar/.github/.github/workflows/release-go.yml@master
     permissions:
       contents: write
       id-token: write
@@ -45,7 +45,7 @@ jobs:
           gh release download "$TAG" --dir dl --pattern checksums.txt --pattern checksums.txt.sigstore.json \
             --pattern 'rhythm-echo_linux_amd64.tar.gz' --pattern 'rhythm-echo_linux_arm64.tar.gz'
           for arch in amd64 arm64; do
-            .github/scripts/verify-release.sh dl "rhythm-echo_linux_${arch}.tar.gz" "$TAG"
+            bash .github/scripts/verify-release.sh dl "rhythm-echo_linux_${arch}.tar.gz" "$TAG"
             mkdir -p "ctx/linux/$arch"
             tar -xzf "dl/rhythm-echo_linux_${arch}.tar.gz" -C "ctx/linux/$arch" rhythm-echo
           done
