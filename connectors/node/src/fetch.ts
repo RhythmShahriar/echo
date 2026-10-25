@@ -19,6 +19,12 @@ export function blocked(): TypeError {
   return new TypeError('blocked by Echo');
 }
 
+/**
+ * installFetch wraps globalThis.fetch once per process. While inactive the
+ * wrapper calls straight through. While active each request waits for
+ * Echo's decision; with no decision a sealed site's request fails as a
+ * network error rather than going out.
+ */
 export function installFetch(): void {
   const s = state();
   const orig = globalThis.fetch as (typeof fetch & { [WRAPPED]?: true }) | undefined;
@@ -144,6 +150,7 @@ async function readRequestBody(input: RequestInfo | URL, init: RequestInit | und
   return { text: await readCapped(r.body, max), init };
 }
 
+/** readCapped reads at most max bytes of a stream as UTF-8, then stops pulling. */
 export async function readCapped(stream: ReadableStream<Uint8Array> | null, max: number): Promise<string> {
   if (!stream) return '';
   const reader = stream.getReader();

@@ -9,6 +9,7 @@
 
 import type { Config } from './config.js';
 
+/** Context is what a capture made now should carry. */
 export interface Context {
   /** "<run>/<action>" from X-Echo-Run, once accepted. */
   run?: string;
@@ -25,15 +26,20 @@ export interface RunClaim {
   forwarded: boolean;
 }
 
+/** Resolver finds the Context of the request being handled, for frameworks whose request isn't in the AsyncLocalStorage. */
 export type Resolver = () => Context | undefined | Promise<Context | undefined>;
 
+/** ALS is the part of AsyncLocalStorage the connector uses. */
 export interface ALS<T> {
   getStore(): T | undefined;
   run<R>(store: T, fn: () => R): R;
 }
 
+/** State is the process-wide state, shared by every copy of the package. */
 export interface State {
+  /** The resolved configuration, once activate() ran. */
   cfg?: Config;
+  /** Whether the hooks capture; false passes every call straight through. */
   active: boolean;
   /** Echo's mode from its last answer; seal until Echo says otherwise, so an unreachable Echo fails closed. */
   mode: string;
@@ -41,11 +47,14 @@ export interface State {
   wire?: number;
   /** When wire was learned (Date.now()), so an upgraded Echo gets the newest version again. */
   wireAt?: number;
+  /** fetch as it was before the hook, which Echo itself is reached with. */
   origFetch?: typeof fetch;
+  /** Hooks already installed, so a second copy of the package doesn't patch again. */
   patched: Set<string>;
   als?: ALS<Context>;
   /** Framework hooks that find the current request (Next.js), tried after the AsyncLocalStorage. */
   resolvers: Resolver[];
+  /** Problems already logged (see warnOnce). */
   warned: Set<string>;
   /** "after" captures still on their way, for flush(). */
   inflight: Set<Promise<unknown>>;
@@ -55,6 +64,7 @@ export interface State {
 
 const KEY = Symbol.for('rhythm.echo.state');
 
+/** state returns the process-wide state, creating it sealed and inactive. */
 export function state(): State {
   const g = globalThis as unknown as Record<symbol, State | undefined>;
   let s = g[KEY];

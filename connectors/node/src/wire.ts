@@ -15,10 +15,14 @@ export const RUN_HEADER = 'X-Echo-Run';
 /** Authenticates connectors when Echo listens beyond loopback. */
 export const TOKEN_HEADER = 'X-Echo-Token';
 
+/** Phase of an HTTP capture: before it is sent (Echo decides) or after (its response). */
 export type Phase = 'before' | 'after';
+/** What Echo decided: send it for real, answer with Echo's response or fail it. */
 export type Action = 'allow' | 'fake' | 'block';
 
+/** Source describes the connector and what it hooked. */
 export interface Source {
+  /** node for this connector. */
   via: string;
   stack?: string;
   plugin?: string;
@@ -28,6 +32,7 @@ export interface Source {
   site?: string;
 }
 
+/** Email is a message handed to the app's mailer. */
 export interface Email {
   from?: string;
   to?: string[];
@@ -54,35 +59,47 @@ export interface Attachment {
   sha256?: string;
 }
 
+/** HTTP is an outbound request and, after sending, its response. */
 export interface HTTP {
   method: string;
   url: string;
+  /** Lowercased names, credentials masked (see maskHeaders). */
   headers?: Record<string, string>;
   body?: string;
+  /** After: the response status. */
   status?: number;
+  /** After: the response body. */
   response?: string;
 }
 
+/** Capture is one email or HTTP request reported to Echo. */
 export interface Capture {
+  /** The wire version this capture follows. */
   v: number;
   kind: 'email' | 'http';
   phase?: Phase;
+  /** After: the ID Echo returned for the before capture. */
   id?: string;
+  /** "<run>/<action>", from X-Echo-Run. */
   run?: string;
   source: Source;
   email?: Email;
   http?: HTTP;
+  /** The send failed: the error, as text. */
   error?: string;
 }
 
+/** Response is what the app gets instead of the real service's answer. */
 export interface Response {
   status: number;
   headers?: Record<string, string>;
   body?: string;
 }
 
+/** Decision is Echo's answer to a capture. */
 export interface Decision {
   id: string;
+  /** seal or observe: remembered, so a later missing decision fails the right way. */
   mode: string;
   action?: Action;
   response?: Response;

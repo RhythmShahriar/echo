@@ -13,6 +13,7 @@ export interface LatestQuery {
   channel?: string | string[];
   /** Only messages from this run and action (X-Echo-Run). */
   run?: string;
+  /** See run. */
   action?: string;
   /** Only messages caught after this time. */
   since?: Date | string;
@@ -34,7 +35,9 @@ export interface Link {
 
 /** Echo's answer, with the first code and link picked out. */
 export interface Latest {
+  /** The one-time codes found, unmasked, most likely first. */
   codes: string[];
+  /** The links of a known kind, unmasked, in the order they appear. */
   links: Link[];
   /** The message as Echo stores it, credentials masked. */
   message: Record<string, unknown>;
@@ -52,6 +55,7 @@ export interface LatestOptions {
   token?: string;
 }
 
+/** DEFAULT_WAIT is how long Echo waits for a match when the query names no wait. */
 export const DEFAULT_WAIT = '10s';
 
 /** waitParam turns a wait into the Go duration Echo reads. */

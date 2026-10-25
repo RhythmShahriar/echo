@@ -65,6 +65,7 @@ class EchoClient
         $this->http = new Client($options);
     }
 
+    /** Echo's base URL, as configured. */
     public function url(): string
     {
         return $this->url;

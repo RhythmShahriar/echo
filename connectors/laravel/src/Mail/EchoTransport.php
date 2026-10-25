@@ -34,11 +34,18 @@ final class EchoTransport implements TransportInterface
     ) {
     }
 
+    /** The real transport this one wraps. */
     public function inner(): TransportInterface
     {
         return $this->inner;
     }
 
+    /**
+     * Reports the message, then sends it only when Echo allows it. With
+     * Echo unreachable a sealed site's mail fails (unless the transport is
+     * array or log, which deliver nothing), so staging can't mail real
+     * people because Echo is down.
+     */
     public function send(RawMessage $message, ?Envelope $envelope = null): ?SentMessage
     {
         if (! $this->echo->active()) {
@@ -106,6 +113,7 @@ final class EchoTransport implements TransportInterface
         return $this->inner instanceof ArrayTransport || $this->inner instanceof LogTransport;
     }
 
+    /** Names the transport after the real one (echo+smtp://…), for logs and debug output. */
     public function __toString(): string
     {
         return 'echo+'.$this->inner;

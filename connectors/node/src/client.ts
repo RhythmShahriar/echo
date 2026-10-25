@@ -16,6 +16,12 @@ import { downgrade, TOKEN_HEADER, WIRE_MIN_VERSION, WIRE_VERSION, type Capture, 
  */
 export const WIRE_RECHECK_MS = 60 * 60 * 1000;
 
+/**
+ * send posts a capture and returns Echo's decision, or null when there is
+ * none: Echo unreachable, too slow or answering an error. It never throws,
+ * so a broken Echo can't crash the site; the caller decides with sealed()
+ * whether no decision blocks.
+ */
 export async function send(c: Omit<Capture, 'v'>): Promise<Decision | null> {
   const s = state();
   const cfg = s.cfg;
@@ -82,11 +88,16 @@ async function echoWire(f: typeof fetch, headers: Record<string, string>, url: s
   }
 }
 
-/** sealed reports whether a missing decision must block. */
+/**
+ * sealed reports whether a missing decision must block. Until Echo has
+ * said observe, the answer is yes: a staging site that loses Echo must not
+ * start sending real mail and requests.
+ */
 export function sealed(): boolean {
   return state().mode !== 'observe';
 }
 
+/** errText is an error's message with its cause, for a capture's error field and the log. */
 export function errText(err: unknown): string {
   if (err instanceof Error) {
     const cause = (err as { cause?: unknown }).cause;

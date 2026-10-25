@@ -28,6 +28,11 @@ use Rhythm\Echo\Mail\SealOnSending;
  */
 class EchoServiceProvider extends ServiceProvider
 {
+    /**
+     * Binds the client and the connector and wraps the mail manager and
+     * container-built Guzzle clients. Nothing here decides whether the
+     * connector is active: that is asked when each binding resolves.
+     */
     public function register(): void
     {
         $this->mergeConfigFrom(__DIR__.'/../config/rhythm-echo.php', 'rhythm-echo');
@@ -71,6 +76,10 @@ class EchoServiceProvider extends ServiceProvider
         });
     }
 
+    /**
+     * Registers the commands, then, only when active, the Http client
+     * middleware, the MessageSending listener and TrackRun.
+     */
     public function boot(): void
     {
         $this->publishes([__DIR__.'/../config/rhythm-echo.php' => $this->app->configPath('rhythm-echo.php')], 'rhythm-echo');

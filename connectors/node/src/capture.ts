@@ -33,6 +33,7 @@ function bare(hostname: string): string {
   return hostname.toLowerCase().replace(/^\[|\]$/g, '');
 }
 
+/** isLoopback reports whether a host name stays on this machine ("0.0.0.0" reaches loopback too). */
 export function isLoopback(h: string): boolean {
   return h === 'localhost' || h.endsWith('.localhost') || h === '::1' || /^127\.\d+\.\d+\.\d+$/.test(h) || h === '0.0.0.0';
 }

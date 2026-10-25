@@ -4,8 +4,10 @@
 // Configuration comes from the environment only, so the same build works
 // in development, on a staging server and on a Vercel preview.
 
+/** DEFAULT_URL is where `rhythm echo up` listens unless told otherwise. */
 export const DEFAULT_URL = 'http://127.0.0.1:8025';
 
+/** Options for register(). Every one is optional and falls back to the environment. */
 export interface Options {
   /** Echo's capture API. Default: RHYTHM_ECHO_URL or http://127.0.0.1:8025. */
   url?: string;
@@ -48,8 +50,11 @@ export interface Options {
   logger?: Pick<Console, 'info' | 'warn'>;
 }
 
+/** Config is Options resolved against the environment: what the hooks read. */
 export interface Config {
+  /** Echo's capture API, without a trailing slash. */
   url: string;
+  /** Echo's host and port, so calls to Echo itself are never captured. */
   echoHost: string;
   /** What X-Echo-Run signatures are checked with: the token, else the write token. */
   token: string;
@@ -68,6 +73,7 @@ export interface Config {
 
 type Env = Record<string, string | undefined>;
 
+/** env returns process.env, or an empty object where there is no process. */
 export function env(): Env {
   // process is missing in browsers and some edge runtimes; Next.js's Edge
   // runtime has it.
@@ -77,6 +83,7 @@ export function env(): Env {
 
 const truthy = (v: string | undefined) => v !== undefined && /^(1|true|yes|on)$/i.test(v.trim());
 
+/** resolveConfig fills every option from o, then the environment, then the defaults. */
 export function resolveConfig(o: Options = {}, e: Env = env()): Config {
   const url = (o.url ?? e.RHYTHM_ECHO_URL ?? DEFAULT_URL).replace(/\/+$/, '');
   let echoHost = '';
@@ -109,8 +116,11 @@ export function resolveConfig(o: Options = {}, e: Env = env()): Config {
   };
 }
 
+/** Guard is the production guard's verdict. */
 export interface Guard {
+  /** Whether the hooks may capture here. */
   active: boolean;
+  /** Why, for the one-line status. */
   reason: string;
   /** A one-line problem with the environment worth logging even when inactive. */
   warning?: string;
