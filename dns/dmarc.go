@@ -14,15 +14,15 @@ import (
 
 // DMARC is the domain's DMARC policy.
 type DMARC struct {
-	Name      string   `json:"name"` // where it was found: _dmarc.domain or _dmarc.orgdomain
-	Record    string   `json:"record"`
+	Name      string   `json:"name"`                // where it was found: _dmarc.domain or _dmarc.orgdomain
+	Record    string   `json:"record"`              // as published
 	Inherited bool     `json:"inherited,omitempty"` // from the organizational domain
 	Policy    string   `json:"policy"`              // the one that applies to this domain
-	P         string   `json:"p"`
-	SP        string   `json:"sp,omitempty"`
-	Pct       int      `json:"pct"`
-	ADKIM     string   `json:"adkim"`
-	ASPF      string   `json:"aspf"`
+	P         string   `json:"p"`                   // the domain's policy: none, quarantine or reject
+	SP        string   `json:"sp,omitempty"`        // its subdomains' policy, when set apart
+	Pct       int      `json:"pct"`                 // share of failing mail the policy applies to; default 100
+	ADKIM     string   `json:"adkim"`               // DKIM alignment: r (relaxed, the default) or s (strict)
+	ASPF      string   `json:"aspf"`                // SPF alignment: r or s
 	RUA       []string `json:"rua,omitempty"`
 	RUF       []string `json:"ruf,omitempty"`
 }

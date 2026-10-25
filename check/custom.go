@@ -32,8 +32,8 @@ type Custom struct {
 
 // Fixtures are texts a custom rule must match and must not match.
 type Fixtures struct {
-	Match   []string
-	NoMatch []string
+	Match   []string // each must match
+	NoMatch []string // none may match
 }
 
 // matcher returns where the rule's pattern is first found in s, or -1.
@@ -130,11 +130,11 @@ func CustomRules(cs []Custom) ([]Rule, error) {
 
 // FixtureResult is one fixture of a custom rule, run.
 type FixtureResult struct {
-	Rule string
+	Rule string // the rule's ID
 	Text string // "" when the rule has no fixture of this kind
 	Want bool   // true for a match fixture, false for a no_match one
-	Got  bool
-	Err  error // the rule doesn't compile
+	Got  bool   // whether the rule matched it
+	Err  error  // the rule doesn't compile
 }
 
 // OK reports whether the fixture came out as declared.

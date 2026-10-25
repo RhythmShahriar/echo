@@ -30,7 +30,7 @@ type Result struct {
 	Subject    string        `json:"subject,omitempty"`
 	MessageID  string        `json:"message_id,omitempty"`
 	ReturnPath string        `json:"return_path,omitempty"`
-	Sender     dns.Sender    `json:"sender"`
+	Sender     dns.Sender    `json:"sender"`             // inferred from the headers, for dns.Check
 	Provider   string        `json:"provider,omitempty"` // label of Sender.Provider
 	Auth       Auth          `json:"auth"`
 	Signatures []Signature   `json:"signatures,omitempty"`
@@ -46,35 +46,35 @@ type Auth struct {
 	SPF     string   `json:"spf,omitempty"`    // pass, fail, softfail, neutral, none, temperror, permerror
 	DKIM    string   `json:"dkim,omitempty"`   // pass when any signature passed
 	DMARC   string   `json:"dmarc,omitempty"`
-	Methods []Method `json:"methods,omitempty"`
+	Methods []Method `json:"methods,omitempty"` // every result in the header, the ones above included
 }
 
 // Method is one result in an Authentication-Results header.
 type Method struct {
-	Method string            `json:"method"`
-	Result string            `json:"result"`
-	Reason string            `json:"reason,omitempty"`
-	Props  map[string]string `json:"props,omitempty"` // header.from, smtp.mailfrom, header.d, header.s…
+	Method string            `json:"method"`           // spf, dkim, dmarc, arc…
+	Result string            `json:"result"`           // pass, fail…
+	Reason string            `json:"reason,omitempty"` // the reason= text, when given
+	Props  map[string]string `json:"props,omitempty"`  // header.from, smtp.mailfrom, header.d, header.s…
 }
 
 // Signature is a DKIM-Signature header's tags (b= and bh= omitted).
 type Signature struct {
 	Domain    string   `json:"d"`
 	Selector  string   `json:"s"`
-	Algorithm string   `json:"a"`
-	Headers   []string `json:"h"`
+	Algorithm string   `json:"a"`           // rsa-sha256, ed25519-sha256
+	Headers   []string `json:"h"`           // the headers it signs
 	Length    bool     `json:"l,omitempty"` // signs only part of the body
 }
 
 // Hop is one Received header.
 type Hop struct {
-	From  string    `json:"from,omitempty"`
-	IP    string    `json:"ip,omitempty"`
-	By    string    `json:"by,omitempty"`
-	With  string    `json:"with,omitempty"`
+	From  string    `json:"from,omitempty"` // the host that handed it over
+	IP    string    `json:"ip,omitempty"`   // that host's address, as the receiver saw it
+	By    string    `json:"by,omitempty"`   // the host that received it
+	With  string    `json:"with,omitempty"` // the protocol: ESMTPS, HTTP…
 	At    time.Time `json:"at,omitzero"`
 	Delay float64   `json:"delay_s,omitempty"` // since the previous hop
-	Raw   string    `json:"raw"`
+	Raw   string    `json:"raw"`               // the header, secrets redacted
 }
 
 // Analyze parses a raw RFC 5322 message (an .eml file, as saved from the

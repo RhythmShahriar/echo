@@ -16,7 +16,7 @@ import (
 // content, so a stream reveals nothing a page couldn't fetch anyway.
 type Event struct {
 	Type string `json:"type"` // add, update or delete
-	ID   string `json:"id"`
+	ID   string `json:"id"`   // the message's; fetch it to see what changed
 }
 
 // keepAlive is how often an idle stream sends a comment, so proxies and

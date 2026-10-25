@@ -36,15 +36,15 @@ type Summary struct {
 	Kind     string        `json:"kind"`  // "Email", "Twilio SMS", "Zapier webhook"
 	Title    string        `json:"title"` // subject, event or first words
 	From     string        `json:"from,omitempty"`
-	To       []string      `json:"to,omitempty"` // at most 3
-	MoreTo   int           `json:"more_to,omitempty"`
-	Snippet  string        `json:"snippet,omitempty"`
+	To       []string      `json:"to,omitempty"`      // at most 3
+	MoreTo   int           `json:"more_to,omitempty"` // recipients beyond the 3 in To
+	Snippet  string        `json:"snippet,omitempty"` // the start of the plain text, on one line
 	Status   model.Status  `json:"status"`
 	Run      string        `json:"run,omitempty"`
 	Action   string        `json:"action,omitempty"`
-	Errors   int           `json:"errors,omitempty"`
+	Errors   int           `json:"errors,omitempty"` // content check issues by level
 	Warnings int           `json:"warnings,omitempty"`
-	Attach   int           `json:"attachments,omitempty"`
+	Attach   int           `json:"attachments,omitempty"` // how many files it carries
 }
 
 // Page is what GET /ui/messages answers.
@@ -55,7 +55,7 @@ type Page struct {
 	// Total counts the matching messages, Inbox all of them.
 	Total  int    `json:"total"`
 	Inbox  int    `json:"inbox"`
-	Mode   string `json:"mode"`
+	Mode   string `json:"mode"` // seal or observe, for the header
 	Facets Facets `json:"facets"`
 	// ReadOnly is set for a viewer signed in with a Login: the page then
 	// hides Delete and offers Sign out.
@@ -70,16 +70,16 @@ type Facets struct {
 	Channels  []string `json:"channels"`
 	Actions   []string `json:"actions"`
 	Providers []string `json:"providers"`
-	Checks    []string `json:"checks"`
+	Checks    []string `json:"checks"` // check IDs with an issue somewhere
 }
 
 // Detail is what GET /ui/messages/{id} answers: the stored message, its
 // content checks and the attachments found in its MIME body.
 type Detail struct {
 	Message     model.Message `json:"message"`
-	Kind        string        `json:"kind"`
-	Title       string        `json:"title"`
-	Issues      []model.Issue `json:"issues"`
+	Kind        string        `json:"kind"`   // as in Summary
+	Title       string        `json:"title"`  // as in Summary
+	Issues      []model.Issue `json:"issues"` // the content checks' findings, run now
 	Attachments []Attachment  `json:"attachments"`
 	Raw         string        `json:"raw"` // the MIME source, or the HTTP request as text
 }

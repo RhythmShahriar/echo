@@ -85,6 +85,10 @@ func (s *session) Rcpt(to string, _ *smtp.RcptOptions) error   { s.to = append(s
 func (s *session) Reset()                                      { s.from, s.to = "", nil }
 func (s *session) Logout() error                               { return nil }
 
+// Data captures the message as an email that ends at Echo: the sink
+// delivers nothing, in any mode. Envelope recipients missing from To and
+// Cc are recorded as Bcc and the run comes from the message's own
+// X-Echo-Run header.
 func (s *session) Data(r io.Reader) error {
 	raw, err := io.ReadAll(io.LimitReader(r, maxMail+1))
 	if err != nil {

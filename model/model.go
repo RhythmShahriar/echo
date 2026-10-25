@@ -20,6 +20,7 @@ const Schema = "rhythm-echo/v1"
 // Channel is what kind of message something is.
 type Channel string
 
+// Channels Echo sorts messages into.
 const (
 	Email     Channel = "email"
 	SMS       Channel = "sms"
@@ -38,6 +39,7 @@ var Channels = []Channel{Email, SMS, WhatsApp, Chat, Webhook, Analytics, Payment
 // Status says what happened to a message.
 type Status string
 
+// Statuses a message can end in.
 const (
 	Sent    Status = "sent"    // observed and delivered (observe mode)
 	Faked   Status = "faked"   // Echo answered instead of the real service: sealed, or mail caught by Echo's SMTP sink in any mode
@@ -47,7 +49,7 @@ const (
 
 // Message is one thing the site sent.
 type Message struct {
-	ID       string            `json:"id"`
+	ID       string            `json:"id"`               // NewID of when and what was caught; unique within an inbox
 	Run      string            `json:"run,omitempty"`    // from X-Echo-Run: the run…
 	Action   string            `json:"action,omitempty"` // …and the action that caused it
 	Channel  Channel           `json:"channel"`
@@ -67,7 +69,7 @@ type Message struct {
 	Body     string            `json:"body,omitempty"` // raw HTTP or MIME body, secrets redacted, size-capped
 	Response *Response         `json:"response,omitempty"`
 	Status   Status            `json:"status"`
-	Error    string            `json:"error,omitempty"`
+	Error    string            `json:"error,omitempty"` // why a Failed or Blocked message didn't go
 	Source   Source            `json:"source"`
 	At       time.Time         `json:"at"`
 
@@ -137,6 +139,7 @@ func NewID(seed string) string {
 // a new warning or notice NEW.
 type Level string
 
+// Issue levels, most serious first.
 const (
 	Error   Level = "error"
 	Warning Level = "warning"
@@ -162,7 +165,7 @@ type Issue struct {
 	Detail  string   `json:"detail,omitempty"`
 	Fix     string   `json:"fix,omitempty"`
 	Message string   `json:"message,omitempty"` // the message ID it concerns
-	Key     string   `json:"key"`
+	Key     string   `json:"key"`               // Check|Title, set by Identify: what compare matches issues on
 	Actions []string `json:"actions,omitempty"` // set when grouped
 }
 
@@ -178,23 +181,23 @@ type Action struct {
 	Messages []Message `json:"messages"` // in the order they were sent
 	Issues   []Issue   `json:"issues,omitempty"`
 	Error    string    `json:"error,omitempty"` // the action itself failed (the request errored)
-	Duration float64   `json:"duration_ms"`
+	Duration float64   `json:"duration_ms"`     // from the start of the action until its messages were in
 }
 
 // Run is one check of what a site sends.
 type Run struct {
-	Schema   string    `json:"schema"`
-	Tool     string    `json:"tool"`
-	Version  string    `json:"version"`
-	ID       string    `json:"id"`
-	Target   string    `json:"target,omitempty"`
-	Name     string    `json:"name,omitempty"` // snapshot name
-	Mode     string    `json:"mode"`           // seal or observe
+	Schema   string    `json:"schema"`           // always Schema
+	Tool     string    `json:"tool"`             // rhythm-echo
+	Version  string    `json:"version"`          // the Echo that made the run
+	ID       string    `json:"id"`               // sent to the site in X-Echo-Run, so captures are filed under this run
+	Target   string    `json:"target,omitempty"` // the site checked, as config's site
+	Name     string    `json:"name,omitempty"`   // snapshot name
+	Mode     string    `json:"mode"`             // seal or observe
 	Started  time.Time `json:"started"`
 	Duration float64   `json:"duration_ms"`
 	Actions  []Action  `json:"actions"`
-	Issues   []Issue   `json:"issues,omitempty"` // run-wide (seal health, deliverability)
-	Warnings []string  `json:"warnings,omitempty"`
+	Issues   []Issue   `json:"issues,omitempty"`   // run-wide (seal health, deliverability)
+	Warnings []string  `json:"warnings,omitempty"` // problems with the run itself, not the site: captures that couldn't be tied to an action
 	// BootIDs lists every catcher boot seen during the run, oldest first.
 	// More than one means Echo restarted mid-run and lost what it held.
 	BootIDs []string `json:"boot_ids,omitempty"`
@@ -234,16 +237,16 @@ var Classes = []string{Broke, New, Changed, Fixed}
 
 // Change is one difference between a snapshot and the current run.
 type Change struct {
-	Class   string   `json:"class"`
+	Class   string   `json:"class"` // Broke, New, Changed or Fixed
 	Check   string   `json:"check"`
-	Title   string   `json:"title"`
+	Title   string   `json:"title"` // part of compare.Key, which accept lists name: rewording it changes the key
 	Detail  string   `json:"detail,omitempty"`
 	Fix     string   `json:"fix,omitempty"`
 	Actions []string `json:"actions"` // action labels
 	Channel Channel  `json:"channel,omitempty"`
 	Before  string   `json:"before,omitempty"` // in full: the terminal and HTML reports shorten it themselves
 	After   string   `json:"after,omitempty"`
-	Score   float64  `json:"score,omitempty"`
+	Score   float64  `json:"score,omitempty"` // how many actions it affects; Sort ranks by it within a class
 	// Diff is a line diff of Before and After, for content changes.
 	Diff []DiffLine `json:"diff,omitempty"`
 }
@@ -270,8 +273,8 @@ type Comparison struct {
 	Before   RunRef    `json:"before"`
 	After    RunRef    `json:"after"`
 	Changes  []Change  `json:"changes"`
-	Actions  int       `json:"actions"`
-	Warnings []string  `json:"warnings,omitempty"`
+	Actions  int       `json:"actions"`            // how many actions were compared
+	Warnings []string  `json:"warnings,omitempty"` // what to read the changes with: a mode mismatch, missing actions, accepted changes
 	Created  time.Time `json:"created"`
 }
 
@@ -279,7 +282,7 @@ type Comparison struct {
 type RunRef struct {
 	Target  string    `json:"target,omitempty"`
 	Name    string    `json:"name,omitempty"`
-	Dir     string    `json:"dir"`
+	Dir     string    `json:"dir"` // the run's folder, as given to compare
 	Started time.Time `json:"started"`
 }
 

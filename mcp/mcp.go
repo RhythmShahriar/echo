@@ -56,14 +56,14 @@ const maxLine = 4 << 20
 // Server answers MCP requests with Echo's data. Zero fields have working
 // defaults except Echo.
 type Server struct {
-	Echo    *client.Client  // the running Echo the message tools read
-	Config  config.Config   // actions for run_action, snapshot and compare
-	Store   store.Store     // where snapshots and runs are kept (default .echo)
-	Replay  runner.Replayer // replay actions; nil reports them as unavailable
-	Dir     string          // the project folder actions run in; "" is the working folder
-	DNS     dns.Resolver    // check_domain's resolver; nil is the system's
-	Version string          // Echo's version, in serverInfo and stored runs
-	Now     func() time.Time
+	Echo    *client.Client   // the running Echo the message tools read
+	Config  config.Config    // actions for run_action, snapshot and compare
+	Store   store.Store      // where snapshots and runs are kept (default .echo)
+	Replay  runner.Replayer  // replay actions; nil reports them as unavailable
+	Dir     string           // the project folder actions run in; "" is the working folder
+	DNS     dns.Resolver     // check_domain's resolver; nil is the system's
+	Version string           // Echo's version, in serverInfo and stored runs
+	Now     func() time.Time // nil: time.Now
 
 	actions sync.Mutex // one run at a time: Echo attributes untagged mail to the action in progress
 }

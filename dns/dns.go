@@ -58,16 +58,16 @@ type Options struct {
 // Report is what Check found: the parsed records as facts and the issues.
 type Report struct {
 	Domain    string    `json:"domain"`
-	OrgDomain string    `json:"org_domain"`
-	Sender    *Sender   `json:"sender,omitempty"`
-	SPF       *SPF      `json:"spf,omitempty"`
-	DKIM      []DKIMKey `json:"dkim,omitempty"`
-	DMARC     *DMARC    `json:"dmarc,omitempty"`
-	MX        []string  `json:"mx,omitempty"`
-	NullMX    bool      `json:"null_mx,omitempty"`
+	OrgDomain string    `json:"org_domain"`        // the registrable domain, where DMARC falls back to
+	Sender    *Sender   `json:"sender,omitempty"`  // Options.Sender, echoed
+	SPF       *SPF      `json:"spf,omitempty"`     // nil when there is no record
+	DKIM      []DKIMKey `json:"dkim,omitempty"`    // the keys found under the selectors tried
+	DMARC     *DMARC    `json:"dmarc,omitempty"`   // nil when neither the domain nor its OrgDomain has one
+	MX        []string  `json:"mx,omitempty"`      // mail servers, most preferred first
+	NullMX    bool      `json:"null_mx,omitempty"` // "MX 0 .": the domain accepts no mail (RFC 7505)
 	MTASTS    *MTASTS   `json:"mta_sts,omitempty"`
-	TLSRPT    string    `json:"tls_rpt,omitempty"`
-	BIMI      string    `json:"bimi,omitempty"`
+	TLSRPT    string    `json:"tls_rpt,omitempty"` // the _smtp._tls record, when there is one
+	BIMI      string    `json:"bimi,omitempty"`    // the default._bimi record, when there is one
 	// Unreachable is true when no lookup got an answer from the resolver
 	// (a timeout or a refused connection every time). Issues then holds
 	// one error about the resolver and no record was checked.

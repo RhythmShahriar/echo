@@ -22,8 +22,8 @@ import (
 // compared with a snapshot.
 type Result struct {
 	Run        *model.Run
-	Comparison *model.Comparison
-	Dir        string
+	Comparison *model.Comparison // nil unless compared
+	Dir        string            // the run's folder: report.html is written there
 }
 
 // Compared reports whether the result is a comparison.

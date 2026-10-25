@@ -23,10 +23,11 @@ const (
 	indent     = badgeWidth + 2
 )
 
+// PrettyOptions are the terminal report's switches.
 type PrettyOptions struct {
-	Plain   bool
-	Quiet   bool
-	Verbose bool
+	Plain   bool // no color, boxes or glyphs: --plain, or not a terminal
+	Quiet   bool // only the outcome: no header, steps or notes
+	Verbose bool // every message under its action, with send errors
 }
 
 // Pretty renders Echo for a terminal.
@@ -35,6 +36,7 @@ type Pretty struct {
 	o       PrettyOptions
 }
 
+// NewPretty returns a Pretty writing the report to w and notes to errw.
 func NewPretty(w, errw io.Writer, o PrettyOptions) *Pretty { return &Pretty{w: w, errw: errw, o: o} }
 
 var (

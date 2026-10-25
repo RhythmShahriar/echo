@@ -45,14 +45,14 @@ const (
 // is, counts and a verdict that read the same for every kind plus the
 // command's own data. Schema stays rhythm-echo/v1; fields are only added.
 type Envelope struct {
-	Schema   string  `json:"schema"`
-	Kind     Kind    `json:"kind"`
-	Tool     string  `json:"tool"`
-	Version  string  `json:"version"`
+	Schema   string  `json:"schema"`   // model.Schema
+	Kind     Kind    `json:"kind"`     // what Data holds
+	Tool     string  `json:"tool"`     // rhythm-echo
+	Version  string  `json:"version"`  // the Echo that wrote it
 	Complete bool    `json:"complete"` // false when part of it couldn't be checked or a payload was cut to size
 	Summary  Summary `json:"summary"`
-	Verdict  string  `json:"verdict"`
-	Data     any     `json:"data"`
+	Verdict  string  `json:"verdict"` // VerdictOK, VerdictFindings or VerdictError
+	Data     any     `json:"data"`    // the command's own result, shaped by Kind
 
 	// failed says a part is missing (Verdict "error"). A payload cut to
 	// size leaves Complete false but not failed: everything else was
@@ -63,16 +63,16 @@ type Envelope struct {
 // Summary counts what an Envelope holds. A count that doesn't apply to
 // the kind is 0.
 type Summary struct {
-	Broke         int `json:"broke"`
+	Broke         int `json:"broke"` // changes by class, in a comparison
 	New           int `json:"new"`
 	Changed       int `json:"changed"`
 	Fixed         int `json:"fixed"`
-	Errors        int `json:"errors"`
+	Errors        int `json:"errors"` // issues by level
 	Warnings      int `json:"warnings"`
 	Notices       int `json:"notices"`
 	Actions       int `json:"actions"` // run: actions run; comparison: actions compared
 	Messages      int `json:"messages"`
-	FailedActions int `json:"failed_actions"`
+	FailedActions int `json:"failed_actions"` // actions that errored themselves, not the site's messages
 }
 
 // Snapshot is one entry of the snapshots kind.

@@ -74,8 +74,8 @@ type Capture struct {
 	ID      string `json:"id,omitempty"`                        // after: the ID Echo returned for before
 	Run     string `json:"run,omitempty"`                       // from X-Echo-Run, "<run>/<action>"
 	Source  Source `json:"source"`
-	Email   *Email `json:"email,omitempty"`
-	HTTP    *HTTP  `json:"http,omitempty"`
+	Email   *Email `json:"email,omitempty"` // set when kind is email
+	HTTP    *HTTP  `json:"http,omitempty"`  // set when kind is http
 	Error   string `json:"error,omitempty"` // the send failed (wp_mail_failed, a transport error)
 }
 
@@ -99,8 +99,8 @@ type Email struct {
 	Subject string            `json:"subject,omitempty"`
 	Text    string            `json:"text,omitempty"`
 	HTML    string            `json:"html,omitempty"`
-	Headers map[string]string `json:"headers,omitempty"`
-	Raw     string            `json:"raw,omitempty"` // full MIME, when the connector has it
+	Headers map[string]string `json:"headers,omitempty"` // the message's other headers, by name
+	Raw     string            `json:"raw,omitempty"`     // full MIME, when the connector has it
 
 	// Attachments lists the files attached to the message, for connectors
 	// that send no Raw MIME. With Raw set, Echo reads them from the MIME.
@@ -110,7 +110,7 @@ type Email struct {
 // Attachment describes one attached file. Connectors send what they know
 // about it, never its content.
 type Attachment struct {
-	Name   string `json:"name,omitempty"`
+	Name   string `json:"name,omitempty"`   // the file name the recipient sees
 	Type   string `json:"type,omitempty"`   // MIME type, application/pdf
 	Size   int64  `json:"size,omitempty"`   // decoded size in bytes
 	SHA256 string `json:"sha256,omitempty"` // hex digest of the decoded content
@@ -119,11 +119,11 @@ type Attachment struct {
 // HTTP is an outbound request and, after sending, its response.
 type HTTP struct {
 	Method   string            `json:"method"`
-	URL      string            `json:"url"`
-	Headers  map[string]string `json:"headers,omitempty"`
-	Body     string            `json:"body,omitempty"`
-	Status   int               `json:"status,omitempty"` // after
-	Response string            `json:"response,omitempty"`
+	URL      string            `json:"url"`                // absolute; Echo decides on its host
+	Headers  map[string]string `json:"headers,omitempty"`  // credential headers masked, a Stripe key's mode prefix kept so Echo can tell live from test
+	Body     string            `json:"body,omitempty"`     // as sent; Echo masks it before storing
+	Status   int               `json:"status,omitempty"`   // after
+	Response string            `json:"response,omitempty"` // after: the response body
 }
 
 // Decisions for an HTTP capture.
@@ -135,17 +135,17 @@ const (
 
 // Decision is Echo's answer to a capture.
 type Decision struct {
-	ID       string    `json:"id"`
-	Mode     string    `json:"mode" enum:"seal,observe"`
+	ID       string    `json:"id"`                                       // the stored message, for the after phase; empty for a request Echo let through unrecorded
+	Mode     string    `json:"mode" enum:"seal,observe"`                 // the mode Echo is in
 	Action   string    `json:"action,omitempty" enum:"allow,fake,block"` // http: allow, fake or block; email: fake (don't send) or allow
 	Response *Response `json:"response,omitempty"`                       // for fake
 }
 
 // Response is the answer a connector gives the site instead of sending.
 type Response struct {
-	Status  int               `json:"status"`
-	Headers map[string]string `json:"headers,omitempty"`
-	Body    string            `json:"body,omitempty"`
+	Status  int               `json:"status"`            // the HTTP status to answer with
+	Headers map[string]string `json:"headers,omitempty"` // the provider's own, such as Content-Type
+	Body    string            `json:"body,omitempty"`    // shaped like the provider's real answer, so the site's SDK reads it
 }
 
 // sigLen is the length of a run signature: 16 bytes in unpadded base64url.

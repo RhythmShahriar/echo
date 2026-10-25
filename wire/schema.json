@@ -52,10 +52,12 @@
           "$ref": "#/$defs/Source"
         },
         "email": {
-          "$ref": "#/$defs/Email"
+          "$ref": "#/$defs/Email",
+          "description": "set when kind is email"
         },
         "http": {
-          "$ref": "#/$defs/HTTP"
+          "$ref": "#/$defs/HTTP",
+          "description": "set when kind is http"
         },
         "error": {
           "type": "string",
@@ -145,7 +147,8 @@
           "type": "object",
           "additionalProperties": {
             "type": "string"
-          }
+          },
+          "description": "the message's other headers, by name"
         },
         "raw": {
           "type": "string",
@@ -167,7 +170,8 @@
       "description": "Attachment describes one attached file. Connectors send what they know about it, never its content.",
       "properties": {
         "name": {
-          "type": "string"
+          "type": "string",
+          "description": "the file name the recipient sees"
         },
         "type": {
           "type": "string",
@@ -192,23 +196,27 @@
           "type": "string"
         },
         "url": {
-          "type": "string"
+          "type": "string",
+          "description": "absolute; Echo decides on its host"
         },
         "headers": {
           "type": "object",
           "additionalProperties": {
             "type": "string"
-          }
+          },
+          "description": "credential headers masked, a Stripe key's mode prefix kept so Echo can tell live from test"
         },
         "body": {
-          "type": "string"
+          "type": "string",
+          "description": "as sent; Echo masks it before storing"
         },
         "status": {
           "type": "integer",
           "description": "after"
         },
         "response": {
-          "type": "string"
+          "type": "string",
+          "description": "after: the response body"
         }
       },
       "required": [
@@ -222,10 +230,12 @@
       "description": "Decision is Echo's answer to a capture.",
       "properties": {
         "id": {
-          "type": "string"
+          "type": "string",
+          "description": "the stored message, for the after phase; empty for a request Echo let through unrecorded"
         },
         "mode": {
           "type": "string",
+          "description": "the mode Echo is in",
           "enum": [
             "seal",
             "observe"
@@ -256,16 +266,19 @@
       "description": "Response is the answer a connector gives the site instead of sending.",
       "properties": {
         "status": {
-          "type": "integer"
+          "type": "integer",
+          "description": "the HTTP status to answer with"
         },
         "headers": {
           "type": "object",
           "additionalProperties": {
             "type": "string"
-          }
+          },
+          "description": "the provider's own, such as Content-Type"
         },
         "body": {
-          "type": "string"
+          "type": "string",
+          "description": "shaped like the provider's real answer, so the site's SDK reads it"
         }
       },
       "required": [

@@ -35,7 +35,7 @@ type Site struct {
 //	    config: /srv/sites/client-a/.echo/config.yaml
 //	    schedule: "Tue 02:00"
 type Sites struct {
-	ReadTokenEnv string `yaml:"read_token_env"`
+	ReadTokenEnv string `yaml:"read_token_env"` // the variable holding the token that reads every site; the file names variables, never tokens
 	Sites        []Site `yaml:"sites"`
 
 	readToken string

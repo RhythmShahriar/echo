@@ -265,6 +265,11 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// authorized reports whether r carries Echo's token in
+// Proxy-Authorization, as a bearer token or as a Basic password (the
+// only form many HTTP clients can send through a proxy URL's user
+// info). Without a token every request passes, which ListenAndServe
+// allows only on loopback (and up only there or on a private network).
 func (p *Proxy) authorized(r *http.Request) bool {
 	if p.opt.Token == "" {
 		return true
@@ -583,6 +588,10 @@ func (p *Proxy) handle(w http.ResponseWriter, r *http.Request, scheme, host, hoo
 	}
 }
 
+// writeFake answers with Echo's fake instead of the real service: 200
+// with an empty body when the decision has none and JSON when the body
+// names no type, as most provider SDKs expect. X-Echo-Id ties the answer
+// to the stored message.
 func writeFake(w http.ResponseWriter, d wire.Decision) {
 	resp := d.Response
 	if resp == nil {

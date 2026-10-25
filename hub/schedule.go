@@ -31,7 +31,7 @@ import (
 // Schedule is when an update window opens: on some days of the week at a
 // time of day, in the clock's own time zone.
 type Schedule struct {
-	Spec   string
+	Spec   string  // as written, for messages
 	days   [7]bool // by time.Weekday
 	hour   int
 	minute int
@@ -112,38 +112,38 @@ func (s Schedule) Next(t time.Time) time.Time {
 
 // WindowOptions configure one update window.
 type WindowOptions struct {
-	Store        string        // the hub's store: results go under sites/<id>
-	Sites        []*Site       // in order
-	URL, Token   string        // the hub's API and its read token
-	HTTP         *http.Client  // nil: a default client (set one that trusts a self-signed hub)
-	After        string        // the update command, run with sh -c in each site's folder
-	Hide         []string      // variables After must not see: Sites.SecretEnv
-	AfterTimeout time.Duration // default 30 minutes
-	Snapshot     string        // compare with this snapshot; empty takes a fresh one before After
-	Version      string
-	Now          func() time.Time
-	Log          io.Writer // progress and the command's output; nil discards
+	Store        string           // the hub's store: results go under sites/<id>
+	Sites        []*Site          // in order
+	URL, Token   string           // the hub's API and its read token
+	HTTP         *http.Client     // nil: a default client (set one that trusts a self-signed hub)
+	After        string           // the update command, run with sh -c in each site's folder
+	Hide         []string         // variables After must not see: Sites.SecretEnv
+	AfterTimeout time.Duration    // default 30 minutes
+	Snapshot     string           // compare with this snapshot; empty takes a fresh one before After
+	Version      string           // Echo's version, in stored runs
+	Now          func() time.Time // nil: time.Now
+	Log          io.Writer        // progress and the command's output; nil discards
 }
 
 // Result is what one site's window found. It is kept as schedule.json in
 // the compare's run folder, for History.
 type Result struct {
-	Site       string         `json:"site"`
+	Site       string         `json:"site"` // the site's ID
 	Started    time.Time      `json:"started"`
 	Finished   time.Time      `json:"finished"`
-	After      string         `json:"after,omitempty"`
-	AfterError string         `json:"after_error,omitempty"`
-	Snapshot   string         `json:"snapshot,omitempty"`
-	Dir        string         `json:"dir,omitempty"`
-	Verdict    string         `json:"verdict,omitempty"`
-	Counts     map[string]int `json:"counts,omitempty"`
-	Error      string         `json:"error,omitempty"` // the window couldn't compare
+	After      string         `json:"after,omitempty"`       // the update command that ran
+	AfterError string         `json:"after_error,omitempty"` // how it failed; the window still compares
+	Snapshot   string         `json:"snapshot,omitempty"`    // the snapshot compared with
+	Dir        string         `json:"dir,omitempty"`         // the compare's run folder
+	Verdict    string         `json:"verdict,omitempty"`     // one line: "Nothing broke: 0 broke, 1 new, …"
+	Counts     map[string]int `json:"counts,omitempty"`      // changes by class
+	Error      string         `json:"error,omitempty"`       // the window couldn't compare
 }
 
 // Broke reports whether the site broke or couldn't be checked.
 func (r Result) Broke() bool { return r.Error != "" || r.AfterError != "" || r.Counts[model.Broke] > 0 }
 
-// Replay, when set, makes the replayer for a site's replay actions, given
+// Replay makes the replayer for a site's replay actions when set, given
 // the site's config, its project folder and its config file (the
 // replayer looks there for live payment keys). The CLI sets it before
 // calling ScheduleMain; without it replay actions report that replay

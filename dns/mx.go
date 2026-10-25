@@ -20,11 +20,11 @@ import (
 // MTASTS is the domain's MTA-STS record and, when fetched, its policy.
 type MTASTS struct {
 	Record string   `json:"record"`
-	ID     string   `json:"id,omitempty"`
-	URL    string   `json:"url,omitempty"` // set when the policy was fetched
-	Mode   string   `json:"mode,omitempty"`
-	MX     []string `json:"mx,omitempty"`
-	MaxAge string   `json:"max_age,omitempty"`
+	ID     string   `json:"id,omitempty"`      // changes when the policy does
+	URL    string   `json:"url,omitempty"`     // set when the policy was fetched
+	Mode   string   `json:"mode,omitempty"`    // enforce, testing or none, from the policy
+	MX     []string `json:"mx,omitempty"`      // the policy's mx patterns
+	MaxAge string   `json:"max_age,omitempty"` // seconds senders may cache the policy
 }
 
 const maxPolicy = 64 << 10 // RFC 8461 policies are tiny; cap what we read

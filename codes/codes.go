@@ -37,8 +37,8 @@ const (
 
 // Link is a link of a kind a test may follow.
 type Link struct {
-	Kind string `json:"kind"`
-	URL  string `json:"url"`
+	Kind string `json:"kind"` // Magic, Verify, Reset, Login or Unsubscribe
+	URL  string `json:"url"`  // as the message had it, HTML entities decoded
 }
 
 // maxCodes is the most codes read from one field: a code is one or two

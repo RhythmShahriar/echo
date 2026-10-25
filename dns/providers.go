@@ -9,11 +9,11 @@ import "strings"
 // it asks customers to publish, its default DKIM selectors and the
 // domains its mail carries (DKIM d=, Return-Path, Received hosts).
 type Provider struct {
-	Name      string   `json:"name"`  // key used in Sender.Provider
-	Label     string   `json:"label"` // for people
-	SPF       []string `json:"spf,omitempty"`
-	Selectors []string `json:"selectors,omitempty"`
-	Domains   []string `json:"domains,omitempty"`
+	Name      string   `json:"name"`                // key used in Sender.Provider
+	Label     string   `json:"label"`               // for people
+	SPF       []string `json:"spf,omitempty"`       // include: domains, any one of which authorizes it
+	Selectors []string `json:"selectors,omitempty"` // DKIM selectors to look up
+	Domains   []string `json:"domains,omitempty"`   // what its mail is recognized by
 	// Note explains a provider whose selectors can't be guessed.
 	Note string `json:"note,omitempty"`
 }

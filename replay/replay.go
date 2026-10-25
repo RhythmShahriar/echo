@@ -49,7 +49,7 @@ type Resolver interface {
 
 // Target is where to send.
 type Target struct {
-	URL     string            `json:"url"`
+	URL     string            `json:"url"`               // the site's webhook endpoint, checked against staging and production
 	Headers map[string]string `json:"headers,omitempty"` // extra headers; they can't replace signature headers
 }
 
@@ -58,7 +58,7 @@ type Options struct {
 	// Secret signs the event. When empty it's read from SecretEnv, or the
 	// scheme's default variable (SecretEnv(scheme)).
 	Secret    string
-	SecretEnv string
+	SecretEnv string // the variable to read Secret from (config's secret_env)
 	// Staging lists URL prefixes from config that may be targeted even
 	// when they resolve to public addresses.
 	Staging []string
@@ -72,15 +72,15 @@ type Options struct {
 	// Scan is other configuration in reach (name → contents: .env,
 	// wp-config.php, Echo's config), scanned for live keys.
 	Scan map[string]string
-	HMAC HMAC
+	HMAC HMAC // the header, digest and encoding of the generic hmac scheme
 	// Run and Action go into X-Echo-Run, so what the site sends in
 	// response is tied to this replay. Defaults: a new run ID and
 	// "replay-<event>".
 	Run, Action string
-	Resolver    Resolver // nil: net.DefaultResolver
-	Timeout     time.Duration
-	Now         func() time.Time
-	MaxBody     int // response bytes kept; default 64 KiB
+	Resolver    Resolver         // nil: net.DefaultResolver
+	Timeout     time.Duration    // for the whole send; default 30s
+	Now         func() time.Time // nil: time.Now; the signing timestamp
+	MaxBody     int              // response bytes kept; default 64 KiB
 
 	// RunKey, when set, signs X-Echo-Run, as connectors with a key only
 	// trust a signed value. Leave it empty until the Echo the site
@@ -91,15 +91,15 @@ type Options struct {
 
 // Result is what happened.
 type Result struct {
-	Event     string            `json:"event"`
-	Scheme    string            `json:"scheme"`
-	URL       string            `json:"url"`
-	Run       string            `json:"run"`
+	Event     string            `json:"event"`  // Event.Name
+	Scheme    string            `json:"scheme"` // how it was signed
+	URL       string            `json:"url"`    // where it went, credentials masked
+	Run       string            `json:"run"`    // sent in X-Echo-Run with Action
 	Action    string            `json:"action"`
-	Status    int               `json:"status"`
-	Body      string            `json:"body,omitempty"` // capped, secrets redacted
-	Truncated bool              `json:"truncated,omitempty"`
-	Location  string            `json:"location,omitempty"` // a redirect, not followed
+	Status    int               `json:"status"`              // the site's answer; 0 when nothing was sent
+	Body      string            `json:"body,omitempty"`      // capped, secrets redacted
+	Truncated bool              `json:"truncated,omitempty"` // Body was cut to MaxBody
+	Location  string            `json:"location,omitempty"`  // a redirect, not followed
 	Duration  time.Duration     `json:"duration_ns"`
 	Headers   map[string]string `json:"headers"` // as sent, signatures and secrets masked
 	Secret    string            `json:"secret"`  // where the secret came from, masked

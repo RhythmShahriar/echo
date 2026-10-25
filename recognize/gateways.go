@@ -87,6 +87,10 @@ func (g gateway) isTest(r Request) bool {
 	return g.test(r)
 }
 
+// recognizer turns g into a Recognizer that claims its live and sandbox
+// hosts. Refuse and Fake both ask isTest, so a call is faked only when
+// the real one could not have moved money; anything else gets the
+// gateway's own refusal.
 func (g gateway) recognizer() Recognizer {
 	hosts := slices.Clone(g.Live)
 	for _, h := range g.Sandbox {

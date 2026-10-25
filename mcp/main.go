@@ -133,7 +133,7 @@ func projectFolders(path string) (root, dir string) {
 // its own version before calling Main.
 var Version = "dev"
 
-// Replay, when set, makes the replayer for replay actions from the config.
+// Replay makes the replayer for replay actions from the config when set.
 // It lives in the CLI (it signs events with the site's secrets), which
 // sets it before calling Main; without it replay actions report that
 // replay isn't available.

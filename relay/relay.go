@@ -72,6 +72,9 @@ type account struct {
 
 func (a account) String() string { return net.JoinHostPort(a.host, a.port) }
 
+// parseURL reads smtp:// (STARTTLS, port 587 by default) or smtps://
+// (TLS from the start, port 465). No error it returns quotes the URL,
+// since the URL holds the relay's password.
 func parseURL(raw string) (account, error) {
 	u, err := url.Parse(raw)
 	if err != nil {
@@ -156,6 +159,7 @@ func (rl *releaser) who(r *http.Request) string {
 	return ""
 }
 
+// answer is what POST /v1/messages/{id}/release replies.
 type answer struct {
 	Released string `json:"released,omitempty"` // the message ID
 	To       string `json:"to,omitempty"`
@@ -163,6 +167,10 @@ type answer struct {
 	Error    string `json:"error,omitempty"`
 }
 
+// release sends one caught email to one address on the allowlist, for a
+// client's sign-off. It is the one way mail Echo caught can reach a real
+// inbox. So it takes a reader (never a write token) and one address, then
+// logs every attempt, refused ones included, as a message of its own.
 func (rl *releaser) release(w http.ResponseWriter, r *http.Request) {
 	who := rl.who(r)
 	if who == "" {

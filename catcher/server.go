@@ -93,7 +93,7 @@ type Config struct {
 	// Store is where messages are kept: "memory", or "jsonl" for an
 	// inbox from OpenInbox. Default: whichever the inbox is.
 	Store   string
-	Version string
+	Version string // Echo's version, reported in health and the Mailpit info route
 	// Warn is told about things worth a line in the log, such as a
 	// connector's site host that Echo ignores. Default: the standard log.
 	Warn func(msg string)
@@ -101,7 +101,7 @@ type Config struct {
 
 // Server is the catcher's HTTP API.
 type Server struct {
-	Inbox   *Inbox
+	Inbox   *Inbox // what was caught; the live view and the CLI read it directly
 	cfg     Config
 	mux     *http.ServeMux
 	handler http.Handler // mux behind Protect and the token check
@@ -179,6 +179,12 @@ func (s *Server) BootID() string { return s.cfg.BootID }
 // check when a token is set.
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) { s.handler.ServeHTTP(w, r) }
 
+// serve checks the token, then serves the route. With no token set
+// every request passes: up allows that only on loopback (or a private
+// network when asked) and Protect has already turned away web pages.
+// Echo's token or the read token opens every route. A write token opens
+// only the routes a connector needs and marks its captures with its
+// site, so one site's connector can't read another site's mail.
 func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
 	if s.cfg.Token == "" && s.cfg.ReadToken == "" && len(s.cfg.WriteTokens) == 0 {
 		s.mux.ServeHTTP(w, r)
@@ -371,6 +377,12 @@ func (s *Server) captureFor(c wire.Capture, site string) (wire.Decision, error) 
 	return wire.Decision{}, errors.New(`kind must be "email" or "http"`)
 }
 
+// http records an outbound request and decides its fate, in this order:
+// a live payment is refused in every mode; while sealed, a cloud metadata
+// address is faked as not found; observe mode, the site itself and the
+// allowlist go through; anything else is faked with the provider's own
+// answer. Every field is masked before the message is stored, after
+// one-time codes are read from it for the latest route.
 func (s *Server) http(c wire.Capture, run, action string, src model.Source) (wire.Decision, error) {
 	h := c.HTTP
 	if c.Phase == wire.After && c.ID != "" {
@@ -600,6 +612,11 @@ func (s *Server) fitAny(v string, fn func(string) string) string {
 	return v
 }
 
+// cutMasked cuts v to MaxBody plus margin, masks it with fn, then cuts
+// the masked text to MaxBody with the truncated mark. Masking comes
+// between the cuts so a secret that straddles the first cut is still
+// masked whole. It reports
+// whether anything was cut.
 func (s *Server) cutMasked(v string, fn func(string) string) (string, bool) {
 	cut := false
 	if limit := s.cfg.MaxBody + margin; len(v) > limit {

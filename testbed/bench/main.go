@@ -91,18 +91,18 @@ func main() {
 // Outcome is everything recorded for one scenario.
 type Outcome struct {
 	Scenario Scenario          `json:"scenario"`
-	Echo     Result            `json:"echo"`
-	Tools    map[string]Result `json:"tools"`
-	Seconds  float64           `json:"seconds"`
+	Echo     Result            `json:"echo"`    // whether Echo caught it
+	Tools    map[string]Result `json:"tools"`   // the other tools' verdicts, by name
+	Seconds  float64           `json:"seconds"` // how long the scenario took
 }
 
 // Run is the whole benchmark, for the scoreboard.
 type Run struct {
-	Version  string
+	Version  string // the Echo benchmarked
 	Started  time.Time
 	Duration time.Duration
-	Partial  bool
-	BinErr   error
+	Partial  bool             // only some scenarios ran (-only)
+	BinErr   error            // why Echo couldn't be run at all
 	Tools    []Tool           // judged, in column order
 	ToolErr  map[string]error // why a tool wasn't judged
 	Outcomes []Outcome

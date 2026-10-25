@@ -414,10 +414,13 @@ var errUnreachable = errors.New("can't reach Echo")
 // PlainAuth it also works without TLS: the sink is the operator's own Echo.
 type TokenAuth string
 
+// Start sends the token at once, as AUTH PLAIN with the user "echo".
 func (t TokenAuth) Start(*smtp.ServerInfo) (string, []byte, error) {
 	return "PLAIN", []byte("\x00echo\x00" + string(t)), nil
 }
 
+// Next fails on any further challenge: PLAIN has none, so one means
+// the server isn't Echo's sink.
 func (TokenAuth) Next(_ []byte, more bool) ([]byte, error) {
 	if more {
 		return nil, errors.New("unexpected SMTP AUTH challenge")
@@ -425,6 +428,10 @@ func (TokenAuth) Next(_ []byte, more bool) ([]byte, error) {
 	return nil, nil
 }
 
+// viaSMTP hands the message to Echo's SMTP sink, logging in with the
+// token when the sink offers AUTH (it does only beyond loopback). The
+// whole exchange gets a minute, so a stuck sink can't hang the site's
+// mail call.
 func viaSMTP(addr, token string, msg []byte, from string, rcpts []string) error {
 	conn, err := net.DialTimeout("tcp", addr, 10*time.Second) //nolint:gosec // the address is the operator's own Echo
 	if err != nil {

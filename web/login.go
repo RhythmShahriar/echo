@@ -97,6 +97,9 @@ func (l *Login) failed() {
 	l.mu.Unlock()
 }
 
+// start opens a session and returns its random ID and expiry, dropping
+// expired ones on the way. Sessions live in memory only, so a restart
+// signs everyone out.
 func (l *Login) start() (string, time.Time) {
 	id := rand.Text()
 	l.mu.Lock()
@@ -112,6 +115,7 @@ func (l *Login) start() (string, time.Time) {
 	return id, exp
 }
 
+// valid reports whether r's session cookie names a live session.
 func (l *Login) valid(r *http.Request) bool {
 	c, err := r.Cookie(SessionCookie)
 	if err != nil {
@@ -224,6 +228,10 @@ func localPath(p string) string {
 	return (&url.URL{Path: u.Path, RawPath: u.RawPath, RawQuery: u.RawQuery}).String()
 }
 
+// serveLogin shows the sign-in form and checks what it posts. The page
+// can't be framed or cached, a post must come from Echo's own origin and
+// failures are throttled, so a page elsewhere can neither sign a viewer
+// in nor guess the password. next only ever leads to a path on this site.
 func (l *Login) serveLogin(w http.ResponseWriter, r *http.Request) {
 	h := w.Header()
 	h.Set("Content-Security-Policy", CSP+"; form-action 'self'") // CSP has frame-ancestors 'none'
@@ -268,6 +276,7 @@ func (l *Login) serveLogin(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// loginData fills the sign-in page.
 type loginData struct {
 	Next, Error string
 }

@@ -274,6 +274,10 @@ func paypalSandbox(r Request) bool {
 // paypalIDRe matches PayPal object IDs: upper-case letters and digits.
 var paypalIDRe = regexp.MustCompile(`^[A-Z0-9-]{10,}$`)
 
+// paypalCall splits /v2/checkout/orders/5O1.../capture into the
+// resource ("checkout.orders"), whether an object ID was in the path
+// and the action ("capture", or a verb from the method), as stripeCall
+// does for Stripe.
 func paypalCall(r Request) (resource string, withID bool, action string) {
 	s := segments(r)
 	if len(s) > 0 && (s[0] == "v1" || s[0] == "v2") {

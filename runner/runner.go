@@ -45,13 +45,13 @@ type Replayer func(ctx context.Context, a config.ReplayAction, to, run string) e
 
 // Options says what Run runs and against which Echo.
 type Options struct {
-	Config  config.Config
-	Client  *client.Client
-	Version string
-	Name    string // snapshot name
-	HTTP    *http.Client
-	Replay  Replayer
-	Only    []string // run only these action names
+	Config  config.Config  // the actions and how long to wait for each
+	Client  *client.Client // the Echo that catches what the site sends
+	Version string         // Echo's version, stored in the run
+	Name    string         // snapshot name
+	HTTP    *http.Client   // sends http actions; nil: one that follows no redirects
+	Replay  Replayer       // nil: replay actions fail as unavailable
+	Only    []string       // run only these action names
 	Hooks   Hooks
 	// Quiet and Timeout override the config's waits when more than 0
 	// (the CLI's --quiet and --timeout). Quiet replaces every action's
@@ -90,8 +90,8 @@ type Options struct {
 
 // Hooks report progress.
 type Hooks struct {
-	Action func(a *model.Action, done, total int)
-	Log    func(string)
+	Action func(a *model.Action, done, total int) // after each action, with how many are done
+	Log    func(string)                           // a note worth a line, such as a flush command that failed
 }
 
 // Errors from Select: the configuration or the command line asks for
@@ -398,6 +398,10 @@ func noun(ch model.Channel) string {
 	return string(ch) + " messages"
 }
 
+// doHTTP sends an http action to the site. The run goes in X-Echo-Run and
+// in a cookie of the same name, as connectors accept either.
+// The body is read (up to 1 MiB) and dropped so the site finishes the
+// request. A 4xx or 5xx fails the action. Errors show the URL masked.
 func doHTTP(ctx context.Context, o Options, a config.Action, runValue string, fake *fakeData) error {
 	h := a.HTTP
 	target := resolve(o.Config.Site, fake.expand(h.URL)) // refuse checked it isn't production

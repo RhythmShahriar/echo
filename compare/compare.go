@@ -29,6 +29,9 @@ func Compare(before, after *model.Run, beforeDir, afterDir, version string) *mod
 	return compareRuns(before, after, beforeDir, afterDir, version, Options{})
 }
 
+// compareRuns pairs the runs' actions by ID and their messages within
+// each action, then groups what changed so one change shows once with
+// every action it affects. Run-wide issues are compared as "site-wide".
 func compareRuns(before, after *model.Run, beforeDir, afterDir, version string, o Options) *model.Comparison {
 	out := &model.Comparison{Schema: model.Schema, Tool: "rhythm-echo", Version: version, Created: time.Now().UTC(),
 		Before: model.RunRef{Target: before.Target, Name: before.Name, Dir: beforeDir, Started: before.Started},
@@ -635,9 +638,9 @@ func silentVia(b, a model.Action) string {
 // silentConnectors notes each action that sent nothing at all this time
 // although a connector in the site sent its mail in the snapshot. Echo
 // can't tell that from a site that stopped sending. A connector that
-// can't reach Echo is the likelier cause when every message is gone, and
-// it can fail the action too: a connector that can't hand a request to
-// Echo throws, as a dead connection would.
+// can't reach Echo is the likelier cause when every message is gone. It
+// can fail the action too: a connector that can't hand a request to Echo
+// throws, as a dead connection would.
 func silentConnectors(before, after *model.Run) []string {
 	var w []string
 	for _, b := range before.Actions {
