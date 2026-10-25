@@ -2298,3 +2298,34 @@ func TestLatestWaitsForTheNewMessage(t *testing.T) {
 		t.Errorf("latest with nothing: %d %q", code, errOut)
 	}
 }
+
+// TestUpdatePromptQuietForMachines checks that a JSON or -q run never asks
+// about a new release or prints the notice, while a plain run may.
+func TestUpdatePromptQuietForMachines(t *testing.T) {
+	t.Chdir(t.TempDir())
+	c, _ := lookup("run")
+	for _, tc := range []struct {
+		args  []string
+		quiet bool
+	}{
+		{nil, false},
+		{[]string{"--json"}, true},
+		{[]string{"-o", "run.json"}, true},
+		{[]string{"-q"}, true},
+		{[]string{"--md"}, false},
+	} {
+		p, err := parse(c, append([]string{"--url", "http://127.0.0.1:1"}, tc.args...))
+		if err != nil {
+			t.Fatalf("%v: %v", tc.args, err)
+		}
+		s := p.begin(&bytes.Buffer{}, &bytes.Buffer{})
+		got := s.promptOptions()
+		s.stop()
+		if got.Quiet != tc.quiet {
+			t.Errorf("%v: Quiet = %v, want %v", tc.args, got.Quiet, tc.quiet)
+		}
+		if got.Stdout != s.stdout || got.Out != s.stderr {
+			t.Errorf("%v: the prompt must use the run's own writers", tc.args)
+		}
+	}
+}

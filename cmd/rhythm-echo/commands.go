@@ -72,7 +72,7 @@ type session struct {
 	tty, live      bool
 	plain          bool // no color, boxes or glyphs: --plain, or not a terminal
 	view           *report.Pretty
-	notice         <-chan string
+	update         *update.Pending
 	ran            bool   // run, snapshot or compare ran the actions: failed ones set the exit code
 	allFailed      string // what to say when every action failed
 }
@@ -121,13 +121,13 @@ func (s *session) selectActions() error {
 }
 
 // start prints the header and the one-time notice and checks for a new
-// release in the background.
+// release in the background; finish asks about it at the end.
 func (s *session) start(target string) {
 	if kitconfig.FirstRun("echo-authorised-use") && !s.o.quiet {
 		fmt.Fprint(s.stderr, "Note: use Echo on sites you own or are authorised to test. Captured messages can\n"+
 			"hold personal data: they stay on this machine, with credentials masked. This notice is shown once.\n\n")
 	}
-	s.notice = update.Notice(s.ctx, &update.Updater{Repo: "RhythmShahriar/echo", Binary: "rhythm-echo", Current: version,
+	s.update = update.StartCheck(s.ctx, &update.Updater{Repo: "RhythmShahriar/echo", Binary: "rhythm-echo", Current: version,
 		UserAgent: "rhythm-echo/" + version + " (+https://rythm.sh/echo)", API: os.Getenv("RHYTHM_GITHUB_API")})
 	s.view.Header(version, target)
 }
@@ -180,9 +180,26 @@ func (s *session) runKey(h client.Health) string {
 	return cmp.Or(os.Getenv(writeTokenEnv), s.echo.Token)
 }
 
-// finish saves the HTML report, writes the chosen format, prints the
-// summary and picks the exit code.
+// finish writes the report and picks the exit code, then offers the new
+// release once the run's output is all written.
 func (s *session) finish(res report.Result, hint string) int {
+	code := s.writeReport(res, hint)
+	if s.live && s.ctx.Err() == nil {
+		update.PromptAtExit(s.ctx, s.promptOptions())
+	}
+	return code
+}
+
+// promptOptions sets up the update prompt: a run read by a machine (JSON
+// or -q) never asks or prints the notice.
+func (s *session) promptOptions() update.PromptOptions {
+	return update.PromptOptions{Check: s.update, Quiet: s.o.quiet || s.o.json || s.format == "json",
+		Stdout: s.stdout, Out: s.stderr}
+}
+
+// writeReport saves the HTML report, writes the chosen format, prints the
+// summary and picks the exit code.
+func (s *session) writeReport(res report.Result, hint string) int {
 	html := ""
 	if res.Dir != "" {
 		html = filepath.Join(res.Dir, "report.html")
@@ -230,15 +247,6 @@ func (s *session) finish(res report.Result, hint string) int {
 	if s.o.open && open != "" {
 		if err := openFile(open); err != nil {
 			fmt.Fprintln(s.stderr, "rhythm echo: opening the report:", err)
-		}
-	}
-	if s.notice != nil && s.live && !s.o.quiet {
-		select {
-		case msg, ok := <-s.notice:
-			if ok {
-				fmt.Fprintln(s.stderr, msg)
-			}
-		case <-time.After(200 * time.Millisecond):
 		}
 	}
 	if s.ctx.Err() != nil {
