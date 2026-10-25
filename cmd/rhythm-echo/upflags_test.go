@@ -62,6 +62,10 @@ func apiCall(t *testing.T, method, url, token, body string) (int, string) {
 	if token != "" {
 		req.Header.Set(wire.TokenHeader, token)
 	}
+	// A fresh connection each time: tests reuse ports, and a POST on a
+	// kept-alive connection to an up that has since stopped fails with EOF
+	// (the client retries only idempotent requests).
+	req.Close = true
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)
@@ -343,6 +347,7 @@ func TestUpMountsTheRelay(t *testing.T) {
 		req, _ := http.NewRequestWithContext(context.Background(), http.MethodPost, release, strings.NewReader(`{"to":"x@evil.test"}`))
 		req.Header.Set("Content-Type", "application/json")
 		req.Host = host
+		req.Close = true // see apiCall
 		if origin != "" {
 			req.Header.Set("Origin", origin)
 		}
@@ -514,6 +519,7 @@ func hostCall(t *testing.T, method, addr, path, host, body string) (int, string)
 		t.Fatal(err)
 	}
 	req.Host = host
+	req.Close = true // see apiCall
 	if body != "" {
 		req.Header.Set("Content-Type", "application/json")
 	}
@@ -570,6 +576,7 @@ func TestUpPrivateNetworkAnswersToServiceNames(t *testing.T) {
 	}
 	req, _ := http.NewRequestWithContext(context.Background(), "POST", "http://"+addr+"/v1/capture", strings.NewReader(emailCapture("x")))
 	req.Host = "echo:8025"
+	req.Close = true
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Origin", "http://attacker.example")
 	resp, err := http.DefaultClient.Do(req)
