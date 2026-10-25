@@ -160,7 +160,7 @@ SPF (including the 10-lookup limit), DKIM keys, DMARC policy and alignment for t
 </tr>
 </table>
 
-53 services are recognized out of the box, from SendGrid, Mailgun, Postmark, Resend, SES and the Gmail and Microsoft Graph APIs to Twilio, Vonage, WhatsApp Cloud, Slack, Teams, GA4, Segment, Meta, FCM, APNs, Stripe, HubSpot, Klaviyo and Zapier (`rhythm echo providers` lists them). Anything else is captured as a generic webhook.
+54 services are recognized out of the box, from SendGrid, Mailgun, Postmark, Resend, SES and the Gmail and Microsoft Graph APIs to Twilio, Vonage, WhatsApp Cloud, Slack, Teams, GA4, Segment, Meta, FCM, APNs, Stripe, HubSpot, Klaviyo and Zapier (`rhythm echo providers` lists them). Anything else is captured as a generic webhook.
 
 ## Why Echo
 
