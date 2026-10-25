@@ -1,0 +1,10 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+# Every text file checks out with LF on every OS, so golden files, the
+# README and the Dockerfile read the same on Windows (whose git turns LF
+# into CRLF by default) as they do on Linux and macOS.
+* text=auto eol=lf
+
+# Raw emails keep the CRLF line ends SMTP gives them, byte for byte.
+*.eml -text

@@ -76,11 +76,16 @@ jobs:
       - uses: shivammathur/setup-php@bf6b4fbd49ca58e4608c9c89fba0b8d90bd2a39f # 2.35.5
         with:
           php-version: ${{ matrix.php }}
+          # Windows' PHP leaves fileinfo off; league/flysystem needs it.
+          extensions: fileinfo
           tools: composer:v2
           coverage: none
       # The package Makefile runs PHP and Composer in Docker; on the runner
       # they run natively (what make install phpunit analyse runs), so the
       # matrix picks the PHP version and Windows needs no make.
+      # composer.json resolves for PHP 8.3 (config.platform); there is no
+      # lock file, so each matrix entry resolves for its own PHP instead.
+      - run: composer config platform.php "$(php -r 'echo PHP_VERSION;')"
       - run: composer install --no-interaction --no-progress
       - run: php vendor/bin/phpunit
       - if: matrix.php == '8.3'
@@ -148,4 +153,6 @@ jobs:
           addon_repository: ${{ github.repository }}
           addon_ref: ${{ github.sha }}
           disable_checkout_action: true
-          test_command: bats integrations/ddev/tests --filter-tags '!release'
+          # The action runs this unquoted, so a quoted tag would keep its
+          # quotes and match no test.
+          test_command: bats integrations/ddev/tests --filter-tags !release
