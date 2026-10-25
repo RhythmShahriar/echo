@@ -62,7 +62,7 @@ func apiCall(t *testing.T, method, url, token, body string) (int, string) {
 	if token != "" {
 		req.Header.Set(wire.TokenHeader, token)
 	}
-	// A fresh connection each time: tests reuse ports, and a POST on a
+	// A fresh connection each time: tests reuse ports. A POST on a
 	// kept-alive connection to an up that has since stopped fails with EOF
 	// (the client retries only idempotent requests).
 	req.Close = true

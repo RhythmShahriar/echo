@@ -78,8 +78,9 @@ jobs:
       - uses: shivammathur/setup-php@bf6b4fbd49ca58e4608c9c89fba0b8d90bd2a39f # 2.35.5
         with:
           php-version: ${{ matrix.php }}
-          # Windows' PHP leaves fileinfo off; league/flysystem needs it.
-          extensions: fileinfo
+          # Windows' PHP leaves these off: league/flysystem needs fileinfo
+          # and the queue tests keep their jobs in SQLite.
+          extensions: fileinfo, pdo_sqlite, sqlite3
           tools: composer:v2
           coverage: none
       # The package Makefile runs PHP and Composer in Docker; on the runner
