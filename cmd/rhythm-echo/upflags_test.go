@@ -172,7 +172,7 @@ func TestUpFreePortsMovesWithoutAsking(t *testing.T) {
 		t.Errorf("exit %d", code)
 	}
 	s.stop()
-	if !strings.Contains(out.String(), "API: http://"+api) || !strings.Contains(errOut.String(), "Saved to .echo/config.yaml") {
+	if !strings.Contains(out.String(), "API: http://"+api) || !strings.Contains(errOut.String(), "Saved to "+filepath.Join(".echo", "config.yaml")) {
 		t.Errorf("didn't move to %s:\n%s%s", api, out.String(), errOut.String())
 	}
 }

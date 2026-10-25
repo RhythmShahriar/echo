@@ -6,6 +6,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -98,7 +99,7 @@ func TestSetAddressesCreatesAndKeepsMode(t *testing.T) {
 	if err := SetAddresses(p, "127.0.0.1:18026", "", ""); err != nil {
 		t.Fatal(err)
 	}
-	if st, _ := os.Stat(p); st.Mode().Perm() != 0o600 {
+	if st, _ := os.Stat(p); runtime.GOOS != "windows" && st.Mode().Perm() != 0o600 { // Windows has no mode bits
 		t.Errorf("mode = %v", st.Mode().Perm())
 	}
 }

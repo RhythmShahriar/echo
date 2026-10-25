@@ -77,7 +77,7 @@ func TestSnapshotThenCompare(t *testing.T) {
 	cfg.Actions = []config.Action{
 		{Name: "Contact form", HTTP: &config.HTTPAction{URL: "/contact", Form: map[string]string{
 			"name": "${fake:name}", "email": "${fake:email}", "message": "Hello"}}, Expect: config.Expect{model.Email: {N: 2}}},
-		{Name: "Nightly report", Command: `curl -s -X POST ` + srv.URL + `/v1/capture -d "{\"v\":1,\"kind\":\"email\",\"run\":\"$RHYTHM_ECHO_RUN\",\"source\":{\"via\":\"test\"},\"email\":{\"to\":[\"ops@shop.test\"],\"subject\":\"Nightly report\",\"text\":\"All good\"}}" >/dev/null`},
+		{Name: "Nightly report", Command: forShell(`curl -s -X POST ` + srv.URL + `/v1/capture -d "{\"v\":1,\"kind\":\"email\",\"run\":\"$RHYTHM_ECHO_RUN\",\"source\":{\"via\":\"test\"},\"email\":{\"to\":[\"ops@shop.test\"],\"subject\":\"Nightly report\",\"text\":\"All good\"}}" >/dev/null`)},
 	}
 	ctx := context.Background()
 	before, err := Run(ctx, Options{Config: cfg, Client: echo, Version: "test", Name: "good"})
@@ -472,4 +472,14 @@ func TestRestartIsReported(t *testing.T) {
 	if len(run.Warnings) != 1 || !strings.HasPrefix(run.Warnings[0], "Echo restarted during the run; it keeps messages in memory") {
 		t.Errorf("warnings = %q", run.Warnings)
 	}
+}
+
+// forShell turns a test's sh command line into one cmd.exe runs the same
+// way on Windows, where command actions go through cmd /C: %VAR% for
+// $RHYTHM_ECHO_RUN and NUL for /dev/null.
+func forShell(cmd string) string {
+	if runtime.GOOS != "windows" {
+		return cmd
+	}
+	return strings.NewReplacer("$RHYTHM_ECHO_RUN", "%RHYTHM_ECHO_RUN%", ">/dev/null", ">NUL").Replace(cmd)
 }

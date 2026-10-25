@@ -6,6 +6,7 @@ package kitcheck
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/RhythmShahriar/rhythm/kit/cache"
@@ -49,7 +50,7 @@ func TestWriteFileReplaces(t *testing.T) {
 	if b, err := os.ReadFile(path); err != nil || string(b) != "new" { //nolint:gosec // the test's own file
 		t.Errorf("read %q, %v", b, err)
 	}
-	if fi, err := os.Stat(filepath.Dir(path)); err != nil || fi.Mode().Perm()&0o077 != 0 {
+	if fi, err := os.Stat(filepath.Dir(path)); err != nil || runtime.GOOS != "windows" && fi.Mode().Perm()&0o077 != 0 {
 		t.Errorf("folder mode %v, %v; want no group or other access", fi.Mode(), err)
 	}
 }

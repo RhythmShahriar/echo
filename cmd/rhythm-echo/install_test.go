@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -244,11 +245,15 @@ func TestInstallGenericNamesAnOtherSink(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("%d %s", code, errOut)
 	}
-	for _, want := range []string{
-		`sendmail_path = "RHYTHM_ECHO_SMTP=127.0.0.1:2525 ` + binaryPath() + ` sendmail -t -i"`,
+	wants := []string{
+		`sendmail_path = "RHYTHM_ECHO_SMTP=127.0.0.1:2525 ` + shellQuote(binaryPath()) + ` sendmail -t -i"`,
 		"Mail (scripts):   RHYTHM_ECHO_SMTP=127.0.0.1:2525",
 		"host 127.0.0.1, port 2525",
-	} {
+	}
+	if runtime.GOOS == "windows" { // no sh -c: the variable is set apart
+		wants = []string{"and set RHYTHM_ECHO_SMTP=127.0.0.1:2525 in the environment PHP runs in", "host 127.0.0.1, port 2525"}
+	}
+	for _, want := range wants {
 		if !strings.Contains(out, want) {
 			t.Errorf("missing %q:\n%s", want, out)
 		}

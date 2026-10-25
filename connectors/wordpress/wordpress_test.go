@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -41,7 +42,7 @@ func TestInstallWritesPluginAndSettings(t *testing.T) {
 	if err != nil || string(got) != string(Plugin()) {
 		t.Fatalf("plugin not written: %v", err)
 	}
-	if fi, _ := os.Stat(filepath.Join(dir, "wp-content", PluginPath)); fi.Mode().Perm() != 0o644 {
+	if fi, _ := os.Stat(filepath.Join(dir, "wp-content", PluginPath)); runtime.GOOS != "windows" && fi.Mode().Perm() != 0o644 { // Windows has no mode bits
 		t.Errorf("plugin mode = %v, want 0644 so the web server can read it", fi.Mode().Perm())
 	}
 	settings := filepath.Join(dir, "wp-content", SettingsPath)
@@ -155,12 +156,20 @@ func TestScriptInstalls(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Strip "<?php" and run the body with WPMU_PLUGIN_DIR defined, as WP-CLI would.
-	body := strings.TrimPrefix(script, "<?php\n")
-	code := "define('WPMU_PLUGIN_DIR', $argv[1]);\n" + body
-	if out, err := exec.Command(php, "-r", code, mu).CombinedOutput(); err != nil {
-		t.Fatalf("%v: %s", err, out)
+	// Run the body with WPMU_PLUGIN_DIR defined, as WP-CLI would. It goes
+	// in a file: as php -r it is longer than a Windows command line.
+	runPHP := func(name, src string) {
+		t.Helper()
+		f := filepath.Join(t.TempDir(), name)
+		code := "<?php\ndefine('WPMU_PLUGIN_DIR', $argv[1]);\n" + strings.TrimPrefix(src, "<?php\n")
+		if err := os.WriteFile(f, []byte(code), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if out, err := exec.Command(php, f, mu).CombinedOutput(); err != nil { //nolint:gosec // the test's own script
+			t.Fatalf("%s: %v: %s", name, err, out)
+		}
 	}
+	runPHP("install.php", script)
 	got, err := os.ReadFile(filepath.Join(mu, "rhythm-echo.php"))
 	if err != nil || string(got) != string(Plugin()) {
 		t.Fatalf("plugin: %v", err)
@@ -168,10 +177,7 @@ func TestScriptInstalls(t *testing.T) {
 	if b, err := os.ReadFile(filepath.Join(mu, "rhythm-echo", "settings.php")); err != nil || !strings.Contains(string(b), "http://echo:8025") {
 		t.Fatalf("settings: %v %s", err, b)
 	}
-	un := strings.TrimPrefix(UninstallScript(), "<?php\n")
-	if out, err := exec.Command(php, "-r", "define('WPMU_PLUGIN_DIR', $argv[1]);\n"+un, mu).CombinedOutput(); err != nil {
-		t.Fatalf("%v: %s", err, out)
-	}
+	runPHP("uninstall.php", UninstallScript())
 	if _, err := os.Stat(filepath.Join(mu, "rhythm-echo.php")); !os.IsNotExist(err) {
 		t.Error("uninstall script left the plugin")
 	}

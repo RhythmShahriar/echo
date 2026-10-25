@@ -681,7 +681,12 @@ func TestNextFreePairSkipsBusyPorts(t *testing.T) {
 	if api, _, _ := nextFreePair("127.0.0.1", "127.0.0.1", false); api != "127.0.0.1:20411" {
 		t.Errorf("without SMTP: %s, want 20411", api)
 	}
-	// Each keeps its own host.
+	// Each keeps its own host. macOS has only 127.0.0.1 on its loopback.
+	if l, err := net.Listen("tcp", "127.0.0.2:0"); err != nil {
+		t.Skipf("no 127.0.0.2 here: %v", err)
+	} else {
+		_ = l.Close()
+	}
 	if api, smtp, ok := nextFreePair("127.0.0.1", "127.0.0.2", true); !ok || !strings.HasPrefix(api, "127.0.0.1:") || !strings.HasPrefix(smtp, "127.0.0.2:") {
 		t.Errorf("hosts: %s %s %v", api, smtp, ok)
 	}
@@ -814,12 +819,12 @@ func TestUpMovesAsideWhenAsked(t *testing.T) {
 	}
 	s.stop()
 
-	if !strings.Contains(asked, "Mailpit is already on "+ports[0]+". Run Echo on "+api+" and "+smtp+" instead and save them to .echo/config.yaml?") {
+	if !strings.Contains(asked, "Mailpit is already on "+ports[0]+". Run Echo on "+api+" and "+smtp+" instead and save them to "+filepath.Join(".echo", "config.yaml")+"?") {
 		t.Errorf("asked %q", asked)
 	}
 	for _, want := range []string{
 		"Mailpit is already on " + ports[0] + ". Echo runs on " + api + " and " + smtp + " instead.",
-		"Saved to .echo/config.yaml",
+		"Saved to " + filepath.Join(".echo", "config.yaml"),
 		"  RHYTHM_ECHO_URL=http://" + api,
 		"  RHYTHM_ECHO_SMTP=" + smtp,
 		"  MAIL_PORT=" + strings.TrimPrefix(smtp, "127.0.0.1:"),

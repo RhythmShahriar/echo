@@ -8,6 +8,7 @@
 import { execFile } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { promisify } from 'node:util';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
@@ -15,6 +16,8 @@ import { befores, fakeEcho, type FakeEcho } from './helpers.js';
 
 const run = promisify(execFile);
 const dist = join(import.meta.dirname, '..', 'dist');
+// --import takes a URL: a bare Windows path (D:\...) reads as scheme d:.
+const esmRegister = pathToFileURL(join(dist, 'esm', 'register.js')).href;
 let echo: FakeEcho;
 
 beforeAll(async () => {
@@ -39,7 +42,7 @@ async function node(args: string[], extraEnv: Record<string, string> = {}) {
 describe.skipIf(!existsSync(join(dist, 'esm', 'register.js')))('built package', () => {
   it('node --import (ESM build)', async () => {
     echo.captures.length = 0;
-    const out = await node(['--import', join(dist, 'esm', 'register.js')]);
+    const out = await node(['--import', esmRegister]);
     expect(out).toContain('[rhythm-echo] active');
     expect(out).toContain('{"fetch":200,"https":200');
     const got = await echo.waitFor(befores, 2);
@@ -55,7 +58,7 @@ describe.skipIf(!existsSync(join(dist, 'esm', 'register.js')))('built package', 
 
   it('both builds in one process patch once and share state', async () => {
     echo.captures.length = 0;
-    const out = await node(['-r', join(dist, 'cjs', 'register.js'), '--import', join(dist, 'esm', 'register.js')]);
+    const out = await node(['-r', join(dist, 'cjs', 'register.js'), '--import', esmRegister]);
     expect(out.match(/\[rhythm-echo\] active/g)).toHaveLength(1);
     expect(out).toContain('{"fetch":200,"https":200');
     const got = await echo.waitFor(befores, 2);
@@ -85,7 +88,7 @@ console.log(JSON.stringify([typeof p.latest, typeof p.echo.latest, typeof c.regi
   it('stays inert in production', async () => {
     const { stdout } = await run(
       process.execPath,
-      ['--import', join(dist, 'esm', 'register.js'), '-e', "console.log(Symbol.for('rhythm.echo.fetch') in fetch)"],
+      ['--import', esmRegister, '-e', "console.log(Symbol.for('rhythm.echo.fetch') in fetch)"],
       { env: { ...process.env, RHYTHM_ECHO_URL: echo.url, VERCEL_ENV: 'production' } },
     );
     expect(stdout.trim()).toBe('false');

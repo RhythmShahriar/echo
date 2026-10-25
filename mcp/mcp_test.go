@@ -563,7 +563,11 @@ func TestMainUsesTheConfigFolder(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(proj, "sub"), 0o750); err != nil {
 		t.Fatal(err)
 	}
-	cfg := "listen: " + echo + "\nquiet: 50ms\ntimeout: 1s\nactions:\n  - name: Send\n    command: ./send.sh\n"
+	send := "./send.sh"
+	if runtime.GOOS == "windows" {
+		send = "echo x >> sent" // cmd /C runs no sh script; this writes to the same file
+	}
+	cfg := "listen: " + echo + "\nquiet: 50ms\ntimeout: 1s\nactions:\n  - name: Send\n    command: " + send + "\n"
 	if err := os.WriteFile(filepath.Join(proj, ".echo", "config.yaml"), []byte(cfg), 0o600); err != nil {
 		t.Fatal(err)
 	}

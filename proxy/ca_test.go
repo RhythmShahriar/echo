@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -36,7 +37,7 @@ func TestLoadCAPersistsWithPrivateKey(t *testing.T) {
 		t.Errorf("CA = %v %v %v", a.Cert.Subject, a.Cert.IsCA, a.Cert.NotAfter)
 	}
 	st, err := os.Stat(filepath.Join(dir, caKeyFile))
-	if err != nil || st.Mode().Perm() != 0o600 {
+	if err != nil || runtime.GOOS != "windows" && st.Mode().Perm() != 0o600 {
 		t.Errorf("key file mode = %v, %v", st.Mode(), err)
 	}
 	if a.CertPath != filepath.Join(dir, caCertFile) {
@@ -91,7 +92,7 @@ func TestLoadCARotatesWithOverlap(t *testing.T) {
 	if on, _ := os.ReadFile(rot.CertPath); !bytes.Equal(on, rot.PEM) {
 		t.Error("ca.pem on disk differs from PEM")
 	}
-	if st, err := os.Stat(filepath.Join(dir, caPrevKeyFile)); err != nil || st.Mode().Perm() != 0o600 {
+	if st, err := os.Stat(filepath.Join(dir, caPrevKeyFile)); err != nil || runtime.GOOS != "windows" && st.Mode().Perm() != 0o600 {
 		t.Errorf("previous key: %v %v", st, err)
 	}
 	oldOnly := x509.NewCertPool()
@@ -253,7 +254,7 @@ func TestLoadCAMovesTheOldCacheCA(t *testing.T) {
 		t.Errorf("old cache directory left: %v", err)
 	}
 	for _, f := range []string{caKeyFile, caPrevKeyFile} {
-		if st, err := os.Stat(filepath.Join(dir, f)); err != nil || st.Mode().Perm() != 0o600 {
+		if st, err := os.Stat(filepath.Join(dir, f)); err != nil || runtime.GOOS != "windows" && st.Mode().Perm() != 0o600 {
 			t.Errorf("%s: %v %v", f, st, err)
 		}
 	}

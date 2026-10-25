@@ -13,6 +13,7 @@ import (
 
 	"github.com/RhythmShahriar/echo/hub"
 	"github.com/RhythmShahriar/echo/model"
+	"github.com/RhythmShahriar/echo/report"
 	"github.com/RhythmShahriar/echo/store"
 )
 
@@ -62,15 +63,12 @@ func TestAgencyReport(t *testing.T) {
 	}
 
 	t.Setenv("PATH", t.TempDir()) // no Chrome
-	code, _, errOut = runCLI(t, "report", "--site", "client-a", "--store", root, "--pdf", "-o", "pdf.html")
-	if _, err := os.Stat("pdf.html"); code != exitError || err != nil || !strings.Contains(errOut, "no Chrome or Chromium found on PATH") ||
-		!strings.Contains(errOut, "the HTML report is pdf.html") {
-		t.Errorf("--pdf without Chrome: %d %v %s", code, err, errOut)
-	}
-	// -o client.pdf names the PDF; the HTML goes beside it.
-	code, _, errOut = runCLI(t, "report", "--site", "client-a", "--store", root, "-o", "client.pdf")
-	if _, err := os.Stat("client.html"); code != exitError || err != nil || !strings.Contains(errOut, "the HTML report is client.html") {
-		t.Errorf("-o client.pdf without Chrome: %d %v %s", code, err, errOut)
+	// macOS and Windows runners have Chrome or Edge installed outside PATH,
+	// where PDF also looks; the rest of the test runs without it.
+	if b := report.FindBrowser(); b != "" {
+		t.Logf("not testing --pdf without Chrome: %s is installed", b)
+	} else {
+		agencyWithoutChrome(t, root)
 	}
 
 	for _, c := range []struct {
@@ -91,5 +89,21 @@ func TestAgencyReport(t *testing.T) {
 	}
 	if code, _, errOut := runCLI(t, "report", "--site", "client-b", "--store", root); code != exitError || !strings.Contains(errOut, `no update windows for site "client-b"`) {
 		t.Errorf("a site with no windows: %d %s", code, errOut)
+	}
+}
+
+// agencyWithoutChrome: --pdf and -o <file>.pdf without Chrome keep the
+// HTML report and say where it is.
+func agencyWithoutChrome(t *testing.T, root string) {
+	t.Helper()
+	code, _, errOut := runCLI(t, "report", "--site", "client-a", "--store", root, "--pdf", "-o", "pdf.html")
+	if _, err := os.Stat("pdf.html"); code != exitError || err != nil || !strings.Contains(errOut, "no Chrome or Chromium found on PATH") ||
+		!strings.Contains(errOut, "the HTML report is pdf.html") {
+		t.Errorf("--pdf without Chrome: %d %v %s", code, err, errOut)
+	}
+	// -o client.pdf names the PDF; the HTML goes beside it.
+	code, _, errOut = runCLI(t, "report", "--site", "client-a", "--store", root, "-o", "client.pdf")
+	if _, err := os.Stat("client.html"); code != exitError || err != nil || !strings.Contains(errOut, "the HTML report is client.html") {
+		t.Errorf("-o client.pdf without Chrome: %d %v %s", code, err, errOut)
 	}
 }

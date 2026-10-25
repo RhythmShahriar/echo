@@ -16,6 +16,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"sync"
@@ -82,8 +83,14 @@ func TestCurl(t *testing.T) {
 	runScenarios(t, func(t *testing.T, h *harness, ca string) (int, string) {
 		// --resolve pins the name to a closed local port: if curl ignored
 		// the proxy it would fail instead of reaching the real host.
-		cmd := exec.Command(bin, "-sS", "--max-time", "10", "--cacert", ca, "--resolve", twilioHost+":443:127.0.0.1",
-			"-H", "Authorization: "+twilioAuth, "--data", twilioForm, "-w", "\n%{http_code}", "https://"+twilioHost+twilioPath) //nolint:gosec // test
+		args := []string{"-sS", "--max-time", "10", "--cacert", ca, "--resolve", twilioHost + ":443:127.0.0.1",
+			"-H", "Authorization: " + twilioAuth, "--data", twilioForm, "-w", "\n%{http_code}", "https://" + twilioHost + twilioPath}
+		if runtime.GOOS == "windows" {
+			// Windows' curl checks revocation through Schannel; Echo's
+			// CA publishes no revocation list.
+			args = append([]string{"--ssl-no-revoke"}, args...)
+		}
+		cmd := exec.Command(bin, args...) //nolint:gosec // test
 		cmd.Env = []string{"PATH=" + os.Getenv("PATH"), "HOME=" + t.TempDir(), "HTTPS_PROXY=" + h.proxyURL}
 		out, err := cmd.CombinedOutput()
 		if err != nil {

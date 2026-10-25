@@ -112,8 +112,7 @@ func TestSnapshotCompareThroughTheCLI(t *testing.T) {
 	srv := httptest.NewServer(catcher.NewServer(catcher.NewInbox(1000), catcher.Config{Version: "test"}))
 	defer srv.Close()
 	writeConfig := func(subject string) {
-		capture := fmt.Sprintf(`curl -s -X POST %s/v1/capture -d "{\"v\":1,\"kind\":\"email\",\"run\":\"$RHYTHM_ECHO_RUN\",\"source\":{\"via\":\"test\"},\"email\":{\"from\":\"shop@shop.test\",\"to\":[\"admin@shop.test\"],\"subject\":\"%s\",\"text\":\"New order\"}}" >/dev/null`, srv.URL, subject)
-		cfg := fmt.Sprintf("quiet: 300ms\ntimeout: 5s\nactions:\n  - name: New order\n    command: |\n      %s\n", capture)
+		cfg := captureConfig(srv.URL, subject)
 		if err := os.MkdirAll(".echo", 0o750); err != nil {
 			t.Fatal(err)
 		}
@@ -1164,6 +1163,7 @@ func TestFindConfigStopsAtTheRepoAndHome(t *testing.T) {
 	root := t.TempDir()
 	home := filepath.Join(root, "home")
 	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home) // os.UserHomeDir on Windows
 	mk := func(parts ...string) string {
 		d := filepath.Join(append([]string{root}, parts...)...)
 		if err := os.MkdirAll(d, 0o750); err != nil {
@@ -1537,7 +1537,17 @@ func TestInstallNodeAndNextNeedAProject(t *testing.T) {
 // to the Echo at echoURL.
 func captureConfig(echoURL, subject string) string {
 	capture := fmt.Sprintf(`curl -s -X POST %s/v1/capture -d "{\"v\":1,\"kind\":\"email\",\"run\":\"$RHYTHM_ECHO_RUN\",\"source\":{\"via\":\"test\"},\"email\":{\"from\":\"shop@shop.test\",\"to\":[\"admin@shop.test\"],\"subject\":\"%s\",\"text\":\"New order\"}}" >/dev/null`, echoURL, subject)
-	return fmt.Sprintf("quiet: 300ms\ntimeout: 5s\nactions:\n  - name: New order\n    command: |\n      %s\n", capture)
+	return fmt.Sprintf("quiet: 300ms\ntimeout: 5s\nactions:\n  - name: New order\n    command: |\n      %s\n", forShell(capture))
+}
+
+// forShell turns a test's sh command line into one cmd.exe runs the same
+// way on Windows, where command actions go through cmd /C: %VAR% for
+// $RHYTHM_ECHO_RUN and NUL for /dev/null.
+func forShell(cmd string) string {
+	if runtime.GOOS != "windows" {
+		return cmd
+	}
+	return strings.NewReplacer("$RHYTHM_ECHO_RUN", "%RHYTHM_ECHO_RUN%", ">/dev/null", ">NUL").Replace(cmd)
 }
 
 func TestBaselinesTravel(t *testing.T) {
@@ -1958,8 +1968,8 @@ func TestQuietAndTimeoutFlags(t *testing.T) {
 		{[]string{"run", "--quiet", "0"}, "--quiet 0s: must be more than 0"},
 		{[]string{"run", "--quiet", "45s"}, "--quiet 45s: over the 30s Echo waits for quiet at most"},
 		{[]string{"run", "--quiet", "5s", "--timeout", "1s"}, "--quiet 5s is longer than the timeout of 1s (--timeout), so no action could ever fall quiet"},
-		{[]string{"run", "--quiet", "20s"}, "--quiet 20s is longer than the timeout of 10s (timeout: in .echo/config.yaml)"},
-		{[]string{"run", "--timeout", "100ms"}, "--timeout 100ms is shorter than the quiet of 200ms (quiet: in .echo/config.yaml), so no action could ever fall quiet; lower it with --quiet"},
+		{[]string{"run", "--quiet", "20s"}, "--quiet 20s is longer than the timeout of 10s (timeout: in " + filepath.Join(".echo", "config.yaml") + ")"},
+		{[]string{"run", "--timeout", "100ms"}, "--timeout 100ms is shorter than the quiet of 200ms (quiet: in " + filepath.Join(".echo", "config.yaml") + "), so no action could ever fall quiet; lower it with --quiet"},
 		{[]string{"run", "--quiet", "5"}, `--quiet "5": want a duration like 500ms, or no value for results only`},
 		{[]string{"run", "--timeout", "soon"}, `--timeout "soon": want a duration like 10m or 5s`},
 		{[]string{"ls", "--quiet=2s"}, "--quiet 2s: only snapshot, compare and run take a duration; -q alone means results only"},

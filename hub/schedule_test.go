@@ -145,10 +145,15 @@ func TestRunWindow(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// The update commands, in sh or in cmd /C on Windows.
+	update, failing := `touch broken && echo "updated $RHYTHM_ECHO_SITE"`, "echo nope >&2; exit 3"
+	if runtime.GOOS == "windows" {
+		update, failing = `type nul > broken && echo updated %RHYTHM_ECHO_SITE%`, "echo nope 1>&2 & exit 3"
+	}
 	var log bytes.Buffer
 	chosen, _ := sites.Select("all")
 	results := RunWindow(context.Background(), WindowOptions{Store: store, Sites: chosen, URL: "http://" + hubAddr, Token: tokens["READ"],
-		After: `touch broken && echo "updated $RHYTHM_ECHO_SITE"`, Version: "test", Log: &log})
+		After: update, Version: "test", Log: &log})
 	if len(results) != 2 {
 		t.Fatalf("results: %+v\n%s", results, log.String())
 	}
@@ -206,7 +211,7 @@ func TestRunWindow(t *testing.T) {
 
 	// A failing update is recorded and the compare still runs.
 	results = RunWindow(context.Background(), WindowOptions{Store: store, Sites: chosen[1:], URL: "http://" + hubAddr, Token: tokens["READ"],
-		After: "echo nope >&2; exit 3", Snapshot: "pre-update", Version: "test", Log: &log})
+		After: failing, Snapshot: "pre-update", Version: "test", Log: &log})
 	if len(results) != 1 || !strings.Contains(results[0].AfterError, "exit status 3") || results[0].Dir == "" || !results[0].Broke() {
 		t.Errorf("failed update: %+v", results)
 	}

@@ -17,6 +17,7 @@ import (
 	"net/smtp"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -332,7 +333,7 @@ func TestPersist(t *testing.T) {
 	if err := h.Close(); err != nil {
 		t.Fatal(err)
 	}
-	if fi, err := os.Stat(filepath.Join(store, InboxDir)); err != nil || fi.Mode().Perm() != 0o700 {
+	if fi, err := os.Stat(filepath.Join(store, InboxDir)); err != nil || runtime.GOOS != "windows" && fi.Mode().Perm() != 0o700 {
 		t.Errorf("inbox folder: %v %v", fi, err)
 	}
 
@@ -565,7 +566,7 @@ func TestTLS(t *testing.T) {
 		}
 	}
 	cert, key := TLSFiles(store)
-	if fi, err := os.Stat(key); err != nil || fi.Mode().Perm() != 0o600 {
+	if fi, err := os.Stat(key); err != nil || runtime.GOOS != "windows" && fi.Mode().Perm() != 0o600 {
 		t.Errorf("key file: %v %v", fi, err)
 	}
 	cfg, err = LoadTLS(cert, key)

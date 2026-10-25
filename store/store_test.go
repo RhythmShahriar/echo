@@ -570,6 +570,9 @@ func TestFailedPointerWriteLeavesNoTempFile(t *testing.T) {
 	if os.Geteuid() == 0 {
 		t.Skip("root ignores folder permissions")
 	}
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows ignores a folder's read-only mode")
+	}
 	if err := os.Chmod(snaps, 0o500); err != nil { //nolint:gosec // a test folder made read-only on purpose
 		t.Fatal(err)
 	}

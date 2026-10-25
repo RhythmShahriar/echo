@@ -8,10 +8,12 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
 	"github.com/RhythmShahriar/echo/proxy"
+	kitconfig "github.com/RhythmShahriar/rhythm/kit/config"
 )
 
 func TestViewHandlerShowsWarnings(t *testing.T) {
@@ -35,8 +37,18 @@ func caEnv(t *testing.T) string {
 }
 
 func TestCmdCAMovesTheCacheCA(t *testing.T) {
-	home := caEnv(t)
-	legacy := filepath.Join(home, "XDG_CACHE_HOME", "rhythm", "echo", "ca")
+	caEnv(t)
+	// The folders each OS uses (XDG on Linux, Library on macOS, AppData on
+	// Windows), all under the temp home caEnv set.
+	cache, err := kitconfig.CacheDir("echo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	legacy := filepath.Join(cache, "ca")
+	dir, err := proxy.DefaultCADir()
+	if err != nil {
+		t.Fatal(err)
+	}
 	old, err := proxy.LoadCA(legacy)
 	if err != nil {
 		t.Fatal(err)
@@ -45,7 +57,7 @@ func TestCmdCAMovesTheCacheCA(t *testing.T) {
 	if code := cmdCA(nil, &out, &errOut); code != exitOK {
 		t.Fatalf("exit %d: %s", code, errOut.String())
 	}
-	want := filepath.Join(home, "XDG_CONFIG_HOME", "rhythm", "echo", "ca", "ca.pem")
+	want := filepath.Join(dir, "ca.pem")
 	if strings.TrimSpace(out.String()) != want {
 		t.Errorf("path = %q, want %q", out.String(), want)
 	}
@@ -73,11 +85,11 @@ func TestCmdCAUntrust(t *testing.T) {
 	if !strings.HasPrefix(out.String(), "No Echo CA on this machine.") || !strings.Contains(out.String(), "update-ca-certificates") {
 		t.Errorf("no CA: %q", out.String())
 	}
-	if strings.Contains(out.String(), "rm -r") {
+	if strings.Contains(out.String(), "rm -r") || strings.Contains(out.String(), "rmdir") {
 		t.Errorf("removal of a missing directory offered: %q", out.String())
 	}
-	if ents, _ := os.ReadDir(filepath.Join(home, "XDG_CONFIG_HOME")); len(ents) != 0 {
-		t.Error("--untrust created a CA")
+	if ents, _ := os.ReadDir(home); len(ents) != 0 {
+		t.Errorf("--untrust created %v", ents)
 	}
 
 	ca, err := proxy.LoadCA("")
@@ -94,7 +106,7 @@ func TestCmdCAUntrust(t *testing.T) {
 		"rhythm-echo CA, serial " + strings.ToUpper(ca.Cert.SerialNumber.Text(16)),
 		"sudo security delete-certificate -Z <SHA-1> /Library/Keychains/System.keychain",
 		"certutil -delstore Root <SHA-1>",
-		"rm -r " + filepath.Dir(ca.CertPath),
+		removeDir(filepath.Dir(ca.CertPath), runtime.GOOS),
 	} {
 		if !strings.Contains(got, w) {
 			t.Errorf("missing %q in:\n%s", w, got)
