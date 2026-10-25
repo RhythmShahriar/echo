@@ -60,7 +60,7 @@ func TestDeclaredProvidersShip(t *testing.T) {
 	for _, p := range declared {
 		names = append(names, p.rec.Provider)
 	}
-	for _, want := range []string{"mailjet", "mixpanel", "segment", "posthog", "expo", "sinch", "infobip", "bandwidth"} {
+	for _, want := range []string{"mailjet", "mixpanel", "segment", "posthog", "expo", "sinch", "infobip", "bandwidth", "mailersend"} {
 		if !slices.Contains(names, want) {
 			t.Errorf("YAML provider %q not loaded (have %q)", want, names)
 		}
