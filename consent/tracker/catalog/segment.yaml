@@ -1,0 +1,28 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+# Segment analytics.js. recognize/providers/segment.yaml covers the
+# server-side HTTP API; this entry is the visitor's browser.
+id: segment
+name: Segment
+vendor: Twilio Segment
+category: analytics
+consent: needed
+hits:
+  - hosts: [api.segment.io, events.eu1.segmentapis.com]
+    paths: ["/v1/*"]
+    methods: [POST]
+scripts:
+  - hosts: [cdn.segment.com]
+    paths: [/analytics.js/**, /analytics-next/**, /next-integrations/**, /v1/projects/**]
+cookies:
+  - ajs_anonymous_id
+  - ajs_user_id
+storage:
+  - "ajs_*"
+fix: Load analytics.js only after consent, or use Segment's Consent Management to hold events until the visitor accepts
+docs: https://segment.com/docs/connections/sources/catalog/libraries/website/javascript/
+sources:
+  - https://segment.com/docs/connections/sources/catalog/libraries/website/javascript/
+  - https://segment.com/docs/connections/sources/catalog/libraries/website/javascript/identity/
+  - https://segment.com/docs/privacy/consent-management/

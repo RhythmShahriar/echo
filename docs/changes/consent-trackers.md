@@ -18,6 +18,8 @@ exact text they see. The docs team writes the wiki from this file.
 
 ## Entries
 
+38 of the 47 PRD 12.1 entries; the embeds and necessary services come with T5.
+
 Each entry with its consent need, what `consent trackers` shows under Matches and the fix line its issues carry.
 
 | id | name | category | consent | matches | fix |
@@ -44,6 +46,22 @@ Each entry with its consent need, what `consent trackers` shows under Matches an
 | `taboola` | Taboola Pixel | advertising | needed | `trc.taboola.com, cdn.taboola.com` | Load the Taboola Pixel only after the banner reports marketing consent |
 | `tiktok` | TikTok Pixel | advertising | needed | `analytics.tiktok.com/api/v2/pixel, analytics.tiktok.com/api/v2/pixel/**, analytics.tiktok.com/i18n/pixel/events.js and 2 more` | Load the TikTok Pixel only after the banner reports marketing consent, or call ttq.holdConsent() first and ttq.grantConsent() on consent |
 | `x-pixel` | X (Twitter) Pixel | advertising | needed | `analytics.twitter.com/i/adsct, t.co/i/adsct, static.ads-twitter.com/uwt.js and 1 more` | Load the X Pixel only after the banner reports marketing consent |
+| `adobe-analytics` | Adobe Analytics | analytics | needed | `*.sc.omtrdc.net/b/ss/**, *.2o7.net/b/ss/**, any host /b/ss/** and 2 more` | Set Adobe's defaultConsent to pending (Web SDK) or turn on Opt-In in the Experience Cloud ID service until the visitor accepts |
+| `amplitude` | Amplitude | analytics | needed | `api2.amplitude.com/2/httpapi, api2.amplitude.com/batch, api.eu.amplitude.com/2/httpapi and 3 more` | Initialize Amplitude with optOut true and turn it off once the visitor accepts |
+| `fathom` | Fathom Analytics | analytics | exempt | `cdn.usefathom.com/, cdn.usefathom.com/script.js` | (none: exempt) |
+| `fullstory` | FullStory | session-replay | needed | `rs.fullstory.com/rec/**, rs.eu1.fullstory.com/rec/**, edge.fullstory.com` | Start FullStory with _fs_capture_on_startup set to false and call FS('start') once the visitor accepts |
+| `heap` | Heap | analytics | needed | `heapanalytics.com/h, heapanalytics.com/api/**, c.us.heap-api.com and 4 more` | Load Heap only after the visitor accepts analytics |
+| `hotjar` | Hotjar | session-replay | needed | `*.hotjar.com/api/**, *.hotjar.io, static.hotjar.com/c/hotjar-*.js and 1 more` | Load Hotjar only after the visitor accepts analytics or session recording |
+| `lucky-orange` | Lucky Orange | session-replay | needed | `api.luckyorange.com, *.luckyorange.net, *.visitors.live and 1 more` | Load Lucky Orange only after the visitor accepts analytics or session recording |
+| `matomo` | Matomo | analytics | needed | `any host /matomo.php, any host /piwik.php, any host /js/tracker.php and 4 more` | Call _paq.push(['requireCookieConsent']) before tracking and rememberCookieConsentGiven once the visitor accepts, or run Matomo without cookies |
+| `microsoft-clarity` | Microsoft Clarity | session-replay | needed | `*.clarity.ms/collect, www.clarity.ms/tag/*, www.clarity.ms/s/** and 1 more` | Load Clarity only after consent, or send it the visitor's choice with window.clarity('consentv2', ...) from the banner |
+| `mixpanel` | Mixpanel | analytics | needed | `api-js.mixpanel.com/track*, api-js.mixpanel.com/engage*, api-js.mixpanel.com/groups* and 4 more` | Initialize Mixpanel with opt_out_tracking_by_default and call mixpanel.opt_in_tracking() once the visitor accepts |
+| `mouseflow` | Mouseflow | session-replay | needed | `o2.mouseflow.com, cdn.mouseflow.com` | Load Mouseflow only after the visitor accepts analytics or session recording |
+| `piwik-pro` | Piwik PRO | analytics | needed | `*.piwik.pro/ppms.php, *.containers.piwik.pro/*.js, *.piwik.pro/ppms.js` | Turn on Piwik PRO's consent manager or let your banner block the container until the visitor accepts |
+| `plausible` | Plausible | analytics | exempt | `plausible.io/api/event, any host /api/event, plausible.io/js/*.js` | (none: exempt) |
+| `posthog` | PostHog | analytics | needed | `us.i.posthog.com/e/*, us.i.posthog.com/i/v0/e/*, us.i.posthog.com/batch/* and 17 more` | Initialize PostHog with opt_out_capturing_by_default and call posthog.opt_in_capturing() once the visitor accepts |
+| `segment` | Segment | analytics | needed | `api.segment.io/v1/*, events.eu1.segmentapis.com/v1/*, cdn.segment.com/analytics.js/** and 3 more` | Load analytics.js only after consent, or use Segment's Consent Management to hold events until the visitor accepts |
+| `yandex-metrica` | Yandex Metrica | analytics | needed | `mc.yandex.ru/watch/**, mc.yandex.ru/webvisor/**, mc.yandex.ru/clmap/** and 7 more` | Load Yandex Metrica only after the visitor accepts analytics |
 
 Notes users may notice:
 
@@ -52,3 +70,6 @@ Notes users may notice:
 - Meta Pixel `/tr` on any host counts when it has both `id` and `ev`.
 - Cookies with generic names only count on the vendor's domain: `IDE`, `test_cookie`, `DSID` (doubleclick.net), `MUID` (bing.com), `CLID` (clarity.ms), `fr` (facebook.com), LinkedIn's `bcookie`, `lidc`, `li_sugr`, `UserMatchHistory`, `AnalyticsSyncHistory` (linkedin.com), `personalization_id` (twitter.com, x.com), `t_gid`, `t_pt_gid` (taboola.com), `obuid` (outbrain.com), `ad-id`, `ad-privacy` (amazon-adsystem.com).
 - `consent/tracker/NOTICE` credits the Open Cookie Database (Apache-2.0) for the cookie names of taboola, snap and outbrain.
+- PostHog `/e/` and `/i/v0/e/` on any host when posthog-js's `ver` and `_` parameters are there; Adobe `/b/ss/` on any host with `AQB` and `AQE`; Matomo `/matomo.php` and `/piwik.php` with `idsite` and `rec`; Plausible `/api/event` when the body is JSON with `n` and `u`.
+- Plausible and Fathom are `exempt` (cookieless) and list no cookies.
+- Matomo and Piwik PRO share the `_pk_` cookies; Echo reports them as `matomo`. Piwik PRO's own cookies are the `stg_` Tag Manager cookies.

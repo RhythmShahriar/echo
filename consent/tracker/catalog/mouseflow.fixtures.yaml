@@ -1,0 +1,16 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+hits:
+  match:
+    - POST https://o2.mouseflow.com/websites/abcd-1234/recordings
+    - https://o2.mouseflow.com/websites/abcd-1234/settings
+  no_match:
+    - POST https://shop.test/websites/abcd-1234/recordings
+    - https://cdn.mouseflow.com/projects/abcd-1234.js
+scripts:
+  match:
+    - https://cdn.mouseflow.com/projects/abcd-1234.js
+cookies:
+  match: [mf_user, mf_abcd1234]
+  no_match: [mfa_banner, mf]

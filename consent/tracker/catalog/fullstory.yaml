@@ -1,0 +1,24 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+# FullStory session recording. EU accounts record to rs.eu1.fullstory.com.
+id: fullstory
+name: FullStory
+vendor: FullStory
+category: session-replay
+consent: needed
+hits:
+  - hosts: [rs.fullstory.com, rs.eu1.fullstory.com]
+    paths: [/rec/**]
+    methods: [GET, POST]
+scripts:
+  - hosts: [edge.fullstory.com]
+cookies:
+  - fs_uid
+  - fs_lua
+  - fs_cid
+fix: Start FullStory with _fs_capture_on_startup set to false and call FS('start') once the visitor accepts
+docs: https://developer.fullstory.com/browser/getting-started/
+sources:
+  - https://developer.fullstory.com/browser/getting-started/
+  - https://help.fullstory.com/hc/en-us/articles/360020829513

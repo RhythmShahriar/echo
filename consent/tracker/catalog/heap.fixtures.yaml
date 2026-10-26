@@ -1,0 +1,17 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+hits:
+  match:
+    - {url: "https://heapanalytics.com/h?a=1234567890&u=1&v=2&s=3&b=web", type: image}
+    - POST https://c.us.heap-api.com/api/track
+  no_match:
+    - https://shop.test/h?a=1234567890
+    - https://cdn.us.heap-api.com/config/1234567890/heap_config.js
+scripts:
+  match:
+    - https://cdn.us.heap-api.com/config/1234567890/heap_config.js
+    - https://cdn.heapanalytics.com/js/heap-1234567890.js
+cookies:
+  match: [_hp2_id.1234567890, _hp2_ses_props.1234567890]
+  no_match: [hp2_id, _hp_banner]

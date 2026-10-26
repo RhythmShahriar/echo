@@ -1,0 +1,36 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+# Piwik PRO. Its tracking client sets the same _pk_ cookies as Matomo
+# (matched there); its own are the Tag Manager's stg_ cookies.
+# ppms_privacy_<app id> is its consent cookie, not a tracker.
+id: piwik-pro
+name: Piwik PRO
+vendor: Piwik PRO
+category: analytics
+consent: needed
+hits:
+  - hosts: ["*.piwik.pro"]
+    paths: [/ppms.php]
+    methods: [GET, POST]
+scripts:
+  - hosts: ["*.containers.piwik.pro"]
+    paths: ["/*.js"]
+  - hosts: ["*.piwik.pro"]
+    paths: [/ppms.js]
+cookies:
+  - stg_traffic_source_priority
+  - stg_last_interaction
+  - stg_returning_visitor
+  - stg_externalReferrer
+  - stg_utm_campaign
+  - stg_pk_campaign
+  - "stg_fired_*"
+params:
+  id: [idsite]
+fix: Turn on Piwik PRO's consent manager or let your banner block the container until the visitor accepts
+docs: https://help.piwik.pro/analytics/piwik-pro-cookies/
+sources:
+  - https://help.piwik.pro/analytics/piwik-pro-cookies/
+  - https://help.piwik.pro/support/privacy/cookies-created-for-visitors-by-piwik-pro/
+  - https://developers.piwik.pro/en/latest/data_collection/web/javascript_tracking_client/index.html

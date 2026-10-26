@@ -28,15 +28,9 @@ var prdIDs = []string{
 	"stripe", "paypal", "recaptcha", "hcaptcha", "turnstile", "google-fonts",
 }
 
-// pendingIDs are the PRD entries later items add. TestCatalogCount
-// drops them from this list as they land.
-var pendingIDs = slices.DeleteFunc(slices.Clone(prdIDs), func(id string) bool {
-	return slices.Index(prdIDs, id) < 7 || slices.Contains(advertisingIDs, id)
-})
-
-// advertisingIDs are the advertising and social entries.
-var advertisingIDs = []string{"meta-pixel", "tiktok", "linkedin", "microsoft-uet", "pinterest", "snap", "x-pixel", "reddit",
-	"quora", "amazon-ads", "criteo", "taboola", "outbrain", "hubspot", "klaviyo"}
+// pendingIDs are the PRD entries a later item adds (T5, embeds and
+// necessary services). TestCatalogCount drops this list when they land.
+var pendingIDs = []string{"youtube", "vimeo", "google-maps", "stripe", "paypal", "recaptcha", "hcaptcha", "turnstile", "google-fonts"}
 
 // minimal is a valid entry and its fixtures, for the loader tests to
 // break one piece at a time.
@@ -347,7 +341,7 @@ func FuzzCatalogYAML(f *testing.F) {
 	f.Add([]byte(minimalEntry), []byte("hits:\n  match: [\"https://px.shop.example/collect\"]\n"))
 	f.Add([]byte(""), []byte(""))
 	f.Add([]byte("- a\n- b\n"), []byte("{"))
-	for _, id := range []string{"ga4", "meta-pixel", "google-ads"} {
+	for _, id := range []string{"ga4", "meta-pixel", "plausible", "hotjar", "google-ads"} {
 		e, _ := fs.ReadFile(catalogFS, path.Join(catalogDir, id+".yaml"))
 		x, _ := fs.ReadFile(catalogFS, path.Join(catalogDir, id+".fixtures.yaml"))
 		f.Add(e, x)

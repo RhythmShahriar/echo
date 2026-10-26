@@ -1,0 +1,15 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+hits:
+  match:
+    - {method: POST, url: "https://plausible.io/api/event", body: '{"n":"pageview","u":"https://shop.test/"}', type: fetch}
+    - {method: POST, url: "https://shop.test/api/event", body: '{"n":"pageview","u":"https://shop.test/","d":"shop.test","r":null}'}
+  no_match:
+    - {method: POST, url: "https://shop.test/api/event", body: '{"query":"x"}'}
+    - POST https://shop.test/api/event
+    - https://plausible.io/js/script.js
+scripts:
+  match:
+    - https://plausible.io/js/script.js
+    - https://plausible.io/js/pa-TESTBED.js

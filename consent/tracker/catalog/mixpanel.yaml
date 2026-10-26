@@ -1,0 +1,27 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+# Mixpanel's browser SDK. recognize/providers/mixpanel.yaml covers the
+# server-side ingestion API; this entry is the visitor's browser, so
+# the two stay separate.
+id: mixpanel
+name: Mixpanel
+vendor: Mixpanel
+category: analytics
+consent: needed
+hits:
+  - hosts: [api-js.mixpanel.com, api-eu.mixpanel.com]
+    paths: ["/track*", "/engage*", "/groups*"]
+    methods: [GET, POST]
+scripts:
+  - hosts: [cdn.mxpnl.com]
+    paths: [/libs/**]
+cookies:
+  - "mp_*"
+storage:
+  - "mp_*"
+fix: Initialize Mixpanel with opt_out_tracking_by_default and call mixpanel.opt_in_tracking() once the visitor accepts
+docs: https://docs.mixpanel.com/docs/tracking-methods/sdks/javascript
+sources:
+  - https://docs.mixpanel.com/docs/tracking-methods/sdks/javascript
+  - https://docs.mixpanel.com/docs/privacy/protecting-user-data

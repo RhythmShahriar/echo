@@ -1,0 +1,21 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+hits:
+  match:
+    - {method: POST, url: "https://api.segment.io/v1/p", body: '{"type":"page","anonymousId":"a1"}', type: fetch}
+    - POST https://api.segment.io/v1/t
+    - POST https://api.segment.io/v1/batch
+  no_match:
+    - POST https://shop.test/v1/p
+    - https://cdn.segment.com/analytics.js/v1/abc123/analytics.min.js
+scripts:
+  match:
+    - https://cdn.segment.com/analytics.js/v1/abc123/analytics.min.js
+    - https://cdn.segment.com/v1/projects/abc123/settings
+cookies:
+  match: [ajs_anonymous_id, ajs_user_id]
+  no_match: [ajs, anonymous_id]
+storage:
+  match: [ajs_anonymous_id, ajs_user_traits]
+  no_match: [ajax_cache]

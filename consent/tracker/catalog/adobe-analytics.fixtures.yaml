@@ -1,0 +1,18 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+hits:
+  match:
+    - https://shop.sc.omtrdc.net/b/ss/shopprod/1/JS-2.22.0/s1234567890?AQB=1&ndh=1&pageName=home&AQE=1
+    - POST https://shop.112.2o7.net/b/ss/shopprod/1/JS-2.22.0/s1
+    - https://metrics.shop.test/b/ss/shopprod/1/JS-2.22.0/s1234567890?AQB=1&pageName=home&AQE=1
+    - POST https://edge.adobedc.net/ee/v1/interact?configId=abc
+  no_match:
+    - https://shop.test/b/ss/shopprod/1/JS-2.22.0/s1
+    - https://assets.adobedtm.com/launch-ABC123.min.js
+scripts:
+  match:
+    - https://assets.adobedtm.com/0123/launch-ABC123.min.js
+cookies:
+  match: [s_cc, s_sq, s_ecid, AMCV_0123456789ABCDEF%40AdobeOrg, kndctr_0123_AdobeOrg_identity, s_vi, s_fid, AMCVS_0123456789ABCDEF%40AdobeOrg]
+  no_match: [s_banner, AMC, cc]

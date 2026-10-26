@@ -1,0 +1,29 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+# Yandex Metrica, including Webvisor session recording. The counter ID
+# is the path segment after /watch/.
+id: yandex-metrica
+name: Yandex Metrica
+vendor: Yandex
+category: analytics
+consent: needed
+hits:
+  - hosts: [mc.yandex.ru, mc.yandex.com]
+    paths: [/watch/**, /webvisor/**, /clmap/**]
+    methods: [GET, POST]
+scripts:
+  - hosts: [mc.yandex.ru, mc.yandex.com]
+    paths: [/metrika/tag.js, /metrika/watch.js]
+cookies:
+  - _ym_uid
+  - _ym_d
+  - _ym_isad
+  - _ym_visorc
+params:
+  id_path: '^/(?:watch|webvisor)/([0-9]+)'
+fix: Load Yandex Metrica only after the visitor accepts analytics
+docs: https://yandex.com/support/metrica/general/cookie-usage.html
+sources:
+  - https://yandex.com/support/metrica/general/cookie-usage.html
+  - https://yandex.com/support/metrica/code/install-counter-csp.html

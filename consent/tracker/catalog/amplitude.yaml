@@ -1,0 +1,26 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+# Amplitude Browser SDK. Cookies and storage keys are AMP_<key> and
+# AMP_MKTG_<key>.
+id: amplitude
+name: Amplitude
+vendor: Amplitude
+category: analytics
+consent: needed
+hits:
+  - hosts: [api2.amplitude.com, api.eu.amplitude.com]
+    paths: [/2/httpapi, /batch]
+    methods: [POST]
+scripts:
+  - hosts: [cdn.amplitude.com]
+    paths: [/libs/**, /script/**]
+cookies:
+  - "AMP_*"
+storage:
+  - "AMP_*"
+fix: Initialize Amplitude with optOut true and turn it off once the visitor accepts
+docs: https://amplitude.com/docs/sdks/analytics/browser/browser-sdk-2
+sources:
+  - https://amplitude.com/docs/sdks/analytics/browser/browser-sdk-2
+  - https://amplitude.com/docs/apis/analytics/http-v2

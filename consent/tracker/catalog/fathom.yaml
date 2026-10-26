@@ -1,0 +1,24 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+# Fathom Analytics: cookieless, exempt by default. Page views are a GET
+# to the root of cdn.usefathom.com with the site ID in sid and a cache
+# buster in cid.
+id: fathom
+name: Fathom Analytics
+vendor: Conva Ventures
+category: analytics
+consent: exempt
+hits:
+  - hosts: [cdn.usefathom.com]
+    paths: [/]
+    params_all: [cid]
+scripts:
+  - hosts: [cdn.usefathom.com]
+    paths: [/script.js]
+params:
+  id: [sid]
+docs: https://usefathom.com/docs/script/script-advanced
+sources:
+  - https://usefathom.com/docs/script/script-advanced
+  - https://usefathom.com/legal/compliance

@@ -1,0 +1,17 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+hits:
+  match:
+    - POST https://rs.fullstory.com/rec/bundle/v2?OrgId=TESTBED&UserId=1
+    - https://rs.fullstory.com/rec/page
+    - POST https://rs.eu1.fullstory.com/rec/bundle/v2
+  no_match:
+    - POST https://shop.test/rec/bundle/v2
+    - https://edge.fullstory.com/s/fs.js
+scripts:
+  match:
+    - https://edge.fullstory.com/s/fs.js
+cookies:
+  match: [fs_uid, fs_lua, fs_cid]
+  no_match: [fs_banner, uid]

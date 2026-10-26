@@ -1,0 +1,34 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+# PostHog's web snippet. recognize/providers/posthog.yaml covers the same
+# capture paths server-side; this entry is the visitor's browser. Many
+# sites proxy PostHog through their own domain; there the path alone is
+# too common, so the ver= (SDK version) and _= (timestamp) parameters
+# posthog-js adds to every capture call prove it.
+id: posthog
+name: PostHog
+vendor: PostHog
+category: analytics
+consent: needed
+any_host: true
+hits:
+  - hosts: [us.i.posthog.com, eu.i.posthog.com, app.posthog.com, eu.posthog.com]
+    paths: ["/e/*", "/i/v0/e/*", "/batch/*", "/s/*"]
+    methods: [GET, POST]
+  - paths: ["/e/*", "/i/v0/e/*"]
+    methods: [POST]
+    params_all: [ver, _]
+    params_match: {ver: '^1\.[0-9]+\.[0-9]+'}
+scripts:
+  - hosts: [us-assets.i.posthog.com, eu-assets.i.posthog.com]
+cookies:
+  - "ph_*_posthog"
+storage:
+  - "ph_*_posthog"
+fix: Initialize PostHog with opt_out_capturing_by_default and call posthog.opt_in_capturing() once the visitor accepts
+docs: https://posthog.com/docs/libraries/js
+sources:
+  - https://posthog.com/docs/libraries/js
+  - https://posthog.com/docs/privacy/gdpr-compliance
+  - https://posthog.com/docs/advanced/proxy

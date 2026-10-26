@@ -1,0 +1,40 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+# Hotjar session recording and surveys. The tracking code tests storage
+# with _hjLocalStorageTest and _hjSessionStorageTest keys (sometimes with
+# a suffix) and keeps the user ID in both cookies and localStorage.
+id: hotjar
+name: Hotjar
+vendor: Hotjar
+category: session-replay
+consent: needed
+hits:
+  - hosts: ["*.hotjar.com"]
+    paths: [/api/**]
+    methods: [GET, POST, PUT]
+  - hosts: ["*.hotjar.io"]
+scripts:
+  - hosts: [static.hotjar.com]
+    paths: ["/c/hotjar-*.js"]
+  - hosts: [script.hotjar.com]
+cookies:
+  - "_hjSessionUser_*"
+  - "_hjSession_*"
+  - _hjid
+  - _hjAbsoluteSessionInProgress
+  - _hjFirstSeen
+  - "_hjIncludedInSessionSample_*"
+  - _hjTLDTest
+storage:
+  - "_hjSessionUser_*"
+  - _hjid
+  - "_hjLocalStorageTest*"
+  - "_hjSessionStorageTest*"
+  - hjViewportId
+  - hjActiveViewportIds
+fix: Load Hotjar only after the visitor accepts analytics or session recording
+docs: https://help.hotjar.com/hc/en-us/articles/6952777582999-Cookies-Set-by-the-Hotjar-Tracking-Code
+sources:
+  - https://help.hotjar.com/hc/en-us/articles/6952777582999-Cookies-Set-by-the-Hotjar-Tracking-Code
+  - https://help.hotjar.com/hc/en-us/articles/115009336727-Content-Security-Policy-CSP

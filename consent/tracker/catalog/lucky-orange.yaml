@@ -1,0 +1,25 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+# Lucky Orange session recording. Its developer docs list
+# *.luckyorange.com and wss://*.visitors.live for connections and
+# tools.luckyorange.com for the script; settings come from
+# settings.luckyorange.net.
+id: lucky-orange
+name: Lucky Orange
+vendor: Lucky Orange
+category: session-replay
+consent: needed
+hits:
+  - hosts: [api.luckyorange.com, "*.luckyorange.net", "*.visitors.live"]
+scripts:
+  - hosts: [tools.luckyorange.com]
+cookies:
+  - "_lo_*"
+  - lo-uid
+fix: Load Lucky Orange only after the visitor accepts analytics or session recording
+docs: https://developers.luckyorange.com/libraries/browser/cookies-storage
+sources:
+  - https://developers.luckyorange.com/libraries/browser/cookies-storage
+  - https://developers.luckyorange.com/libraries/browser/content-security-policy
+  - https://help.luckyorange.com/article/173-what-cookies-does-lucky-orange-set

@@ -1,0 +1,17 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+hits:
+  match:
+    - https://shop.piwik.pro/ppms.php?idsite=0123-abcd&rec=1
+    - POST https://shop.piwik.pro/ppms.php
+  no_match:
+    - https://shop.test/ppms.php?idsite=0123-abcd&rec=1
+    - https://shop.containers.piwik.pro/0123-abcd.js
+scripts:
+  match:
+    - https://shop.containers.piwik.pro/0123-abcd.js
+    - https://shop.piwik.pro/ppms.js
+cookies:
+  match: [stg_traffic_source_priority, stg_last_interaction, stg_returning_visitor, stg_fired__1234, stg_externalReferrer, stg_utm_campaign, stg_pk_campaign]
+  no_match: [stg_banner, ppms_privacy_0123-abcd]

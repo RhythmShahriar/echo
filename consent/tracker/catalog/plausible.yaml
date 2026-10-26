@@ -1,0 +1,29 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+# Plausible: cookieless analytics, exempt by default. Hits on a proxy
+# (the site's own /api/event) count only when the body is Plausible's
+# JSON: an object with n (event name) and u (page URL).
+id: plausible
+name: Plausible
+vendor: Plausible Insights
+category: analytics
+consent: exempt
+any_host: true
+hits:
+  - hosts: [plausible.io]
+    paths: [/api/event]
+    methods: [POST]
+  - paths: [/api/event]
+    methods: [POST]
+    body_json: [n, u]
+scripts:
+  - hosts: [plausible.io]
+    paths: ["/js/*.js"]
+params:
+  event: [n]
+docs: https://plausible.io/docs/events-api
+sources:
+  - https://plausible.io/docs/events-api
+  - https://plausible.io/data-policy
+  - https://plausible.io/docs/proxy/introduction
