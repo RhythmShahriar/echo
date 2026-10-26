@@ -202,6 +202,24 @@ runs:
         GH_TOKEN: ${{ github.token }}
       run: |
         set -euo pipefail
+        # Only for testing the Action itself: Echo's own CI builds
+        # rhythm-echo from the checkout and names it here, so a new mode is
+        # tested before its release exists. It skips the signature check,
+        # so the step says so.
+        if [ -n "${RHYTHM_ECHO_ACTION_BINARY:-}" ]; then
+          bin=$RHYTHM_ECHO_ACTION_BINARY
+          if [ ! -f "$bin" ] || [ ! -x "$bin" ]; then
+            echo "::error::RHYTHM_ECHO_ACTION_BINARY: $bin isn't an executable file"
+            exit 1
+          fi
+          dir="$RUNNER_TEMP/echo-bin"
+          mkdir -p "$dir"
+          cp "$bin" "$dir/rhythm-echo"
+          echo "::warning::Using $bin (RHYTHM_ECHO_ACTION_BINARY) in place of a signed Echo release"
+          echo "$dir" >> "$GITHUB_PATH"
+          "$dir/rhythm-echo" --version
+          exit 0
+        fi
         # The binary follows the Action: RhythmShahriar/echo@v1.2.3 (or that
         # tag's commit SHA) runs Echo 1.2.3, so a new release can't change a
         # pinned build.

@@ -380,3 +380,64 @@ func TestActionWindows(t *testing.T) {
 	contains(t, "log", res.log, "::error::the Echo Action runs on Linux and macOS runners, not MINGW64_NT-10.0-20348")
 	lacks(t, "log", res.log, "curl ran")
 }
+
+// TestActionDevBinary installs the binary RHYTHM_ECHO_ACTION_BINARY names
+// in place of a release, which is how Echo's own CI tests a mode before
+// its release exists: nothing is downloaded and the step warns that no
+// signature was checked. A name that isn't an executable file stops the
+// step.
+func TestActionDevBinary(t *testing.T) {
+	needBash(t)
+	only := func(r *runner) {
+		for _, s := range r.action.Runs.Steps {
+			if s.Name != "Install Echo" {
+				r.skip = append(r.skip, s.Name)
+			}
+		}
+	}
+	fakes := t.TempDir()
+	write := func(name, body string, mode os.FileMode) string {
+		path := filepath.Join(fakes, name)
+		if err := os.WriteFile(path, []byte(body), mode); err != nil {
+			t.Fatal(err)
+		}
+		return path
+	}
+	write("curl", "#!/bin/sh\necho curl ran >&2\nexit 22\n", 0o700)
+	built := write("built-echo", "#!/bin/sh\necho rhythm-echo from the checkout\n", 0o700)
+	plain := write("plain-file", "not a program\n", 0o600)
+
+	t.Run("built", func(t *testing.T) {
+		r := newRunner(t)
+		only(r)
+		r.path = []string{fakes}
+		r.env["RHYTHM_ECHO_ACTION_BINARY"] = built
+		res := r.use(map[string]string{"mode": "consent", "site": "http://127.0.0.1:35113/"})
+		if !res.ok {
+			t.Fatalf("install failed:\n%s", res.log)
+		}
+		contains(t, "log", res.log, "::warning::Using "+built+" (RHYTHM_ECHO_ACTION_BINARY) in place of a signed Echo release")
+		contains(t, "log", res.log, "rhythm-echo from the checkout")
+		lacks(t, "log", res.log, "curl ran")
+		if _, err := os.Stat(filepath.Join(r.temp, "echo-bin", "rhythm-echo")); err != nil {
+			t.Errorf("the binary isn't in echo-bin: %v", err)
+		}
+		if len(r.path) == 0 || r.path[0] != filepath.Join(r.temp, "echo-bin") {
+			t.Errorf("PATH starts with %q, want echo-bin", r.path)
+		}
+	})
+	for name, path := range map[string]string{"not executable": plain, "missing": filepath.Join(fakes, "nothing"), "folder": fakes} {
+		t.Run(name, func(t *testing.T) {
+			r := newRunner(t)
+			only(r)
+			r.path = []string{fakes}
+			r.env["RHYTHM_ECHO_ACTION_BINARY"] = path
+			res := r.use(map[string]string{"mode": "consent", "site": "http://127.0.0.1:35113/"})
+			if res.ok {
+				t.Fatalf("install of %s succeeded:\n%s", path, res.log)
+			}
+			contains(t, "log", res.log, "::error::RHYTHM_ECHO_ACTION_BINARY: "+path+" isn't an executable file")
+			lacks(t, "log", res.log, "curl ran")
+		})
+	}
+}
