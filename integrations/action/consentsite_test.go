@@ -16,7 +16,7 @@ import (
 
 // siteAddr is where TestConsentSite runs the server, away from the
 // workflow's 18990 and the testbeds.
-const siteAddr = "127.0.0.1:35100"
+const siteAddr = "127.0.0.1:20516"
 
 // TestConsentSite runs the unit tests of the consent site the
 // action-test workflow starts (go test ./... skips testdata), then the
@@ -38,7 +38,7 @@ func TestConsentSite(t *testing.T) {
 		t.Fatalf("build: %v\n%s", err, out)
 	}
 
-	if out, err := exec.Command(bin, "-addr", "0.0.0.0:35101").CombinedOutput(); err == nil || //nolint:gosec // the binary this test built
+	if out, err := exec.Command(bin, "-addr", "0.0.0.0:20517").CombinedOutput(); err == nil || //nolint:gosec // the binary this test built
 		!strings.Contains(string(out), "listen on 127.0.0.1 only") {
 		t.Errorf("listened beyond loopback: %v\n%s", err, out)
 	}

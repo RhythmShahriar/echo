@@ -17,15 +17,16 @@ import (
 )
 
 // Ports for the Action's Echo, its SMTP sink, the fixture shop and an
-// address where nothing listens. They are fixed, from the block this
-// suite owns (consentsite_test.go takes 35100 and 35101). Ports picked
-// by listening on :0 and closing again were flaky: the kernel could
-// hand one to another process before Echo bound it.
+// address where nothing listens. They are fixed, from the repo's own
+// 20513 to 20519 block, clear of the CI fixture's 20510 and the
+// workflow's 18990 (consentsite_test.go takes 20516 and 20517). Ports
+// picked by listening on :0 and closing again were flaky: the kernel
+// could hand one to another process before Echo bound it.
 const (
-	listen   = "127.0.0.1:35110"
-	smtp     = "127.0.0.1:35111"
-	shopPort = "35112"
-	deadEcho = "http://127.0.0.1:35119"
+	listen   = "127.0.0.1:20513"
+	smtp     = "127.0.0.1:20514"
+	shopPort = "20515"
+	deadEcho = "http://127.0.0.1:20519"
 )
 
 // shop is a monorepo layout: the CI fixture in sites/shop, served by
@@ -412,7 +413,7 @@ func TestActionDevBinary(t *testing.T) {
 		only(r)
 		r.path = []string{fakes}
 		r.env["RHYTHM_ECHO_ACTION_BINARY"] = built
-		res := r.use(map[string]string{"mode": "consent", "site": "http://127.0.0.1:35113/"})
+		res := r.use(map[string]string{"mode": "consent", "site": "http://127.0.0.1:20517/"})
 		if !res.ok {
 			t.Fatalf("install failed:\n%s", res.log)
 		}
@@ -432,7 +433,7 @@ func TestActionDevBinary(t *testing.T) {
 			only(r)
 			r.path = []string{fakes}
 			r.env["RHYTHM_ECHO_ACTION_BINARY"] = path
-			res := r.use(map[string]string{"mode": "consent", "site": "http://127.0.0.1:35113/"})
+			res := r.use(map[string]string{"mode": "consent", "site": "http://127.0.0.1:20517/"})
 			if res.ok {
 				t.Fatalf("install of %s succeeded:\n%s", path, res.log)
 			}
