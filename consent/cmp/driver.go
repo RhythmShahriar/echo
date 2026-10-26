@@ -27,6 +27,9 @@ import (
 //go:embed rules
 var rulesFS embed.FS
 
+// pollEvery is how often Detect and Choose look at the page again.
+const pollEvery = 250 * time.Millisecond
+
 // driver is the consent.CMPDriver: the rule pack and the code that
 // finds, clicks and verifies with it.
 type driver struct {

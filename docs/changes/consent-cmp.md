@@ -25,3 +25,28 @@ texts, for the release notes and the docs team.
   and a line: `<file>: line <n>: unknown key "<key>"`,
   `<file>: line <n>: api.reject: "eval(" is not allowed in a rule's JavaScript; rules make fixed calls only`,
   `<file>: line <n>: <key>: missing`.
+
+## C2 Detection
+
+- `Detect` looks every 250 ms until `--banner-wait` and stops at the
+  first look that sees a banner. With `--cmp <id>` only that rule is
+  tried (generic is not); with `--cmp auto` the named rules by priority,
+  then generic.
+- A banner counts as shown when its container is sized, not
+  `display:none`, not `visibility:hidden`, not transparent (opacity
+  above 0.01, ancestors included) and inside the page or scrollable into
+  it. Markup that is there but hidden is `present`, not `found`.
+- `present` comes from a detect selector, a window global (typeof only)
+  or a loaded script URL (resource timing and `<script src>`). Page text
+  is never read, so a page that only names a CMP is not present.
+- `detected_by` in the JSON holds at most two pieces joined by ` and `,
+  selector first, then global, then script:
+  `selector:#CybotCookiebotDialog and global:Cookiebot`,
+  `global:Cookiebot and script:consent.cookiebot.com/uc.js`, or
+  `generic` for the generic rule. (`consent detect` prints it as
+  `#CybotCookiebotDialog and window.Cookiebot`; that rendering is the
+  cli lane's.)
+- `tcf` is true when the page defines `__tcfapi`; `banner_at_ms` is the
+  run-clock time of the look that saw the banner.
+- When every look failed (the page kept navigating), Detect returns the
+  last script error instead of "no banner".
