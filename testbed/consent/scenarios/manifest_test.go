@@ -134,7 +134,7 @@ func auditFiles(root, dir string, mapped []string) []string {
 		rel = filepath.ToSlash(rel)
 		vendored := strings.Contains(rel, "/vendor/")
 		for _, h := range hostsIn(string(data)) {
-			if !allowedHost(h, mapped) && !(vendored && slices.Contains(vendorHosts, h)) {
+			if !allowedHost(h, mapped) && (!vendored || !slices.Contains(vendorHosts, h)) {
 				problems = append(problems, fmt.Sprintf("%s: names %s, which isn't under .test, loopback or a host -print-map maps", rel, h))
 			}
 		}
