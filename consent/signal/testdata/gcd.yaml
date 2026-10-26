@@ -2,7 +2,9 @@
 # is known, each signal as default/update (or unknown) in the order
 # ad_storage, analytics_storage, ad_user_data, ad_personalization, the
 # kept tail and note, where the value came from and when it was taken.
-# Rows from real gtag.js hits have source "capture" (see captures/).
+# Rows from real gtag.js hits have a source starting "capture" plus the
+# gcs from the same hit and what it reads (gcs, gcs_signals); see
+# captures/README.md. TestFixtureRowsHaveSource checks every row.
 - raw: 13t3p3p3p5
   known: true
   signals: [granted/unset, denied/unset, denied/unset, denied/unset]
