@@ -67,5 +67,5 @@ type VerifyFile struct {
 type VerifySignature struct {
 	Present bool   `json:"present"`
 	OK      bool   `json:"ok"`
-	Key     string `json:"key"` // the public key file, or its id
+	Key     string `json:"key"` // the --key file; empty without --key
 }

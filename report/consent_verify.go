@@ -58,8 +58,12 @@ func WriteConsentVerify(w io.Writer, v *ConsentVerify, asJSON bool, o ConsentTex
 	}
 	s := v.Signature
 	key := Safe(s.Key)
-	badSig := false
+	badSig, noSig := false, false
 	switch {
+	case !s.Present && s.Key != "":
+		// --key asks for a signature: none is a failure, not a shrug.
+		noSig = true
+		fmt.Fprintf(&b, "Signature: missing (--key %s given)\n", key)
 	case !s.Present:
 		b.WriteString("Signature: none\n")
 	case s.Key == "":
@@ -70,7 +74,7 @@ func WriteConsentVerify(w io.Writer, v *ConsentVerify, asJSON bool, o ConsentTex
 		badSig = true
 		fmt.Fprintf(&b, "Signature: doesn't match (ed25519, key %s)\n", key)
 	}
-	if changed+missing == 0 && !badSig {
+	if changed+missing == 0 && !badSig && !noSig {
 		fmt.Fprintf(&b, "Verified: %s match", plural(ok, "file", "files"))
 		if s.Present && s.OK && s.Key != "" {
 			b.WriteString(", signed by " + key)
@@ -86,6 +90,9 @@ func WriteConsentVerify(w io.Writer, v *ConsentVerify, asJSON bool, o ConsentTex
 		}
 		if badSig {
 			why = append(why, "the signature doesn't match")
+		}
+		if noSig {
+			why = append(why, "no signature")
 		}
 		fmt.Fprintf(&b, "Not verified: %s; %s match.\n", strings.Join(why, ", "), plural(ok, "file", "files"))
 	}

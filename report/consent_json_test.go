@@ -240,6 +240,7 @@ func verifySamples() map[string]*ConsentVerify {
 		"missing": {Folder: dir, Files: missing},
 		"no-key":  {Folder: dir, Files: files(), Signature: VerifySignature{Present: true}},
 		"bad-sig": {Folder: dir, Files: files(), Signature: VerifySignature{Present: true, Key: "team.pub"}},
+		"no-sig":  {Folder: dir, Files: files(), Signature: VerifySignature{Key: "team.pub"}},
 	}
 }
 
@@ -269,6 +270,13 @@ func TestVerifyTextGolden(t *testing.T) {
 	if !strings.Contains(buf.String(), "missing  evidence/page-1/reject-banner.png\n") ||
 		!strings.HasSuffix(buf.String(), "Not verified: 1 missing; 2 files match.\n") {
 		t.Errorf("missing:\n%s", buf.String())
+	}
+	// --key with no signature to check is a failure, named as such.
+	buf.Reset()
+	_ = WriteConsentVerify(&buf, verifySamples()["no-sig"], false, ConsentTextOptions{})
+	if !strings.Contains(buf.String(), "Signature: missing (--key team.pub given)\n") ||
+		!strings.HasSuffix(buf.String(), "Not verified: no signature; 3 files match.\n") {
+		t.Errorf("no-sig:\n%s", buf.String())
 	}
 }
 
@@ -320,7 +328,7 @@ func TestCatalogDetectVerifySchemas(t *testing.T) {
 	}
 	for name, v := range verifySamples() {
 		e := verifyEnvelope(v)
-		want := map[string]string{"good": VerdictOK, "no-key": VerdictOK, "changed": VerdictFindings, "bad-sig": VerdictFindings, "missing": VerdictError}[name]
+		want := map[string]string{"good": VerdictOK, "no-key": VerdictOK, "changed": VerdictFindings, "bad-sig": VerdictFindings, "no-sig": VerdictFindings, "missing": VerdictError}[name]
 		if e.Verdict != want || e.Complete != (name != "missing") {
 			t.Errorf("verify %s: %s %v", name, e.Verdict, e.Complete)
 		}

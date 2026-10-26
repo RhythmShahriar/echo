@@ -61,8 +61,9 @@ func detectEnvelope(d *consent.DetectResult) Envelope {
 	return e
 }
 
-// verifyEnvelope wraps what consent verify found: a changed file or a
-// signature that doesn't match is an error (findings); a missing file
+// verifyEnvelope wraps what consent verify found: a changed file, or a
+// signature that doesn't match or is missing with --key, is an error
+// (findings); a missing file
 // leaves the folder unchecked (error, incomplete), as exit 3 says.
 func verifyEnvelope(v *ConsentVerify) Envelope {
 	e := NewEnvelope(KindConsentVerify, v)
@@ -76,7 +77,9 @@ func verifyEnvelope(v *ConsentVerify) Envelope {
 			e.Summary.Errors++
 		}
 	}
-	if s := v.Signature; s.Present && s.Key != "" && !s.OK {
+	// With --key, a signature that doesn't match or isn't there fails,
+	// as the exit code does.
+	if s := v.Signature; s.Key != "" && !s.OK {
 		e.Summary.Errors++
 	}
 	switch {
