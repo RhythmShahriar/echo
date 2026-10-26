@@ -79,10 +79,18 @@ func Main(args []string, env Env) int {
 	switch s {
 	case subCheck:
 		return c.check(pos)
+	case subDetect:
+		return c.detect(pos)
+	case subReport:
+		return c.report(pos)
 	case subVerify:
 		return c.verify(pos)
+	case subCmps:
+		return c.cmps(pos)
+	case subTrackers:
+		return c.trackers(pos)
 	}
-	return c.notBuilt()
+	return c.prune(pos)
 }
 
 // cmd is one consent command line being run.
@@ -90,12 +98,6 @@ type cmd struct {
 	env Env
 	o   *options
 	sub sub
-}
-
-// notBuilt answers a subcommand this build doesn't have yet.
-func (c *cmd) notBuilt() int {
-	fmt.Fprintf(c.env.Stderr, "rhythm echo: %s isn't built yet\n", c.sub.command())
-	return exitUnavailable
 }
 
 // fail prints err as Echo does and returns its exit code: 2 for a
