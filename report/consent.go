@@ -31,9 +31,10 @@ type ConsentTextOptions struct {
 // ConsentMarkdownOptions shape the Markdown summary (--md, the Action
 // summary and the PR comment).
 type ConsentMarkdownOptions struct {
-	Details       bool   // a details block per run
-	MaxBytes      int    // cut to fit (a PR comment holds 65536); 0 means no cap
+	Details       bool   // summary-details: issue details and a collapsed timeline per run
+	MaxBytes      int    // cut to fit (a PR comment holds 65536); 0 means 900 KiB
 	ConsentSHA256 string // the hash of consent.json, quoted in the footer
+	FailOn        string // --fail-on, for the verdict word; "" is error
 }
 
 // ConsentHTMLOptions shape the HTML evidence report.
@@ -72,11 +73,6 @@ type VerifySignature struct {
 	Present bool   `json:"present"`
 	OK      bool   `json:"ok"`
 	Key     string `json:"key"` // the public key file, or its id
-}
-
-// WriteConsentMarkdown writes the Markdown summary of a consent check.
-func WriteConsentMarkdown(w io.Writer, r *consent.Result, o ConsentMarkdownOptions) error {
-	return errConsentNotBuilt
 }
 
 // WriteConsentHTML writes the HTML evidence report of a consent check.

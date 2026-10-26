@@ -16,10 +16,9 @@ func TestConsentWritersNotBuilt(t *testing.T) {
 	var b strings.Builder
 	r := &consent.Result{}
 	for name, err := range map[string]error{
-		"markdown": WriteConsentMarkdown(&b, r, ConsentMarkdownOptions{}),
-		"html":     WriteConsentHTML(&b, r, ConsentHTMLOptions{}),
-		"junit":    WriteConsentJUnit(&b, r, ""),
-		"catalog":  WriteConsentCatalog(&b, nil, nil, "cmps", false, ConsentTextOptions{}),
+		"html":    WriteConsentHTML(&b, r, ConsentHTMLOptions{}),
+		"junit":   WriteConsentJUnit(&b, r, ""),
+		"catalog": WriteConsentCatalog(&b, nil, nil, "cmps", false, ConsentTextOptions{}),
 	} {
 		if err == nil || err.Error() != "report: consent writer not built yet" {
 			t.Errorf("%s: err = %v", name, err)

@@ -304,6 +304,9 @@ func TestReportRecordsSandboxOff(t *testing.T) {
 	if err := WriteConsentJSON(&buf, r, ""); err != nil || !strings.Contains(buf.String(), `"Chrome ran without its sandbox."`) || !strings.Contains(buf.String(), `"sandbox": false`) {
 		t.Errorf("json: %v", err)
 	}
+	if out := consentMDOf(t, r, ConsentMarkdownOptions{}); !strings.Contains(out, " Chrome ran without its sandbox. ") {
+		t.Errorf("markdown:\n%s", out)
+	}
 }
 
 func TestConsentInsecureMarked(t *testing.T) {
@@ -321,6 +324,9 @@ func TestConsentInsecureMarked(t *testing.T) {
 	var buf bytes.Buffer
 	if err := WriteConsentJSON(&buf, r, ""); err != nil || !strings.Contains(buf.String(), `"TLS not verified."`) {
 		t.Errorf("json: %v", err)
+	}
+	if out := consentMDOf(t, r, ConsentMarkdownOptions{}); !strings.Contains(out, " TLS not verified. ") {
+		t.Errorf("markdown:\n%s", out)
 	}
 }
 
