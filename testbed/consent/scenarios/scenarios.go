@@ -113,6 +113,11 @@ func Load(dir string) (*Manifest, error) {
 	if err != nil {
 		return nil, err
 	}
+	return Parse(data)
+}
+
+// Parse decodes and checks a manifest's bytes, as Load does for the file.
+func Parse(data []byte) (*Manifest, error) {
 	var m Manifest
 	dec := yaml.NewDecoder(bytes.NewReader(data))
 	dec.KnownFields(true)
