@@ -155,7 +155,7 @@ func safePath(rel string) bool {
 
 // hashRegular hashes the file rel inside dir when it is a regular file
 // whose folders resolve inside dir: a link is never followed, as the
-// manifest never lists one, and a linked folder (events -> /etc) in a
+// manifest never lists one. A linked folder (events -> /etc) in a
 // folder handed over by someone else would read a file outside it.
 func hashRegular(dir, rel string) (consent.EvidenceFile, error) {
 	p := filepath.Join(dir, filepath.FromSlash(rel))

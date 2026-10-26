@@ -263,7 +263,7 @@ func TestVerifyLinkedFolder(t *testing.T) {
 	}
 }
 
-// Unlisted names files neither list covers, links included, and none
+// Unlisted names files neither list covers, links included; none
 // for a folder as a check wrote it.
 func TestUnlisted(t *testing.T) {
 	dir := folder(t, "")

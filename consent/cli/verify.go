@@ -22,8 +22,8 @@ const msgSigstore = "Sigstore bundle present: check it with cosign verify-blob -
 
 // msgSignatureScope says what a good signature vouches for: consent.json
 // and the attachments it lists by hash. The reports and manifest.json
-// are written after it, so only their manifest hashes check them, and
-// someone who rewrites a report can rewrite the manifest too.
+// are written after it, so only their manifest hashes check them: whoever
+// rewrites a report can rewrite the manifest too.
 const msgSignatureScope = "The signature covers consent.json and the files it lists; " +
 	"report.html, report.md and manifest.json are checked against manifest.json only."
 
