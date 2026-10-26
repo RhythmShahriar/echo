@@ -255,3 +255,23 @@ func TestLoadRefusesBadManifests(t *testing.T) {
 		t.Error("found e99")
 	}
 }
+
+// TestFlagValuesStayWhole guards against YAML's flow lists splitting a
+// flag's value at its comma: [--click, button,api] is three items, so
+// rhythm-echo would get "api" as a stray argument.
+func TestFlagValuesStayWhole(t *testing.T) {
+	m := load(t)
+	for _, id := range []string{"c11", "c20"} {
+		s, _ := m.Find(id)
+		if want := []string{"--click", "button,api"}; !slices.Equal(s.Args, want) {
+			t.Errorf("%s args = %q, want %q", id, s.Args, want)
+		}
+	}
+	for _, s := range m.Scenarios {
+		for i, a := range s.Args {
+			if strings.HasPrefix(a, "--") && i+2 < len(s.Args) && !strings.HasPrefix(s.Args[i+2], "-") {
+				t.Errorf("%s: %q after %s %s is a stray argument (quote a value that has a comma)", s.ID, s.Args[i+2], a, s.Args[i+1])
+			}
+		}
+	}
+}

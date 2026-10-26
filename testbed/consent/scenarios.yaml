@@ -130,7 +130,7 @@ scenarios:
     area: trackers
     cmp: usercentrics
     needs: go
-    args: [--click, button,api]
+    args: [--click, "button,api"]
     toggle: the youtube.com frame loads whatever the choice; the CMP is in a closed shadow root, so only its API can choose
     expect:
       - {check: consent/embed, tracker: youtube, level: warning}
@@ -209,7 +209,7 @@ scenarios:
     area: choice
     cmp: generic
     needs: go
-    args: [--click, button,api]
+    args: [--click, "button,api"]
     toggle: a transparent overlay covers the page and the Reject handler binds 6 s late
     any: true
     expect:
