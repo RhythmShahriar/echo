@@ -28,10 +28,6 @@ var prdIDs = []string{
 	"stripe", "paypal", "recaptcha", "hcaptcha", "turnstile", "google-fonts",
 }
 
-// pendingIDs are the PRD entries a later item adds (T5, embeds and
-// necessary services). TestCatalogCount drops this list when they land.
-var pendingIDs = []string{"youtube", "vimeo", "google-maps", "stripe", "paypal", "recaptcha", "hcaptcha", "turnstile", "google-fonts"}
-
 // minimal is a valid entry and its fixtures, for the loader tests to
 // break one piece at a time.
 const (
@@ -207,13 +203,7 @@ func TestCatalogHash(t *testing.T) {
 }
 
 func TestCatalogCount(t *testing.T) {
-	var want []string
-	for _, id := range prdIDs {
-		if !slices.Contains(pendingIDs, id) {
-			want = append(want, id)
-		}
-	}
-	slices.Sort(want)
+	want := slices.Sorted(slices.Values(prdIDs))
 	var got []string
 	for _, tr := range builtin.Trackers() {
 		got = append(got, tr.ID)

@@ -1,0 +1,14 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+frames:
+  match:
+    - https://player.vimeo.com/video/1
+    - https://player.vimeo.com/video/76979871?h=8272103f6e&title=0
+  no_match:
+    - https://player.vimeo.com/video/1?dnt=1
+    - https://player.vimeo.com/video/1?title=0&dnt=1
+    - https://shop.test/video/1
+cookies:
+  match: [{name: vuid, domain: .vimeo.com}]
+  no_match: [vuid, {name: vuid, domain: shop.test}, vimeo_seen]

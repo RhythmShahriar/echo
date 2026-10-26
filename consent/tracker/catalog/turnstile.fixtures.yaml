@@ -1,0 +1,11 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+scripts:
+  match:
+    - https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit
+  no_match:
+    - https://shop.test/turnstile/v0/api.js
+frames:
+  match:
+    - https://challenges.cloudflare.com/cdn-cgi/challenge-platform/h/b/turnstile/if/ov2/av0/rcv/abc/0x4AAATEST/auto/fbE/new/normal/auto/

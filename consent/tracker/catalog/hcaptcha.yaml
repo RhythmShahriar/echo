@@ -1,0 +1,23 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+# hCaptcha: the api.js loader, the challenge frames on its asset hosts
+# and the checks it posts to the hCaptcha API.
+id: hcaptcha
+name: hCaptcha
+vendor: Intuition Machines
+category: necessary
+consent: "no"
+hits:
+  - hosts: [hcaptcha.com, api.hcaptcha.com, api2.hcaptcha.com]
+    paths: [/checksiteconfig, /getcaptcha/**, /checkcaptcha/**]
+scripts:
+  - hosts: [js.hcaptcha.com, hcaptcha.com]
+    paths: [/1/api.js]
+frames:
+  - hosts: ["*.hcaptcha.com"]
+    paths: [/captcha/**]
+docs: https://docs.hcaptcha.com/
+sources:
+  - https://docs.hcaptcha.com/
+  - https://docs.hcaptcha.com/#content-security-policy-settings

@@ -1,0 +1,17 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+hits:
+  match:
+    - {method: POST, url: "https://api.hcaptcha.com/checksiteconfig?v=1&host=shop.test&sitekey=10000000-ffff", type: xhr}
+    - {method: POST, url: "https://hcaptcha.com/getcaptcha/10000000-ffff", type: xhr}
+  no_match:
+    - https://shop.test/checksiteconfig
+    - https://js.hcaptcha.com/1/api.js
+scripts:
+  match:
+    - https://js.hcaptcha.com/1/api.js?render=explicit
+    - https://hcaptcha.com/1/api.js
+frames:
+  match:
+    - https://newassets.hcaptcha.com/captcha/v1/abc123/static/hcaptcha.html#frame=checkbox

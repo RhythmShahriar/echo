@@ -18,7 +18,7 @@ exact text they see. The docs team writes the wiki from this file.
 
 ## Entries
 
-38 of the 47 PRD 12.1 entries; the embeds and necessary services come with T5.
+All 47 PRD 12.1 entries.
 
 Each entry with its consent need, what `consent trackers` shows under Matches and the fix line its issues carry.
 
@@ -62,6 +62,15 @@ Each entry with its consent need, what `consent trackers` shows under Matches an
 | `posthog` | PostHog | analytics | needed | `us.i.posthog.com/e/*, us.i.posthog.com/i/v0/e/*, us.i.posthog.com/batch/* and 17 more` | Initialize PostHog with opt_out_capturing_by_default and call posthog.opt_in_capturing() once the visitor accepts |
 | `segment` | Segment | analytics | needed | `api.segment.io/v1/*, events.eu1.segmentapis.com/v1/*, cdn.segment.com/analytics.js/** and 3 more` | Load analytics.js only after consent, or use Segment's Consent Management to hold events until the visitor accepts |
 | `yandex-metrica` | Yandex Metrica | analytics | needed | `mc.yandex.ru/watch/**, mc.yandex.ru/webvisor/**, mc.yandex.ru/clmap/** and 7 more` | Load Yandex Metrica only after the visitor accepts analytics |
+| `google-maps` | Google Maps | embed | needed | `www.google.com/maps/embed*, www.google.com/maps/embed/**, maps.google.com/maps/embed* and 2 more` | Show a static image with a click-to-load button and load the map only after consent |
+| `vimeo` | Vimeo embed | embed | needed | `player.vimeo.com/video/*` | Add dnt=1 to the Vimeo player URL or load the player only after consent |
+| `youtube` | YouTube embed | embed | needed | `www.youtube.com/api/stats/*, www.youtube.com/youtubei/v1/log_event, youtube.com/api/stats/* and 6 more` | Embed the video from www.youtube-nocookie.com or behind a click-to-load placeholder that loads the player only after consent |
+| `google-fonts` | Google Fonts | functional | no | `fonts.googleapis.com/css, fonts.googleapis.com/css2, fonts.googleapis.com/icon and 1 more` | (none: consent no) |
+| `hcaptcha` | hCaptcha | necessary | no | `hcaptcha.com/checksiteconfig, hcaptcha.com/getcaptcha/**, hcaptcha.com/checkcaptcha/** and 9 more` | (none: consent no) |
+| `paypal` | PayPal checkout | necessary | no | `www.paypal.com/smart/buttons, www.paypal.com/smart/menu, www.paypal.com/smart/card-fields and 1 more` | (none: consent no) |
+| `recaptcha` | Google reCAPTCHA | necessary | no | `www.google.com/recaptcha/api2/*, www.google.com/recaptcha/enterprise/*, www.recaptcha.net/recaptcha/api2/* and 14 more` | (none: consent no) |
+| `stripe` | Stripe.js | necessary | no | `m.stripe.com, js.stripe.com/v3/*.html, m.stripe.network and 3 more` | (none: consent no) |
+| `turnstile` | Cloudflare Turnstile | necessary | no | `challenges.cloudflare.com/cdn-cgi/challenge-platform/**, challenges.cloudflare.com/turnstile/v0/api.js` | (none: consent no) |
 
 Notes users may notice:
 
@@ -73,3 +82,13 @@ Notes users may notice:
 - PostHog `/e/` and `/i/v0/e/` on any host when posthog-js's `ver` and `_` parameters are there; Adobe `/b/ss/` on any host with `AQB` and `AQE`; Matomo `/matomo.php` and `/piwik.php` with `idsite` and `rec`; Plausible `/api/event` when the body is JSON with `n` and `u`.
 - Plausible and Fathom are `exempt` (cookieless) and list no cookies.
 - Matomo and Piwik PRO share the `_pk_` cookies; Echo reports them as `matomo`. Piwik PRO's own cookies are the `stg_` Tag Manager cookies.
+
+## Embeds and necessary services (T5)
+
+- Embeds (category `embed`, consent `needed`): `youtube`, `vimeo` and `google-maps`. Their iframes are hits of kind `frame`; the verdict reports them as `consent/embed`, not as trackers before the choice.
+- YouTube counts only on `www.youtube.com` and `youtube.com` (the `/embed/` frame, `/api/stats/` and `/youtubei/v1/log_event`, the IFrame API scripts and the cookies `VISITOR_INFO1_LIVE`, `VISITOR_PRIVACY_METADATA`, `YSC` and `__Secure-ROLLOUT_TOKEN`, the last two on youtube.com only). `www.youtube-nocookie.com` never counts.
+- Vimeo counts only for a `player.vimeo.com/video/` frame without `dnt=1` and for the `vuid` cookie on vimeo.com.
+- Google Maps counts for the `www.google.com/maps/embed` frame and the Maps JavaScript API (`maps.googleapis.com/maps/api/js`).
+- Necessary services (category `necessary`, consent `no`): `stripe` (Stripe.js), `paypal` (PayPal checkout), `recaptcha` (Google reCAPTCHA, also on www.recaptcha.net), `hcaptcha` and `turnstile` (Cloudflare Turnstile). Google Fonts is category `functional` with consent `no`. These are listed under "Seen, no consent needed", never judged and never held.
+- Google Fonts stylesheet and font loads are reported with kind `script` (a load, never held).
+- For the docs: the Munich Regional Court (LG Muenchen I, 3 O 17493/20, 20 January 2022) held that loading Google Fonts from Google's servers without consent shares the visitor's IP address unlawfully. Echo does not judge it; the docs can suggest self-hosting the fonts.

@@ -1,0 +1,22 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+hits:
+  match:
+    - {method: POST, url: "https://m.stripe.com/6", body: "eyJ2MiI6MX0", type: xhr}
+    - https://m.stripe.com/4
+  no_match:
+    - https://shop.test/6
+    - https://js.stripe.com/v3/
+scripts:
+  match:
+    - https://js.stripe.com/v3/
+    - https://js.stripe.com/basil/stripe.js
+    - https://js.stripe.com/v3/fingerprinted/js/elements-inner-card-1a2b3c.js
+frames:
+  match:
+    - https://js.stripe.com/v3/elements-inner-card-1a2b3c.html#wait=false
+    - https://m.stripe.network/inner.html#url=https%3A%2F%2Fshop.test%2F
+cookies:
+  match: [__stripe_mid, __stripe_sid]
+  no_match: [stripe_mid, __stripe_banner]

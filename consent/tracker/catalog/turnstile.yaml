@@ -1,0 +1,20 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+# Cloudflare Turnstile: the api.js loader and the challenge frame on
+# challenges.cloudflare.com.
+id: turnstile
+name: Cloudflare Turnstile
+vendor: Cloudflare
+category: necessary
+consent: "no"
+scripts:
+  - hosts: [challenges.cloudflare.com]
+    paths: [/turnstile/v0/api.js]
+frames:
+  - hosts: [challenges.cloudflare.com]
+    paths: [/cdn-cgi/challenge-platform/**]
+docs: https://developers.cloudflare.com/turnstile/get-started/client-side-rendering/
+sources:
+  - https://developers.cloudflare.com/turnstile/get-started/client-side-rendering/
+  - https://developers.cloudflare.com/turnstile/reference/content-security-policy/

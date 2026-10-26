@@ -129,8 +129,9 @@ func TestScriptNeverHeld(t *testing.T) {
 		}
 		for _, f := range ff.Hits.Match {
 			r := f.request()
-			if f.Body == "" && !builtin.Hold(r) {
-				t.Errorf("%s: hit %s isn't held", e.info.ID, f.URL)
+			// A necessary service is never held; every other hit is.
+			if held := builtin.Hold(r); f.Body == "" && held != (e.info.Need != consent.NeedNo) {
+				t.Errorf("%s: hit %s held %v, need %s", e.info.ID, f.URL, held, e.info.Need)
 			}
 			r.Type = "script"
 			if builtin.Hold(r) {

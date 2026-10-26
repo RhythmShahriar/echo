@@ -1,0 +1,15 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+frames:
+  match:
+    - https://www.google.com/maps/embed?pb=!1m18!1m12
+    - https://www.google.com/maps/embed/v1/place?key=AIzaTEST&q=Berlin
+  no_match:
+    - https://www.google.com/maps/place/Berlin
+    - https://shop.test/maps/embed?pb=1
+scripts:
+  match:
+    - https://maps.googleapis.com/maps/api/js?key=AIzaTEST&callback=initMap
+  no_match:
+    - https://maps.googleapis.com/maps/api/geocode/json

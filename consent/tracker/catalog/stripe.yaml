@@ -1,0 +1,27 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+# Stripe.js and its fraud-prevention signals. Payments need it, so it is
+# listed under "Seen, no consent needed" and never judged or held.
+id: stripe
+name: Stripe.js
+vendor: Stripe
+category: necessary
+consent: "no"
+hits:
+  - hosts: [m.stripe.com]
+scripts:
+  - hosts: [js.stripe.com]
+    paths: [/v3, "/*/stripe.js", /v3/fingerprinted/**]
+frames:
+  - hosts: [js.stripe.com]
+    paths: ["/v3/*.html"]
+  - hosts: [m.stripe.network]
+cookies:
+  - __stripe_mid
+  - __stripe_sid
+docs: https://docs.stripe.com/js
+sources:
+  - https://docs.stripe.com/js
+  - https://docs.stripe.com/security/guide
+  - https://stripe.com/legal/cookies-policy
