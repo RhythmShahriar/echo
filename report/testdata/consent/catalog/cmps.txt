@@ -1,0 +1,6 @@
+CMP        DETECTED BY                                ACCEPT       REJECT                        STATE FROM
+cookiebot  #CybotCookiebotDialog, window.Cookiebot    button, api  first layer, api              CookieConsent cookie
+onetrust   #onetrust-banner-sdk, window.OneTrust      button, api  first layer or settings, api  OptanonConsent cookie
+generic    buttons whose text means accept or reject  button       first layer or settings       banner gone and stays gone
+           (30 languages)
+3 CMPs, rules version 1.2.0 (sha256 fake...). A banner none of these find: --accept-selector and --reject-selector.

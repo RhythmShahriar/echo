@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites name="rhythm-echo consent" tests="3" failures="0" skipped="0" time="21.230">
+  <testsuite name="/" tests="3" failures="0" skipped="0" time="42.300" timestamp="2026-10-26T09:20:41Z">
+    <properties>
+      <property name="consent.json.sha256" value="e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"></property>
+    </properties>
+    <testcase name="/ · No choice" classname="rhythm-echo.consent" time="14.100">
+      <system-out>Google Analytics 4: 2 cookieless pings (gcs G100); no tracker cookies; Meta Pixel held back</system-out>
+    </testcase>
+    <testcase name="/ · Accept" classname="rhythm-echo.consent" time="14.100">
+      <system-out>Google Analytics 4, Google Ads, Meta Pixel fired; update granted at 2.0s; kept on 1 more page</system-out>
+    </testcase>
+    <testcase name="/ · Reject" classname="rhythm-echo.consent" time="14.100">
+      <system-out>nothing fired; update denied at 2.0s; kept on 1 more page</system-out>
+    </testcase>
+  </testsuite>
+</testsuites>

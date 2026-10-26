@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites name="rhythm-echo consent" tests="3" failures="0" skipped="2" time="21.230">
+  <testsuite name="/" tests="3" failures="0" skipped="2" time="42.300" timestamp="2026-10-26T09:20:41Z">
+    <properties>
+      <property name="consent.json.sha256" value="e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"></property>
+    </properties>
+    <testcase name="/ · No choice" classname="rhythm-echo.consent" time="14.100">
+      <system-out>nothing fired</system-out>
+    </testcase>
+    <testcase name="/ · Accept" classname="rhythm-echo.consent" time="14.100">
+      <skipped message="inconclusive: no_banner">Cookiebot is on the page but no banner showed within 10s</skipped>
+    </testcase>
+    <testcase name="/ · Reject" classname="rhythm-echo.consent" time="14.100">
+      <skipped message="inconclusive: no_banner">Cookiebot is on the page but no banner showed within 10s</skipped>
+    </testcase>
+  </testsuite>
+</testsuites>

@@ -136,3 +136,10 @@ Only on pages with Google hits. These issues name no tracker: their key ends in 
 - (8) `Run details`: Echo, Browser, OS, User agent, Geo (`none`), Locale, Time zone, Viewport, Started (UTC), Duration, Policy, Tracker hits, Hosts mapped, Sandbox, TLS, Tracker catalog and CMP rules (`1.2.0 (sha256 4be1..., 47 entries)`), Network, Result, Evidence folder.
 - (9) `Comparison against <name> from <time>`: `Change | What | Page | Run | Before and after`.
 - Footer: `consent.HonestLimits`, one paragraph each, backticks as code.
+
+## V11 JUnit and catalog tables
+
+- `report.xml` (`--junit`): `<testsuites name="rhythm-echo consent">` with `tests`, `failures`, `skipped` and `time`; one `<testsuite name="<path>">` per page (`<site> <path>` with `--sites`) carrying `<properties><property name="consent.json.sha256" value="<hash>"></property></properties>`; one `<testcase name="<path> · <Run>" classname="rhythm-echo.consent" time="14.100">` per run with one `<failure message="<check>: <title>" type="error">` per counted error-level issue (the detail and `fix: <fix>` as its text), `<skipped message="inconclusive: <reason>">` with the run's detail for a run that couldn't choose, and the run's terminal summary as `<system-out>` for a run that passed. Warnings, notices and ignored issues never fail a case. Times are seconds with three decimals.
+- `consent cmps`: the table `CMP  DETECTED BY  ACCEPT  REJECT  STATE FROM`, columns two spaces apart, the generic rule's `(30 languages)` on a second line under DETECTED BY, then `<n> CMPs, rules version <v> (sha256 <first 4>...). A banner none of these find: --accept-selector and --reject-selector.`
+- `consent trackers`: `TRACKER  NAME  CATEGORY  CONSENT  MATCHES` (CONSENT is `needed`, `exempt` or `no`), then `<n> trackers, catalogue version <v> (sha256 <first 4>...). Add your own under consent: trackers:.` The version reads `unknown` when the stage isn't linked into the build.
+- `consent cmps --json` and `consent trackers --json`: the `consent-catalog` envelope, data `{cmps}` or `{trackers}` with `catalog` and `rules` (version, sha256, count) from the linked stages.

@@ -4,16 +4,10 @@
 package report
 
 import (
-	"errors"
-	"io"
 	"time"
 
 	"github.com/RhythmShahriar/echo/consent"
 )
-
-// errConsentNotBuilt is what every consent writer returns until it is
-// written.
-var errConsentNotBuilt = errors.New("report: consent writer not built yet")
 
 // ConsentTextOptions shape the terminal output of the consent commands.
 type ConsentTextOptions struct {
@@ -74,17 +68,4 @@ type VerifySignature struct {
 	Present bool   `json:"present"`
 	OK      bool   `json:"ok"`
 	Key     string `json:"key"` // the public key file, or its id
-}
-
-// WriteConsentJUnit writes a consent check as JUnit XML, one test case
-// per page and run; consentSHA256 is quoted in the properties.
-func WriteConsentJUnit(w io.Writer, r *consent.Result, consentSHA256 string) error {
-	return errConsentNotBuilt
-}
-
-// WriteConsentCatalog writes consent cmps (kind "cmps") or consent
-// trackers (kind "trackers"), as a table or as a consent-catalog
-// envelope.
-func WriteConsentCatalog(w io.Writer, cmps []consent.CMPRuleInfo, trackers []consent.TrackerInfo, kind string, asJSON bool, o ConsentTextOptions) error {
-	return errConsentNotBuilt
 }
