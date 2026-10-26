@@ -43,6 +43,7 @@ config file. The help is `rhythm-echo mcp --help`.
 | `snapshot` | Runs the actions and saves the result as a snapshot (`name`, `actions`) | runs the actions, writes `.echo/snapshots` |
 | `compare` | Runs the actions again and compares with a snapshot (`snapshot`, the latest when empty): verdict, counts and every change | runs the actions, writes `.echo/runs` |
 | `check_domain` | SPF, DKIM, DMARC, MX, MTA-STS, TLS-RPT and BIMI for a sending `domain` (`provider` when known) | no |
+| `check_consent` | Cookie consent on a page: no choice, Accept and Reject in a real browser, tracking hits held, Consent Mode decoded (`url`, `runs`, `consent_mode`, `geo`). Needs no running Echo; only for sites you own or are authorised to test | loads the page, writes `.echo/consent` |
 
 ## What the agent sees
 

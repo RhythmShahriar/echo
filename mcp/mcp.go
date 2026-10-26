@@ -243,7 +243,8 @@ func (s *Server) initialize(requested string) map[string]any {
 		"serverInfo":      map[string]any{"name": "rhythm-echo", "title": "Echo", "version": s.Version},
 		"instructions": "Echo records every email, SMS, webhook and API call a site sends. " +
 			"list_messages and get_message read what was captured; latest_code gives a one-time code for a login or sign-up test; " +
-			"run_action, snapshot and compare run the actions in .echo/config.yaml; check_domain checks SPF, DKIM, DMARC and MX. " +
+			"run_action, snapshot and compare run the actions in .echo/config.yaml; check_domain checks SPF, DKIM, DMARC and MX; " +
+			"check_consent loads a page with no choice, Accept and Reject on its cookie banner and reports trackers that fired before the choice or after Reject. " +
 			"Credentials in results are masked.",
 	}
 }
