@@ -1,0 +1,50 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+# Cookiebot (Usercentrics). The JavaScript API (Cookiebot.consent,
+# submitCustomConsent, renew) and the CookieConsent cookie are in the
+# developer documentation. It doesn't list the dialog's element IDs:
+# those are the ones the dialog Cookiebot serves carries, read on public
+# pages on 2026-10-26 (docs/changes/consent-cmp.md records this).
+id: cookiebot
+name: Cookiebot
+priority: 10
+detect:
+  selectors: ["#CybotCookiebotDialog"]
+  globals: [Cookiebot]
+  scripts: [consent.cookiebot.com/uc.js, consent.cookiebot.eu/uc.js]
+banner:
+  selector: "#CybotCookiebotDialog"
+accept:
+  - "#CybotCookiebotDialogBodyLevelButtonLevelOptinAllowAll"
+  - "#CybotCookiebotDialogBodyButtonAccept"
+reject:
+  first_layer: ["#CybotCookiebotDialogBodyButtonDecline"]
+  second_layer:
+    # Older dialogs have a Customize button; newer ones a Details tab.
+    open: ["#CybotCookiebotDialogBodyLevelButtonCustomize", "#CybotCookiebotDialogNavDetails"]
+    toggles_off: "input.CybotCookiebotDialogBodyLevelButton:not([disabled])"
+    save: ["#CybotCookiebotDialogBodyLevelButtonLevelOptinAllowallSelection"]
+reopen:
+  api: reopen
+api:
+  accept: Cookiebot.submitCustomConsent(true,true,true)
+  reject: Cookiebot.submitCustomConsent(false,false,false)
+  reopen: Cookiebot.renew()
+  state: JSON.stringify(Cookiebot.consent)
+verify:
+  parser: cookiebot
+  cookies: [CookieConsent]
+  accepted: {statistics: true, marketing: true}
+  rejected: {statistics: false, marketing: false}
+sources:
+  - https://www.cookiebot.com/en/developer/
+fixtures:
+  - testdata/cookiebot/first-layer.html
+  - testdata/cookiebot/second-layer.html
+  - testdata/cookiebot/hidden.html
+  - testdata/cookiebot/late.html
+  - testdata/cookiebot/two-banners.html
+  - testdata/cookiebot/text-only.html
+  - testdata/cookiebot/script-no-banner.html
+  - testdata/cookiebot/details-tab.html

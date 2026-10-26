@@ -1,0 +1,19 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+# The generic rule: a cookie banner no named rule knows. It has no
+# selectors; consent/cmp/generic.go finds a fixed, sticky, high
+# (z-index 1000 or more) or modal element whose text has a cookie or
+# consent word; its buttons are ranked by text in 30 languages with the
+# phrases of consent/cmp/generic_words.yaml. A choice is verified by the
+# banner being gone after the click and still gone after a reload.
+# It is tried last: only with --cmp auto or --cmp generic.
+id: generic
+name: Generic banner
+priority: 1000
+verify:
+  parser: banner
+sources:
+  - https://www.edpb.europa.eu/our-work-tools/our-documents/other/report-work-undertaken-cookie-banner-taskforce_en
+fixtures:
+  - testdata/generic/expect.yaml

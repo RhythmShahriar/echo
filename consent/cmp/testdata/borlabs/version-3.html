@@ -1,0 +1,46 @@
+<!doctype html>
+<!-- Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+     SPDX-License-Identifier: MIT -->
+<!-- Replica of a Borlabs Cookie page for Echo's CMP tests (Borlabs Cookie 3 markup, Reject only in the preferences), written
+     fresh from Borlabs Cookie's public JavaScript API and knowledge base pages
+     and the markup its dialog carries on public pages; none of Borlabs Cookie's code.
+     Source: https://borlabs.io/kb/javascript-api-v3/
+     Captured 2026-10-26. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Shop with Borlabs Cookie: Borlabs Cookie 3 markup, Reject only in the preferences</title>
+<style>
+  body { font: 16px/1.5 sans-serif; margin: 0; padding: 24px; }
+  #BorlabsCookieBox { display: none; position: fixed; left: 0; right: 0; bottom: 0; z-index: 999999; background: #fff;
+    border-top: 2px solid #0063e3; padding: 16px 24px; box-shadow: 0 -4px 16px rgba(0,0,0,.2); }
+  #BorlabsCookieBox.show-cookie-box { display: block; }
+  .replica-prefs { display: none; }
+  .replica-open .replica-prefs { display: block; }
+  ._brlbs-btn, .brlbs-btn { display: inline-block; margin: 4px 8px 4px 0; padding: 8px 16px; font-size: 15px; border: 1px solid #333; }
+  .newsletter { position: fixed; top: 24px; right: 24px; z-index: 1000; width: 280px; background: #ffe; border: 1px solid #aa8; padding: 16px; }
+</style>
+</head>
+<body>
+<h1>Corner Shop</h1>
+<p>Hand-made goods, shipped from a small workshop.</p>
+<template id="replica-banner">
+<div id="BorlabsCookieBox" class="brlbs-cmpnt-container" data-borlabs-cookie-version="3">
+  <div class="brlbs-cmpnt-dialog brlbs-cmpnt-dialog-box" role="dialog" aria-label="Privacy Preference">
+    <p class="brlbs-cmpnt-p">We need your consent before you can continue on our website.</p>
+    <button type="button" class="brlbs-btn brlbs-btn-accept-all" data-borlabs-cookie-actions="accept-all">Accept all</button>
+    <button type="button" class="brlbs-btn brlbs-btn-preferences" data-borlabs-cookie-actions="preferences">Individual Privacy Preferences</button>
+    <div class="replica-prefs">
+      <label class="brlbs-checkbox"><input type="checkbox" value="essential" checked disabled> Essential</label>
+      <label class="brlbs-checkbox"><input type="checkbox" value="statistics" data-borlabs-cookie-checkbox> Statistics</label>
+      <label class="brlbs-checkbox"><input type="checkbox" value="marketing" data-borlabs-cookie-checkbox> Marketing</label>
+      <label class="brlbs-checkbox"><input type="checkbox" value="external-media" data-borlabs-cookie-checkbox> External Media</label>
+      <button type="button" class="brlbs-btn brlbs-btn-save" data-borlabs-cookie-actions="save-consents">Save</button>
+    </div>
+  </div>
+</div>
+</template>
+<script id="borlabs-cookie-js" src="wp-content/plugins/borlabs-cookie/assets/javascript/borlabs-cookie.min.js" data-show="now" data-version="3"></script>
+</body>
+</html>

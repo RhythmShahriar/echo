@@ -1,0 +1,68 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+# Usercentrics. The banner lives in a shadow root: #usercentrics-root
+# (Browser UI v2, data-testid controls) or #usercentrics-cmp-ui (Web CMP
+# v3, the #accept, #deny, #more and #save controls of the custom CSS
+# documentation). UC_UI is the v2 API, __ucCmp the v3 one; the calls try
+# UC_UI first. A closed shadow root can't be clicked into: the banner is
+# still seen (hit tests land on its host) and the choice falls back to
+# the API under --click button,api.
+id: usercentrics
+name: Usercentrics
+priority: 10
+detect:
+  selectors: ["#usercentrics-root", "#usercentrics-cmp-ui"]
+  globals: [UC_UI, __ucCmp]
+  scripts: [app.usercentrics.eu, web.cmp.usercentrics.eu]
+banner:
+  selector:
+    - "#usercentrics-root ::shadow [data-testid=uc-default-banner]"
+    - "#usercentrics-cmp-ui ::shadow #uc-main-dialog"
+accept:
+  - "#usercentrics-root ::shadow [data-testid=uc-accept-all-button]"
+  - "#usercentrics-cmp-ui ::shadow #accept"
+reject:
+  first_layer:
+    - "#usercentrics-root ::shadow [data-testid=uc-deny-all-button]"
+    - "#usercentrics-cmp-ui ::shadow #deny"
+  second_layer:
+    open:
+      - "#usercentrics-root ::shadow [data-testid=uc-more-button]"
+      - "#usercentrics-cmp-ui ::shadow #more"
+    toggles_off:
+      - "#usercentrics-root ::shadow input[type=checkbox]:not([disabled])"
+      - "#usercentrics-cmp-ui ::shadow .uc-toggle:not([disabled])"
+    save:
+      - "#usercentrics-root ::shadow [data-testid=uc-save-button]"
+      - "#usercentrics-cmp-ui ::shadow #save"
+reopen:
+  selectors: ["#usercentrics-cmp-ui ::shadow #uc-privacy-button", "#usercentrics-root ::shadow [data-testid=uc-privacy-button]"]
+  api: reopen
+api:
+  accept: "(window.UC_UI ? UC_UI.acceptAllConsents() : __ucCmp.acceptAllConsents())"
+  reject: "(window.UC_UI ? UC_UI.denyAllConsents() : __ucCmp.denyAllConsents())"
+  reopen: "(window.UC_UI ? UC_UI.showSecondLayer() : __ucCmp.showSecondLayer())"
+  state: "JSON.stringify(UC_UI.getServicesBaseInfo().map(s => ({id: s.id, status: s.consent.status})))"
+verify:
+  parser: usercentrics
+  storage: [uc_settings, ucData, uc_user_interaction]
+  # Consent is per service, which a site sets up; the state reader
+  # reports whether any service is granted or denied. Essential
+  # services stay granted after Deny, so Reject is "some service
+  # denied" and Accept "none denied".
+  accepted: {services_denied: false}
+  rejected: {services_denied: true}
+sources:
+  - https://usercentrics.com/docs/web/features/custom-css/configuration/
+  - https://usercentrics.atlassian.net/wiki/spaces/SKB/pages/705593353
+  - https://usercentrics.com/docs/web/features/events/uc-consent/
+fixtures:
+  - testdata/usercentrics/first-layer.html
+  - testdata/usercentrics/second-layer.html
+  - testdata/usercentrics/hidden.html
+  - testdata/usercentrics/late.html
+  - testdata/usercentrics/two-banners.html
+  - testdata/usercentrics/text-only.html
+  - testdata/usercentrics/script-no-banner.html
+  - testdata/usercentrics/closed-shadow.html

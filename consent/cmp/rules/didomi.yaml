@@ -1,0 +1,57 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+# Didomi. The JavaScript API (setUserAgreeToAll, setUserDisagreeToAll,
+# preferences.show, getCurrentUserStatus) is in the Web SDK reference,
+# the didomi_token and euconsent-v2 cookies on its cookies page; the
+# notice and preferences markup is what Didomi serves on public pages,
+# read on 2026-10-26. A TCF setup may keep the choice in the TC string
+# alone, so verify.tcf reads euconsent-v2 when didomi_token says
+# nothing.
+id: didomi
+name: Didomi
+priority: 10
+detect:
+  selectors: ["#didomi-host", "#didomi-notice"]
+  globals: [Didomi, didomiOnReady]
+  scripts: [sdk.privacy-center.org]
+banner:
+  selector: "#didomi-notice"
+accept: ["#didomi-notice-agree-button"]
+reject:
+  first_layer: ["#didomi-notice-disagree-button"]
+  second_layer:
+    open: ["#didomi-notice-learn-more-button"]
+    # Each purpose has an Agree and a Disagree button (aria-pressed):
+    # every Disagree not yet pressed is pressed.
+    press_off:
+      - ".didomi-consent-popup-categories button[data-choice=disagree]"
+      - ".didomi-consent-popup-categories .didomi-components-radio__option--disagree"
+    save: [".didomi-consent-popup-actions button[aria-label*=Save]"]
+reopen:
+  api: reopen
+api:
+  accept: Didomi.setUserAgreeToAll()
+  reject: Didomi.setUserDisagreeToAll()
+  reopen: Didomi.preferences.show()
+  state: JSON.stringify(Didomi.getCurrentUserStatus())
+verify:
+  parser: didomi
+  cookies: [didomi_token, euconsent-v2]
+  tcf: true
+  # Purposes by Didomi ID: cookies is TCF purpose 1 (store and access
+  # information on a device), create_ads_profile purpose 3.
+  accepted: {cookies: true}
+  rejected: {cookies: false, create_ads_profile: false}
+sources:
+  - https://developers.didomi.io/cmp/web-sdk/reference/api
+  - https://docs.didomi.io/get-started/general/cookies-and-local-storage
+fixtures:
+  - testdata/didomi/first-layer.html
+  - testdata/didomi/second-layer.html
+  - testdata/didomi/hidden.html
+  - testdata/didomi/late.html
+  - testdata/didomi/two-banners.html
+  - testdata/didomi/text-only.html
+  - testdata/didomi/script-no-banner.html
+  - testdata/didomi/tcf.html

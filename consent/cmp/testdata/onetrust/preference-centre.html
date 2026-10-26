@@ -1,0 +1,57 @@
+<!doctype html>
+<!-- Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+     SPDX-License-Identifier: MIT -->
+<!-- Replica of a OneTrust page for Echo's CMP tests (Reject only in the preference center, styled switches with performance and targeting pre-ticked), written
+     fresh from OneTrust's public JavaScript API documentation and the
+     banner markup OneTrust serves on public pages; none of OneTrust's code.
+     Source: https://developer.onetrust.com/onetrust/docs/javascript-api
+     Captured 2026-10-26. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Shop with OneTrust: Reject only in the preference center, styled switches with performance and targeting pre-ticked</title>
+<style>
+  body { font: 16px/1.5 sans-serif; margin: 0; padding: 24px; }
+  #onetrust-banner-sdk { position: fixed; left: 0; right: 0; bottom: 0; z-index: 2147483645; background: #fff;
+    border-top: 2px solid #3860be; padding: 16px 24px; box-shadow: 0 -4px 16px rgba(0,0,0,.2); }
+  #onetrust-pc-sdk { display: none; position: fixed; top: 10%; left: 20%; right: 20%; z-index: 2147483646;
+    background: #fff; border: 1px solid #333; padding: 16px; }
+  #onetrust-consent-sdk button { margin: 4px 8px 4px 0; padding: 8px 16px; font-size: 15px; }
+  .ot-cat-item { padding: 6px 0; }
+  .ot-switch-input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+  .ot-switch { display: inline-block; padding: 4px 12px; border: 1px solid #333; border-radius: 12px; cursor: pointer; }
+  .newsletter { position: fixed; top: 24px; right: 24px; z-index: 1000; width: 280px; background: #ffe; border: 1px solid #aa8; padding: 16px; }
+</style>
+</head>
+<body>
+<h1>Corner Shop</h1>
+<p>Hand-made goods, shipped from a small workshop.</p>
+<template id="replica-banner">
+<div id="onetrust-consent-sdk">
+  <div id="onetrust-banner-sdk" class="otFlat" role="region" aria-label="Cookie banner">
+    <div id="onetrust-policy">
+      <h2 id="onetrust-policy-title">We value your privacy</h2>
+      <p id="onetrust-policy-text">We use cookies to improve your experience and for marketing. <a href="/cookie-policy">Cookie Policy</a></p>
+    </div>
+    <div id="onetrust-button-group-parent">
+      <div id="onetrust-button-group">
+        <button id="onetrust-pc-btn-handler">Cookie Settings</button>
+        <button id="onetrust-accept-btn-handler">Accept All Cookies</button>
+      </div>
+    </div>
+  </div>
+  <div id="onetrust-pc-sdk" class="otPcCenter" role="dialog" aria-modal="true" aria-labelledby="ot-pc-title">
+    <h2 id="ot-pc-title">Privacy Preference Center</h2>
+    <div class="ot-cat-item" data-optanongroupid="C0001"><span>Strictly Necessary Cookies</span> <span class="ot-always-active">Always Active</span></div>
+    <div class="ot-cat-item" data-optanongroupid="C0002"><input type="checkbox" id="ot-group-id-C0002" class="category-switch-handler ot-switch-input" name="ot-group-id-C0002" data-optanongroupid="C0002" checked> <label class="ot-switch" for="ot-group-id-C0002">Performance Cookies</label></div>
+    <div class="ot-cat-item" data-optanongroupid="C0003"><input type="checkbox" id="ot-group-id-C0003" class="category-switch-handler ot-switch-input" name="ot-group-id-C0003" data-optanongroupid="C0003"> <label class="ot-switch" for="ot-group-id-C0003">Functional Cookies</label></div>
+    <div class="ot-cat-item" data-optanongroupid="C0004"><input type="checkbox" id="ot-group-id-C0004" class="category-switch-handler ot-switch-input" name="ot-group-id-C0004" data-optanongroupid="C0004" checked> <label class="ot-switch" for="ot-group-id-C0004">Targeting Cookies</label></div>
+    <button class="ot-pc-refuse-all-handler">Reject All</button>
+    <button class="save-preference-btn-handler onetrust-close-btn-handler">Confirm My Choices</button>
+  </div>
+</div>
+</template>
+<script src="cdn.cookielaw.org/scripttemplates/otSDKStub.js" data-domain-script="00000000-0000-0000-0000-000000000000" data-show="now"></script>
+</body>
+</html>

@@ -1,0 +1,47 @@
+<!doctype html>
+<!-- Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+     SPDX-License-Identifier: MIT -->
+<!-- Replica of a Usercentrics page for Echo's CMP tests (returning visitor: the banner is drawn and hidden), written
+     fresh from Usercentrics's public Browser UI and Web CMP documentation and
+     the markup its banner carries on public pages; none of Usercentrics's code.
+     Source: https://usercentrics.com/docs/web/features/custom-css/configuration/
+     Captured 2026-10-26. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Shop with Usercentrics: returning visitor: the banner is drawn and hidden</title>
+<style>
+  body { font: 16px/1.5 sans-serif; margin: 0; padding: 24px; }
+  .newsletter { position: fixed; top: 24px; right: 24px; z-index: 1000; width: 280px; background: #ffe; border: 1px solid #aa8; padding: 16px; }
+</style>
+</head>
+<body>
+<h1>Corner Shop</h1>
+<p>Hand-made goods, shipped from a small workshop.</p>
+<div id="usercentrics-root" data-created-at="replica"></div>
+<template id="replica-banner">
+<style>
+  .replica-dialog { position: fixed; left: 0; right: 0; bottom: 0; z-index: 2147483647; background: #fff; border-top: 2px solid #0045a5;
+    padding: 16px 24px; font: 15px/1.5 sans-serif; box-shadow: 0 -4px 16px rgba(0,0,0,.2); }
+  .replica-second { display: none; }
+  button { margin: 4px 8px 4px 0; padding: 8px 16px; font-size: 15px; }
+</style>
+<div class="replica-dialog" data-testid="uc-default-banner" role="dialog" aria-label="Privacy Settings">
+  <p>We use cookies and similar technologies on our website. You can change your choice at any time in the privacy settings.</p>
+  <div class="replica-second" data-testid="uc-second-layer">
+    <label><input type="checkbox" data-service="H1Vl5NidjWX" checked disabled> Usercentrics Consent Management Platform</label><br>
+    <label><input type="checkbox" data-service="HkocEodjb7"> Google Analytics</label><br>
+    <label><input type="checkbox" data-service="ko1w5PpFl"> Facebook Pixel</label><br>
+    <button data-testid="uc-save-button">Save Settings</button>
+  </div>
+  <div>
+    <button data-testid="uc-more-button">Settings</button>
+    <button data-testid="uc-deny-all-button">Deny</button>
+    <button data-testid="uc-accept-all-button">Accept All</button>
+  </div>
+</div>
+</template>
+<script id="usercentrics-cmp" src="app.usercentrics.eu/browser-ui/latest/loader.js" data-settings-id="replica" data-show="hidden"></script>
+</body>
+</html>

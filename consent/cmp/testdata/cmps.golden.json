@@ -1,0 +1,117 @@
+{
+  "Info": {
+    "version": "1.2.0",
+    "sha256": "8979fbe04741aac1bac658d5022b1fabaf7e7663607c6bc75865733b54e15d37",
+    "count": 9
+  },
+  "Rules": [
+    {
+      "ID": "cookiebot",
+      "Name": "Cookiebot",
+      "DetectedBy": "#CybotCookiebotDialog, window.Cookiebot",
+      "Accept": "button, api",
+      "Reject": "first layer or settings, api",
+      "StateFrom": "CookieConsent cookie",
+      "Sources": [
+        "https://www.cookiebot.com/en/developer/"
+      ]
+    },
+    {
+      "ID": "didomi",
+      "Name": "Didomi",
+      "DetectedBy": "#didomi-host, window.Didomi",
+      "Accept": "button, api",
+      "Reject": "first layer or settings, api",
+      "StateFrom": "didomi_token cookie",
+      "Sources": [
+        "https://developers.didomi.io/cmp/web-sdk/reference/api",
+        "https://docs.didomi.io/get-started/general/cookies-and-local-storage"
+      ]
+    },
+    {
+      "ID": "onetrust",
+      "Name": "OneTrust",
+      "DetectedBy": "#onetrust-banner-sdk, window.OneTrust",
+      "Accept": "button, api",
+      "Reject": "first layer or settings, api",
+      "StateFrom": "OptanonConsent cookie",
+      "Sources": [
+        "https://developer.onetrust.com/onetrust/docs/javascript-api"
+      ]
+    },
+    {
+      "ID": "usercentrics",
+      "Name": "Usercentrics",
+      "DetectedBy": "#usercentrics-root (shadow DOM), window.UC_UI",
+      "Accept": "button, api",
+      "Reject": "first layer or settings, api",
+      "StateFrom": "uc_settings storage",
+      "Sources": [
+        "https://usercentrics.com/docs/web/features/custom-css/configuration/",
+        "https://usercentrics.atlassian.net/wiki/spaces/SKB/pages/705593353",
+        "https://usercentrics.com/docs/web/features/events/uc-consent/"
+      ]
+    },
+    {
+      "ID": "borlabs",
+      "Name": "Borlabs Cookie",
+      "DetectedBy": "#BorlabsCookieBox, window.BorlabsCookie",
+      "Accept": "button",
+      "Reject": "first layer or settings",
+      "StateFrom": "borlabs-cookie cookie",
+      "Sources": [
+        "https://borlabs.io/kb/javascript-api/",
+        "https://borlabs.io/kb/javascript-api-v3/",
+        "https://borlabs.io/kb/what-information-does-borlabs-cookie-store/"
+      ]
+    },
+    {
+      "ID": "complianz",
+      "Name": "Complianz",
+      "DetectedBy": "#cmplz-cookiebanner-container, window.complianz",
+      "Accept": "button",
+      "Reject": "first layer or settings",
+      "StateFrom": "cmplz_* cookies",
+      "Sources": [
+        "https://complianz.io/add-a-link-to-show-the-cookie-banner/",
+        "https://complianz.io/cookie-banner-does-not-appear/",
+        "https://wordpress.org/plugins/complianz-gdpr/"
+      ]
+    },
+    {
+      "ID": "cookieyes",
+      "Name": "CookieYes",
+      "DetectedBy": ".cky-consent-container, window.getCkyConsent",
+      "Accept": "button",
+      "Reject": "first layer or settings",
+      "StateFrom": "cookieyes-consent cookie",
+      "Sources": [
+        "https://www.cookieyes.com/documentation/retrieving-consent-data-using-api-getckyconsent/",
+        "https://wordpress.org/plugins/cookie-law-info/"
+      ]
+    },
+    {
+      "ID": "iubenda",
+      "Name": "iubenda",
+      "DetectedBy": "#iubenda-cs-banner, window._iub",
+      "Accept": "button, api",
+      "Reject": "first layer or settings, api",
+      "StateFrom": "_iub_cs-* cookies",
+      "Sources": [
+        "https://www.iubenda.com/en/help/1205-how-to-configure-your-cookie-solution-advanced-guide",
+        "https://www.iubenda.com/en/help/680"
+      ]
+    },
+    {
+      "ID": "generic",
+      "Name": "Generic banner",
+      "DetectedBy": "buttons whose text means accept or reject (30 languages)",
+      "Accept": "button",
+      "Reject": "first layer or settings",
+      "StateFrom": "banner gone and stays gone",
+      "Sources": [
+        "https://www.edpb.europa.eu/our-work-tools/our-documents/other/report-work-undertaken-cookie-banner-taskforce_en"
+      ]
+    }
+  ]
+}

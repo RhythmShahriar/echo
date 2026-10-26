@@ -1,0 +1,79 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+# What Echo should see on each Complianz replica page (format in
+# ../README.md). found, present, banner_after_ms, detected_by and the
+# layers are checked in a real browser by the testbed's X8; sees answers
+# the FakeTab tests of consent/cmp.
+cmp: complianz
+pages:
+  - page: first-layer.html
+    found: true
+    present: true
+    detected_by: "selector:#cmplz-cookiebanner-container and global:complianz"
+    accept_layer: 1
+    reject_layer: 1
+    sees:
+      selectors: ["#cmplz-cookiebanner-container", ".cmplz-cookiebanner"]
+      globals: [complianz, cmplz_set_cookie]
+      scripts: [complianz-gdpr/cookiebanner/js/complianz]
+      banner: true
+      controls: [".cmplz-accept", ".cmplz-deny", ".cmplz-view-preferences"]
+  - page: second-layer.html
+    found: true
+    present: true
+    detected_by: "selector:#cmplz-cookiebanner-container and global:complianz"
+    accept_layer: 1
+    reject_layer: 2
+    sees:
+      selectors: ["#cmplz-cookiebanner-container", ".cmplz-cookiebanner"]
+      globals: [complianz, cmplz_set_cookie]
+      scripts: [complianz-gdpr/cookiebanner/js/complianz]
+      banner: true
+      controls: [".cmplz-accept", ".cmplz-view-preferences"]
+      settings: [".cmplz-save-preferences"]
+      toggles: [false, false, false]
+  - page: hidden.html
+    found: false
+    present: true
+    detected_by: "selector:#cmplz-cookiebanner-container and global:complianz"
+    sees:
+      selectors: ["#cmplz-cookiebanner-container", ".cmplz-cookiebanner"]
+      globals: [complianz, cmplz_set_cookie]
+      scripts: [complianz-gdpr/cookiebanner/js/complianz]
+  - page: late.html
+    found: true
+    present: true
+    banner_after_ms: 4000
+    detected_by: "selector:#cmplz-cookiebanner-container and global:complianz"
+    accept_layer: 1
+    reject_layer: 1
+    sees:
+      selectors: ["#cmplz-cookiebanner-container", ".cmplz-cookiebanner"]
+      globals: [complianz, cmplz_set_cookie]
+      scripts: [complianz-gdpr/cookiebanner/js/complianz]
+      banner: true
+      controls: [".cmplz-accept", ".cmplz-deny", ".cmplz-view-preferences"]
+  - page: two-banners.html
+    found: true
+    present: true
+    detected_by: "selector:#cmplz-cookiebanner-container and global:complianz"
+    accept_layer: 1
+    reject_layer: 1
+    sees:
+      selectors: ["#cmplz-cookiebanner-container", ".cmplz-cookiebanner"]
+      globals: [complianz, cmplz_set_cookie]
+      scripts: [complianz-gdpr/cookiebanner/js/complianz]
+      banner: true
+      controls: [".cmplz-accept", ".cmplz-deny", ".cmplz-view-preferences"]
+      decoys: ["#newsletter-accept", ".newsletter-close"]
+  - page: text-only.html
+    found: false
+    present: false
+  - page: script-no-banner.html
+    found: false
+    present: true
+    detected_by: "global:complianz and script:complianz-gdpr/cookiebanner/js/complianz"
+    sees:
+      globals: [complianz, cmplz_set_cookie]
+      scripts: [complianz-gdpr/cookiebanner/js/complianz]

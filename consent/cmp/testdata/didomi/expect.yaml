@@ -1,0 +1,93 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+# What Echo should see on each Didomi replica page (format in
+# ../README.md). found, present, banner_after_ms, detected_by and the
+# layers are checked in a real browser by the testbed's X8; sees answers
+# the FakeTab tests of consent/cmp.
+cmp: didomi
+pages:
+  - page: first-layer.html
+    found: true
+    present: true
+    detected_by: "selector:#didomi-host and global:Didomi"
+    accept_layer: 1
+    reject_layer: 1
+    sees:
+      selectors: ["#didomi-host", "#didomi-notice"]
+      globals: [Didomi, didomiOnReady]
+      scripts: [sdk.privacy-center.org]
+      banner: true
+      controls: ["#didomi-notice-agree-button", "#didomi-notice-disagree-button", "#didomi-notice-learn-more-button"]
+  - page: second-layer.html
+    found: true
+    present: true
+    detected_by: "selector:#didomi-host and global:Didomi"
+    accept_layer: 1
+    reject_layer: 2
+    sees:
+      selectors: ["#didomi-host", "#didomi-notice"]
+      globals: [Didomi, didomiOnReady]
+      scripts: [sdk.privacy-center.org]
+      banner: true
+      controls: ["#didomi-notice-agree-button", "#didomi-notice-learn-more-button"]
+      settings: [".didomi-consent-popup-actions button[aria-label*=Save]"]
+      toggles: [true, true, true, true]
+  - page: hidden.html
+    found: false
+    present: true
+    detected_by: "selector:#didomi-host and global:Didomi"
+    sees:
+      selectors: ["#didomi-host", "#didomi-notice"]
+      globals: [Didomi, didomiOnReady]
+      scripts: [sdk.privacy-center.org]
+  - page: late.html
+    found: true
+    present: true
+    banner_after_ms: 4000
+    detected_by: "selector:#didomi-host and global:Didomi"
+    accept_layer: 1
+    reject_layer: 1
+    sees:
+      selectors: ["#didomi-host", "#didomi-notice"]
+      globals: [Didomi, didomiOnReady]
+      scripts: [sdk.privacy-center.org]
+      banner: true
+      controls: ["#didomi-notice-agree-button", "#didomi-notice-disagree-button", "#didomi-notice-learn-more-button"]
+  - page: two-banners.html
+    found: true
+    present: true
+    detected_by: "selector:#didomi-host and global:Didomi"
+    accept_layer: 1
+    reject_layer: 1
+    sees:
+      selectors: ["#didomi-host", "#didomi-notice"]
+      globals: [Didomi, didomiOnReady]
+      scripts: [sdk.privacy-center.org]
+      banner: true
+      controls: ["#didomi-notice-agree-button", "#didomi-notice-disagree-button", "#didomi-notice-learn-more-button"]
+      decoys: ["#newsletter-accept", ".newsletter-close"]
+  - page: text-only.html
+    found: false
+    present: false
+  - page: script-no-banner.html
+    found: false
+    present: true
+    detected_by: "global:Didomi and script:sdk.privacy-center.org"
+    sees:
+      globals: [Didomi, didomiOnReady]
+      scripts: [sdk.privacy-center.org]
+  - page: tcf.html
+    found: true
+    present: true
+    detected_by: "selector:#didomi-host and global:Didomi"
+    accept_layer: 1
+    reject_layer: 1
+    tcf: true
+    stores: tcf
+    sees:
+      selectors: ["#didomi-host", "#didomi-notice"]
+      globals: [Didomi, didomiOnReady, __tcfapi]
+      scripts: [sdk.privacy-center.org]
+      banner: true
+      controls: ["#didomi-notice-agree-button", "#didomi-notice-disagree-button", "#didomi-notice-learn-more-button"]

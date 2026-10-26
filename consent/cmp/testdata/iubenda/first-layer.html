@@ -1,0 +1,60 @@
+<!doctype html>
+<!-- Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+     SPDX-License-Identifier: MIT -->
+<!-- Replica of a iubenda page for Echo's CMP tests (banner with Reject on the first layer), written
+     fresh from iubenda's public Cookie Solution guides and the markup its
+     banner carries on public pages; none of iubenda's code.
+     Source: https://www.iubenda.com/en/help/1205-how-to-configure-your-cookie-solution-advanced-guide
+     Captured 2026-10-26. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Shop with iubenda: banner with Reject on the first layer</title>
+<style>
+  body { font: 16px/1.5 sans-serif; margin: 0; padding: 24px; }
+  #iubenda-cs-banner { display: none; position: fixed; left: 0; right: 0; bottom: 0; z-index: 99999998; background: #fff;
+    border-top: 2px solid #1cc691; padding: 16px 24px; box-shadow: 0 -4px 16px rgba(0,0,0,.2); }
+  #iubenda-cs-banner.iubenda-cs-default-floating { left: auto; right: 24px; bottom: 24px; width: 380px; border: 1px solid #ccc; }
+  #iubenda-iframe { display: none; position: fixed; top: 10%; left: 20%; right: 20%; z-index: 99999999; background: #fff; border: 1px solid #333; padding: 16px; }
+  .iubenda-cs-btn-primary, .iubenda-cs-customize-btn, .iubenda-cs-save-btn { margin: 4px 8px 4px 0; padding: 8px 16px; font-size: 15px; }
+  .purposes-item { padding: 4px 0; }
+  .newsletter { position: fixed; top: 24px; right: 24px; z-index: 1000; width: 280px; background: #ffe; border: 1px solid #aa8; padding: 16px; }
+</style>
+</head>
+<body>
+<h1>Corner Shop</h1>
+<p>Hand-made goods, shipped from a small workshop.</p>
+<template id="replica-banner">
+<div id="iubenda-cs-banner" class="iubenda-cs-default iubenda-cs-bottom iubenda-cs-visible" role="alertdialog" aria-labelledby="iubenda-cs-title" aria-describedby="iubenda-cs-paragraph">
+  <div class="iubenda-cs-container">
+    <div class="iubenda-cs-content">
+      <div class="iubenda-banner-content" role="document">
+        <div id="iubenda-cs-title">Notice</div>
+        <div id="iubenda-cs-paragraph"><p class="iub-p">We and selected third parties use cookies or similar technologies for technical purposes and, with your consent, for other purposes as specified in the <a href="/privacy-policy/12345678/cookie-policy" class="iubenda-cs-cookie-policy-lnk">cookie policy</a>.</p></div>
+      </div>
+      <div class="iubenda-cs-opt-group">
+        <div class="iubenda-cs-opt-group-custom"><button class="iubenda-cs-customize-btn" tabindex="0" role="button" aria-pressed="false">Customize</button></div>
+        <div class="iubenda-cs-opt-group-consent">
+        <button class="iubenda-cs-reject-btn iubenda-cs-btn-primary" tabindex="0" role="button" aria-pressed="false">Reject</button>
+        <button class="iubenda-cs-accept-btn iubenda-cs-btn-primary" tabindex="0" role="button" aria-pressed="false">Accept</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<div id="iubenda-iframe" role="dialog" aria-label="Your privacy choices">
+  <div id="iubenda-iframe-content">
+    <div class="purposes-item"><label><input type="checkbox" class="purposes-item-input style-switch" data-purpose="1" checked disabled> Strictly necessary</label></div>
+    <div class="purposes-item"><label><input type="checkbox" class="purposes-item-input style-switch" id="iub-purpose-2" data-purpose="2"> Simple interactions & functionalities</label></div>
+    <div class="purposes-item"><label><input type="checkbox" class="purposes-item-input style-switch" id="iub-purpose-3" data-purpose="3"> Experience enhancement</label></div>
+    <div class="purposes-item"><label><input type="checkbox" class="purposes-item-input style-switch" id="iub-purpose-4" data-purpose="4"> Measurement</label></div>
+    <div class="purposes-item"><label><input type="checkbox" class="purposes-item-input style-switch" id="iub-purpose-5" data-purpose="5"> Targeting & Advertising</label></div>
+    <div id="iubFooterBtnContainer"><button class="iubenda-cs-save-btn iub-btn iub-btn-consent">Save and continue</button></div>
+  </div>
+</div>
+</template>
+<script>var _iub = _iub || []; _iub.csConfiguration = {"siteId": 1234567, "cookiePolicyId": 12345678, "lang": "en"};</script>
+<script src="cdn.iubenda.com/cs/iubenda_cs.js" charset="UTF-8" data-show="now"></script>
+</body>
+</html>

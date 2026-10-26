@@ -1,0 +1,43 @@
+<!doctype html>
+<!-- Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+     SPDX-License-Identifier: MIT -->
+<!-- Hand-made page for Echo's generic rule tests (a German banner whose Reject is only in its settings, two switches on): no vendor's
+     markup or code. Written 2026-10-26. -->
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Corner Shop: a German banner whose Reject is only in its settings, two switches on</title>
+<style>
+  body { font: 16px/1.5 sans-serif; margin: 0; padding: 24px; }
+  [hidden] { display: none !important; }
+  .bar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 9999; background: #fff; border-top: 2px solid #333;
+    padding: 16px 24px; box-shadow: 0 -4px 16px rgba(0,0,0,.2); }
+  .modal { position: fixed; top: 15%; left: 20%; right: 20%; z-index: 10000; background: #fff; border: 1px solid #333; padding: 16px; }
+  .bar button, .modal button, .bar a.btn { margin: 4px 8px 4px 0; padding: 8px 16px; font-size: 15px; }
+  .widget { position: fixed; right: 24px; bottom: 24px; width: 300px; z-index: 5000; background: #fff; border: 1px solid #333; padding: 16px; }
+  .drawer { position: fixed; top: 0; right: 0; bottom: 0; width: 320px; z-index: 5000; background: #fff; border-left: 1px solid #333; padding: 16px; }
+  .top { position: sticky; top: 0; z-index: 10; background: #ffd; padding: 8px 24px; }
+</style>
+</head>
+<body>
+<h1>Eckladen</h1>
+<p>Handgemachte Waren aus einer kleinen Werkstatt.</p>
+<template id="replica-banner">
+<div class="bar" data-banner role="region" aria-label="Cookies">
+  <p>Wir verwenden Cookies, um unsere Website zu verbessern. Mit Ihrer Einwilligung auch für Statistik und Marketing.</p>
+  <div>
+    <button type="button" data-do="settings">Einstellungen</button>
+    <button type="button" data-do="accept">Alle akzeptieren</button>
+  </div>
+</div>
+<div class="modal" data-settings hidden role="dialog" aria-modal="true" aria-label="Cookie-Einstellungen">
+  <label><input type="checkbox" checked disabled> Notwendig</label><br>
+  <label><input type="checkbox" checked> Statistik</label><br>
+  <label><input type="checkbox" checked> Marketing</label><br>
+  <button type="button" data-do="save">Auswahl speichern</button>
+</div>
+</template>
+<script src="banner.js" data-show="now"></script>
+</body>
+</html>

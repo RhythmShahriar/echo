@@ -1,0 +1,52 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+# iubenda Cookie Solution. The _iub.cs.api calls (acceptAll, rejectAll,
+# openPreferences, getPreferences) and the iubenda-cs-preferences-link
+# class are in the advanced configuration guide; the banner and
+# preferences panel markup is what iubenda serves on public pages, read
+# on 2026-10-26. Purposes are numbered 1 to 5 (1 strictly necessary, 4
+# measurement, 5 marketing).
+id: iubenda
+name: iubenda
+priority: 20
+detect:
+  selectors: ["#iubenda-cs-banner"]
+  globals: [_iub]
+  scripts: [cdn.iubenda.com, cs.iubenda.com]
+banner:
+  selector: "#iubenda-cs-banner"
+accept: [".iubenda-cs-accept-btn"]
+reject:
+  first_layer: [".iubenda-cs-reject-btn"]
+  second_layer:
+    open: [".iubenda-cs-customize-btn"]
+    toggles_off: "#iubenda-iframe .purposes-item-input:not([disabled])"
+    save: ["#iubenda-iframe .iubenda-cs-save-btn"]
+reopen:
+  selectors: [".iubenda-cs-preferences-link"]
+  api: reopen
+api:
+  accept: _iub.cs.api.acceptAll()
+  reject: _iub.cs.api.rejectAll()
+  reopen: _iub.cs.api.openPreferences()
+  state: "JSON.stringify(_iub.cs.api.getPreferences ? _iub.cs.api.getPreferences() : null)"
+verify:
+  parser: iubenda
+  cookies: [_iub_cs-*]
+  # Which purposes a site uses is its own setup: Accept needs a decided
+  # state, Reject measurement and marketing off or absent.
+  accepted: {}
+  rejected: {"4": false, "5": false}
+sources:
+  - https://www.iubenda.com/en/help/1205-how-to-configure-your-cookie-solution-advanced-guide
+  - https://www.iubenda.com/en/help/680
+fixtures:
+  - testdata/iubenda/first-layer.html
+  - testdata/iubenda/second-layer.html
+  - testdata/iubenda/hidden.html
+  - testdata/iubenda/late.html
+  - testdata/iubenda/two-banners.html
+  - testdata/iubenda/text-only.html
+  - testdata/iubenda/script-no-banner.html
+  - testdata/iubenda/floating.html

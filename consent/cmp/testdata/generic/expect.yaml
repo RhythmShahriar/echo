@@ -1,0 +1,556 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+# What Echo should see on each generic page (format in ../README.md).
+# accept_text and reject_text are the controls Find reports (for a
+# Reject in the settings, the button that opens them); reject_reason is
+# set when the Reject can't be verified. sees.generic is what the
+# generic script reports, for the FakeTab tests. The lang-<code>.html
+# rows at the end are written by TestGenericLanguagePages
+# (go test ./consent/cmp -run TestGenericLanguagePages -update).
+cmp: generic
+pages:
+  - page: english.html
+    found: true
+    present: true
+    detected_by: "generic"
+    accept_layer: 1
+    reject_layer: 1
+    accept_text: "Accept all"
+    reject_text: "Reject all"
+    sees:
+      generic:
+        cookie: true
+        consent: true
+        buttons: ["Cookie settings", "Reject all", "Accept all"]
+        links: ["Privacy policy"]
+        settings: ["Save my choices"]
+        toggles: [false, false]
+  - page: settings-layer.html
+    found: true
+    present: true
+    detected_by: "generic"
+    accept_layer: 1
+    reject_layer: 2
+    accept_text: "Alle akzeptieren"
+    reject_text: "Einstellungen"
+    sees:
+      generic:
+        cookie: true
+        consent: true
+        buttons: ["Einstellungen", "Alle akzeptieren"]
+        settings: ["Auswahl speichern"]
+        toggles: [true, true]
+  - page: rtl-ar.html
+    found: true
+    present: true
+    detected_by: "generic"
+    accept_layer: 1
+    reject_layer: 1
+    accept_text: "قبول الكل"
+    reject_text: "رفض الكل"
+    sees:
+      generic:
+        cookie: true
+        buttons: ["قبول الكل", "رفض الكل"]
+  - page: rtl-he.html
+    found: true
+    present: true
+    detected_by: "generic"
+    accept_layer: 1
+    reject_layer: 1
+    accept_text: "קבל הכל"
+    reject_text: "דחה הכל"
+    sees:
+      generic:
+        cookie: true
+        buttons: ["דחה הכל", "קבל הכל"]
+  - page: split-text.html
+    found: true
+    present: true
+    detected_by: "generic"
+    accept_layer: 1
+    reject_layer: 1
+    accept_text: "Alle\u00a0akzeptieren"
+    reject_text: "ALLE\u00a0\u00a0ablehnen"
+    sees:
+      generic:
+        cookie: true
+        buttons: ["Alle\u00a0akzeptieren", "ALLE\u00a0\u00a0ablehnen"]
+  - page: continue.html
+    found: true
+    present: true
+    detected_by: "generic"
+    accept_layer: 1
+    reject_layer: 1
+    accept_text: "Tout accepter"
+    reject_text: "Continuer sans accepter →"
+    sees:
+      generic:
+        cookie: true
+        buttons: ["Continuer sans accepter →", "Personnaliser", "Tout accepter"]
+  - page: policy-link.html
+    found: true
+    present: true
+    detected_by: "generic"
+    accept_layer: 1
+    reject_layer: 2
+    accept_text: "Accept"
+    reject_text: "Manage preferences"
+    sees:
+      generic:
+        cookie: true
+        consent: true
+        buttons: ["Accept", "Manage preferences"]
+        links: ["Reject (read our cookie policy)"]
+        settings: ["Save preferences"]
+        toggles: [true]
+  - page: late.html
+    found: true
+    present: true
+    banner_after_ms: 4000
+    detected_by: "generic"
+    accept_layer: 1
+    reject_layer: 1
+    accept_text: "Allow all cookies"
+    reject_text: "Decline"
+    sees:
+      generic:
+        cookie: true
+        consent: true
+        buttons: ["Decline", "Allow all cookies"]
+  - page: hides-only.html
+    found: true
+    present: true
+    detected_by: "generic"
+    accept_layer: 1
+    reject_layer: 1
+    accept_text: "Accept all"
+    reject_text: "Reject all"
+    reject_reason: state_unchanged
+    sees:
+      generic:
+        cookie: true
+        consent: true
+        buttons: ["Reject all", "Accept all"]
+        comes_back: true
+  - page: iframe.html
+    found: true
+    present: true
+    detected_by: "generic"
+    accept_layer: 1
+    reject_layer: 1
+    accept_text: "Accept all"
+    reject_text: "Reject all"
+    sees:
+      generic:
+        cookie: true
+        consent: true
+        buttons: ["Reject all", "Accept all"]
+  - page: newsletter.html
+    found: false
+    present: false
+    sees:
+      generic:
+        consent: true
+        ignored: true
+        buttons: ["Accept offer", "No thanks"]
+  - page: age-gate.html
+    found: false
+    present: false
+    sees:
+      generic:
+        consent: true
+        ignored: true
+        buttons: ["I am over 18", "Accept", "Leave"]
+  - page: login.html
+    found: false
+    present: false
+    sees:
+      generic:
+        consent: true
+        ignored: true
+        buttons: ["Log in", "I agree", "Decline"]
+  - page: cart.html
+    found: false
+    present: false
+    sees:
+      generic:
+        cookie: true
+        ignored: true
+        buttons: ["Checkout", "Continue shopping"]
+  - page: returns-form.html
+    found: false
+    present: false
+  - page: chat.html
+    found: false
+    present: false
+    sees:
+      generic:
+        consent: true
+        ignored: true
+        buttons: ["Start chat", "Accept", "Close"]
+  - page: shipping.html
+    found: false
+    present: false
+# generated by TestGenericLanguagePages
+  - page: lang-bg.html
+    found: true
+    present: true
+    detected_by: "generic"
+    accept_layer: 1
+    reject_layer: 1
+    accept_text: "Приемам всички"
+    reject_text: "Отхвърлям всички"
+    sees:
+      generic:
+        cookie: true
+        buttons: ["Настройки", "Отхвърлям всички", "Приемам всички"]
+  - page: lang-cs.html
+    found: true
+    present: true
+    detected_by: "generic"
+    accept_layer: 1
+    reject_layer: 1
+    accept_text: "Přijmout vše"
+    reject_text: "Odmítnout vše"
+    sees:
+      generic:
+        cookie: true
+        buttons: ["Nastavení", "Odmítnout vše", "Přijmout vše"]
+  - page: lang-da.html
+    found: true
+    present: true
+    detected_by: "generic"
+    accept_layer: 1
+    reject_layer: 1
+    accept_text: "Accepter alle"
+    reject_text: "Afvis alle"
+    sees:
+      generic:
+        cookie: true
+        buttons: ["Indstillinger", "Afvis alle", "Accepter alle"]
+  - page: lang-de.html
+    found: true
+    present: true
+    detected_by: "generic"
+    accept_layer: 1
+    reject_layer: 1
+    accept_text: "Alle akzeptieren"
+    reject_text: "Alle ablehnen"
+    sees:
+      generic:
+        cookie: true
+        buttons: ["Einstellungen", "Alle ablehnen", "Alle akzeptieren"]
+  - page: lang-el.html
+    found: true
+    present: true
+    detected_by: "generic"
+    accept_layer: 1
+    reject_layer: 1
+    accept_text: "Αποδοχή όλων"
+    reject_text: "Απόρριψη όλων"
+    sees:
+      generic:
+        cookie: true
+        buttons: ["Ρυθμίσεις", "Απόρριψη όλων", "Αποδοχή όλων"]
+  - page: lang-en.html
+    found: true
+    present: true
+    detected_by: "generic"
+    accept_layer: 1
+    reject_layer: 1
+    accept_text: "Accept all"
+    reject_text: "Reject all"
+    sees:
+      generic:
+        cookie: true
+        buttons: ["Settings", "Reject all", "Accept all"]
+  - page: lang-es.html
+    found: true
+    present: true
+    detected_by: "generic"
+    accept_layer: 1
+    reject_layer: 1
+    accept_text: "Aceptar todo"
+    reject_text: "Rechazar todo"
+    sees:
+      generic:
+        cookie: true
+        buttons: ["Configuración", "Rechazar todo", "Aceptar todo"]
+  - page: lang-et.html
+    found: true
+    present: true
+    detected_by: "generic"
+    accept_layer: 1
+    reject_layer: 1
+    accept_text: "Nõustu kõigiga"
+    reject_text: "Keeldu kõigist"
+    sees:
+      generic:
+        cookie: true
+        buttons: ["Seaded", "Keeldu kõigist", "Nõustu kõigiga"]
+  - page: lang-fi.html
+    found: true
+    present: true
+    detected_by: "generic"
+    accept_layer: 1
+    reject_layer: 1
+    accept_text: "Hyväksy kaikki"
+    reject_text: "Hylkää kaikki"
+    sees:
+      generic:
+        cookie: true
+        buttons: ["Asetukset", "Hylkää kaikki", "Hyväksy kaikki"]
+  - page: lang-fr.html
+    found: true
+    present: true
+    detected_by: "generic"
+    accept_layer: 1
+    reject_layer: 1
+    accept_text: "Tout accepter"
+    reject_text: "Tout refuser"
+    sees:
+      generic:
+        cookie: true
+        buttons: ["Paramètres", "Tout refuser", "Tout accepter"]
+  - page: lang-ga.html
+    found: true
+    present: true
+    detected_by: "generic"
+    accept_layer: 1
+    reject_layer: 1
+    accept_text: "Glac le gach rud"
+    reject_text: "Diúltaigh do gach rud"
+    sees:
+      generic:
+        cookie: true
+        buttons: ["Socruithe", "Diúltaigh do gach rud", "Glac le gach rud"]
+  - page: lang-hr.html
+    found: true
+    present: true
+    detected_by: "generic"
+    accept_layer: 1
+    reject_layer: 1
+    accept_text: "Prihvati sve"
+    reject_text: "Odbij sve"
+    sees:
+      generic:
+        cookie: true
+        buttons: ["Postavke", "Odbij sve", "Prihvati sve"]
+  - page: lang-hu.html
+    found: true
+    present: true
+    detected_by: "generic"
+    accept_layer: 1
+    reject_layer: 1
+    accept_text: "Összes elfogadása"
+    reject_text: "Összes elutasítása"
+    sees:
+      generic:
+        cookie: true
+        buttons: ["Beállítások", "Összes elutasítása", "Összes elfogadása"]
+  - page: lang-it.html
+    found: true
+    present: true
+    detected_by: "generic"
+    accept_layer: 1
+    reject_layer: 1
+    accept_text: "Accetta tutto"
+    reject_text: "Rifiuta tutto"
+    sees:
+      generic:
+        cookie: true
+        buttons: ["Impostazioni", "Rifiuta tutto", "Accetta tutto"]
+  - page: lang-lt.html
+    found: true
+    present: true
+    detected_by: "generic"
+    accept_layer: 1
+    reject_layer: 1
+    accept_text: "Priimti visus"
+    reject_text: "Atmesti visus"
+    sees:
+      generic:
+        cookie: true
+        buttons: ["Nustatymai", "Atmesti visus", "Priimti visus"]
+  - page: lang-lv.html
+    found: true
+    present: true
+    detected_by: "generic"
+    accept_layer: 1
+    reject_layer: 1
+    accept_text: "Pieņemt visus"
+    reject_text: "Noraidīt visus"
+    sees:
+      generic:
+        cookie: true
+        buttons: ["Iestatījumi", "Noraidīt visus", "Pieņemt visus"]
+  - page: lang-mt.html
+    found: true
+    present: true
+    detected_by: "generic"
+    accept_layer: 1
+    reject_layer: 1
+    accept_text: "Aċċetta kollox"
+    reject_text: "Irrifjuta kollox"
+    sees:
+      generic:
+        cookie: true
+        buttons: ["Settings", "Irrifjuta kollox", "Aċċetta kollox"]
+  - page: lang-nl.html
+    found: true
+    present: true
+    detected_by: "generic"
+    accept_layer: 1
+    reject_layer: 1
+    accept_text: "Alles accepteren"
+    reject_text: "Alles weigeren"
+    sees:
+      generic:
+        cookie: true
+        buttons: ["Instellingen", "Alles weigeren", "Alles accepteren"]
+  - page: lang-pl.html
+    found: true
+    present: true
+    detected_by: "generic"
+    accept_layer: 1
+    reject_layer: 1
+    accept_text: "Akceptuję"
+    reject_text: "Odrzuć wszystkie"
+    sees:
+      generic:
+        cookie: true
+        buttons: ["Ustawienia", "Odrzuć wszystkie", "Akceptuję"]
+  - page: lang-pt.html
+    found: true
+    present: true
+    detected_by: "generic"
+    accept_layer: 1
+    reject_layer: 1
+    accept_text: "Aceitar tudo"
+    reject_text: "Rejeitar tudo"
+    sees:
+      generic:
+        cookie: true
+        buttons: ["Definições", "Rejeitar tudo", "Aceitar tudo"]
+  - page: lang-ro.html
+    found: true
+    present: true
+    detected_by: "generic"
+    accept_layer: 1
+    reject_layer: 1
+    accept_text: "Acceptă tot"
+    reject_text: "Respinge tot"
+    sees:
+      generic:
+        cookie: true
+        buttons: ["Setări", "Respinge tot", "Acceptă tot"]
+  - page: lang-sk.html
+    found: true
+    present: true
+    detected_by: "generic"
+    accept_layer: 1
+    reject_layer: 1
+    accept_text: "Prijať všetko"
+    reject_text: "Odmietnuť všetko"
+    sees:
+      generic:
+        cookie: true
+        buttons: ["Nastavenia", "Odmietnuť všetko", "Prijať všetko"]
+  - page: lang-sl.html
+    found: true
+    present: true
+    detected_by: "generic"
+    accept_layer: 1
+    reject_layer: 1
+    accept_text: "Sprejmi vse"
+    reject_text: "Zavrni vse"
+    sees:
+      generic:
+        cookie: true
+        buttons: ["Nastavitve", "Zavrni vse", "Sprejmi vse"]
+  - page: lang-sv.html
+    found: true
+    present: true
+    detected_by: "generic"
+    accept_layer: 1
+    reject_layer: 1
+    accept_text: "Acceptera alla"
+    reject_text: "Avvisa alla"
+    sees:
+      generic:
+        cookie: true
+        buttons: ["Inställningar", "Avvisa alla", "Acceptera alla"]
+  - page: lang-no.html
+    found: true
+    present: true
+    detected_by: "generic"
+    accept_layer: 1
+    reject_layer: 1
+    accept_text: "Godta alle"
+    reject_text: "Avvis alle"
+    sees:
+      generic:
+        cookie: true
+        buttons: ["Innstillinger", "Avvis alle", "Godta alle"]
+  - page: lang-is.html
+    found: true
+    present: true
+    detected_by: "generic"
+    accept_layer: 1
+    reject_layer: 1
+    accept_text: "Samþykkja allt"
+    reject_text: "Hafna öllu"
+    sees:
+      generic:
+        cookie: true
+        buttons: ["Stillingar", "Hafna öllu", "Samþykkja allt"]
+  - page: lang-tr.html
+    found: true
+    present: true
+    detected_by: "generic"
+    accept_layer: 1
+    reject_layer: 1
+    accept_text: "Tümünü kabul et"
+    reject_text: "Tümünü reddet"
+    sees:
+      generic:
+        cookie: true
+        buttons: ["Ayarlar", "Tümünü reddet", "Tümünü kabul et"]
+  - page: lang-uk.html
+    found: true
+    present: true
+    detected_by: "generic"
+    accept_layer: 1
+    reject_layer: 1
+    accept_text: "Прийняти всі"
+    reject_text: "Відхилити всі"
+    sees:
+      generic:
+        cookie: true
+        buttons: ["Налаштування", "Відхилити всі", "Прийняти всі"]
+  - page: lang-ar.html
+    found: true
+    present: true
+    detected_by: "generic"
+    accept_layer: 1
+    reject_layer: 1
+    accept_text: "قبول الكل"
+    reject_text: "رفض الكل"
+    sees:
+      generic:
+        cookie: true
+        buttons: ["الإعدادات", "رفض الكل", "قبول الكل"]
+  - page: lang-he.html
+    found: true
+    present: true
+    detected_by: "generic"
+    accept_layer: 1
+    reject_layer: 1
+    accept_text: "קבל הכל"
+    reject_text: "דחה הכל"
+    sees:
+      generic:
+        cookie: true
+        buttons: ["הגדרות עוגיות", "דחה הכל", "קבל הכל"]

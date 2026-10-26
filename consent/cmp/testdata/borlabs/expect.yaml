@@ -1,0 +1,93 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+# What Echo should see on each Borlabs Cookie replica page (format in
+# ../README.md). found, present, banner_after_ms, detected_by and the
+# layers are checked in a real browser by the testbed's X8; sees answers
+# the FakeTab tests of consent/cmp.
+cmp: borlabs
+pages:
+  - page: first-layer.html
+    found: true
+    present: true
+    detected_by: "selector:#BorlabsCookieBox and global:BorlabsCookie"
+    accept_layer: 1
+    reject_layer: 1
+    sees:
+      selectors: ["#BorlabsCookieBox", "._brlbs-box-wrap"]
+      globals: [BorlabsCookie]
+      scripts: [/borlabs-cookie/]
+      banner: true
+      controls: ["._brlbs-btn-accept-all", "[data-cookie-accept-all]", "[data-cookie-refuse]", "[data-cookie-individual]"]
+  - page: second-layer.html
+    found: true
+    present: true
+    detected_by: "selector:#BorlabsCookieBox and global:BorlabsCookie"
+    accept_layer: 1
+    reject_layer: 2
+    sees:
+      selectors: ["#BorlabsCookieBox", "._brlbs-box-wrap"]
+      globals: [BorlabsCookie]
+      scripts: [/borlabs-cookie/]
+      banner: true
+      controls: ["._brlbs-btn-accept-all", "[data-cookie-accept-all]", "[data-cookie-individual]"]
+      settings: ["[data-cookie-accept]"]
+      toggles: [false, false, false]
+  - page: hidden.html
+    found: false
+    present: true
+    detected_by: "selector:#BorlabsCookieBox and global:BorlabsCookie"
+    sees:
+      selectors: ["#BorlabsCookieBox", "._brlbs-box-wrap"]
+      globals: [BorlabsCookie]
+      scripts: [/borlabs-cookie/]
+  - page: late.html
+    found: true
+    present: true
+    banner_after_ms: 4000
+    detected_by: "selector:#BorlabsCookieBox and global:BorlabsCookie"
+    accept_layer: 1
+    reject_layer: 1
+    sees:
+      selectors: ["#BorlabsCookieBox", "._brlbs-box-wrap"]
+      globals: [BorlabsCookie]
+      scripts: [/borlabs-cookie/]
+      banner: true
+      controls: ["._brlbs-btn-accept-all", "[data-cookie-accept-all]", "[data-cookie-refuse]", "[data-cookie-individual]"]
+  - page: two-banners.html
+    found: true
+    present: true
+    detected_by: "selector:#BorlabsCookieBox and global:BorlabsCookie"
+    accept_layer: 1
+    reject_layer: 1
+    sees:
+      selectors: ["#BorlabsCookieBox", "._brlbs-box-wrap"]
+      globals: [BorlabsCookie]
+      scripts: [/borlabs-cookie/]
+      banner: true
+      controls: ["._brlbs-btn-accept-all", "[data-cookie-accept-all]", "[data-cookie-refuse]", "[data-cookie-individual]"]
+      decoys: ["#newsletter-accept", ".newsletter-close"]
+  - page: text-only.html
+    found: false
+    present: false
+  - page: script-no-banner.html
+    found: false
+    present: true
+    detected_by: "global:BorlabsCookie and script:/borlabs-cookie/"
+    sees:
+      globals: [BorlabsCookie]
+      scripts: [/borlabs-cookie/]
+  - page: version-3.html
+    found: true
+    present: true
+    detected_by: "selector:#BorlabsCookieBox and global:BorlabsCookie"
+    accept_layer: 1
+    reject_layer: 2
+    sees:
+      selectors: ["#BorlabsCookieBox", ".brlbs-cmpnt-container"]
+      globals: [BorlabsCookie]
+      scripts: [/borlabs-cookie/]
+      banner: true
+      controls: ["[data-borlabs-cookie-actions=accept-all]", "[data-borlabs-cookie-actions=preferences]"]
+      settings: ["[data-borlabs-cookie-actions=save-consents]"]
+      toggles: [false, false, false]
