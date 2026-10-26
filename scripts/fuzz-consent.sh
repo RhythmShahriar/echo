@@ -2,7 +2,8 @@
 # Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
 # SPDX-License-Identifier: MIT
 
-# Runs every fuzz target of the consent packages and of report, each for
+# Runs every fuzz target of the consent packages, of report and of the
+# consent testbed (its scenario file and resolver parsers), each for
 # the given time (default 30s). go test fuzzes one target at a time, so
 # each one is listed and run on its own. Stops at the first crasher; the
 # failing input is in the package's testdata/fuzz folder.
@@ -12,7 +13,7 @@ set -eu
 
 time=${1:-30s}
 
-for pkg in $(go list ./consent/... ./report); do
+for pkg in $(go list ./consent/... ./report ./testbed/consent/...); do
 	for name in $(go test -list '^Fuzz' "$pkg" | grep '^Fuzz' || true); do
 		echo "fuzz $pkg $name ($time)"
 		go test -run '^$' -fuzz "^${name}\$" -fuzztime "$time" "$pkg"
