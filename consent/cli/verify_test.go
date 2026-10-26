@@ -14,6 +14,7 @@ import (
 	"testing"
 
 	"github.com/RhythmShahriar/echo/consent/consenttest"
+	"github.com/RhythmShahriar/echo/consent/evidence"
 )
 
 // writeKeys writes a fresh ed25519 pair as openssl does: team.key
@@ -61,7 +62,7 @@ func TestVerifySignedCheck(t *testing.T) {
 	}
 	code, out, errOut := runMain(t, "verify", dir, "--key", "team.pub")
 	want := "ok  consent.json\nok  consent.json.sig\nok  events/page-1-none.ndjson\nok  evidence/page-1/none-banner.png\nok  report.html\n" +
-		"signature present=true ok=true key=team.pub\n"
+		"signature present=true ok=true key=team.pub\n" + msgSignatureScope + "\n"
 	if code != exitOK || out != want || errOut != "" {
 		t.Errorf("exit %d\n%s%s", code, out, errOut)
 	}
@@ -102,6 +103,34 @@ func TestVerifyTamperedExit(t *testing.T) {
 	writeKeys(t)
 	if code, out, _ := runMain(t, "verify", dir, "--key", "team.pub"); code != exitFindings || !strings.Contains(out, "signature present=true ok=false") {
 		t.Errorf("another key: exit %d\n%s", code, out)
+	}
+}
+
+// A report rewritten together with the manifest still verifies, as the
+// signature covers consent.json only: the scope line says so. A file
+// the manifest doesn't list is named, never failing the exit. Without
+// --key or with --quiet there is no scope line.
+func TestVerifySignatureScope(t *testing.T) {
+	inDir(t, "")
+	dir := signedCheck(t)
+	putFile(t, filepath.Join(dir, "report.html"), "<p>rewritten</p>")
+	putFile(t, filepath.Join(dir, "notes.txt"), "added later")
+	if err := evidence.WriteManifest(dir); err != nil {
+		t.Fatal(err)
+	}
+	putFile(t, filepath.Join(dir, "extra.png"), "x")
+	code, out, _ := runMain(t, "verify", dir, "--key", "team.pub")
+	if code != exitOK || !strings.Contains(out, "not in the manifest  extra.png\n") || !strings.HasSuffix(out, msgSignatureScope+"\n") {
+		t.Errorf("exit %d\n%s", code, out)
+	}
+	if strings.Contains(out, "not in the manifest  notes.txt") {
+		t.Errorf("a listed file named as unlisted:\n%s", out)
+	}
+	if _, out, _ := runMain(t, "verify", dir); strings.Contains(out, "The signature covers") {
+		t.Errorf("no --key:\n%s", out)
+	}
+	if _, out, _ := runMain(t, "verify", "-q", dir, "--key", "team.pub"); strings.Contains(out, "The signature covers") || !strings.Contains(out, "not in the manifest  extra.png") {
+		t.Errorf("--quiet:\n%s", out)
 	}
 }
 

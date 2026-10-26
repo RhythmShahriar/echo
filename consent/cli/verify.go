@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/RhythmShahriar/echo/consent"
 	"github.com/RhythmShahriar/echo/consent/evidence"
 	"github.com/RhythmShahriar/echo/report"
 )
@@ -18,6 +19,13 @@ import (
 const msgSigstore = "Sigstore bundle present: check it with cosign verify-blob --bundle consent.json.sigstore.json " +
 	"--certificate-identity-regexp '^https://github.com/<owner>/<repo>/' " +
 	"--certificate-oidc-issuer https://token.actions.githubusercontent.com consent.json"
+
+// msgSignatureScope says what a good signature vouches for: consent.json
+// and the attachments it lists by hash. The reports and manifest.json
+// are written after it, so only their manifest hashes check them, and
+// someone who rewrites a report can rewrite the manifest too.
+const msgSignatureScope = "The signature covers consent.json and the files it lists; " +
+	"report.html, report.md and manifest.json are checked against manifest.json only."
 
 // verify is rhythm echo consent verify <folder|file> [--key <file>]:
 // it checks an evidence folder's hashes and signature and exits 0 when
@@ -44,6 +52,12 @@ func (c *cmd) verify(pos []string) int {
 	}
 	if err := writers.verify(env.Stdout, v, c.o.json, c.textOptions(env.Stdout)); err != nil {
 		fmt.Fprintln(env.Stderr, "rhythm echo: printing the result:", err)
+	}
+	for _, rel := range evidence.Unlisted(pos[0], v) {
+		fmt.Fprintln(view, "not in the manifest  "+consent.SafeText(rel, 200))
+	}
+	if v.Signature.Key != "" && v.Signature.OK && !c.o.quiet {
+		fmt.Fprintln(view, msgSignatureScope)
 	}
 	if _, err := os.Lstat(filepath.Join(evidence.Folder(pos[0]), evidence.SigstoreFile)); err == nil && !c.o.quiet {
 		fmt.Fprintln(view, msgSigstore)
