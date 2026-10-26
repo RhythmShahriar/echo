@@ -30,6 +30,9 @@ type Engine struct {
 	mu     sync.Mutex
 	guards map[string]*egress.Proxy // target URL -> its guard
 	runs   []*Run
+	// refused counts the requests closed runs refused in the browser
+	// (--map-only): they never reach a guard, so its count misses them.
+	refused int
 }
 
 // Start launches Chrome for p with its egress listener and starts
@@ -83,7 +86,8 @@ func (e *Engine) Close() {
 
 // Network sums what the listeners refused: the browser-wide one counts
 // Chrome's own traffic, the guards the page traffic they refused and
-// any browser service host a page context asked for.
+// any browser service host a page context asked for. Requests a closed
+// run refused in the browser (--map-only) are added to Refused.
 func (e *Engine) Network() consent.Network {
 	st := e.internal.Stats()
 	e.mu.Lock()
@@ -91,8 +95,12 @@ func (e *Engine) Network() consent.Network {
 	for _, g := range e.guards {
 		st = st.Add(g.Stats())
 	}
-	return consent.Network{Refused: st.Refused, BrowserInternal: st.BrowserInternal}
+	return consent.Network{Refused: st.Refused + e.refused, BrowserInternal: st.BrowserInternal}
 }
+
+// Mapped reports whether --map-host maps any host, so every writer can
+// say the result came from mapped hosts rather than the real ones.
+func (e *Engine) Mapped() bool { return newMapper(e.plan.MapHosts).any() }
 
 // guard returns the target's guard, starting it on first use: every
 // run of a target goes through the same one. A target --map-host
@@ -205,6 +213,7 @@ func (r *Run) Close() *Recording {
 	r.once.Do(func() {
 		r.out = r.s.close()
 		r.e.mu.Lock()
+		r.e.refused += r.out.Refused
 		for i, x := range r.e.runs {
 			if x == r {
 				r.e.runs = append(r.e.runs[:i], r.e.runs[i+1:]...)

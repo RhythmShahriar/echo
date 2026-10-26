@@ -130,9 +130,11 @@ func TestCookieParams(t *testing.T) {
 	}
 }
 
-// --map-host prefers an exact host over a wildcard and the longest
-// wildcard over a shorter one; addresses are host:port or a URL.
-func TestMapper(t *testing.T) {
+// --map-host matches exact hosts and *.suffix patterns, ignoring case;
+// it prefers an exact host over a wildcard and the longest wildcard
+// over a shorter one; addresses are host:port or a URL. A wildcard never
+// covers its own bare domain.
+func TestMapExactAndWildcard(t *testing.T) {
 	m := newMapper(map[string]string{
 		"*.shop.test":     "127.0.0.1:35071",
 		"*.cdn.shop.test": "http://127.0.0.1:35072/base/",

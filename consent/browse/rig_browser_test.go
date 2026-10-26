@@ -55,8 +55,14 @@ func newRig(t *testing.T, p *consent.Plan) *rig {
 	return &rig{t: t, e: e, b: e.b, h: e.h, internal: e.internal, plan: p}
 }
 
-// open opens a run of kind for target.
+// open opens a run of kind for target and returns its session.
 func (g *rig) open(target string, kind consent.RunKind) *session {
+	g.t.Helper()
+	return g.openRun(target, kind).s
+}
+
+// openRun opens a run of kind for target.
+func (g *rig) openRun(target string, kind consent.RunKind) *Run {
 	g.t.Helper()
 	u, err := url.Parse(target)
 	if err != nil {
@@ -69,7 +75,7 @@ func (g *rig) open(target string, kind consent.RunKind) *session {
 	}
 	gd, _ := g.e.guard(tg)
 	g.guards = append(g.guards, gd)
-	return run.s
+	return run
 }
 
 // load navigates and waits for the load event plus a quiet moment.
