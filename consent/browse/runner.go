@@ -88,6 +88,7 @@ type check struct {
 	e      *Engine
 	plan   *consent.Plan
 	stages consent.Stages
+	echo   *echoLink // --echo; nil without
 
 	mu       sync.Mutex
 	notes    []string
@@ -107,7 +108,7 @@ func (c *check) failedWrite(rel string, err error) {
 }
 
 func newCheck(e *Engine, p *consent.Plan, stages consent.Stages) *check {
-	return &check{e: e, plan: p, stages: stages}
+	return &check{e: e, plan: p, stages: stages, echo: newEchoLink(p.Echo)}
 }
 
 // note adds a result note once.
@@ -252,8 +253,11 @@ func (c *check) attempt(ctx context.Context, page, k int) slot {
 			x.sinks = append(x.sinks, events.write)
 		}
 	}
+	es, runValue := c.echoBegin(actx, page+1, kind)
+	x.echoRun = runValue
 	run, err := c.e.open(actx, t, kind, openWait, x)
 	if err != nil {
+		c.echoEnd(ctx, es, a, nil)
 		if events != nil {
 			c.saveEvents(&out, events, nil)
 		}
@@ -273,6 +277,7 @@ func (c *check) attempt(ctx context.Context, page, k int) slot {
 	rec := run.Close()
 	c.count(rec)
 	fill(&out, rec)
+	out.Server = c.echoEnd(ctx, es, a, rec)
 	if events != nil {
 		c.saveEvents(&out, events, rec.Events)
 	}

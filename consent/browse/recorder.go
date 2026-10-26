@@ -8,6 +8,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"maps"
 	"math"
 	"net/url"
 	"strings"
@@ -23,6 +24,7 @@ import (
 
 	"github.com/RhythmShahriar/echo/consent"
 	"github.com/RhythmShahriar/echo/consent/browse/egress"
+	"github.com/RhythmShahriar/echo/wire"
 )
 
 // targetKind says what an attached target is.
@@ -880,20 +882,35 @@ func (r *recorder) fulfillHeld(s cdp, e *proto.FetchRequestPaused, req *consent.
 	_ = proto.FetchFulfillRequest{RequestID: e.RequestID, ResponseCode: code, ResponseHeaders: headers, Body: body}.Call(s)
 }
 
-// sameSiteHeaders adds the plan's -H headers to a same-site request.
-// Other requests keep Chrome's headers (nil means unchanged).
+// sameSiteHeaders adds the plan's -H headers and, with --echo, the
+// run's X-Echo-Run to a same-site request, so the site's Echo connector
+// files what it sends under this run. Other requests keep Chrome's
+// headers (nil means unchanged): a third party never gets either.
 func (r *recorder) sameSiteHeaders(u *url.URL, have proto.NetworkHeaders) []*proto.FetchHeaderEntry {
-	if len(r.plan.Headers) == 0 || !httpx.SameSite(r.site, u) {
+	extra := r.plan.Headers
+	if r.echoRun != "" {
+		extra = maps.Clone(extra)
+		if extra == nil {
+			extra = map[string]string{}
+		}
+		for k := range extra {
+			if strings.EqualFold(k, wire.RunHeader) {
+				delete(extra, k)
+			}
+		}
+		extra[wire.RunHeader] = r.echoRun
+	}
+	if len(extra) == 0 || !httpx.SameSite(r.site, u) {
 		return nil
 	}
-	out := make([]*proto.FetchHeaderEntry, 0, len(have)+len(r.plan.Headers))
+	out := make([]*proto.FetchHeaderEntry, 0, len(have)+len(extra))
 	for name, v := range have {
-		if _, ours := lookupFold(r.plan.Headers, name); ours {
+		if _, ours := lookupFold(extra, name); ours {
 			continue
 		}
 		out = append(out, &proto.FetchHeaderEntry{Name: name, Value: v.Str()})
 	}
-	for name, v := range r.plan.Headers {
+	for name, v := range extra {
 		out = append(out, &proto.FetchHeaderEntry{Name: name, Value: v})
 	}
 	return out
@@ -1081,6 +1098,13 @@ func (r *recorder) addVisit(at int64) int {
 	defer r.mu.Unlock()
 	r.visits = append(r.visits, at)
 	return len(r.visits) - 1
+}
+
+// phaseAt is the phase at run time at, from the choices made so far.
+func (r *recorder) phaseAt(at int64) consent.Phase {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.phaseLocked(at)
 }
 
 // startPhase is the phase a run is in before any choice.

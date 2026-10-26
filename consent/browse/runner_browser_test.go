@@ -177,8 +177,14 @@ func shopSite(t *testing.T, extra string) *site {
 // other host refused, short waits and no retries.
 func shopPlan(t *testing.T, st *site, runs ...consent.RunKind) *consent.Plan {
 	t.Helper()
+	return planFor(t, st.addr(), runs...)
+}
+
+// planFor is shopPlan for a server at addr.
+func planFor(t *testing.T, addr string, runs ...consent.RunKind) *consent.Plan {
+	t.Helper()
 	p := consenttest.NewPlan(t, "https://shop.test/")
-	p.MapHosts = map[string]string{"shop.test": st.addr(), "*.other.test": st.addr()}
+	p.MapHosts = map[string]string{"shop.test": addr, "*.other.test": addr}
 	p.MapOnly = true
 	p.Settle = 300 * time.Millisecond
 	p.BannerWait = 3 * time.Second
