@@ -139,6 +139,14 @@ type recorder struct {
 
 	clicks chan int64 // pointerdown times from hooks.js, newest last
 
+	worlds       map[proto.PageFrameID]proto.RuntimeExecutionContextID // Echo's isolated world per frame
+	hosts        map[proto.NetworkRequestID]string                     // request host, for Set-Cookie attribution
+	setCookies   map[string]setCookieNote                              // Set-Cookie lines seen, by name and domain
+	blocked      map[string]bool                                       // blocked cookies already recorded
+	cookies      map[string]uint64                                     // last snapshot's cookies (fingerprints, never values)
+	storage      map[string]int                                        // last snapshot's storage keys and value lengths
+	lastSnapshot int64
+
 	limit    chan struct{} // closed when Limits.Requests is reached
 	counts   struct{ requests, held, refused, internal atomic.Int64 }
 	dropped  atomic.Int64
@@ -167,6 +175,8 @@ func newRecorder(ctx context.Context, h *hub, p *consent.Plan, site *url.URL, ki
 		ready: make(chan struct{}), inbox: make(chan *rod.Message, 16384), stop: make(chan struct{}), loopD: make(chan struct{}),
 		sem: make(chan struct{}, maxHandlers), targets: map[proto.TargetSessionID]*target{}, frames: map[proto.PageFrameID]string{},
 		reqs: map[proto.NetworkRequestID]*pending{}, limit: make(chan struct{}), clicks: make(chan int64, 16),
+		worlds: map[proto.PageFrameID]proto.RuntimeExecutionContextID{}, hosts: map[proto.NetworkRequestID]string{},
+		setCookies: map[string]setCookieNote{}, blocked: map[string]bool{}, cookies: map[string]uint64{}, storage: map[string]int{},
 		events: make(chan consent.Event, ch), wake: make(chan struct{}, 1), writerD: make(chan struct{})}
 	if p.Live != nil {
 		live := p.Live
@@ -422,6 +432,11 @@ func (r *recorder) handle(msg *rod.Message) {
 		if msg.Load(&e) && e.Response != nil {
 			r.completed(e.RequestID, e.Response.Status, header(e.Response.Headers, "X-Rhythm-Echo-Refused"))
 		}
+	case "Network.responseReceivedExtraInfo":
+		var e proto.NetworkResponseReceivedExtraInfo
+		if msg.Load(&e) {
+			r.extraInfo(&e)
+		}
 	case "Network.loadingFailed":
 		var e proto.NetworkLoadingFailed
 		if msg.Load(&e) {
@@ -437,6 +452,7 @@ func (r *recorder) handle(msg *rod.Message) {
 		if msg.Load(&e) && e.Frame != nil {
 			r.mu.Lock()
 			r.frames[e.Frame.ID] = origin(e.Frame.URL)
+			delete(r.worlds, e.Frame.ID) // the new document has no world yet
 			r.mu.Unlock()
 		}
 	case "Page.frameAttached":
@@ -496,6 +512,9 @@ func (r *recorder) willBeSent(t *target, e *proto.NetworkRequestWillBeSent) {
 	defer r.mu.Unlock()
 	if r.base == 0 && t.kind == kindPage && e.Type == proto.NetworkResourceTypeDocument {
 		r.base = float64(e.WallTime)
+	}
+	if e.Request != nil {
+		r.noteHostLocked(e.RequestID, e.Request.URL)
 	}
 	p := r.reqs[e.RequestID]
 	if e.RedirectResponse != nil && p != nil && p.paused {

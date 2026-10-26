@@ -204,6 +204,10 @@ func (r *Run) Now() int64 { return r.s.rec.now() }
 // performance.now(), ms) on the run clock.
 func (r *Run) PageTime(ms float64) int64 { return r.s.rec.atPage(ms) }
 
+// Snapshot records the cookies and storage keys that are new or changed
+// since the last snapshot. The run calls it after every step.
+func (r *Run) Snapshot(ctx context.Context) error { return r.s.snapshot(ctx) }
+
 // LimitReached is closed when the run reaches Limits.Requests.
 func (r *Run) LimitReached() <-chan struct{} { return r.s.rec.limit }
 

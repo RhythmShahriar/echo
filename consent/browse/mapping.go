@@ -148,6 +148,11 @@ func (r *recorder) fetchMapped(s cdp, e *proto.FetchRequestPaused, u *url.URL, b
 	if len(data) > maxMapped {
 		data = data[:maxMapped]
 	}
+	if lines := resp.Header.Values("Set-Cookie"); len(lines) > 0 {
+		// Chrome reports no raw headers for a response Echo answered, so
+		// the attribution notes them here.
+		r.noteSetCookies(u.Hostname(), lines, r.now())
+	}
 	var headers []*proto.FetchHeaderEntry
 	for name, vs := range resp.Header {
 		if strings.EqualFold(name, "Content-Length") || slices.ContainsFunc(hopHeaders, func(h string) bool { return strings.EqualFold(h, name) }) {
