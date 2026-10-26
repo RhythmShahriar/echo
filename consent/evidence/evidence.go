@@ -4,10 +4,10 @@
 package evidence
 
 import (
+	"crypto/ed25519"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -43,12 +43,19 @@ type Manifest struct {
 // evidence/, har/) into r.Evidence.Files, then writes consent.json
 // atomically (0600 in a 0700 folder) as the bare result and returns its
 // SHA-256, which the reports then state. r.Evidence.Folder is set to
-// dir when the caller left it empty. signKey signs consent.json; this
-// build doesn't sign yet, so a key is an error rather than an unsigned
-// file the user believes signed.
+// dir when the caller left it empty. signKey, when set, is the
+// --sign-key file: consent.json is then signed into consent.json.sig.
+// The key is read before anything is written, so a bad key never
+// leaves an unsigned result the user believes signed.
 func WriteResult(dir string, r *consent.Result, signKey string) (sha string, err error) {
+	var key ed25519.PrivateKey
 	if signKey != "" {
-		return "", errors.New("--sign-key: signing isn't built into this version yet")
+		if key, err = LoadSignKey(signKey); err != nil {
+			return "", err
+		}
+	}
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return "", err
 	}
 	files, err := hashFiles(dir, func(rel string) bool {
 		top, _, _ := strings.Cut(rel, "/")
@@ -68,6 +75,11 @@ func WriteResult(dir string, r *consent.Result, signKey string) (sha string, err
 	data = append(data, '\n')
 	if err := cache.WriteFile(filepath.Join(dir, ResultFile), data); err != nil {
 		return "", err
+	}
+	if key != nil {
+		if err := sign(dir, key, data); err != nil {
+			return "", err
+		}
 	}
 	sum := sha256.Sum256(data)
 	return hex.EncodeToString(sum[:]), nil

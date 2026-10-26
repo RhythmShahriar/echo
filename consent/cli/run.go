@@ -34,12 +34,16 @@ import (
 // which tests swap for stand-ins (the verdict lane writes the real ones
 // and their goldens).
 var writers = struct {
-	text  func(io.Writer, *consent.Result, report.ConsentTextOptions) error
-	md    func(io.Writer, *consent.Result, report.ConsentMarkdownOptions) error
-	html  func(io.Writer, *consent.Result, report.ConsentHTMLOptions) error
-	junit func(io.Writer, *consent.Result, string) error
-	json  func(io.Writer, *consent.Result, string) error
-}{report.WriteConsentText, report.WriteConsentMarkdown, report.WriteConsentHTML, report.WriteConsentJUnit, report.WriteConsentJSON}
+	text    func(io.Writer, *consent.Result, report.ConsentTextOptions) error
+	md      func(io.Writer, *consent.Result, report.ConsentMarkdownOptions) error
+	html    func(io.Writer, *consent.Result, report.ConsentHTMLOptions) error
+	junit   func(io.Writer, *consent.Result, string) error
+	json    func(io.Writer, *consent.Result, string) error
+	detect  func(io.Writer, *consent.DetectResult, bool, report.ConsentTextOptions) error
+	verify  func(io.Writer, *report.ConsentVerify, bool, report.ConsentTextOptions) error
+	catalog func(io.Writer, []consent.CMPRuleInfo, []consent.TrackerInfo, string, bool, report.ConsentTextOptions) error
+}{report.WriteConsentText, report.WriteConsentMarkdown, report.WriteConsentHTML, report.WriteConsentJUnit, report.WriteConsentJSON,
+	report.WriteConsentDetect, report.WriteConsentVerify, report.WriteConsentCatalog}
 
 // The report files of an evidence folder.
 const (
@@ -180,13 +184,12 @@ func (c *cmd) check(pos []string) int {
 	if err := c.writeEvidence(st, dir, r); err != nil {
 		return fail(env, err)
 	}
-	view, viewIsTerm := env.Stdout, kitcli.IsTerminal(env.Stdout)
+	view := env.Stdout
 	if stdoutFormat(st.outs) != "" {
-		view, viewIsTerm = env.Stderr, kitcli.IsTerminal(env.Stderr)
+		view = env.Stderr
 	}
-	plain := o.plain || !viewIsTerm
-	opts := report.ConsentTextOptions{Plain: plain, Color: !plain && !o.noColor && os.Getenv("NO_COLOR") == "", Quiet: o.quiet, Verbose: o.verbose,
-		Width: width(view), FailOn: st.failOn, FirstRun: firstRun, ReportPath: shown(filepath.Join(dir, reportHTML))}
+	opts := c.textOptions(view)
+	opts.FailOn, opts.FirstRun, opts.ReportPath = st.failOn, firstRun, shown(filepath.Join(dir, reportHTML))
 	if err := writers.text(view, r, opts); err != nil {
 		fmt.Fprintln(env.Stderr, "rhythm echo: printing the result:", err)
 	}
@@ -215,6 +218,16 @@ func (c *cmd) check(pos []string) int {
 		prompt(ctx)
 	}
 	return r.ExitCode(st.failOn)
+}
+
+// textOptions are the terminal options for output written to view:
+// plain off a terminal or with --plain, color unless --no-color or
+// NO_COLOR, -q and -v.
+func (c *cmd) textOptions(view io.Writer) report.ConsentTextOptions {
+	o := c.o
+	plain := o.plain || !kitcli.IsTerminal(view)
+	return report.ConsentTextOptions{Plain: plain, Color: !plain && !o.noColor && os.Getenv("NO_COLOR") == "", Quiet: o.quiet, Verbose: o.verbose,
+		Width: width(view)}
 }
 
 // writeEvidence writes consent.json (hashing the attachments first),

@@ -15,6 +15,7 @@ import (
 
 	"github.com/RhythmShahriar/echo/config"
 	"github.com/RhythmShahriar/echo/consent"
+	"github.com/RhythmShahriar/echo/consent/evidence"
 	"github.com/RhythmShahriar/echo/sendmail"
 	"github.com/RhythmShahriar/echo/store"
 )
@@ -72,8 +73,11 @@ func (c *cmd) prepare(pos []string) (*setup, error) {
 		return nil, usagef("%s", msgShowIDs)
 	}
 	if o.signKey != "" {
-		// Refused before any browser starts, rather than after the run.
-		return nil, usagef("--sign-key: signing isn't built into this version yet")
+		// A key that can't sign is refused before any browser starts,
+		// not after the run; WriteResult reads it again to sign.
+		if _, err := evidence.LoadSignKey(o.signKey); err != nil {
+			return nil, err
+		}
 	}
 	st := &setup{outs: outs}
 	if st.failOn, err = checkFailOn(o.failOn, o.against != ""); err != nil {

@@ -79,6 +79,43 @@ func fakeWriters(t *testing.T) *written {
 		_, err := fmt.Fprintf(w, "{\"kind\":\"consent\",\"verdict\":%q,\"complete\":%v}\n", r.Verdict(failOn), r.Complete)
 		return err
 	}
+	writers.verify = func(w io.Writer, v *report.ConsentVerify, asJSON bool, _ report.ConsentTextOptions) error {
+		if asJSON {
+			return json.NewEncoder(w).Encode(map[string]any{"kind": "consent-verify", "data": v})
+		}
+		for _, f := range v.Files {
+			state := "ok"
+			switch {
+			case f.Got == "":
+				state = "missing"
+			case !f.OK:
+				state = "changed"
+			}
+			fmt.Fprintf(w, "%s  %s\n", state, f.Path)
+		}
+		_, err := fmt.Fprintf(w, "signature present=%v ok=%v key=%s\n", v.Signature.Present, v.Signature.OK, v.Signature.Key)
+		return err
+	}
+	writers.detect = func(w io.Writer, d *consent.DetectResult, asJSON bool, _ report.ConsentTextOptions) error {
+		if asJSON {
+			return json.NewEncoder(w).Encode(map[string]any{"kind": "consent-detect", "data": d})
+		}
+		_, err := fmt.Fprintf(w, "DETECT %s found=%v accept=%v reject=%v screenshot=%s\n", d.URL, d.CMP.Found, d.Accept != nil, d.Reject != nil, d.Screenshot)
+		return err
+	}
+	writers.catalog = func(w io.Writer, cmps []consent.CMPRuleInfo, trackers []consent.TrackerInfo, kind string, asJSON bool, _ report.ConsentTextOptions) error {
+		if asJSON {
+			return json.NewEncoder(w).Encode(map[string]any{"kind": "consent-catalog", "cmps": cmps, "trackers": trackers})
+		}
+		fmt.Fprintf(w, "CATALOG %s\n", kind)
+		for _, c := range cmps {
+			fmt.Fprintf(w, "cmp %s\n", c.ID)
+		}
+		for _, t := range trackers {
+			fmt.Fprintf(w, "tracker %s %s\n", t.ID, strings.Join(t.Sources, ","))
+		}
+		return nil
+	}
 	return &got
 }
 

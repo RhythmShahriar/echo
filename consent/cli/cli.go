@@ -79,6 +79,8 @@ func Main(args []string, env Env) int {
 	switch s {
 	case subCheck:
 		return c.check(pos)
+	case subVerify:
+		return c.verify(pos)
 	}
 	return c.notBuilt()
 }

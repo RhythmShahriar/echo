@@ -465,12 +465,16 @@ func mustWd(t *testing.T) string {
 	return wd
 }
 
-// Until signing is built, --sign-key is refused before anything runs.
-func TestSignKeyNotBuilt(t *testing.T) {
+// A --sign-key that can't sign is refused before anything runs.
+func TestSignKeyChecked(t *testing.T) {
 	inDir(t, "")
 	runner, _ := useRunner(t, consenttest.GoldenResult("clean"), nil)
+	putFile(t, "team.key", "not a key")
 	code, _, errOut := runMain(t, "--sign-key", "team.key", "https://shop.test/")
-	if code != exitUsage || errOut != "rhythm echo: --sign-key: signing isn't built into this version yet\n" || len(runner.Plans) != 0 {
+	if code != exitUsage || errOut != "rhythm echo: --sign-key: want an ed25519 private key in PEM (openssl genpkey -algorithm ed25519 -out team.key)\n" || len(runner.Plans) != 0 {
 		t.Errorf("exit %d %q", code, errOut)
+	}
+	if _, err := os.Stat(".echo"); err == nil {
+		t.Error("a refused key made the store")
 	}
 }

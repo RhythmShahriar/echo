@@ -93,17 +93,6 @@ func TestWriteResult(t *testing.T) {
 	}
 }
 
-// This build signs nothing: a key is refused rather than ignored.
-func TestWriteResultSignKeyNotBuilt(t *testing.T) {
-	dir := t.TempDir()
-	if _, err := WriteResult(dir, consenttest.GoldenResult("clean"), "team.key"); err == nil {
-		t.Fatal("a sign key was taken")
-	}
-	if _, err := os.Stat(filepath.Join(dir, "consent.json")); err == nil {
-		t.Error("consent.json was written unsigned")
-	}
-}
-
 // The manifest covers every file but itself, sorted, links left out.
 func TestWriteManifest(t *testing.T) {
 	dir := t.TempDir()
