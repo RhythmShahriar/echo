@@ -412,9 +412,11 @@ func (x *custom) runs() []fixtureRun {
 
 // fixtureURL is a request fixture as the report shows it: the URL with
 // credentials and personal parameters masked (IDs kept, the config's
-// author wrote them), led by the method when it isn't GET.
+// author wrote them), led by the method when it isn't GET. The mask's
+// bullets come back percent-encoded in a query; they are shown as
+// bullets, so a masked value reads as masked.
 func fixtureURL(f reqFixture) string {
-	u := consent.MaskURL(f.URL, true)
+	u := strings.ReplaceAll(consent.MaskURL(f.URL, true), "%E2%80%A2", "•")
 	if f.Method != "GET" {
 		u = f.Method + " " + u
 	}
