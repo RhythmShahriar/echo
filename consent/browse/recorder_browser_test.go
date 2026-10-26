@@ -245,7 +245,10 @@ func TestQueuedFlushAfter(t *testing.T) {
 
 // TestRequestStorm: 50,000 beacons stop the recording at the request
 // limit: the run is marked as limited and truncated, nothing past the
-// limit leaves the browser and the memory stays bounded.
+// limit leaves the browser and the memory stays bounded. The limit is
+// lowered to 2,000: sendBeacon gives up while Chrome's keepalive quota
+// is full, so how many of the 50,000 are sent depends on how fast the
+// recorder answers (slow under -race), not on the page.
 func TestRequestStorm(t *testing.T) {
 	st := newSite(t)
 	st.page("shop.test/", `<!doctype html><title>storm</title><script>
@@ -256,27 +259,27 @@ burst();
 </script>`)
 	p := consenttest.NewPlan(t, "https://shop.test/")
 	p.MapHosts = map[string]string{"shop.test": st.addr(), "tracker.test": st.addr()}
+	const limit = 2000
+	p.Limits.Requests = limit
 	g := newRig(t, p)
 	s := g.open("https://shop.test/", consent.RunNone)
 	if err := s.navigate("https://shop.test/"); err != nil {
 		t.Fatal(err)
 	}
+	select {
+	case <-s.rec.limit:
+	case <-time.After(testenv.Timeout(3 * time.Minute)):
+		t.Fatal("the request limit was never reached")
+	}
+	// Let the page finish its burst so the requests past the limit are
+	// the ones checked below.
 	deadline := time.Now().Add(testenv.Timeout(3 * time.Minute))
-	for {
-		var sent bool
+	for time.Now().Before(deadline) {
 		raw, err := s.evalMain(t.Context(), `window.sent === true`)
 		if err == nil && string(raw) == "true" {
-			sent = true
-		}
-		if sent || time.Now().After(deadline) {
 			break
 		}
 		time.Sleep(200 * time.Millisecond)
-	}
-	select {
-	case <-s.rec.limit:
-	case <-time.After(testenv.Timeout(time.Minute)):
-		t.Fatal("the request limit was never reached")
 	}
 	time.Sleep(testenv.Timeout(2 * time.Second))
 	rec := s.close()
@@ -286,8 +289,8 @@ burst();
 	if !rec.Limit || !rec.Truncated || rec.Dropped == 0 {
 		t.Errorf("limit %v, truncated %v, dropped %d", rec.Limit, rec.Truncated, rec.Dropped)
 	}
-	if n := len(requestEvents(rec)); n > consent.DefaultLimits.Requests {
-		t.Errorf("%d requests recorded; the limit is %d", n, consent.DefaultLimits.Requests)
+	if n := len(requestEvents(rec)); n > limit {
+		t.Errorf("%d requests recorded; the limit is %d", n, limit)
 	}
 	if st.hits("tracker.test", "") != 0 {
 		t.Errorf("%d beacons reached the tracker", st.hits("tracker.test", ""))
