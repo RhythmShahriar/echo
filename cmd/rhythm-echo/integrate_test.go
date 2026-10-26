@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
+	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -120,6 +122,32 @@ func TestDoctorChromeLine(t *testing.T) {
 	}
 	if majorVersion("Google Chrome 153.0.8010.52 \n") != "153" || majorVersion("Chromium") != "" {
 		t.Error("majorVersion")
+	}
+}
+
+// doctor never runs chrome.exe --version on Windows (it opens the
+// browser there) and reads the version from a Chrome elsewhere.
+func TestAskVersion(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("needs a shell script as the fake Chrome")
+	}
+	dir := t.TempDir()
+	ran := filepath.Join(dir, "ran")
+	bin := filepath.Join(dir, "chrome")
+	if err := os.WriteFile(bin, []byte("#!/bin/sh\ntouch '"+ran+"'\necho 'Google Chrome 153.0.8010.52'\n"), 0o700); err != nil { //nolint:gosec // a test script
+		t.Fatal(err)
+	}
+	if v := askVersion("windows", bin); v != "" {
+		t.Errorf("windows: %q", v)
+	}
+	if _, err := os.Stat(ran); err == nil {
+		t.Error("windows: the browser ran")
+	}
+	if v := askVersion("linux", bin); v != "153" {
+		t.Errorf("linux: %q", v)
+	}
+	if v := askVersion("linux", filepath.Join(dir, "missing")); v != "" {
+		t.Errorf("missing: %q", v)
 	}
 }
 
