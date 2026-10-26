@@ -148,7 +148,7 @@ func record(t *testing.T, f func(testing.TB)) *recorder {
 
 // TestNotLinkedRequired: a build whose tracker and cmp stages are linked
 // but whose check, report or detect isn't passes the linkage probe; the
-// later "isn't built yet" then skips, and fails under the require flag.
+// later "isn't built yet" then skips, or fails under the require flag.
 func TestNotLinkedRequired(t *testing.T) {
 	self, err := os.Executable()
 	if err != nil {
