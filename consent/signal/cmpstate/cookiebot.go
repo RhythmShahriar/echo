@@ -181,11 +181,11 @@ func (t *jsTok) value(d int) (jsValue, bool) {
 	if t.i >= len(t.s) {
 		return jsValue{}, false
 	}
-	switch c := t.s[t.i]; {
-	case c == '\'' || c == '"':
+	switch t.s[t.i] {
+	case '\'', '"':
 		s, ok := t.str()
 		return jsValue{s: s}, ok
-	case c == '{' || c == '[':
+	case '{', '[':
 		return jsValue{}, t.skip(d + 1)
 	}
 	start := t.i

@@ -112,7 +112,7 @@ func hostile() []string {
 		strings.Repeat(`{"a":`, 100) + "1" + strings.Repeat("}", 100),
 		strings.Repeat("{a:", 100) + "1" + strings.Repeat("}", 100),
 		strings.Repeat("[", 100) + strings.Repeat("]", 100),
-		"\x00\x01\x1b[31m‮\x7f",
+		"\x00\x01\x1b[31m\u202e\x7f",
 		strings.Repeat("%25", 2000),
 		strings.Repeat("x", MaxValue+1),
 	}
