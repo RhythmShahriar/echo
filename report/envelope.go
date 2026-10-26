@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/RhythmShahriar/echo/consent"
 	"github.com/RhythmShahriar/echo/dns"
 	"github.com/RhythmShahriar/echo/headers"
 	"github.com/RhythmShahriar/echo/model"
@@ -29,10 +30,16 @@ const (
 	KindMessages   Kind = "messages"   // ls, show: captured messages
 	KindSnapshots  Kind = "snapshots"  // snapshots: the stored snapshots
 	KindDoctor     Kind = "doctor"     // doctor: what was checked and how it went
+
+	KindConsent        Kind = "consent"         // consent: the consent check's result (ConsentEnvelope)
+	KindConsentCatalog Kind = "consent-catalog" // consent cmps, consent trackers
+	KindConsentDetect  Kind = "consent-detect"  // consent detect: the banner and its controls
+	KindConsentVerify  Kind = "consent-verify"  // consent verify: an evidence folder checked
 )
 
 // Kinds lists every kind, in the order the docs give them.
-var Kinds = []Kind{KindRun, KindComparison, KindCheck, KindHeaders, KindMessages, KindSnapshots, KindDoctor}
+var Kinds = []Kind{KindRun, KindComparison, KindCheck, KindHeaders, KindMessages, KindSnapshots, KindDoctor,
+	KindConsent, KindConsentCatalog, KindConsentDetect, KindConsentVerify}
 
 // The verdicts of an Envelope.
 const (
@@ -73,6 +80,53 @@ type Summary struct {
 	Actions       int `json:"actions"` // run: actions run; comparison: actions compared
 	Messages      int `json:"messages"`
 	FailedActions int `json:"failed_actions"` // actions that errored themselves, not the site's messages
+}
+
+// ConsentSummary counts what a consent result holds (PRD 9.3). The
+// consent kind has its own summary, so its counts are always written
+// (0 included) while every other kind's summary stays as it was, byte
+// for byte. The first seven counts mean what they mean in Summary.
+type ConsentSummary struct {
+	Broke            int `json:"broke"` // changes by class, with --against
+	New              int `json:"new"`
+	Changed          int `json:"changed"`
+	Fixed            int `json:"fixed"`
+	Errors           int `json:"errors"` // issues by level
+	Warnings         int `json:"warnings"`
+	Notices          int `json:"notices"`
+	Pages            int `json:"pages"`
+	Runs             int `json:"runs"`
+	FailedRuns       int `json:"failed_runs"`
+	InconclusiveRuns int `json:"inconclusive_runs"`
+	Trackers         int `json:"trackers"`
+	BeforeChoice     int `json:"before_choice"`
+	AfterReject      int `json:"after_reject"`
+	Held             int `json:"held"`
+}
+
+// NewConsentSummary maps a consent result's summary to the envelope's
+// field names.
+func NewConsentSummary(s consent.Summary) ConsentSummary {
+	return ConsentSummary{
+		Broke: s.Broke, New: s.New, Changed: s.Changed, Fixed: s.Fixed,
+		Errors: s.Errors, Warnings: s.Warnings, Notices: s.Notices,
+		Pages: s.Pages, Runs: s.Runs, FailedRuns: s.FailedRuns, InconclusiveRuns: s.InconclusiveRuns,
+		Trackers: s.Trackers, BeforeChoice: s.BeforeChoice, AfterReject: s.AfterReject, Held: s.Held,
+	}
+}
+
+// ConsentEnvelope is the Envelope of the consent kind: the same fields
+// in the same order, with ConsentSummary as the summary. WriteConsentJSON
+// writes it.
+type ConsentEnvelope struct {
+	Schema   string         `json:"schema"`   // model.Schema
+	Kind     Kind           `json:"kind"`     // KindConsent
+	Tool     string         `json:"tool"`     // rhythm-echo
+	Version  string         `json:"version"`  // the Echo that wrote it
+	Complete bool           `json:"complete"` // false when a run was inconclusive, cut short or canceled
+	Summary  ConsentSummary `json:"summary"`
+	Verdict  string         `json:"verdict"` // VerdictOK, VerdictFindings or VerdictError
+	Data     any            `json:"data"`    // the *consent.Result
 }
 
 // Snapshot is one entry of the snapshots kind.
