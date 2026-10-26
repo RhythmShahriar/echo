@@ -32,7 +32,7 @@ import (
 )
 
 // Host ports the containers publish, on loopback only. None of them is
-// a port another package's tests listen on (the Action's shop has 20515).
+// a port another package's tests listen on.
 const (
 	apiPort   = "20508"
 	smtpPort  = "20516"

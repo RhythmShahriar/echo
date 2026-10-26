@@ -339,7 +339,7 @@ func TestDeliverabilityAndReplayJSON(t *testing.T) {
 
 	secret := strings.Join([]string{"wh", "sec_", "CliTestSigningSecret0123456789"}, "")
 	t.Setenv("ECHO_STRIPE_WEBHOOK_SECRET", secret)
-	echoSrv := fixtureServer(t, 20469, catcher.NewServer(catcher.NewInbox(100), catcher.Config{Version: "test"}))
+	echoSrv := fixtureServer(t, 0, catcher.NewServer(catcher.NewInbox(100), catcher.Config{Version: "test"}))
 	shop := stripeShop(t, secret, client.New(echoSrv.URL, ""), nil)
 	defer shop.Close()
 	t.Chdir(t.TempDir())

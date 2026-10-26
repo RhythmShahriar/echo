@@ -1439,7 +1439,7 @@ func fakeMailpitSMTP(t *testing.T, port int) {
 func TestDoctorNamesMailpit(t *testing.T) {
 	t.Chdir(t.TempDir())
 	writeConfig(t, "smtp: \"off\"\n")
-	mailpit := fixtureServer(t, 20462, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	mailpit := fixtureServer(t, 0, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v1/info" {
 			fmt.Fprint(w, `{"Version":"v1.21.0","Database":"/data/mailpit.db"}`)
 			return
@@ -1453,7 +1453,7 @@ func TestDoctorNamesMailpit(t *testing.T) {
 
 	// The SMTP port comes from Echo's health and Mailpit on it is named.
 	fakeMailpitSMTP(t, 20464)
-	echo := fixtureServer(t, 20463, echoHealth(catcher.NewServer(catcher.NewInbox(10), catcher.Config{Version: "test"}), "0.0.0.0:20464"))
+	echo := fixtureServer(t, 0, echoHealth(catcher.NewServer(catcher.NewInbox(10), catcher.Config{Version: "test"}), "0.0.0.0:20464"))
 	code, out, _ = runCLI(t, "doctor", "--url", echo.URL, "--plain")
 	if code != exitFindings || !strings.Contains(out, "127.0.0.1:20464 is Mailpit, not Echo's sink") {
 		t.Errorf("doctor with Mailpit on the SMTP port: %d\n%s", code, out)
@@ -1461,7 +1461,7 @@ func TestDoctorNamesMailpit(t *testing.T) {
 }
 
 func TestDoctorRunsOnlyTheStacksChecks(t *testing.T) {
-	echo := fixtureServer(t, 20465, catcher.NewServer(catcher.NewInbox(10), catcher.Config{Version: "test"}))
+	echo := fixtureServer(t, 0, catcher.NewServer(catcher.NewInbox(10), catcher.Config{Version: "test"}))
 	for _, tc := range []struct {
 		files      map[string]string
 		want, not  string
@@ -1559,7 +1559,7 @@ func TestBaselinesTravel(t *testing.T) {
 	if _, err := exec.LookPath("curl"); err != nil {
 		t.Skip("no curl")
 	}
-	echo := fixtureServer(t, 20467, catcher.NewServer(catcher.NewInbox(1000), catcher.Config{Version: "test"}))
+	echo := fixtureServer(t, 0, catcher.NewServer(catcher.NewInbox(1000), catcher.Config{Version: "test"}))
 	root := t.TempDir()
 	t.Setenv("HOME", root)
 	a, b := filepath.Join(root, "a"), filepath.Join(root, "b")
@@ -1845,7 +1845,7 @@ func TestEveryCommandWritesTheEnvelope(t *testing.T) {
 		t.Skip("no curl")
 	}
 	inbox := catcher.NewInbox(1000)
-	echo := fixtureServer(t, 20468, catcher.NewServer(inbox, catcher.Config{Version: "test"}))
+	echo := fixtureServer(t, 0, catcher.NewServer(inbox, catcher.Config{Version: "test"}))
 	root := t.TempDir()
 	t.Setenv("HOME", root)
 	t.Chdir(root)
@@ -2050,7 +2050,7 @@ func fakeLatest(t *testing.T, token string, queries chan<- string) http.Handler 
 func TestLatestPrintsTheCodeOrLink(t *testing.T) {
 	t.Chdir(t.TempDir())
 	queries := make(chan string, 1)
-	echo := fixtureServer(t, 20470, fakeLatest(t, "s3cret-token", queries))
+	echo := fixtureServer(t, 0, fakeLatest(t, "s3cret-token", queries))
 	t.Setenv("RHYTHM_ECHO_URL", echo.URL)
 	t.Setenv("RHYTHM_ECHO_TOKEN", "s3cret-token")
 	lastQuery := func() string {
@@ -2165,7 +2165,7 @@ func TestLatestPrintsTheCodeOrLink(t *testing.T) {
 	// Echo 1.0.0 had no latest route: GET /v1/messages/{id} took "latest"
 	// for an ID and answered http.NotFound.
 	current := catcher.NewServer(catcher.NewInbox(10), catcher.Config{Version: "test"})
-	old := fixtureServer(t, 20471, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	old := fixtureServer(t, 0, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/v1/messages/latest" {
 			http.NotFound(w, r)
 			return
@@ -2190,7 +2190,7 @@ func TestLatestPrintsTheCodeOrLink(t *testing.T) {
 // from Echo's own /v1/messages/latest, as well as its "nothing came" answer.
 func TestLatestAgainstTheRealCatcher(t *testing.T) {
 	t.Chdir(t.TempDir())
-	echo := fixtureServer(t, 20475, catcher.NewServer(catcher.NewInbox(10), catcher.Config{Version: "test"}))
+	echo := fixtureServer(t, 0, catcher.NewServer(catcher.NewInbox(10), catcher.Config{Version: "test"}))
 	t.Setenv("RHYTHM_ECHO_URL", echo.URL)
 	t.Setenv("RHYTHM_ECHO_TOKEN", "")
 	body := `{"v":1,"kind":"email","source":{"via":"wordpress"},"email":{"from":"shop@shop.test","to":["ann@shop.test"],` +
@@ -2279,7 +2279,7 @@ func timedLatest(t *testing.T) (h http.Handler, add func(code string, at time.Ti
 func TestLatestWaitsForTheNewMessage(t *testing.T) {
 	t.Chdir(t.TempDir())
 	h, add := timedLatest(t)
-	echo := fixtureServer(t, 20473, h)
+	echo := fixtureServer(t, 0, h)
 	t.Setenv("RHYTHM_ECHO_URL", echo.URL)
 	add("111111", time.Now().Add(-5*time.Minute)) // the previous test run's
 
@@ -2297,7 +2297,7 @@ func TestLatestWaitsForTheNewMessage(t *testing.T) {
 	}
 	// Nothing in time: the message says how far back it looked.
 	h2, _ := timedLatest(t)
-	t.Setenv("RHYTHM_ECHO_URL", fixtureServer(t, 20474, h2).URL)
+	t.Setenv("RHYTHM_ECHO_URL", fixtureServer(t, 0, h2).URL)
 	code, _, errOut := runCLI(t, "latest", "--to", "ann@shop.test", "--wait", "200ms")
 	if code != exitFindings || errOut != "rhythm echo: no message to ann@shop.test arrived within 200ms (nor in the 1m before; --since looks further back)\n" {
 		t.Errorf("latest with nothing: %d %q", code, errOut)
