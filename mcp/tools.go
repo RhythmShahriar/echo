@@ -118,6 +118,7 @@ func toolList() []tool {
 			}),
 			// Read-only, though it asks DNS servers out there.
 			Annotations: map[string]any{"readOnlyHint": true, "destructiveHint": false, "idempotentHint": true, "openWorldHint": true}},
+		consentTool(),
 	}
 }
 
@@ -195,6 +196,12 @@ func (s *Server) call(ctx context.Context, name string, raw json.RawMessage) (an
 			return nil, err
 		}
 		v, err = s.checkDomain(ctx, a.Domain, a.Provider)
+	case "check_consent":
+		var a consentArgs
+		if err := decode(raw, &a); err != nil {
+			return nil, err
+		}
+		v, err = s.checkConsent(ctx, a)
 	default:
 		return nil, errorf(codeInvalidParams, "no tool %q", name)
 	}

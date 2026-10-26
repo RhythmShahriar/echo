@@ -79,6 +79,14 @@ func (e *writeError) Error() string {
 // the reports stating its hash, the manifest last) and prints the
 // result.
 func (c *cmd) check(pos []string) int {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	return c.runCheck(ctx, pos)
+}
+
+// runCheck is check with ctx: canceling it stops the runs, which are
+// then judged and written as an interrupted check.
+func (c *cmd) runCheck(ctx context.Context, pos []string) int {
 	o, env := c.o, c.env
 	st, err := c.prepare(pos)
 	if err != nil {
@@ -123,8 +131,6 @@ func (c *cmd) check(pos []string) int {
 		fmt.Fprintln(env.Stderr, "rhythm echo:", msgSendHits)
 	}
 
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
 	var prompt func(context.Context)
 	if env.Update != nil && !machine && kitcli.IsTerminal(env.Stdout) {
 		prompt = env.Update(ctx)
