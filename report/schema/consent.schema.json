@@ -1135,6 +1135,9 @@
         "comparison": {
           "$ref": "#/$defs/comparisonOrNull"
         },
+        "complete": {
+          "type": "boolean"
+        },
         "duration_ms": {
           "type": "integer"
         },
@@ -1254,7 +1257,8 @@
         "inconclusive",
         "comparison",
         "evidence",
-        "notes"
+        "notes",
+        "complete"
       ],
       "type": "object"
     },

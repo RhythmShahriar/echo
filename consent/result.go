@@ -284,7 +284,7 @@ type Result struct {
 	Comparison   *Comparison    `json:"comparison"`
 	Evidence     Evidence       `json:"evidence"`
 	Notes        []string       `json:"notes"`
-	Complete     bool           `json:"-"` // the envelope carries it
+	Complete     bool           `json:"complete"` // false when a run was inconclusive, cut short or canceled; consent.json says it too
 }
 
 // Summary is the envelope summary (PRD 9.3), computed from a Result.

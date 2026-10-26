@@ -194,8 +194,8 @@ func TestInterrupted(t *testing.T) {
 		t.Fatalf("exit %d\n%s", code, errOut)
 	}
 	r := readResultFile(t, resultDir(t))
-	if len(r.Pages) != 1 || !strings.Contains(strings.Join(r.Notes, "\n"), noteInterrupted) {
-		t.Errorf("consent.json: %d pages, notes %v", len(r.Pages), r.Notes)
+	if len(r.Pages) != 1 || !strings.Contains(strings.Join(r.Notes, "\n"), noteInterrupted) || r.Complete {
+		t.Errorf("consent.json: %d pages, notes %v, complete %v", len(r.Pages), r.Notes, r.Complete)
 	}
 	if len(got.json) != 1 || got.json[0].Complete {
 		t.Error("the JSON report isn't complete: false")
@@ -561,6 +561,9 @@ func TestWriteOrder(t *testing.T) {
 	}
 	dir := resultDir(t)
 	r := readResultFile(t, dir)
+	if !r.Complete {
+		t.Error("consent.json of a complete check says complete: false")
+	}
 	sum := func(path string) string {
 		data, err := os.ReadFile(path) //nolint:gosec // the test's own folder
 		if err != nil {

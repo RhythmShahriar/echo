@@ -229,6 +229,7 @@
       "Evidence, not legal advice.",
       "Hits held in the browser.",
       "Hosts mapped with --map-host."
-    ]
+    ],
+    "complete": true
   }
 }

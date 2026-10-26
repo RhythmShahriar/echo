@@ -211,6 +211,18 @@ func TestReportLatest(t *testing.T) {
 	if code, out, _ := runMain(t, "report", "--json"); code != exitInterrupted || !strings.Contains(out, `"complete":false`) {
 		t.Errorf("interrupted --json: exit %d %q", code, out)
 	}
+	// A result that says it is incomplete stays so in its report, note
+	// or not.
+	dir = putResult(t, "2026-10-29T08-00-00-eeeeee", "clean")
+	r = consenttest.GoldenResult("clean")
+	r.Complete = false
+	if data, err = jsonIndent(r); err != nil {
+		t.Fatal(err)
+	}
+	putFile(t, filepath.Join(dir, "consent.json"), data)
+	if _, out, _ := runMain(t, "report", "--json"); !strings.Contains(out, `"complete":false`) {
+		t.Errorf("complete: false in consent.json: %q", out)
+	}
 	for args, want := range map[string]string{
 		"report nope":        "rhythm echo: consent report \"nope\": no consent result by that id in .echo/consent; rhythm echo consent report latest shows the newest\n",
 		"report baselines":   "rhythm echo: consent report \"baselines\": no consent result by that id in .echo/consent; rhythm echo consent report latest shows the newest\n",

@@ -177,8 +177,8 @@ func (c *cmd) runCheck(ctx context.Context, pos []string) int {
 	r := merge(results, consent.Result{ID: filepath.Base(dir), Started: started.UTC(), Echo: env.Version, OS: runtime.GOOS + "/" + runtime.GOARCH})
 	r.DurationMS = env.now().Sub(started).Milliseconds()
 	if interrupted {
-		// consent.json is the envelope's data, which has no complete
-		// field: the note says so in the file itself.
+		// complete is false in consent.json; the note says why in
+		// words a reader of the file sees.
 		r.Complete = false
 		r.Notes = append(r.Notes, noteInterrupted)
 	}
