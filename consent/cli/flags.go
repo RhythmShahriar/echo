@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/RhythmShahriar/echo/config"
 	"github.com/RhythmShahriar/echo/internal/flagtext"
 	"github.com/RhythmShahriar/echo/model"
 	"github.com/RhythmShahriar/echo/report"
@@ -334,7 +335,7 @@ var flagDefs = []flagDef{
 }
 
 // cmpNames are the --cmp values: auto, then every CMP rule PRD 7 names.
-var cmpNames = []string{"auto", "cookiebot", "onetrust", "cookieyes", "complianz", "usercentrics", "borlabs", "didomi", "iubenda", "generic"}
+var cmpNames = config.ConsentCMPs
 
 // lookupDef returns the definition of the long flag name.
 func lookupDef(name string) (flagDef, bool) {

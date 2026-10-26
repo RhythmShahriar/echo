@@ -213,7 +213,8 @@ Usage:
   rhythm echo consent [<url>...]         check cookie consent: no choice, Accept and Reject in a real browser
   rhythm echo init [--stack s] [--force]
                                          write .echo/config.yaml with an action for this stack
-                                         (wordpress, laravel, next, node or php; --force replaces it)
+                                         (wordpress, laravel, next, node or php; --force replaces it;
+                                         --consent adds a commented consent: block instead)
   rhythm echo providers                  list the services Echo recognizes, by channel (--json)
   rhythm echo checks [--test]            list the checks and the config's rules (--test: try their fixtures)
   rhythm echo ca [--pem | --untrust]     print the proxy's CA certificate path (--pem: the certificate;

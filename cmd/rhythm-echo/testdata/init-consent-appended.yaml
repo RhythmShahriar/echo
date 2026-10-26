@@ -1,0 +1,34 @@
+site: https://staging.shop.test
+production: [shop.example.com]
+
+# Cookie consent checks: rhythm echo consent (rhythm echo consent --help).
+# Every key is optional; uncomment one to change its default.
+consent:
+  # urls: [/, /shop/]                 # pages to check, read against site:; absolute URLs work too
+  # runs: [none, accept, reject]      # add gpc or withdraw, or write +gpc to add it to these
+  # pages: 1                          # more same-site pages after the choice (0 to 10)
+  # settle: 3s                        # how long the network must be quiet after each step (at most 30s)
+  # banner_wait: 10s                  # how long to wait for a banner (at most 60s)
+  # timeout: 90s                      # longest time for one run (at most 10m)
+  # retries: 1                        # tries again for a run that couldn't make its choice (0 to 3)
+  # cmp: auto                         # or the banner to expect: cookiebot, onetrust, cookieyes, complianz...
+  # click: button                     # button, api or button,api
+  # accept_selector: "#accept-all"    # only when the CMP rule doesn't find the Accept button
+  # reject_selector: "#manage >> #reject-all"  # a >> b clicks a, then b
+  # consent_mode: advanced            # advanced, basic or strict
+  # geo: de                           # look like a visitor from this country (language and time zone)
+  # locale: de-DE                     # default the machine's
+  # timezone: Europe/Berlin           # default the machine's
+  # viewport: desktop                 # desktop or mobile
+  # parallel: 3                       # browser runs at once (1 to 8)
+  # exempt: [plausible]               # trackers allowed before consent
+  # headers:                          # values must be ${env:RHYTHM_ECHO_*}, never the secret itself
+  #   Authorization: ${env:RHYTHM_ECHO_STAGING_AUTH}
+  # map_hosts:                        # answer these hosts from another address, for staging
+  #   "*.shop.test": 127.0.0.1:18950
+  # ignore:                           # known issues; each needs a reason and a date within a year
+  #   - check: consent/before-choice
+  #     tracker: hotjar
+  #     reason: "client signs off until the launch"
+  #     until: 2026-11-30
+  # trackers: []                      # your own trackers, the shape of the built-in catalog
