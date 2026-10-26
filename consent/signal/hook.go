@@ -17,7 +17,7 @@ import (
 )
 
 // Limits on what a hook record may carry. hooks.js keeps a record within
-// MaxHookRecord bytes and 8 levels of arguments, but the page can call
+// MaxHookRecord bytes and 8 levels of arguments. The page can call
 // the binding itself, so the decoder checks again.
 const (
 	// maxDepth is the record object, its args array and 8 levels of
@@ -201,7 +201,11 @@ func regions(raw json.RawMessage) []string {
 
 // notRegion reports whether r can't be part of an ISO 3166 code.
 func notRegion(r rune) bool {
-	return !(r >= 'A' && r <= 'Z' || r >= 'a' && r <= 'z' || r >= '0' && r <= '9' || r == '-')
+	switch {
+	case r >= 'A' && r <= 'Z', r >= 'a' && r <= 'z', r >= '0' && r <= '9', r == '-':
+		return false
+	}
+	return true
 }
 
 // waitMS reads wait_for_update, clamped to 0 to maxWaitMS.

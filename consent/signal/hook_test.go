@@ -182,8 +182,8 @@ func TestHookRawMaskedAndCut(t *testing.T) {
 	}
 
 	// Bidi and other controls in page text are escaped.
-	s = hook(t, record(t, "gtag", "consent", "update", map[string]any{"ad_storage": "denied", "x": "a‮b"}))
-	if strings.ContainsRune(s.Raw, '‮') {
+	s = hook(t, record(t, "gtag", "consent", "update", map[string]any{"ad_storage": "denied", "x": "a\u202eb"}))
+	if strings.ContainsRune(s.Raw, '\u202e') {
 		t.Errorf("Raw keeps a bidi override: %q", s.Raw)
 	}
 }

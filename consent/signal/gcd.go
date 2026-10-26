@@ -79,7 +79,7 @@ func gcdShape(raw string) bool {
 	}
 	for i := range 4 {
 		c, d := raw[2+2*i], raw[3+2*i]
-		if !(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z') {
+		if !isLetter(c) {
 			return false
 		}
 		if i < 3 && d != '1' && d != '3' || i == 3 && d != '5' && d != '7' {
@@ -88,3 +88,6 @@ func gcdShape(raw string) bool {
 	}
 	return true
 }
+
+// isLetter reports whether c is an ASCII letter.
+func isLetter(c byte) bool { return c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' }
