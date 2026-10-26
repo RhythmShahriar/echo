@@ -5,6 +5,7 @@ package verdict
 
 import (
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -61,6 +62,25 @@ func TestRejectNotKept(t *testing.T) { // c07
 	if is := issue(t, r, "consent/reject-not-kept|/|reject|"); is.Title != "After Reject, the banner came back on /" ||
 		is.Detail != "the banner showed again on the reload (/) at 12.00s; after the reload cookie:borlabs-cookie grants marketing" {
 		t.Errorf("%+v", is)
+	}
+}
+
+func TestPagePathDropsQuery(t *testing.T) {
+	r := rejected()
+	r.Pages[0].URL = "https://shop.test/?utm_source=mail&token=abc"
+	r.Pages[0].Runs[0].Visits[1].URL = "https://shop.test/blog/?ref=x"
+	r.Pages[0].Runs[0].Visits[1].Banner = true
+	Evaluator{}.Evaluate(r, nil)
+	is := issue(t, r, "consent/reject-not-kept|/|reject|")
+	if is.Page != "/" || is.Title != "After Reject, the banner came back on /blog/" || strings.Contains(is.Detail, "?") {
+		t.Errorf("%+v", is)
+	}
+	for in, want := range map[string]string{
+		"https://shop.test/a?b=1": "/a", "https://shop.test": "/", "https://shop.test/?": "/", "not a url": "not a url",
+	} {
+		if got := pagePath(in); got != want {
+			t.Errorf("pagePath(%q) = %q, want %q", in, got, want)
+		}
 	}
 }
 

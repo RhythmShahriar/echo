@@ -313,12 +313,12 @@ func anchorPart(s string) string {
 // or -1.
 func (h *consentHTML) pageIndex(site, path string) int {
 	for i, pg := range h.r.Pages {
-		if pg.Site == site && consentPagePath(pg.URL) == path {
+		if pg.Site == site && consentIssuePath(pg.URL) == path {
 			return i
 		}
 	}
 	for i, pg := range h.r.Pages {
-		if consentPagePath(pg.URL) == path {
+		if consentIssuePath(pg.URL) == path {
 			return i
 		}
 	}

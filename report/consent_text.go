@@ -405,7 +405,7 @@ func twoDecimals(ms int64) string {
 
 // runIssues are the counted issues of one run of pg.
 func (t *consentText) runIssues(pg *consent.Page, run *consent.Run) []consent.Issue {
-	path := consentPagePath(pg.URL)
+	path := consentIssuePath(pg.URL)
 	var out []consent.Issue
 	for _, is := range t.r.Issues {
 		if is.Ignored == nil && is.Run == run.Kind && is.Page == path && is.Site == pg.Site {
@@ -415,8 +415,8 @@ func (t *consentText) runIssues(pg *consent.Page, run *consent.Run) []consent.Is
 	return out
 }
 
-// consentPagePath is the path (and query) of a page URL, the way issues
-// name pages.
+// consentPagePath is the path (and query) of a page URL, the way the
+// reports show pages; consentIssuePath is the form issues name them by.
 func consentPagePath(raw string) string {
 	u, err := url.Parse(raw)
 	if err != nil || u.Host == "" {
@@ -429,6 +429,13 @@ func consentPagePath(raw string) string {
 	if u.RawQuery != "" {
 		p += "?" + u.RawQuery
 	}
+	return p
+}
+
+// consentIssuePath is the path of a page URL without its query, the
+// way issues and inconclusive runs name pages.
+func consentIssuePath(raw string) string {
+	p, _, _ := strings.Cut(consentPagePath(raw), "?")
 	return p
 }
 

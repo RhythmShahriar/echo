@@ -357,3 +357,23 @@ func TestConsentTextWraps(t *testing.T) {
 		t.Errorf("nil result: %v %q", err, buf.String())
 	}
 }
+
+func TestConsentIssuePathDropsQuery(t *testing.T) {
+	r := &consent.Result{Pages: []consent.Page{{URL: "https://shop.test/shop/?utm_source=mail", Runs: []consent.Run{{Kind: consent.RunNone}}}},
+		Issues: []consent.Issue{{Check: "consent/before-choice", Page: "/shop/", Run: consent.RunNone, Level: model.Error}}}
+	ct := &consentText{w: &strings.Builder{}, r: r, tn: trackerNames(r)}
+	if got := ct.runIssues(&r.Pages[0], &r.Pages[0].Runs[0]); len(got) != 1 {
+		t.Errorf("issues of a page with a query: %+v", got)
+	}
+	r.Issues[0].Page = "/other/"
+	if got := ct.runIssues(&r.Pages[0], &r.Pages[0].Runs[0]); len(got) != 0 {
+		t.Errorf("issue of another page matched: %+v", got)
+	}
+	if p := consentPagePath("https://shop.test/a?b=1"); p != "/a?b=1" {
+		t.Errorf("shown path %q", p)
+	}
+	h := &consentHTML{t: ct, r: r}
+	if h.pageIndex("", "/shop/") != 0 || h.pageIndex("", "/shop/?utm_source=mail") != -1 {
+		t.Error("pageIndex doesn't match on the path alone")
+	}
+}

@@ -37,8 +37,8 @@ func checkFix(check string) string {
 	return c.Fix
 }
 
-// maxEvidence caps the event numbers one issue lists; the detail still
-// counts every hit.
+// maxEvidence caps the event numbers one issue lists; the detail then
+// says how many there were.
 const maxEvidence = 50
 
 // add appends an issue with its key, default level, policy and site.
@@ -47,8 +47,9 @@ func (j *judge) add(pg *consent.Page, check string, run consent.RunKind, tracker
 	if fix == "" {
 		fix = c.Fix
 	}
-	if len(evidence) > maxEvidence {
+	if n := len(evidence); n > maxEvidence {
 		evidence = evidence[:maxEvidence]
+		detail += fmt.Sprintf("; %d of %d events listed", maxEvidence, n)
 	}
 	if evidence == nil {
 		evidence = []int64{}
@@ -61,8 +62,10 @@ func (j *judge) add(pg *consent.Page, check string, run consent.RunKind, tracker
 	})
 }
 
-// pagePath is the path (and query) of a page URL, the way issues name
-// pages; text that isn't a URL with a host is kept whole.
+// pagePath is the path of a page URL, the way issues name and compare
+// match pages. The query is dropped: it often changes between runs
+// (campaign tags, cache busters) and may carry values the summary
+// mustn't show. Text that isn't a URL with a host is kept whole.
 func pagePath(raw string) string {
 	u, err := url.Parse(raw)
 	if err != nil || u.Host == "" {
@@ -71,9 +74,6 @@ func pagePath(raw string) string {
 	p := u.EscapedPath()
 	if p == "" {
 		p = "/"
-	}
-	if u.RawQuery != "" {
-		p += "?" + u.RawQuery
 	}
 	return p
 }

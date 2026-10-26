@@ -341,6 +341,17 @@ func TestAfterWithdraw(t *testing.T) {
 	}
 }
 
+func TestEvidenceNotCapped(t *testing.T) {
+	run := consent.Run{Kind: consent.RunNone, Hits: []consent.HitRef{
+		hit(1, 100, consent.PhaseBefore, "meta-pixel", 0, "https://www.facebook.com/tr?id=1&ev=PageView")}}
+	r := result(run)
+	Evaluator{}.Evaluate(r, nil)
+	is := issue(t, r, "consent/before-choice|/|none|meta-pixel")
+	if len(is.Evidence) != 1 || strings.Contains(is.Detail, "events listed") {
+		t.Errorf("evidence %v detail %q", is.Evidence, is.Detail)
+	}
+}
+
 func TestEvidenceCapped(t *testing.T) {
 	run := consent.Run{Kind: consent.RunNone}
 	for i := range 60 {
@@ -354,7 +365,8 @@ func TestEvidenceCapped(t *testing.T) {
 	if len(is.Evidence) != maxEvidence {
 		t.Errorf("%d evidence entries, want %d", len(is.Evidence), maxEvidence)
 	}
-	if !strings.HasPrefix(is.Detail, "60 hits (PageView on /, /blog/, /, /blog/, /, ...)") {
+	if !strings.HasPrefix(is.Detail, "60 hits (PageView on /, /blog/, /, /blog/, /, ...)") ||
+		!strings.HasSuffix(is.Detail, "; 50 of 60 events listed") {
 		t.Errorf("detail %q", is.Detail)
 	}
 }
