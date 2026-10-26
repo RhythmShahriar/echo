@@ -75,7 +75,7 @@ func TestGeoDE(t *testing.T) {
 	if lang != "de-DE" || tz != "Europe/Berlin" {
 		t.Errorf("language %q, time zone %q", lang, tz)
 	}
-	if reqs := st.requests("127.0.0.1"); len(reqs) == 0 || !strings.HasPrefix(reqs[0].Header.Get("Accept-Language"), "de-DE") {
+	if reqs := st.requests("127.0.0.1"); len(reqs) == 0 || reqs[0].Header.Get("Accept-Language") != "de-DE,de;q=0.9" {
 		t.Errorf("Accept-Language not German")
 	}
 }

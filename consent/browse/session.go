@@ -142,6 +142,18 @@ func acceptLanguage(locale string) string {
 	return locale + "," + lang + ";q=0.9"
 }
 
+// overrideLanguages is the list Chrome's user agent override takes:
+// the languages without weights. Chrome adds the weights itself, so
+// de-DE,de goes out as de-DE,de;q=0.9.
+func overrideLanguages(acceptLang string) string {
+	parts := strings.Split(acceptLang, ",")
+	for i, p := range parts {
+		p, _, _ = strings.Cut(p, ";")
+		parts[i] = strings.TrimSpace(p)
+	}
+	return strings.Join(parts, ",")
+}
+
 // apply sets the emulation on one target before it runs. The tab gets
 // the screen too; frames take theirs from it.
 func (e *emulation) apply(t *target) error {
@@ -149,13 +161,13 @@ func (e *emulation) apply(t *target) error {
 	if t.kind == kindWorker {
 		// Workers have no Emulation domain; their requests still carry
 		// the user agent and, for gpc, the header.
-		_ = proto.NetworkSetUserAgentOverride{UserAgent: e.ua, AcceptLanguage: e.acceptLang, Platform: e.platform, UserAgentMetadata: e.meta}.Call(s)
+		_ = proto.NetworkSetUserAgentOverride{UserAgent: e.ua, AcceptLanguage: overrideLanguages(e.acceptLang), Platform: e.platform, UserAgentMetadata: e.meta}.Call(s)
 		if e.gpc {
 			_ = proto.NetworkSetExtraHTTPHeaders{Headers: gpcHeaders()}.Call(s)
 		}
 		return nil
 	}
-	if err := (proto.EmulationSetUserAgentOverride{UserAgent: e.ua, AcceptLanguage: e.acceptLang, Platform: e.platform, UserAgentMetadata: e.meta}).Call(s); err != nil {
+	if err := (proto.EmulationSetUserAgentOverride{UserAgent: e.ua, AcceptLanguage: overrideLanguages(e.acceptLang), Platform: e.platform, UserAgentMetadata: e.meta}).Call(s); err != nil {
 		return fmt.Errorf("setting the user agent: %w", err)
 	}
 	if err := (proto.EmulationSetLocaleOverride{Locale: e.locale}).Call(s); err != nil && !alreadySet(err) {

@@ -104,6 +104,9 @@ func TestEmulation(t *testing.T) {
 	if m.width != 390 || m.height != 844 || m.dpr != 3 || !m.mobile || m.gpc || m.platform != "Linux armv8l" || !m.meta.Mobile || m.meta.Platform != "Android" {
 		t.Errorf("mobile: %+v %+v", m, m.meta)
 	}
+	if got := overrideLanguages("de-DE,de;q=0.9"); got != "de-DE,de" {
+		t.Errorf("overrideLanguages = %q", got)
+	}
 	if got := acceptLanguage("en"); got != "en" {
 		t.Errorf("acceptLanguage(en) = %q", got)
 	}
