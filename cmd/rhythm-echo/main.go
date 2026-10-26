@@ -12,8 +12,8 @@
 //
 // The commands are up (the catcher), install, doctor, watch, ls, show,
 // clear, snapshot, compare, run, report, snapshots, replay, latest,
-// check, headers, providers, checks, init, ca, mcp, hub, schedule,
-// conformance and sendmail; `rhythm-echo help` lists their flags and exit
+// check, headers, consent, providers, checks, init, ca, mcp, hub,
+// schedule, conformance and sendmail; `rhythm-echo help` lists their flags and exit
 // codes. Every command exits 0 when done, 1 for findings,
 // 2 for a usage error and 3 when it couldn't run, as Tuner and Soundcheck
 // do; sendmail uses sendmail's own codes instead.
@@ -28,6 +28,7 @@ import (
 
 	"github.com/RhythmShahriar/echo/config"
 	"github.com/RhythmShahriar/echo/conformance"
+	consentcli "github.com/RhythmShahriar/echo/consent/cli"
 	"github.com/RhythmShahriar/echo/hub"
 	"github.com/RhythmShahriar/echo/mcp"
 	"github.com/RhythmShahriar/echo/runner"
@@ -131,6 +132,8 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		return cmdCA(args[1:], stdout, stderr)
 	case "sendmail":
 		return cmdSendmail(args[1:], stdin, stdout, stderr)
+	case "consent":
+		return cmdConsent(args[1:], stdin, stdout, stderr)
 	}
 	return cmdUpdate(args[1:], stdout, stderr)
 }
@@ -155,7 +158,7 @@ func help(name string, stdin io.Reader, stdout, stderr io.Writer) int {
 // ownUsage is the help of the commands another package runs, which
 // print it on stderr for --help; help prints it on stdout.
 var ownUsage = map[string]string{"mcp": mcp.Usage, "hub": hub.Usage, "schedule": hub.ScheduleUsage, "conformance": conformance.Usage,
-	"sendmail": sendmail.Usage}
+	"sendmail": sendmail.Usage, "consent": consentcli.Usage}
 
 // ownReplayer is the replayer mcp and schedule run replay actions with:
 // the one snapshot and compare use, for the project in dir with its
@@ -207,6 +210,7 @@ Usage:
                                          send one caught email to a client through the relay
   rhythm echo check <domain>             SPF, DKIM, DMARC and MX for the domain you send from
   rhythm echo headers <file.eml | ->     check a real received email's authentication
+  rhythm echo consent [<url>...]         check cookie consent: no choice, Accept and Reject in a real browser
   rhythm echo init [--stack s] [--force]
                                          write .echo/config.yaml with an action for this stack
                                          (wordpress, laravel, next, node or php; --force replaces it)

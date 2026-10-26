@@ -5,8 +5,11 @@ package main
 
 import (
 	"fmt"
+	"slices"
 
 	"github.com/RhythmShahriar/echo/check"
+	"github.com/RhythmShahriar/echo/consent"
+	"github.com/RhythmShahriar/echo/model"
 	"github.com/RhythmShahriar/echo/runner"
 )
 
@@ -29,7 +32,7 @@ func cmdChecks(s *session) int {
 		}
 		return exitOK
 	}
-	if err := check.WriteRules(s.stdout, append(check.Rules(), s.checks.Rules...)); err != nil {
+	if err := check.WriteRules(s.stdout, slices.Concat(check.Rules(), consentRules(), s.checks.Rules)); err != nil {
 		return s.fail(err)
 	}
 	if len(s.cfg.Checks) > 0 && !s.o.quiet {
@@ -40,4 +43,15 @@ func cmdChecks(s *session) int {
 		return exitFindings
 	}
 	return exitOK
+}
+
+// consentRules lists the consent checks for the checks table. They look
+// at pages, not messages, so they are listed only: never registered and
+// with no Run. Their channel reads "consent".
+func consentRules() []check.Rule {
+	out := make([]check.Rule, 0, len(consent.Checks))
+	for _, c := range consent.Checks {
+		out = append(out, check.Rule{ID: c.ID, Level: c.Level, Channels: []model.Channel{"consent"}, Doc: c.Doc})
+	}
+	return out
 }
