@@ -198,4 +198,24 @@ func TestMeasures(t *testing.T) {
 	if f := strings.Join(failures(r), "\n"); !strings.Contains(f, "Time per page, p95") {
 		t.Errorf("Docker mode failures = %q", f)
 	}
+	// A full Docker run fails on a target it couldn't measure (the fleet
+	// here) but never on the reproduce row, which -diff judges.
+	r.Partial = false
+	f := strings.Join(failures(r), "\n")
+	if !strings.Contains(f, "Fleet: 50 sites, --parallel 6: not measured (partial run), target") {
+		t.Errorf("Docker mode, unmeasured fleet: failures = %q", f)
+	}
+	if strings.Contains(f, reproduceMeasure) {
+		t.Errorf("Docker mode fails on the reproduce row: %q", f)
+	}
+	// A partial Docker run (-only) measures only what it picked.
+	r.Partial = true
+	if f := strings.Join(failures(r), "\n"); strings.Contains(f, "not measured") {
+		t.Errorf("partial Docker run fails on unmeasured targets: %q", f)
+	}
+	// Go mode never fails on a target it couldn't measure.
+	r.Mode, r.Partial = "go", false
+	if f := strings.Join(failures(r), "\n"); strings.Contains(f, "not measured") {
+		t.Errorf("Go mode fails on unmeasured targets: %q", f)
+	}
 }

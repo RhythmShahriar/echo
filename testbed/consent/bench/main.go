@@ -445,7 +445,7 @@ func measures(r *Results, o options, pages, detect []time.Duration, detectNotes 
 	out = append(out, measure("Echo resident memory (Chrome excluded)", mib(r.Timing.RSSMax), "under 200 MB",
 		r.Timing.RSSMax > 0, r.Timing.RSSMax < targetRSS, ""))
 	out = append(out, sizeMeasure(o, root))
-	out = append(out, measure("make reproduce (two full runs, -diff)", "", "no outcome differs", false, false, "run make -C testbed/consent reproduce"))
+	out = append(out, measure(reproduceMeasure, "", "no outcome differs", false, false, "run make -C testbed/consent reproduce"))
 	return out
 }
 
@@ -493,8 +493,14 @@ func sizeMeasure(o options, root string) Measure {
 	return measure(name, value, target, true, growth <= targetSizeGrowth, "")
 }
 
-// failures lists why r fails: in Docker mode every missed target; in Go
-// mode the correctness ones (catches, false alarms, flakes, leaks,
+// reproduceMeasure is the one target a single run can't measure: make
+// reproduce judges it with -diff over two runs.
+const reproduceMeasure = "make reproduce (two full runs, -diff)"
+
+// failures lists why r fails: in Docker mode every target missed plus, on
+// a full run, every target not measured (but reproduceMeasure), since
+// a benchmark of record that couldn't measure a target hasn't met it; in
+// Go mode the correctness ones (catches, false alarms, flakes, leaks,
 // probes), since a developer machine's timings aren't the record.
 func failures(r *Results) []string {
 	var out []string
@@ -523,8 +529,11 @@ func failures(r *Results) []string {
 	}
 	if r.Mode == "docker" {
 		for _, m := range r.Measures {
-			if m.State == MeasureMissed {
+			switch {
+			case m.State == MeasureMissed:
 				out = append(out, m.Name+": "+m.Value+", target "+m.Target)
+			case m.State == MeasureUnknown && !r.Partial && m.Name != reproduceMeasure:
+				out = append(out, m.Name+": not measured ("+orDash(m.Note)+"), target "+m.Target)
 			}
 		}
 	}
