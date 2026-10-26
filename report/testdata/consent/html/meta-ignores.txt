@@ -463,7 +463,7 @@ Sandbox
 on
 TLS
 verified
-Tracker catalogue
+Tracker catalog
 1.2.0 (sha256 4be1c0ff..., 47 entries)
 CMP rules
 1.2.0 (sha256 9c1dfeed..., 9 entries)

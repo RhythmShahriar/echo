@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+// SPDX-License-Identifier: MIT
+
 package report
 
 import (
@@ -35,7 +38,7 @@ var consentCSP = "default-src 'none'; img-src data:; style-src 'unsafe-inline'; 
 // far smaller, so a bigger file isn't one Echo wrote.
 const maxScreenshot = 8 << 20
 
-// paletteSize is the number of tracker colours, c0 to c11 in the
+// paletteSize is the number of tracker colors, c0 to c11 in the
 // template's style: trackers take them in the order they first appear
 // and the thirteenth and later are grey (cg).
 const paletteSize = 12
@@ -178,8 +181,8 @@ func WriteConsentHTML(w io.Writer, r *consent.Result, o ConsentHTMLOptions) erro
 	return err
 }
 
-// catalogDocs maps tracker ids to their catalogue entries, when the
-// catalogue is linked into this build.
+// catalogDocs maps tracker ids to their catalog entries, when the
+// catalog is linked into this build.
 func catalogDocs() map[string]consent.TrackerInfo {
 	out := map[string]consent.TrackerInfo{}
 	if c := consent.Linked().Classifier; c != nil {
@@ -191,7 +194,7 @@ func catalogDocs() map[string]consent.TrackerInfo {
 }
 
 // docsURL is a tracker's vendor documentation, only when the compiled-in
-// catalogue gives an https:// URL; a result file can't add links.
+// catalog gives an https:// URL; a result file can't add links.
 func (h *consentHTML) docsURL(tracker string) string {
 	u := h.docs[tracker].Docs
 	if !strings.HasPrefix(u, "https://") || strings.ContainsAny(u, " \"'<>\\") {
@@ -666,7 +669,7 @@ const (
 )
 
 // timelineSVG draws a run as inline SVG: an axis from 0 to the run's
-// duration, the choice as a vertical line, hits as filled marks coloured
+// duration, the choice as a vertical line, hits as filled marks colored
 // by tracker (outlined red after the choice in Reject and Withdraw
 // runs), cookies as hollow marks and signals as diamonds. Every text in
 // it is escaped; everything else is numbers and fixed class names.
@@ -946,7 +949,7 @@ func (h *consentHTML) details() []chFact {
 		{"Hosts mapped", yes(r.Mapped, "yes (--map-host)", "no")},
 		{"Sandbox", yes(r.Sandbox, "on", "off")},
 		{"TLS", yes(r.TLSVerified, "verified", "not verified")},
-		{"Tracker catalogue", dataWords(r.Catalog)},
+		{"Tracker catalog", dataWords(r.Catalog)},
 		{"CMP rules", dataWords(r.CMPRules)},
 		{"Network", fmt.Sprintf("%d requests, %d held, %d refused, %d browser internal", r.Network.Requests, r.Network.Held, r.Network.Refused, r.Network.BrowserInternal)},
 		{"Result", Safe(r.ID)},

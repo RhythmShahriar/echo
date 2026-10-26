@@ -1254,7 +1254,7 @@ html
         dd
           | verified
         dt
-          | Tracker catalogue
+          | Tracker catalog
         dd
           | 1.2.0 (sha256 4be1c0ff..., 47 entries)
         dt

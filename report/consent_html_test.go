@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+// SPDX-License-Identifier: MIT
+
 package report
 
 import (
@@ -46,7 +49,7 @@ func writePNG(t testing.TB, dir, rel string, w, h int) {
 }
 
 // evidenceFor writes a 1280 by 800 PNG for every screenshot r names
-// except those in skip, and returns the folder.
+// except those in skip; it returns the folder.
 func evidenceFor(t testing.TB, r *consent.Result, skip ...string) string {
 	t.Helper()
 	dir := t.TempDir()
@@ -247,7 +250,7 @@ func TestConsentReportScreenshots(t *testing.T) {
 	}
 }
 
-// docsClassifier is the fake catalogue with vendor docs, one of them
+// docsClassifier is the fake catalog with vendor docs, one of them
 // not https.
 type docsClassifier struct{ *consenttest.FakeClassifier }
 
@@ -287,7 +290,7 @@ func TestConsentReportDocsLinks(t *testing.T) {
 	}
 }
 
-// The verdict bar shows what changes the meaning of the result, and the
+// The verdict bar shows what changes the meaning of the result; the
 // footer is PRD 15.
 func TestConsentReportSections(t *testing.T) {
 	r := judgedResult(t, "meta-ignores")
@@ -327,7 +330,7 @@ func TestConsentReportSections(t *testing.T) {
 			t.Errorf("verdict bar lacks %q", want)
 		}
 	}
-	// Hits after Reject are outlined red; a fixed palette colours trackers.
+	// Hits after Reject are outlined red; a fixed palette colors trackers.
 	if !strings.Contains(out, `class="hit c`) || !regexp.MustCompile(`class="hit c\d+ late"`).MatchString(out) {
 		t.Errorf("no late hit marks")
 	}
@@ -347,12 +350,12 @@ func TestConsentReportPalette(t *testing.T) {
 		t.Errorf("the thirteenth tracker: %s, want cg", got)
 	}
 	if got := h.color("t3"); got != "c3" {
-		t.Errorf("a tracker changed colour: %s", got)
+		t.Errorf("a tracker changed color: %s", got)
 	}
 	tmpl := consentHTMLSource
 	for i := range paletteSize {
 		if !strings.Contains(tmpl, fmt.Sprintf(".c%d { --c: #", i)) {
-			t.Errorf("the template has no colour for c%d", i)
+			t.Errorf("the template has no color for c%d", i)
 		}
 	}
 }
