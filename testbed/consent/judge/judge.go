@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
 // SPDX-License-Identifier: MIT
 
-package main
+package judge
 
 import (
 	"fmt"
@@ -42,20 +42,20 @@ type Observed struct {
 	Missing []string     // stand-ins the page uses that the run's scripts don't list
 }
 
-// judgeBad judges a bad scenario's broken state.
-func judgeBad(s scenarios.Scenario, o Observed) Verdict {
+// Bad judges a bad scenario's broken state.
+func Bad(s scenarios.Scenario, o Observed) Verdict {
 	if v, bad := common(s, o); bad {
 		return v
 	}
 	var found, missing []string
 	for _, m := range s.Expect {
-		if matches(m, o.Env) {
+		if Matches(m, o.Env) {
 			found = append(found, m.String())
 		} else {
 			missing = append(missing, m.String())
 		}
 	}
-	titles := strings.Join(o.Env.titles(), "; ")
+	titles := strings.Join(o.Env.Titles(), "; ")
 	if titles == "" {
 		titles = "none"
 	}
@@ -63,17 +63,17 @@ func judgeBad(s scenarios.Scenario, o Observed) Verdict {
 		return Verdict{Outcome: Missed, Detail: "no " + strings.Join(missing, " | ") + "; found: " + titles}
 	}
 	for _, m := range s.Forbid {
-		if matches(m, o.Env) {
+		if Matches(m, o.Env) {
 			return Verdict{Outcome: Missed, Detail: "caught for the wrong reason: " + m.String() + "; found: " + titles}
 		}
 	}
 	return Verdict{Outcome: Caught, Found: strings.Join(found, " | ")}
 }
 
-// judgeGood judges a good state: every error and warning outside the
+// Good judges a good state: every error and warning outside the
 // scenario's allow list is a false alarm (notices never are). A good
 // state that couldn't be checked fails.
-func judgeGood(s scenarios.Scenario, o Observed) Verdict {
+func Good(s scenarios.Scenario, o Observed) Verdict {
 	if v, bad := common(s, o); bad {
 		return v
 	}
@@ -101,7 +101,7 @@ func judgeGood(s scenarios.Scenario, o Observed) Verdict {
 func common(s scenarios.Scenario, o Observed) (Verdict, bool) {
 	switch {
 	case o.Env == nil:
-		return Verdict{Outcome: Failed, Detail: fmt.Sprintf("no JSON report (exit %d): %s", o.Exit, tail(o.Output, 300))}, true
+		return Verdict{Outcome: Failed, Detail: fmt.Sprintf("no JSON report (exit %d): %s", o.Exit, Tail(o.Output, 300))}, true
 	case s.WantSinkZero() && o.Sink.Hits > 0:
 		return Verdict{Outcome: Failed, Detail: fmt.Sprintf("%d tracker hits reached the sink in held mode: %s", o.Sink.Hits, byLine(o.Sink.By))}, true
 	case o.Sink.Forbidden > 0:
@@ -112,8 +112,8 @@ func common(s scenarios.Scenario, o Observed) (Verdict, bool) {
 	return Verdict{}, false
 }
 
-// matches reports whether e has the finding m names.
-func matches(m scenarios.Match, e *Envelope) bool {
+// Matches reports whether e has the finding m names.
+func Matches(m scenarios.Match, e *Envelope) bool {
 	switch {
 	case m.IsRun():
 		return runMatches(m, e)
@@ -135,7 +135,7 @@ func matches(m scenarios.Match, e *Envelope) bool {
 // runner gave up on is reported.
 func runMatches(m scenarios.Match, e *Envelope) bool {
 	found := false
-	e.runs(func(_ consent.Page, r consent.Run) {
+	e.Runs(func(_ consent.Page, r consent.Run) {
 		if (m.Run == "" || string(r.Kind) == m.Run) &&
 			(m.Status == "" || string(r.Status) == m.Status) &&
 			(m.Reason == "" || string(r.Reason) == m.Reason) {
@@ -181,7 +181,7 @@ func inconclusive(e *Envelope) string {
 	for _, in := range e.Data.Inconclusive {
 		out = append(out, string(in.Run)+" "+string(in.Reason))
 	}
-	e.runs(func(_ consent.Page, r consent.Run) {
+	e.Runs(func(_ consent.Page, r consent.Run) {
 		if r.Reason == consent.ReasonNone && r.Status != consent.StatusOK && r.Status != consent.StatusNoBanner {
 			out = append(out, string(r.Kind)+" "+string(r.Status))
 		}
@@ -204,8 +204,8 @@ func byLine(by map[string]int) string {
 	return strings.Join(keys, ", ")
 }
 
-// tail is the last n bytes of s, trimmed, for a detail line.
-func tail(s string, n int) string {
+// Tail is the last n bytes of s, trimmed, for a detail line.
+func Tail(s string, n int) string {
 	s = strings.TrimSpace(s)
 	if len(s) > n {
 		s = "..." + s[len(s)-n:]
@@ -216,9 +216,9 @@ func tail(s string, n int) string {
 	return strings.ReplaceAll(s, "\n", " / ")
 }
 
-// signature is what must stay the same between control rounds of one
+// Signature is what must stay the same between control rounds of one
 // good state: the verdict and the issue keys.
-func signature(o Observed) string {
+func Signature(o Observed) string {
 	if o.Env == nil {
 		return fmt.Sprintf("no report, exit %d", o.Exit)
 	}

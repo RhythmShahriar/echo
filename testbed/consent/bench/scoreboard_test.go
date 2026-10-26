@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/RhythmShahriar/echo/testbed/consent/judge"
 	"github.com/RhythmShahriar/echo/testbed/consent/scenarios"
 )
 
@@ -28,16 +29,16 @@ func goldenResults() *Results {
 		Started: time.Date(2026, 10, 26, 9, 0, 0, 0, time.UTC), Seconds: 5400, Rounds: 10,
 		Tools: []string{toolWEC}, ToolNotes: map[string]string{toolAutoconsent: "not run: AUTOCONSENT_DIR isn't set"},
 		Scenarios: []Outcome{
-			{Scenario: c01, Echo: Verdict{Outcome: Caught, Found: "check=consent/before-choice"}, GoodState: &Verdict{Outcome: Clean},
-				Tools: map[string]Verdict{toolWEC: {Outcome: Caught}}},
-			{Scenario: c02, Echo: Verdict{Outcome: Missed, Detail: `no title~"Meta | Pixel"; found: consent/before-choice: Meta fired early`}, GoodState: &Verdict{Outcome: Clean},
-				Tools: map[string]Verdict{toolWEC: {Outcome: Caught}}},
-			{Scenario: g01, Echo: Verdict{Outcome: Clean}, Tools: map[string]Verdict{toolWEC: {Outcome: FalseAlarm}}},
+			{Scenario: c01, Echo: judge.Verdict{Outcome: judge.Caught, Found: "check=consent/before-choice"}, GoodState: &judge.Verdict{Outcome: judge.Clean},
+				Tools: map[string]judge.Verdict{toolWEC: {Outcome: judge.Caught}}},
+			{Scenario: c02, Echo: judge.Verdict{Outcome: judge.Missed, Detail: `no title~"Meta | Pixel"; found: consent/before-choice: Meta fired early`}, GoodState: &judge.Verdict{Outcome: judge.Clean},
+				Tools: map[string]judge.Verdict{toolWEC: {Outcome: judge.Caught}}},
+			{Scenario: g01, Echo: judge.Verdict{Outcome: judge.Clean}, Tools: map[string]judge.Verdict{toolWEC: {Outcome: judge.FalseAlarm}}},
 		},
 		Control: []Control{{ID: "c01", Rounds: 10}, {ID: "g01", Rounds: 10, Flakes: 1, Details: []string{"round 4 differs from round 1: ok [], then error []"}}},
 		Environment: []ProbeOutcome{
-			{Probe: scenarios.Probe{ID: "e01", Name: "The site is down"}, Echo: Verdict{Outcome: Caught, Found: "check: exit 3"}},
-			{Probe: scenarios.Probe{ID: "e16", Name: "Private addresses on the page", Good: []scenarios.Check{{Step: "check", Exit: &two}}}, Echo: Verdict{Outcome: NotRun, Detail: "needs the sealed Docker testbed (-mode docker)"}},
+			{Probe: scenarios.Probe{ID: "e01", Name: "The site is down"}, Echo: judge.Verdict{Outcome: judge.Caught, Found: "check: exit 3"}},
+			{Probe: scenarios.Probe{ID: "e16", Name: "Private addresses on the page", Good: []scenarios.Check{{Step: "check", Exit: &two}}}, Echo: judge.Verdict{Outcome: judge.NotRun, Detail: "needs the sealed Docker testbed (-mode docker)"}},
 		},
 		Clicks:   []ClickRow{{CMP: "complianz", AcceptNeeded: 20, AcceptOK: 20, RejectNeeded: 20, RejectOK: 19}},
 		Timing:   Timing{Pages: 60, PageP50: 18.2, PageP95: 31.5, Detects: 39, DetectP50: 4.1, DetectMax: 9.8, RSSMax: 96 << 20},
@@ -118,7 +119,7 @@ func TestDiff(t *testing.T) {
 	if same, err := diffResults(a, b, &out); err != nil || !same || !strings.Contains(out.String(), "the same in both runs") {
 		t.Errorf("same outcomes: %v %v %s", same, err, out.String())
 	}
-	r.Scenarios[0].Echo.Outcome = Missed
+	r.Scenarios[0].Echo.Outcome = judge.Missed
 	r.Control[1].Flakes = 0
 	_ = r.write(b)
 	out.Reset()

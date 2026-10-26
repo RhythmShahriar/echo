@@ -17,6 +17,7 @@ import (
 	"github.com/RhythmShahriar/echo/consent"
 	"github.com/RhythmShahriar/echo/model"
 	"github.com/RhythmShahriar/echo/report"
+	"github.com/RhythmShahriar/echo/testbed/consent/judge"
 )
 
 // The test binary doubles as a fake rhythm-echo: with fakeEnv set it
@@ -136,7 +137,7 @@ func fakeEcho(mode string, args []string) int {
 }
 
 // writeFake writes e to out and returns code.
-func writeFake(out string, e *Envelope, code int) int {
+func writeFake(out string, e *judge.Envelope, code int) int {
 	if out != "" {
 		data, _ := json.Marshal(e)
 		_ = os.WriteFile(out, data, 0o600)
@@ -147,15 +148,15 @@ func writeFake(out string, e *Envelope, code int) int {
 // allScripts lists a script at every stand-in's address.
 func allScripts() []consent.Script {
 	var out []consent.Script
-	for _, s := range standIns {
-		out = append(out, consent.Script{Tracker: s.name, URL: "https://" + s.prefix + "x.js"})
+	for _, s := range judge.StandIns {
+		out = append(out, consent.Script{Tracker: s.Name, URL: "https://" + s.Prefix + "x.js"})
 	}
 	return out
 }
 
 // fakeEnvelope is a consent envelope with issues and complete set, a
 // default three-run page with every stand-in loaded.
-func fakeEnvelope(complete bool, issues []consent.Issue, mods ...func(*consent.Result)) *Envelope {
+func fakeEnvelope(complete bool, issues []consent.Issue, mods ...func(*consent.Result)) *judge.Envelope {
 	r := consent.Result{ID: "r1", Browser: "Chrome 156.0.0.0", DurationMS: 20000, Issues: issues,
 		Pages: []consent.Page{{URL: "https://x.shop.test/", CMP: consent.CMPInfo{ID: "complianz", Found: true},
 			Runs: []consent.Run{
@@ -167,7 +168,7 @@ func fakeEnvelope(complete bool, issues []consent.Issue, mods ...func(*consent.R
 	for _, m := range mods {
 		m(&r)
 	}
-	e := &Envelope{Schema: model.Schema, Kind: string(report.KindConsent), Version: "9.9.9", Complete: complete, Data: r}
+	e := &judge.Envelope{Schema: model.Schema, Kind: string(report.KindConsent), Version: "9.9.9", Complete: complete, Data: r}
 	e.Verdict = "ok"
 	if len(issues) > 0 {
 		e.Verdict = "findings"
@@ -185,7 +186,7 @@ func issue(check, tracker string, level model.Level, title string) consent.Issue
 }
 
 // record writes e as the fake's recording for site in state.
-func record(t *testing.T, dir, site, state string, e *Envelope) {
+func record(t *testing.T, dir, site, state string, e *judge.Envelope) {
 	t.Helper()
 	data, err := json.Marshal(e)
 	if err != nil {

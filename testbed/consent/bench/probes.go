@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"github.com/RhythmShahriar/echo/consent"
+	"github.com/RhythmShahriar/echo/testbed/consent/judge"
 )
 
 // The environment probes, e01 to e18 of PRD 18.1. Each runs on its own
@@ -343,7 +344,7 @@ func parallelProbe(ctx context.Context, p *ProbeEnv, broken bool) ([]Step, error
 }
 
 // issueKeys lists e's issue keys, sorted; nil for no report.
-func issueKeys(e *Envelope) []string {
+func issueKeys(e *judge.Envelope) []string {
 	if e == nil {
 		return nil
 	}
@@ -424,7 +425,7 @@ func sendHitsComplete(ctx context.Context, p *ProbeEnv, broken bool) ([]Step, er
 		}
 		reported := map[string]int{}
 		if s.env != nil {
-			s.env.runs(func(_ consent.Page, r consent.Run) {
+			s.env.Runs(func(_ consent.Page, r consent.Run) {
 				for _, h := range r.Hits {
 					if h.Kind == consent.HitScript {
 						continue

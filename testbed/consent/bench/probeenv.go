@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/RhythmShahriar/echo/testbed/consent/judge"
 	"github.com/RhythmShahriar/echo/testbed/consent/scenarios"
 	"github.com/RhythmShahriar/echo/testbed/consent/server"
 )
@@ -52,7 +53,7 @@ type Step struct {
 	Verdict  string `json:"verdict,omitempty"`
 	Complete *bool  `json:"complete,omitempty"`
 	Output   string `json:"output"`
-	env      *Envelope
+	env      *judge.Envelope
 }
 
 // note adds a line to what the step shows to says and never.
@@ -71,7 +72,7 @@ var probeFuncs = map[string]ProbeFunc{}
 // ProbeOutcome is everything recorded for one environment probe.
 type ProbeOutcome struct {
 	Probe   scenarios.Probe `json:"probe"`
-	Echo    Verdict         `json:"echo"`
+	Echo    judge.Verdict   `json:"echo"`
 	Good    []Step          `json:"good,omitempty"`
 	Broken  []Step          `json:"broken,omitempty"`
 	Seconds float64         `json:"seconds"`
@@ -187,7 +188,7 @@ func (p *ProbeEnv) finish(name string, ex Exec) Step {
 		return s
 	}
 	s.Output += "\n" + string(data)
-	if e, err := parseEnvelope(data); err == nil {
+	if e, err := judge.ParseEnvelope(data); err == nil {
 		s.env = e
 		s.Verdict = e.Verdict
 		c := e.Complete
@@ -222,7 +223,7 @@ func checkFailed(c scenarios.Check, s Step) string {
 	out := strings.ToLower(s.Output)
 	switch {
 	case c.Exit != nil && s.Exit != *c.Exit:
-		return fmt.Sprintf("exit %d, want %d (%s)", s.Exit, *c.Exit, tail(s.Output, 200))
+		return fmt.Sprintf("exit %d, want %d (%s)", s.Exit, *c.Exit, judge.Tail(s.Output, 200))
 	case c.Verdict != "" && s.Verdict != c.Verdict:
 		return fmt.Sprintf("verdict %q, want %q", s.Verdict, c.Verdict)
 	case c.Complete != nil && (s.Complete == nil || *s.Complete != *c.Complete):
@@ -248,18 +249,18 @@ func checkFailed(c scenarios.Check, s Step) string {
 // evaluateProbe judges a probe from what it saw in each state. A good
 // state that fails its checks fails the probe: it can't tell anything
 // then. A broken state that passes every check is caught.
-func evaluateProbe(pr scenarios.Probe, good, broken []Step) Verdict {
+func evaluateProbe(pr scenarios.Probe, good, broken []Step) judge.Verdict {
 	if why := verifyProbe(pr.Good, good); why != "" {
-		return Verdict{Outcome: Failed, Detail: "good state: " + why}
+		return judge.Verdict{Outcome: judge.Failed, Detail: "good state: " + why}
 	}
 	if why := verifyProbe(pr.Broken, broken); why != "" {
-		return Verdict{Outcome: Missed, Detail: why}
+		return judge.Verdict{Outcome: judge.Missed, Detail: why}
 	}
 	var seen []string
 	for _, c := range pr.Broken {
 		seen = append(seen, c.String())
 	}
-	return Verdict{Outcome: Caught, Found: strings.Join(seen, "; ")}
+	return judge.Verdict{Outcome: judge.Caught, Found: strings.Join(seen, "; ")}
 }
 
 // runProbe runs one probe: the good state, then the broken.
@@ -270,19 +271,19 @@ func runProbe(ctx context.Context, p *ProbeEnv, pr scenarios.Probe) ProbeOutcome
 	f := probeFuncs[pr.Probe]
 	switch {
 	case f == nil:
-		out.Echo = Verdict{Outcome: Failed, Detail: "no probe named " + pr.Probe}
+		out.Echo = judge.Verdict{Outcome: judge.Failed, Detail: "no probe named " + pr.Probe}
 		return out
 	case pr.Needs == "docker" && p.Bed == nil:
-		out.Echo = Verdict{Outcome: NotRun, Detail: "needs the sealed Docker testbed (-mode docker)"}
+		out.Echo = judge.Verdict{Outcome: judge.NotRun, Detail: "needs the sealed Docker testbed (-mode docker)"}
 		return out
 	}
 	var err error
 	if out.Good, err = f(ctx, p.forState(pr.ID, "good"), false); err != nil {
-		out.Echo = Verdict{Outcome: Failed, Detail: "good state: " + err.Error()}
+		out.Echo = judge.Verdict{Outcome: judge.Failed, Detail: "good state: " + err.Error()}
 		return out
 	}
 	if out.Broken, err = f(ctx, p.forState(pr.ID, "broken"), true); err != nil {
-		out.Echo = Verdict{Outcome: Failed, Detail: "broken state: " + err.Error()}
+		out.Echo = judge.Verdict{Outcome: judge.Failed, Detail: "broken state: " + err.Error()}
 		return out
 	}
 	out.Echo = evaluateProbe(pr, out.Good, out.Broken)

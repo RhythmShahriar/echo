@@ -12,6 +12,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/RhythmShahriar/echo/testbed/consent/judge"
 	"github.com/RhythmShahriar/echo/testbed/consent/server"
 )
 
@@ -33,7 +34,7 @@ func headline(r *Results) string {
 			continue
 		}
 		bad++
-		if o.Echo.Outcome == Caught {
+		if o.Echo.Outcome == judge.Caught {
 			caught++
 		}
 	}
@@ -101,15 +102,15 @@ func writeScoreboard(w io.Writer, r *Results) error {
 		for _, t := range r.Tools {
 			v, ok := o.Tools[t]
 			if !ok {
-				v = Verdict{Outcome: NotRun}
+				v = judge.Verdict{Outcome: judge.NotRun}
 			}
 			row = append(row, v.Outcome)
 		}
 		p("| %s |\n", strings.Join(row, " | "))
-		if o.Echo.Outcome != Caught && o.Echo.Outcome != Clean {
+		if o.Echo.Outcome != judge.Caught && o.Echo.Outcome != judge.Clean {
 			details = append(details, fmt.Sprintf("- %s %s: %s", o.Scenario.ID, o.Echo.Outcome, cell(o.Echo.Detail)))
 		}
-		if g := o.GoodState; g != nil && g.Outcome != Clean {
+		if g := o.GoodState; g != nil && g.Outcome != judge.Clean {
 			details = append(details, fmt.Sprintf("- %s good state %s: %s", o.Scenario.ID, g.Outcome, cell(g.Detail)))
 		}
 	}
@@ -182,7 +183,7 @@ func writeScoreboard(w io.Writer, r *Results) error {
 // orNotRun is s, or "not run" when it is empty.
 func orNotRun(s string) string {
 	if s == "" {
-		return NotRun
+		return judge.NotRun
 	}
 	return s
 }

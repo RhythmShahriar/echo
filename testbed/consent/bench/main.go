@@ -19,6 +19,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/RhythmShahriar/echo/testbed/consent/judge"
 	"github.com/RhythmShahriar/echo/testbed/consent/scenarios"
 	"github.com/RhythmShahriar/echo/testbed/consent/server"
 )
@@ -371,7 +372,7 @@ func measures(r *Results, o options, pages, detect []time.Duration, detectNotes 
 			continue
 		}
 		bad++
-		if s.Echo.Outcome == Caught {
+		if s.Echo.Outcome == judge.Caught {
 			caught++
 		}
 	}
@@ -384,7 +385,7 @@ func measures(r *Results, o options, pages, detect []time.Duration, detectNotes 
 		failed += c.Failed
 	}
 	for _, s := range r.Scenarios {
-		if s.Scenario.Good() && s.Echo.Outcome == FalseAlarm {
+		if s.Scenario.Good() && s.Echo.Outcome == judge.FalseAlarm {
 			alarms++
 		}
 	}
@@ -403,9 +404,9 @@ func measures(r *Results, o options, pages, detect []time.Duration, detectNotes 
 	out = append(out, measure("Click success per CMP", clickValue(r.Clicks), "100% on fixtures", clicksKnown, clicksOK, ""))
 	out = append(out, measure("Leaked hits at the sink (held mode)", fmt.Sprint(r.Leaks), "0", len(r.Scenarios) > 0, r.Leaks == 0, ""))
 	e10 := slices.IndexFunc(r.Environment, func(e ProbeOutcome) bool { return e.Probe.ID == "e10" })
-	if e10 >= 0 && r.Environment[e10].Echo.Outcome != NotRun {
+	if e10 >= 0 && r.Environment[e10].Echo.Outcome != judge.NotRun {
 		e := r.Environment[e10].Echo
-		out = append(out, measure("e10 completeness (sink vs reported)", e.Outcome, "exact match", true, e.Outcome == Caught, e.Detail))
+		out = append(out, measure("e10 completeness (sink vs reported)", e.Outcome, "exact match", true, e.Outcome == judge.Caught, e.Detail))
 	} else {
 		out = append(out, measure("e10 completeness (sink vs reported)", "", "exact match", false, false, "e10 not run"))
 	}
@@ -475,11 +476,11 @@ func failures(r *Results) []string {
 	var out []string
 	for _, s := range r.Scenarios {
 		switch s.Echo.Outcome {
-		case Caught, Clean:
+		case judge.Caught, judge.Clean:
 		default:
 			out = append(out, s.Scenario.ID+" "+s.Echo.Outcome)
 		}
-		if s.GoodState != nil && s.GoodState.Outcome != Clean {
+		if s.GoodState != nil && s.GoodState.Outcome != judge.Clean {
 			out = append(out, s.Scenario.ID+" good state "+s.GoodState.Outcome)
 		}
 	}
@@ -489,7 +490,7 @@ func failures(r *Results) []string {
 		}
 	}
 	for _, e := range r.Environment {
-		if e.Echo.Outcome != Caught && e.Echo.Outcome != NotRun {
+		if e.Echo.Outcome != judge.Caught && e.Echo.Outcome != judge.NotRun {
 			out = append(out, e.Probe.ID+" "+e.Echo.Outcome)
 		}
 	}

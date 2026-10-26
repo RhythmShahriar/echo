@@ -18,67 +18,14 @@ import (
 
 	"github.com/RhythmShahriar/echo/consent"
 	"github.com/RhythmShahriar/echo/model"
+	"github.com/RhythmShahriar/echo/testbed/consent/judge"
 	"github.com/RhythmShahriar/echo/testbed/consent/scenarios"
 	"github.com/RhythmShahriar/echo/testbed/consent/server"
 )
 
-func TestStandIns(t *testing.T) {
-	page := `<script src="https://www.googletagmanager.com/gtag/js?id=G-1"></script>
-<script>r.src=t+h._hjSettings.hjid; t='https://static.hotjar.com/c/hotjar-'</script>
-<script src="https://consent.cookiebot.com/uc.js"></script>
-<link href="https://fonts.googleapis.com/css?family=x"><a href="https://www.facebook.com/shop">x</a>
-<script>s.src='https://connect.facebook.net/en_US/fbevents.js'; s2='https://connect.facebook.net/en_US/fbevents.js'</script>`
-	if got := standInsIn(page); !slices.Equal(got, []string{"fbevents", "gtag", "hotjar"}) {
-		t.Errorf("standInsIn = %v", got)
-	}
-	if got := standInsIn(`<p>no tags</p><script src="https://plausible.io/api/event"></script>`); len(got) != 0 {
-		t.Errorf("a hit endpoint isn't a stand-in: %v", got)
-	}
-	e := fakeEnvelope(true, nil, func(r *consent.Result) {
-		r.Pages[0].Runs[0].Scripts = r.Pages[0].Runs[0].Scripts[:1]
-		r.Pages[0].Runs[1].Hits = []consent.HitRef{{URL: "https://static.hotjar.com/c/hotjar-1000001.js?sv=6", Hit: consent.Hit{Kind: consent.HitScript}},
-			{URL: "https://connect.facebook.net/en_US/fbevents.js", Hit: consent.Hit{Kind: consent.HitBeacon}}}
-	})
-	if got := loadedStandIns(e); !slices.Equal(got, []string{"gtag", "hotjar"}) {
-		t.Errorf("loadedStandIns = %v", got)
-	}
-	if got := missingStandIns([]string{"fbevents", "gtag", "hotjar"}, e); !slices.Equal(got, []string{"fbevents"}) {
-		t.Errorf("missing = %v", got)
-	}
-	if got := missingStandIns([]string{"gtag"}, nil); got != nil {
-		t.Errorf("no report: %v", got)
-	}
-}
-
 // TestPageStandInsFromTheTestbed renders real scenario pages. A tag the
 // CMP holds back until Accept (c08's TikTok in the good state) is listed
 // too: the Accept run loads it.
-func TestPageStandInsFromTheTestbed(t *testing.T) {
-	root := testRoot(t)
-	srv, err := server.New(server.Options{Root: root})
-	if err != nil {
-		t.Fatal(err)
-	}
-	got, err := pageStandIns(srv.Handler(), "c01")
-	if err != nil || !slices.Contains(got, "gtag") {
-		t.Errorf("c01 = %v, %v", got, err)
-	}
-	good, _ := pageStandIns(srv.Handler(), "c08")
-	if err := srv.SetBroken("c08", true); err != nil {
-		t.Fatal(err)
-	}
-	broken, _ := pageStandIns(srv.Handler(), "c08")
-	if !slices.Contains(good, "tiktok") || !slices.Contains(broken, "tiktok") {
-		t.Errorf("c08 good %v, broken %v", good, broken)
-	}
-	if got, _ := pageStandIns(srv.Handler(), "g12"); len(got) != 0 {
-		t.Errorf("g12 has no tags: %v", got)
-	}
-	if _, err := pageStandIns(srv.Handler(), "nope"); err == nil {
-		t.Error("an unknown site: no error")
-	}
-}
-
 // fakeBench is a Bench in Go mode over a private testbed copy, running
 // this test binary as rhythm-echo.
 func fakeBench(t *testing.T) (*Bench, *goBed, string, string) {
@@ -110,13 +57,13 @@ func TestRunScenarioEndToEnd(t *testing.T) {
 	record(t, rec, "g01", "good", fakeEnvelope(true, nil))
 
 	out := b.runScenario(t.Context(), jobOf(c01))
-	if out.Echo.Outcome != Caught || out.GoodState == nil || out.GoodState.Outcome != Clean {
+	if out.Echo.Outcome != judge.Caught || out.GoodState == nil || out.GoodState.Outcome != judge.Clean {
 		t.Fatalf("c01 = %+v good %+v", out.Echo, out.GoodState)
 	}
 	if bed.srv.Broken("c01") {
 		t.Error("c01 left broken")
 	}
-	if out := b.runScenario(t.Context(), jobOf(g01)); out.Echo.Outcome != Clean || out.GoodState != nil {
+	if out := b.runScenario(t.Context(), jobOf(g01)); out.Echo.Outcome != judge.Clean || out.GoodState != nil {
 		t.Errorf("g01 = %+v", out)
 	}
 	// The map flags reach rhythm-echo with every stand-in host.
@@ -131,7 +78,7 @@ func TestRunScenarioEndToEnd(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(rec, "c01-broken.leak"), nil, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if out := b.runScenario(t.Context(), jobOf(c01)); out.Echo.Outcome != Failed || !strings.Contains(out.Echo.Detail, "1 tracker hits reached the sink") {
+	if out := b.runScenario(t.Context(), jobOf(c01)); out.Echo.Outcome != judge.Failed || !strings.Contains(out.Echo.Detail, "1 tracker hits reached the sink") {
 		t.Errorf("c01 with a leak = %+v", out.Echo)
 	}
 	if b.leaks != 1 {
@@ -141,7 +88,7 @@ func TestRunScenarioEndToEnd(t *testing.T) {
 	// A report whose scripts don't list the page's gtag: did not load.
 	record(t, rec, "c01", "broken", fakeEnvelope(true, caught, func(r *consent.Result) { r.Pages[0].Runs[0].Scripts = r.Pages[0].Runs[0].Scripts[2:] }))
 	_ = os.Remove(filepath.Join(rec, "c01-broken.leak"))
-	if out := b.runScenario(t.Context(), jobOf(c01)); out.Echo.Outcome != NotLoaded || !strings.Contains(out.Echo.Detail, "gtag") {
+	if out := b.runScenario(t.Context(), jobOf(c01)); out.Echo.Outcome != judge.NotLoaded || !strings.Contains(out.Echo.Detail, "gtag") {
 		t.Errorf("c01 not loaded = %+v", out.Echo)
 	}
 

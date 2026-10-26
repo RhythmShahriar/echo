@@ -9,6 +9,7 @@ import (
 	"path"
 	"sync"
 
+	"github.com/RhythmShahriar/echo/testbed/consent/judge"
 	"github.com/RhythmShahriar/echo/testbed/consent/scenarios"
 )
 
@@ -42,8 +43,8 @@ func (b *Bench) control(ctx context.Context, s scenarios.Scenario, rounds int) C
 	for r := 1; r <= rounds && ctx.Err() == nil; r++ {
 		o, _ := b.check(ctx, jobOf(s), false, path.Join("control", s.ID, fmt.Sprint(r)))
 		c.Rounds++
-		v := judgeGood(s, o)
-		c.add(r, v, signature(o), &first)
+		v := judge.Good(s, o)
+		c.add(r, v, judge.Signature(o), &first)
 	}
 	b.log(fmt.Sprintf("control %s: %d rounds, %d false alarms, %d failed, %d flakes", s.ID, c.Rounds, c.FalseAlarms, c.Failed, c.Flakes))
 	return c
@@ -51,12 +52,12 @@ func (b *Bench) control(ctx context.Context, s scenarios.Scenario, rounds int) C
 
 // add counts round r of a control with verdict v and signature sig;
 // first holds round 1's signature.
-func (c *Control) add(r int, v Verdict, sig string, first *string) {
+func (c *Control) add(r int, v judge.Verdict, sig string, first *string) {
 	switch v.Outcome {
-	case FalseAlarm:
+	case judge.FalseAlarm:
 		c.FalseAlarms++
 		c.Details = append(c.Details, fmt.Sprintf("round %d: %s", r, v.Detail))
-	case Clean:
+	case judge.Clean:
 	default:
 		c.Failed++
 		c.Details = append(c.Details, fmt.Sprintf("round %d %s: %s", r, v.Outcome, v.Detail))

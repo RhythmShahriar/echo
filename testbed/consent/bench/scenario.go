@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/RhythmShahriar/echo/consent"
+	"github.com/RhythmShahriar/echo/testbed/consent/judge"
 	"github.com/RhythmShahriar/echo/testbed/consent/scenarios"
 	"github.com/RhythmShahriar/echo/testbed/consent/server"
 )
@@ -122,35 +123,35 @@ func variantJob(base scenarios.Scenario, v scenarios.Variant) job {
 // check runs rhythm-echo consent on j in one state, in the work
 // subfolder rel; it returns what it left. It switches the state, clears
 // the sink, lists the page's stand-ins, runs and reads the sink.
-func (b *Bench) check(ctx context.Context, j job, broken bool, rel string) (Observed, Exec) {
+func (b *Bench) check(ctx context.Context, j job, broken bool, rel string) (judge.Observed, Exec) {
 	s := j.S
 	if err := b.bed.SetBroken(j.State, broken); err != nil {
-		return Observed{Exit: -1, Output: "switching the state: " + err.Error()}, Exec{}
+		return judge.Observed{Exit: -1, Output: "switching the state: " + err.Error()}, Exec{}
 	}
 	if err := b.bed.ResetSink(j.Site); err != nil {
-		return Observed{Exit: -1, Output: "clearing the sink: " + err.Error()}, Exec{}
+		return judge.Observed{Exit: -1, Output: "clearing the sink: " + err.Error()}, Exec{}
 	}
 	var want []string
 	if j.Site == j.State {
 		var err error
-		if want, err = pageStandIns(b.bed.Render(), j.Site); err != nil {
-			return Observed{Exit: -1, Output: err.Error()}, Exec{}
+		if want, err = judge.PageStandIns(b.bed.Render(), j.Site); err != nil {
+			return judge.Observed{Exit: -1, Output: err.Error()}, Exec{}
 		}
 	}
 	args, ok := stateArgs(s, broken, b.bed.EchoURL())
 	if !ok {
-		return Observed{Exit: -1, Output: "needs an Echo for --echo and none runs"}, Exec{}
+		return judge.Observed{Exit: -1, Output: "needs an Echo for --echo and none runs"}, Exec{}
 	}
 	if err := os.MkdirAll(filepath.Join(b.work, filepath.FromSlash(rel)), 0o750); err != nil {
-		return Observed{Exit: -1, Output: err.Error()}, Exec{}
+		return judge.Observed{Exit: -1, Output: err.Error()}, Exec{}
 	}
 	report := "result.json"
 	args = slices.Concat([]string{"consent", siteURL(j.Site), "--json", "-o", report, "--fail-on", "none"}, args)
 	ctx, cancel := context.WithTimeout(ctx, b.timeout)
 	defer cancel()
 	ex := run(b.bed.Command(ctx, rel, args))
-	o := Observed{Exit: ex.Exit, Output: ex.Stderr}
-	if env, err := readEnvelope(filepath.Join(b.work, filepath.FromSlash(rel), report)); err == nil {
+	o := judge.Observed{Exit: ex.Exit, Output: ex.Stderr}
+	if env, err := judge.ReadEnvelope(filepath.Join(b.work, filepath.FromSlash(rel), report)); err == nil {
 		o.Env = env
 	} else if ex.Exit >= 0 {
 		o.Output += "\nbench: " + err.Error()
@@ -160,7 +161,7 @@ func (b *Bench) check(ctx context.Context, j job, broken bool, rel string) (Obse
 	} else {
 		o.Output += "\nbench: reading the sink: " + err.Error()
 	}
-	o.Missing = missingStandIns(want, o.Env)
+	o.Missing = judge.MissingStandIns(want, o.Env)
 	b.record(s, o, ex, broken)
 	return o, ex
 }
@@ -168,7 +169,7 @@ func (b *Bench) check(ctx context.Context, j job, broken bool, rel string) (Obse
 // record adds a run to the timing, click, memory and leak tallies.
 // Clicks count on good states only: a broken state may break a click on
 // purpose (c20, c21).
-func (b *Bench) record(s scenarios.Scenario, o Observed, ex Exec, broken bool) {
+func (b *Bench) record(s scenarios.Scenario, o judge.Observed, ex Exec, broken bool) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	b.rssMax = max(b.rssMax, ex.MaxRSS)
@@ -192,7 +193,7 @@ func (b *Bench) record(s scenarios.Scenario, o Observed, ex Exec, broken bool) {
 		row = &ClickRow{CMP: s.CMP}
 		b.clicks[s.CMP] = row
 	}
-	o.Env.runs(func(_ consent.Page, r consent.Run) {
+	o.Env.Runs(func(_ consent.Page, r consent.Run) {
 		count := func(c *consent.Choice, accept bool) {
 			if accept {
 				row.AcceptNeeded++
@@ -226,10 +227,10 @@ func (b *Bench) runScenario(ctx context.Context, j job) Outcome {
 	unlock := b.lockState(j.State)
 	defer unlock()
 	start := time.Now()
-	out := Outcome{Scenario: s, Tools: map[string]Verdict{}}
+	out := Outcome{Scenario: s, Tools: map[string]judge.Verdict{}}
 	defer func() { _ = b.bed.SetBroken(j.State, false) }()
 	good, _ := b.check(ctx, j, false, path.Join(s.ID, "good"))
-	gv := judgeGood(s, good)
+	gv := judge.Good(s, good)
 	if s.Good() {
 		out.Echo = gv
 		b.judgeTools(ctx, j, &out)
@@ -239,12 +240,12 @@ func (b *Bench) runScenario(ctx context.Context, j job) Outcome {
 	}
 	out.GoodState = &gv
 	broken, _ := b.check(ctx, j, true, path.Join(s.ID, "broken"))
-	out.Echo = judgeBad(s, broken)
+	out.Echo = judge.Bad(s, broken)
 	b.judgeTools(ctx, j, &out)
-	if out.Echo.Outcome == Caught && gv.Outcome != Clean {
+	if out.Echo.Outcome == judge.Caught && gv.Outcome != judge.Clean {
 		// A scenario whose good state already fails proves nothing about
 		// the bug the broken state adds.
-		out.Echo = Verdict{Outcome: Failed, Detail: "good state " + gv.Outcome + ": " + gv.Detail}
+		out.Echo = judge.Verdict{Outcome: judge.Failed, Detail: "good state " + gv.Outcome + ": " + gv.Detail}
 	}
 	out.Seconds = seconds(time.Since(start))
 	b.log(fmt.Sprintf("%s %s %s", s.ID, out.Echo.Outcome, out.Echo.Detail))

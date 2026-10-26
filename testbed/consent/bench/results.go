@@ -9,6 +9,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/RhythmShahriar/echo/testbed/consent/judge"
 	"github.com/RhythmShahriar/echo/testbed/consent/scenarios"
 )
 
@@ -39,11 +40,11 @@ type Results struct {
 // Outcome is one scenario: how Echo did on the broken state (bad
 // scenarios) or the good one (good scenarios) plus each other tool.
 type Outcome struct {
-	Scenario  scenarios.Scenario `json:"scenario"`
-	Echo      Verdict            `json:"echo"`
-	GoodState *Verdict           `json:"good_state,omitempty"` // a bad scenario's good state, which must be clean
-	Tools     map[string]Verdict `json:"tools,omitempty"`
-	Seconds   float64            `json:"seconds"`
+	Scenario  scenarios.Scenario       `json:"scenario"`
+	Echo      judge.Verdict            `json:"echo"`
+	GoodState *judge.Verdict           `json:"good_state,omitempty"` // a bad scenario's good state, which must be clean
+	Tools     map[string]judge.Verdict `json:"tools,omitempty"`
+	Seconds   float64                  `json:"seconds"`
 }
 
 // Control is one good state over every round of the control pass.

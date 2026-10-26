@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
 // SPDX-License-Identifier: MIT
 
-package main
+package judge
 
 import (
 	"fmt"
@@ -17,14 +17,18 @@ import (
 	"github.com/RhythmShahriar/echo/testbed/consent/server"
 )
 
-// standIns are the tracker stand-in scripts a page can load, by name:
+// StandIn is one tracker stand-in script: its name and the host and
+// path prefix it is served at.
+type StandIn struct{ Name, Prefix string }
+
+// StandIns are the tracker stand-in scripts a page can load, by name:
 // a host and path prefix each. A page that names one but whose run lists
 // no script there didn't load it; then nothing the run saw (or
 // didn't see) says anything about Echo (qa.md 5.2: an http tag URL on an
 // HSTS host silently fails and the scenario passes for the wrong
 // reason). CMP scripts aren't listed: Echo doesn't report them as
 // tracker scripts; a CMP that didn't load shows as no banner.
-var standIns = []struct{ name, prefix string }{
+var StandIns = []StandIn{
 	{"gtag", "www.googletagmanager.com/gtag/js"},
 	{"gtm", "www.googletagmanager.com/gtm.js"},
 	{"fbevents", "connect.facebook.net/"},
@@ -42,18 +46,18 @@ var urlPattern = regexp.MustCompile(`https://[a-z0-9.-]+/[^\s"'<>)\\]*`)
 
 // standInOf names the stand-in at u (host and path, no scheme), or "".
 func standInOf(hostPath string) string {
-	for _, s := range standIns {
-		if strings.HasPrefix(hostPath, s.prefix) {
-			return s.name
+	for _, s := range StandIns {
+		if strings.HasPrefix(hostPath, s.Prefix) {
+			return s.Name
 		}
 	}
 	return ""
 }
 
-// pageStandIns renders the start page of scenario id with h (the
+// PageStandIns renders the start page of scenario id with h (the
 // testbed server's handler, in the state it is in now) and lists the
 // stand-ins it names, sorted.
-func pageStandIns(h http.Handler, id string) ([]string, error) {
+func PageStandIns(h http.Handler, id string) ([]string, error) {
 	req := httptest.NewRequest(http.MethodGet, "https://"+id+server.SiteSuffix+"/", nil)
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
@@ -61,11 +65,11 @@ func pageStandIns(h http.Handler, id string) ([]string, error) {
 		return nil, fmt.Errorf("%s: the testbed answered %d", id, rec.Code)
 	}
 	body, _ := io.ReadAll(rec.Body)
-	return standInsIn(string(body)), nil
+	return StandInsIn(string(body)), nil
 }
 
-// standInsIn lists the stand-ins page names, sorted and once each.
-func standInsIn(page string) []string {
+// StandInsIn lists the stand-ins page names, sorted and once each.
+func StandInsIn(page string) []string {
 	var names []string
 	for _, u := range urlPattern.FindAllString(page, -1) {
 		if n := standInOf(strings.TrimPrefix(u, "https://")); n != "" {
@@ -76,9 +80,9 @@ func standInsIn(page string) []string {
 	return slices.Compact(names)
 }
 
-// loadedStandIns lists the stand-ins e's runs loaded: a script entry, or
+// LoadedStandIns lists the stand-ins e's runs loaded: a script entry, or
 // a script hit, at a stand-in's address.
-func loadedStandIns(e *Envelope) []string {
+func LoadedStandIns(e *Envelope) []string {
 	var names []string
 	add := func(raw string) {
 		u, err := url.Parse(raw)
@@ -89,7 +93,7 @@ func loadedStandIns(e *Envelope) []string {
 			names = append(names, n)
 		}
 	}
-	e.runs(func(_ consent.Page, r consent.Run) {
+	e.Runs(func(_ consent.Page, r consent.Run) {
 		for _, s := range r.Scripts {
 			add(s.URL)
 		}
@@ -103,12 +107,12 @@ func loadedStandIns(e *Envelope) []string {
 	return slices.Compact(names)
 }
 
-// missingStandIns is want less what e loaded.
-func missingStandIns(want []string, e *Envelope) []string {
+// MissingStandIns is want less what e loaded.
+func MissingStandIns(want []string, e *Envelope) []string {
 	if e == nil {
 		return nil
 	}
-	got := loadedStandIns(e)
+	got := LoadedStandIns(e)
 	var out []string
 	for _, w := range want {
 		if !slices.Contains(got, w) {

@@ -20,6 +20,7 @@ import (
 	"github.com/ysmood/gson"
 
 	"github.com/RhythmShahriar/echo/internal/browser"
+	"github.com/RhythmShahriar/echo/testbed/consent/judge"
 	"github.com/RhythmShahriar/echo/testbed/consent/scenarios"
 	"github.com/RhythmShahriar/echo/testbed/consent/server"
 )
@@ -102,13 +103,13 @@ func wecClaims(s scenarios.Scenario) bool {
 }
 
 // judge runs WEC on s in the state the bed is in now.
-func (w *wec) judge(ctx context.Context, s scenarios.Scenario) Verdict {
+func (w *wec) judge(ctx context.Context, s scenarios.Scenario) judge.Verdict {
 	if !wecClaims(s) {
-		return Verdict{Outcome: NotRun, Detail: "not something it claims to check"}
+		return judge.Verdict{Outcome: judge.NotRun, Detail: "not something it claims to check"}
 	}
 	dir := filepath.Join(w.work, "wec", s.ID)
 	if err := os.MkdirAll(dir, 0o750); err != nil {
-		return Verdict{Outcome: Failed, Detail: err.Error()}
+		return judge.Verdict{Outcome: judge.Failed, Detail: err.Error()}
 	}
 	args := append([]string{siteURL(s.ID), "--no-output", "--json", "-q",
 		"--browser-options=" + w.srv.resolverRule(), "--browser-options=--ignore-certificate-errors"}, w.args...)
@@ -119,22 +120,22 @@ func (w *wec) judge(ctx context.Context, s scenarios.Scenario) Verdict {
 	ex := run(cmd)
 	var out wecOutput
 	if err := json.Unmarshal([]byte(ex.Stdout), &out); err != nil {
-		return Verdict{Outcome: Failed, Detail: fmt.Sprintf("no JSON on stdout (exit %d): %s", ex.Exit, tail(ex.Stderr, 160))}
+		return judge.Verdict{Outcome: judge.Failed, Detail: fmt.Sprintf("no JSON on stdout (exit %d): %s", ex.Exit, judge.Tail(ex.Stderr, 160))}
 	}
 	return wecVerdict(s, len(out.Beacons))
 }
 
 // wecVerdict judges WEC's beacon count on s.
-func wecVerdict(s scenarios.Scenario, beacons int) Verdict {
+func wecVerdict(s scenarios.Scenario, beacons int) judge.Verdict {
 	switch {
 	case s.Good() && beacons > 0:
-		return Verdict{Outcome: FalseAlarm, Detail: fmt.Sprintf("%d beacons before any choice", beacons)}
+		return judge.Verdict{Outcome: judge.FalseAlarm, Detail: fmt.Sprintf("%d beacons before any choice", beacons)}
 	case s.Good():
-		return Verdict{Outcome: Clean}
+		return judge.Verdict{Outcome: judge.Clean}
 	case beacons > 0:
-		return Verdict{Outcome: Caught, Found: fmt.Sprintf("%d beacons before any choice", beacons)}
+		return judge.Verdict{Outcome: judge.Caught, Found: fmt.Sprintf("%d beacons before any choice", beacons)}
 	}
-	return Verdict{Outcome: Missed, Detail: "no beacon before any choice"}
+	return judge.Verdict{Outcome: judge.Missed, Detail: "no beacon before any choice"}
 }
 
 // autoconsent runs DuckDuckGo's autoconsent (AUTOCONSENT_DIR: the

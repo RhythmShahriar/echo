@@ -15,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/RhythmShahriar/echo/testbed/consent/judge"
 	"github.com/RhythmShahriar/echo/testbed/consent/scenarios"
 )
 
@@ -86,22 +87,22 @@ func TestEvaluateProbe(t *testing.T) {
 		Broken: []scenarios.Check{{Step: "check", Exit: &three, Never: []string{"all clear"}}}}
 	ok := []Step{{Name: "check", Exit: 0}}
 	down := []Step{{Name: "check", Exit: 3}}
-	if v := evaluateProbe(pr, ok, down); v.Outcome != Caught || v.Found != `check: exit 3, never "all clear"` {
+	if v := evaluateProbe(pr, ok, down); v.Outcome != judge.Caught || v.Found != `check: exit 3, never "all clear"` {
 		t.Errorf("caught = %+v", v)
 	}
-	if v := evaluateProbe(pr, ok, []Step{{Name: "check", Exit: 3, Output: "All clear"}}); v.Outcome != Missed {
+	if v := evaluateProbe(pr, ok, []Step{{Name: "check", Exit: 3, Output: "All clear"}}); v.Outcome != judge.Missed {
 		t.Errorf("an all clear = %+v", v)
 	}
-	if v := evaluateProbe(pr, down, down); v.Outcome != Failed || !strings.HasPrefix(v.Detail, "good state: ") {
+	if v := evaluateProbe(pr, down, down); v.Outcome != judge.Failed || !strings.HasPrefix(v.Detail, "good state: ") {
 		t.Errorf("a failing good state = %+v", v)
 	}
 	// A probe the manifest names that doesn't exist, a Docker probe in
 	// Go mode.
 	p := &ProbeEnv{Work: t.TempDir()}
-	if out := runProbe(t.Context(), p, scenarios.Probe{ID: "e99", Probe: "nope"}); out.Echo.Outcome != Failed {
+	if out := runProbe(t.Context(), p, scenarios.Probe{ID: "e99", Probe: "nope"}); out.Echo.Outcome != judge.Failed {
 		t.Errorf("no such probe = %+v", out.Echo)
 	}
-	if out := runProbe(t.Context(), p, scenarios.Probe{ID: "e16", Probe: "ssrf", Needs: "docker"}); out.Echo.Outcome != NotRun {
+	if out := runProbe(t.Context(), p, scenarios.Probe{ID: "e16", Probe: "ssrf", Needs: "docker"}); out.Echo.Outcome != judge.NotRun {
 		t.Errorf("e16 in Go mode = %+v", out.Echo)
 	}
 }
@@ -222,7 +223,7 @@ func TestSiteDownProbe(t *testing.T) {
 	}
 	e01, _ := m.FindProbe("e01")
 	out := runProbe(t.Context(), probeEnv(t, "site"), e01)
-	if out.Echo.Outcome != Caught {
+	if out.Echo.Outcome != judge.Caught {
 		t.Fatalf("e01 = %+v\ngood %+v\nbroken %+v", out.Echo, out.Good, out.Broken)
 	}
 	if out.Good[0].Verdict != "ok" || out.Broken[0].Exit != 3 {
@@ -240,7 +241,7 @@ func TestInterruptProbe(t *testing.T) {
 	}
 	e05, _ := m.FindProbe("e05")
 	out := runProbe(t.Context(), probeEnv(t, "interrupt"), e05)
-	if out.Echo.Outcome != Caught {
+	if out.Echo.Outcome != judge.Caught {
 		t.Fatalf("e05 = %+v\ngood %+v\nbroken %+v", out.Echo, out.Good, out.Broken)
 	}
 	if !strings.Contains(out.Broken[0].Output, "reject run seen before the interrupt: true") {

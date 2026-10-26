@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/RhythmShahriar/echo/testbed/consent/judge"
 	"github.com/RhythmShahriar/echo/testbed/consent/scenarios"
 )
 
@@ -53,7 +54,7 @@ func (b *Bench) detectTimes(ctx context.Context, list []scenarios.Scenario) ([]t
 		b.rssMax = max(b.rssMax, ex.MaxRSS)
 		b.mu.Unlock()
 		if ex.Exit != 0 {
-			notes = append(notes, fmt.Sprintf("%s: detect exited %d: %s", s.ID, ex.Exit, tail(ex.Stderr, 160)))
+			notes = append(notes, fmt.Sprintf("%s: detect exited %d: %s", s.ID, ex.Exit, judge.Tail(ex.Stderr, 160)))
 			continue
 		}
 		times = append(times, ex.Wall)
@@ -105,8 +106,8 @@ func (b *Bench) fleet(ctx context.Context, list []scenarios.Scenario) (time.Dura
 	b.mu.Lock()
 	b.rssMax = max(b.rssMax, ex.MaxRSS)
 	b.mu.Unlock()
-	if _, err := readEnvelope(filepath.Join(dir, "fleet.json")); err != nil {
-		return ex.Wall, fmt.Sprintf("no report (exit %d): %s", ex.Exit, tail(ex.Stderr, 160))
+	if _, err := judge.ReadEnvelope(filepath.Join(dir, "fleet.json")); err != nil {
+		return ex.Wall, fmt.Sprintf("no report (exit %d): %s", ex.Exit, judge.Tail(ex.Stderr, 160))
 	}
 	return ex.Wall, ""
 }
