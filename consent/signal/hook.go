@@ -4,6 +4,7 @@
 package signal
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -208,10 +209,19 @@ func notRegion(r rune) bool {
 	return true
 }
 
-// waitMS reads wait_for_update, clamped to 0 to maxWaitMS.
+// waitMS reads wait_for_update, clamped to 0 to maxWaitMS. It reads the
+// number as text first: a float64 field fails on a number past its range
+// (1e400), which would read a huge wait as none. ParseFloat gives such a
+// number as an infinity, which the clamp handles. A string is not a
+// number, though json.Number would take one.
 func waitMS(raw json.RawMessage) int {
-	var f float64
-	if raw == nil || json.Unmarshal(raw, &f) != nil || math.IsNaN(f) {
+	var n json.Number
+	raw = bytes.TrimSpace(raw)
+	if len(raw) == 0 || raw[0] == '"' || json.Unmarshal(raw, &n) != nil {
+		return 0
+	}
+	f, err := strconv.ParseFloat(n.String(), 64)
+	if err != nil && !errors.Is(err, strconv.ErrRange) || math.IsNaN(f) {
 		return 0
 	}
 	return int(max(0, min(f, maxWaitMS)))

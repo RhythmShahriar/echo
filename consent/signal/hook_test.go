@@ -246,3 +246,32 @@ func FuzzHookEvent(f *testing.F) {
 		}
 	})
 }
+
+// TestWaitMS checks the clamp holds past float64's range and that what
+// isn't a number reads as no wait.
+func TestWaitMS(t *testing.T) {
+	tests := []struct {
+		raw  string
+		want int
+	}{
+		{"500", 500},
+		{"1e400", maxWaitMS},
+		{"1e12", maxWaitMS},
+		{"-1e400", 0},
+		{"-5", 0},
+		{" 250 ", 250},
+		{`"500"`, 0},
+		{"null", 0},
+		{"", 0},
+		{"true", 0},
+		{"{}", 0},
+	}
+	for _, tt := range tests {
+		if got := waitMS(json.RawMessage(tt.raw)); got != tt.want {
+			t.Errorf("waitMS(%q) = %d, want %d", tt.raw, got, tt.want)
+		}
+	}
+	if got := waitMS(nil); got != 0 {
+		t.Errorf("waitMS(nil) = %d", got)
+	}
+}
