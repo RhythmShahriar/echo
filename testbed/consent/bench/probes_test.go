@@ -277,13 +277,60 @@ func TestRejectStartedAndCompleteFromStore(t *testing.T) {
 	if !rejectStarted(store) {
 		t.Error("the Reject run's events file wasn't seen")
 	}
-	_ = os.WriteFile(filepath.Join(store, "r1", "consent.json"), []byte(`{"notes": ["Interrupted before every run finished: this result is incomplete."]}`), 0o600)
-	if c := completeFromStore(store); c == nil || *c {
-		t.Errorf("an interrupted result: %v", c)
+	write := func(body string) {
+		t.Helper()
+		if err := os.WriteFile(filepath.Join(store, "r1", "consent.json"), []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
 	}
-	_ = os.WriteFile(filepath.Join(store, "r1", "consent.json"), []byte(`{"notes": []}`), 0o600)
-	if c := completeFromStore(store); c == nil || !*c {
-		t.Errorf("a whole result: %v", c)
+	for _, c := range []struct {
+		name, body string
+		want       *bool
+	}{
+		{"canceled Reject run", `{"pages": [{"runs": [{"run": "none", "status": "ok"}, {"run": "reject", "status": "canceled", "reason": "canceled"}]}]}`, ptr(false)},
+		{"inconclusive entry", `{"pages": [{"runs": [{"run": "none", "status": "ok"}]}], "inconclusive": [{"run": "reject", "reason": "canceled"}]}`, ptr(false)},
+		{"truncated run", `{"pages": [{"runs": [{"run": "none", "status": "ok", "truncated": true}]}]}`, ptr(false)},
+		{"whole result", `{"pages": [{"runs": [{"run": "none", "status": "ok"}, {"run": "reject", "status": "ok"}]}]}`, ptr(true)},
+		// The word alone decides nothing: a page title or detail may say it.
+		{"incomplete only in text", `{"pages": [{"url": "https://shop.test/incomplete", "runs": [{"run": "none", "status": "ok", "detail": "incomplete"}]}], "notes": ["incomplete"]}`, ptr(true)},
+		{"no-banner on a page that needs none", `{"pages": [{"needs_no_consent": true, "runs": [{"run": "none", "status": "no-banner", "reason": "no_banner"}]}]}`, ptr(true)},
+		{"not a result", `{"notes": ["this result is incomplete"]}`, nil},
+		{"not JSON", `incomplete`, nil},
+	} {
+		write(c.body)
+		got := completeFromStore(store)
+		if (got == nil) != (c.want == nil) || (got != nil && *got != *c.want) {
+			t.Errorf("%s: complete = %v, want %v", c.name, fmtBool(got), fmtBool(c.want))
+		}
+	}
+}
+
+func ptr(b bool) *bool { return &b }
+
+func fmtBool(b *bool) string {
+	if b == nil {
+		return "nil"
+	}
+	return fmt.Sprint(*b)
+}
+
+// TestWaitForReject: the wait ends on the events file, on the run
+// ending first (no Ctrl-C then) and on the limit.
+func TestWaitForReject(t *testing.T) {
+	store := t.TempDir()
+	done := make(chan Exec, 1)
+	if saw, ended := waitForReject(store, done, 50*time.Millisecond); saw || ended != nil {
+		t.Errorf("limit: saw %v ended %v", saw, ended)
+	}
+	done <- Exec{Exit: 0}
+	if saw, ended := waitForReject(store, done, 5*time.Second); saw || ended == nil || ended.Exit != 0 {
+		t.Errorf("a run that ended before Reject: saw %v ended %v", saw, ended)
+	}
+	ev := filepath.Join(store, "r1", "events")
+	_ = os.MkdirAll(ev, 0o750)
+	_ = os.WriteFile(filepath.Join(ev, "page-1-reject.ndjson"), nil, 0o600)
+	if saw, ended := waitForReject(store, done, 5*time.Second); !saw || ended != nil {
+		t.Errorf("the Reject run: saw %v ended %v", saw, ended)
 	}
 }
 

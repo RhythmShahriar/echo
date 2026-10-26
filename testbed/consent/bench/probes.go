@@ -12,6 +12,7 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -181,28 +182,23 @@ func interruptProbe(ctx context.Context, p *ProbeEnv, broken bool) ([]Step, erro
 			s = p.finish("check", run(cmd))
 		} else {
 			done := make(chan Exec, 1)
-			saw := make(chan bool, 1)
 			cmd.Cancel = func() error { return cmd.Process.Kill() }
-			go func() {
-				// Wait for the Reject run's events file, then press Ctrl-C.
-				deadline := time.Now().Add(p.Timeout / 2)
-				for time.Now().Before(deadline) {
-					if rejectStarted(filepath.Join(p.Work, ".echo", "consent")) {
-						saw <- true
-						return
-					}
-					time.Sleep(100 * time.Millisecond)
-				}
-				saw <- false
-			}()
 			if err := startRun(cmd, done); err != nil {
 				return nil, err
 			}
-			sawReject := <-saw
-			if cmd.Process != nil {
+			// Ctrl-C only once the Reject run's events file is there: a
+			// press in another phase proves nothing about this one, so
+			// the probe then lets the run end on its own and the "seen"
+			// line it asks for is false.
+			sawReject, ended := waitForReject(filepath.Join(p.Work, ".echo", "consent"), done, p.Timeout/2)
+			if ended == nil && sawReject && cmd.Process != nil {
 				_ = interrupt(cmd)
 			}
-			s = p.finish("check", <-done)
+			if ended == nil {
+				e := <-done
+				ended = &e
+			}
+			s = p.finish("check", *ended)
 			s.note("reject run seen before the interrupt: %v", sawReject)
 			if s.Complete == nil {
 				s.Complete = completeFromStore(filepath.Join(p.Work, ".echo", "consent"))
@@ -238,6 +234,26 @@ func startRun(cmd *exec.Cmd, done chan<- Exec) error {
 	return nil
 }
 
+// waitForReject polls store for the Reject run's events file until it
+// appears, the run ends (its Exec is returned) or limit passes.
+func waitForReject(store string, done <-chan Exec, limit time.Duration) (bool, *Exec) {
+	tick := time.NewTicker(100 * time.Millisecond)
+	defer tick.Stop()
+	deadline := time.After(limit)
+	for {
+		if rejectStarted(store) {
+			return true, nil
+		}
+		select {
+		case e := <-done:
+			return rejectStarted(store), &e
+		case <-deadline:
+			return false, nil
+		case <-tick.C:
+		}
+	}
+}
+
 // rejectStarted reports whether a result folder under store has the
 // Reject run's events file yet (events/page-1-reject.ndjson).
 func rejectStarted(store string) bool {
@@ -253,8 +269,11 @@ func rejectStarted(store string) bool {
 }
 
 // completeFromStore reads completeness from the newest consent.json in
-// store when no JSON report was written: consent.json is the bare
-// result, which says it is incomplete with the CLI's interrupt note.
+// store when no JSON report was written. consent.json is the bare
+// result, which has no complete field (the envelope carries it), so it
+// is decided the way consent decides it: an inconclusive entry, or a
+// run that is inconclusive, truncated or canceled, makes it incomplete.
+// A file that isn't a result says nothing (nil).
 func completeFromStore(store string) *bool {
 	var newest string
 	var at time.Time
@@ -274,8 +293,32 @@ func completeFromStore(store string) *bool {
 	if err != nil {
 		return nil
 	}
-	c := !strings.Contains(strings.ToLower(string(data)), "incomplete")
+	var r consent.Result
+	if err := json.Unmarshal(data, &r); err != nil || len(r.Pages) == 0 {
+		return nil
+	}
+	c := resultComplete(&r)
 	return &c
+}
+
+// resultComplete mirrors consent's own rule (Result.incomplete, PRD 9.3
+// and 11.2): a no-banner run on a page that needs no consent is
+// complete; any other inconclusive, truncated or canceled run is not.
+func resultComplete(r *consent.Result) bool {
+	if len(r.Inconclusive) > 0 {
+		return false
+	}
+	for _, p := range r.Pages {
+		for _, run := range p.Runs {
+			if p.NeedsNone && run.Status == consent.StatusNoBanner && (run.Reason == consent.ReasonNone || run.Reason == consent.ReasonNoBanner) {
+				continue
+			}
+			if run.Inconclusive() || run.Truncated || run.Status == consent.StatusCanceled {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 // cpuBusy (e06): every CPU busy while Echo checks. The verdicts must be
