@@ -386,8 +386,9 @@ func (b *Browser) Session() (*rod.Browser, error) {
 // SessionWithProxy is Session for a context whose traffic goes through
 // proxy (e.g. "http://127.0.0.1:41234"), bypassing it for the hosts in
 // bypass, which is Chrome's --proxy-bypass-list syntax ("<-loopback>"
-// sends loopback through the proxy too). Close the returned browser to
-// dispose of the context.
+// sends loopback through the proxy too). Its tabs get no default device
+// emulation: the caller sets the user agent and viewport itself. Close
+// the returned browser to dispose of the context.
 func (b *Browser) SessionWithProxy(proxy, bypass string) (*rod.Browser, error) {
 	var sess *rod.Browser
 	err := retry.Do(b.GetContext(), retry.Policy{Tries: launchTries, Pause: launchPause}, func() error {
@@ -397,7 +398,9 @@ func (b *Browser) SessionWithProxy(proxy, bypass string) (*rod.Browser, error) {
 		}
 		c := *b.Browser
 		c.BrowserContextID = res.BrowserContextID
-		sess = &c
+		// rod emulates a laptop in every new tab by default, which
+		// would replace the user agent and viewport the caller sets.
+		sess = c.NoDefaultDevice()
 		return nil
 	})
 	return sess, err

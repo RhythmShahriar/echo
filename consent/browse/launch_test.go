@@ -38,7 +38,7 @@ func TestConsentLaunchFlags(t *testing.T) {
 	}
 	p := consenttest.NewPlan(t)
 	p.Locale = "de-DE"
-	opts := launchOptions(p, "127.0.0.1:35060", resolveLocale(p))
+	opts := launchOptions(p, "127.0.0.1:35060", planLocale(p))
 	if !slices.Equal(opts.Flags, want) {
 		t.Fatalf("flags = %q\nwant    %q", opts.Flags, want)
 	}
@@ -79,7 +79,7 @@ func TestConsentLaunchFlags(t *testing.T) {
 	}
 }
 
-func TestResolveLocale(t *testing.T) {
+func TestPlanLocale(t *testing.T) {
 	t.Setenv("LC_ALL", "")
 	t.Setenv("LC_MESSAGES", "")
 	t.Setenv("LANG", "fr_FR.UTF-8")
@@ -89,8 +89,8 @@ func TestResolveLocale(t *testing.T) {
 		"de,--disable-web-security": "en-US", "x": "en-US", "en US": "en-US",
 	} {
 		p.Locale = in
-		if got := resolveLocale(p); got != want {
-			t.Errorf("resolveLocale(%q) = %q; want %q", in, got, want)
+		if got := planLocale(p); got != want {
+			t.Errorf("planLocale(%q) = %q; want %q", in, got, want)
 		}
 	}
 	for env, want := range map[string]string{"C": "en-US", "POSIX": "en-US", "de_AT.UTF-8@euro": "de-AT", "": "en-US", "sv_SE": "sv-SE"} {

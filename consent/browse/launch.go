@@ -84,7 +84,7 @@ var findBrowser = browser.FindContext
 // --no-sandbox and the container image without a browser come back as
 // a *consent.FatalError.
 func Launch(ctx context.Context, p *consent.Plan, internalAddr string) (*browser.Browser, error) {
-	opts := launchOptions(p, internalAddr, resolveLocale(p))
+	opts := launchOptions(p, internalAddr, planLocale(p))
 	if os.Getenv(ImageEnv) == "1" && opts.Bin == "" {
 		// The image has no browser and shouldn't fetch one into a
 		// throwaway layer: look for an installed one only.
@@ -120,19 +120,8 @@ func launchError(err error) error {
 // Accept-Language take it.
 var localeTag = regexp.MustCompile(`^[A-Za-z]{2,8}(-[A-Za-z0-9]{1,8})*$`)
 
-// resolveLocale is the browser locale: --locale, else the machine's
-// (LC_ALL, LC_MESSAGES, LANG), else en-US. Anything that isn't shaped
-// like a language tag is en-US.
-func resolveLocale(p *consent.Plan) string {
-	l := strings.TrimSpace(p.Locale)
-	if l == "" {
-		l = machineLocale(os.Getenv)
-	}
-	if !localeTag.MatchString(l) {
-		return "en-US"
-	}
-	return l
-}
+// osGetenv is os.Getenv; machineLocale reads the locale through it.
+var osGetenv = os.Getenv
 
 // machineLocale reads a POSIX locale such as de_DE.UTF-8 as a BCP 47
 // tag (de-DE). C and POSIX, which say nothing about a language, give
