@@ -271,3 +271,57 @@ func TestSameSiteHeaders(t *testing.T) {
 		t.Errorf("no -H: %+v", got)
 	}
 }
+
+// urlSpy is a catalog that keeps the URLs it was asked about and knows
+// one hit only its body proves.
+type urlSpy struct {
+	consenttest.FakeClassifier
+	mu   sync.Mutex
+	urls []string
+}
+
+func (c *urlSpy) Request(r *consent.Request, body []byte, site *url.URL) *consent.Hit {
+	c.mu.Lock()
+	c.urls = append(c.urls, r.URL)
+	c.mu.Unlock()
+	if strings.HasSuffix(r.URL, "/api/event") && strings.Contains(string(body), `"n":"pageview"`) {
+		return &consent.Hit{Tracker: "plausible", Kind: consent.HitBeacon, Need: consent.NeedNeeded}
+	}
+	if strings.HasSuffix(r.URL, "/js/script.js") {
+		return &consent.Hit{Tracker: "plausible", Kind: consent.HitScript, Need: consent.NeedNeeded}
+	}
+	return c.FakeClassifier.Request(r, body, site)
+}
+
+func (c *urlSpy) Hold(r *consent.Request) bool { return c.FakeClassifier.Hold(r) }
+
+// The catalog sees the raw URL while the record keeps the masked one; a
+// hit proven by its body is held, a script never, nothing with
+// --send-hits.
+func TestClassifyRawURLAndBodyHold(t *testing.T) {
+	spy := &urlSpy{}
+	consenttest.Use(t, consent.Stages{Classifier: spy})
+	r := unitRecorder(t, consent.RunNone, nil)
+	raw := "https://www.google-analytics.com/g/collect?v=2&tid=G-ABCD1234&cid=555.666"
+	req := &consent.Request{Method: "GET", URL: consent.MaskURL(raw, false), Host: "www.google-analytics.com"}
+	hit, hold := r.classify(req, raw, nil)
+	if hit == nil || !hold || len(spy.urls) != 1 || spy.urls[0] != raw || strings.Contains(req.URL, "ABCD1234") {
+		t.Errorf("hit %+v hold %v; the catalog saw %q; stored %q", hit, hold, spy.urls, req.URL)
+	}
+	ev := &consent.Request{Method: "POST", URL: "https://shop.test/api/event", Host: "shop.test"}
+	if hit, hold := r.classify(ev, ev.URL, []byte(`{"n":"pageview"}`)); hit == nil || !hold {
+		t.Errorf("body-proven hit: %+v %v", hit, hold)
+	}
+	sc := &consent.Request{Method: "GET", URL: "https://plausible.io/js/script.js", Host: "plausible.io"}
+	if hit, hold := r.classify(sc, sc.URL, nil); hit == nil || hold {
+		t.Errorf("script: %+v held %v", hit, hold)
+	}
+	pre := &consent.Request{Method: "OPTIONS", URL: raw, Host: "www.google-analytics.com"}
+	if hit, hold := r.classify(pre, raw, nil); hit != nil || !hold {
+		t.Errorf("preflight: %+v held %v", hit, hold)
+	}
+	send := unitRecorder(t, consent.RunNone, func(p *consent.Plan) { p.Hold = false })
+	if _, hold := send.classify(req, raw, nil); hold {
+		t.Error("held with --send-hits")
+	}
+}

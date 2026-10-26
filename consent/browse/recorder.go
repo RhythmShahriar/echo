@@ -732,15 +732,7 @@ func (r *recorder) paused(t *target, e *proto.FetchRequestPaused) {
 	req.BodyPartial = partial
 	r.counts.requests.Add(1)
 
-	var hit *consent.Hit
-	preflight := req.Method == "OPTIONS"
-	if c := r.stages.Classifier; c != nil && !preflight {
-		hit = safeClassify(c, req, window, r.site)
-		if hit != nil {
-			hit = r.decodeGoogle(hit)
-		}
-	}
-	hold := r.plan.Hold && r.stages.Classifier != nil && safeHold(r.stages.Classifier, req)
+	hit, hold := r.classify(req, raw, window)
 	mapped, mapAddr := r.mapper.lookup(req.Host)
 
 	answered := true
@@ -901,6 +893,34 @@ func (r *recorder) decodeGoogle(h *consent.Hit) *consent.Hit {
 		g.GCDUnofficial = true
 	}
 	return h
+}
+
+// classify asks the catalog about a request and whether to hold it.
+// The catalog gets the raw URL (cut at Limits.URLBytes), so it can check
+// IDs that the stored, masked URL hides; it masks what it returns. A
+// request is held when the catalog holds its URL or when the body proved
+// it a hit that needs consent: a beacon whose need isn't "no" (a proxied
+// /api/event, a first-party /tr form post). A script is never held. A
+// CORS preflight is not classified, only held with its endpoint.
+func (r *recorder) classify(req *consent.Request, raw string, window []byte) (*consent.Hit, bool) {
+	c := r.stages.Classifier
+	if c == nil {
+		return nil, false
+	}
+	plain := *req
+	plain.URL = r.cut(raw)
+	var hit *consent.Hit
+	if req.Method != "OPTIONS" {
+		hit = safeClassify(c, &plain, window, r.site)
+		if hit != nil {
+			hit = r.decodeGoogle(hit)
+		}
+	}
+	if !r.plan.Hold {
+		return hit, false
+	}
+	byBody := hit != nil && hit.Kind == consent.HitBeacon && hit.Need != consent.NeedNo
+	return hit, byBody || safeHold(c, &plain)
 }
 
 // safeClassify calls the catalog, which must never panic; if it does,
