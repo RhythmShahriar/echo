@@ -361,3 +361,47 @@ texts, for the release notes and the docs team.
   pass Detect, Find and Choose in headless Chrome and in the FakeTab
   tests; on the negative pages nothing is found and `--cmp generic`
   clicks nothing (`no_button`).
+
+## C9 Reopen, BannerShowing, Find and geo override
+
+- Withdraw run, reopen step: Echo clicks the first of the rule's reopen
+  controls that shows within `--banner-wait` (a footer or floating
+  "cookie settings" button). When none shows, it calls the CMP's own
+  reopen function (`how` stays `button` for the Reject that follows)
+  only under `--click api` or `--click button,api`; `--click api` calls
+  the function first.
+- Reopen data per rule: Cookiebot `Cookiebot.renew()` (API only);
+  OneTrust `#ot-sdk-btn`, `.ot-sdk-show-settings`,
+  `#ot-sdk-btn-floating .ot-floating-button__open` (new in C9), else
+  `OneTrust.ToggleInfoDisplay()`; CookieYes `[data-cky-tag=revisit-consent]`;
+  Complianz `.cmplz-manage-consent`, `.cmplz-show-banner`; Usercentrics
+  the privacy button in either root, else the API; Borlabs
+  `.borlabs-cookie-open-dialog-preferences`, `.borlabs-cookie-preference`;
+  Didomi `Didomi.preferences.show()` (API only); iubenda
+  `.iubenda-cs-preferences-link`, else `_iub.cs.api.openPreferences()`.
+  The generic rule has no reopen.
+- Reopen errors (the withdraw run's reason text):
+  - `consent: Cookiebot has no way to reopen the banner without its API; --click button,api allows it`
+    (`<name> has no way ...` for any rule with only an API reopen)
+  - `consent: <name> showed no button to reopen the banner (<selectors>); --click button,api allows its API`
+  - `consent: <name> showed no button to reopen the banner (<selectors>)`
+  - `consent: <name> has no known way to reopen the banner`
+    (the generic rule, a custom-selector banner; `this banner` when
+    nothing names it)
+  - `consent: <name>'s reopen button <selector> left the page`
+  - `consent: <name>'s reopen button <selector> couldn't be clicked`
+  - `consent: <name>'s reopen call <call> failed: <error>`
+- Reject after a reopen that opened the preference center itself
+  (OneTrust, Didomi, Usercentrics and iubenda APIs): when the first
+  layer and the settings opener don't show after 1 s and the settings'
+  Save does, Echo switches the toggles off and clicks Save directly;
+  `layer: 2` and `selector` is the Save alone, e.g.
+  `#onetrust-pc-sdk .save-preference-btn-handler`. `consent detect`
+  reports the same Save when the settings are open on load.
+- `State` (the final state after the reload) reads the rule's verify
+  spec; the generic rule gives `source: banner` with `decided` true when
+  no banner shows.
+- `--geo <cc>` with OneTrust: the driver gives the query parameter
+  `otgeo=<cc>` (lower case) for the start URL; any other CMP, or a
+  country that isn't two letters, gives none. The note the browse lane
+  adds reads `OneTrust geolocation override otgeo=de (unverified)`.

@@ -37,6 +37,9 @@ type target struct {
 	chain  chain
 	probe  probeResult
 	within []consent.Locator // the banner the first click must be inside; nil: anywhere
+	// open: the settings are already open (the withdraw run reopened
+	// them with the CMP's API) and chain is their Save.
+	open bool
 }
 
 // choice is the Choice Find reports for the target, before any click.
@@ -225,6 +228,13 @@ func (d *driver) locate(ctx context.Context, t consent.Tab, p *consent.Plan, r *
 						return &target{layer: 2, chain: c, probe: pr, within: within(r)}, consent.ReasonNone, nil
 					}
 				}
+				tg, err := openSettings(ctx, t, second)
+				if err != nil && ctx.Err() != nil {
+					return nil, consent.ReasonNone, ctx.Err()
+				}
+				if tg != nil {
+					return tg, consent.ReasonNone, nil
+				}
 			}
 		}
 		if now >= deadline {
@@ -234,6 +244,27 @@ func (d *driver) locate(ctx context.Context, t consent.Tab, p *consent.Plan, r *
 			return nil, consent.ReasonNone, err
 		}
 	}
+}
+
+// openSettings is the Save of settings that are already open, with no
+// opener to click: a reopen that went straight to the preference center
+// (OneTrust.ToggleInfoDisplay, Didomi.preferences.show). Save sits
+// outside the banner, so it is probed anywhere on the page.
+func openSettings(ctx context.Context, t consent.Tab, second *secondLayer) (*target, error) {
+	var locs []consent.Locator
+	for _, c := range second.Save {
+		locs = append(locs, c.Steps[0])
+	}
+	res, err := probe(ctx, t, locs, nil)
+	if err != nil {
+		return nil, err
+	}
+	for _, c := range second.Save {
+		if pr := res[locKey(c.Steps[0])]; pr.clickable() {
+			return &target{layer: 2, chain: c, probe: pr, open: true}, nil
+		}
+	}
+	return nil, nil
 }
 
 // behindClosedRoot reports whether a probe found no control at all and
@@ -293,20 +324,24 @@ func (d *driver) viaButton(ctx context.Context, t consent.Tab, p *consent.Plan, 
 		return d.clickAndVerify(ctx, t, p, r, k, tg.chain, tg.within, ch, before)
 	}
 
-	// Second layer: open the settings, wait for Save, switch every
-	// enabled toggle off, then save.
-	if reason, err := d.clickSteps(ctx, t, p, tg.chain.Steps, tg.within, ch); reason != consent.ReasonNone || err != nil {
-		return ch, reason, err
-	}
-	if r.ID == genericID {
-		return d.genericSettings(ctx, t, p, r, k, tg, ch, before)
-	}
-	save, err := d.waitClickable(ctx, t, p, r.Second.Save, nil)
-	if err != nil {
-		return ch, consent.ReasonNone, err
-	}
-	if save == nil {
-		return ch, consent.ReasonNoButton, nil
+	// Second layer: open the settings (unless they are open already),
+	// wait for Save, switch every enabled toggle off, then save.
+	save := &tg.chain
+	if !tg.open {
+		if reason, err := d.clickSteps(ctx, t, p, tg.chain.Steps, tg.within, ch); reason != consent.ReasonNone || err != nil {
+			return ch, reason, err
+		}
+		if r.ID == genericID {
+			return d.genericSettings(ctx, t, p, r, k, tg, ch, before)
+		}
+		save, err = d.waitClickable(ctx, t, p, r.Second.Save, nil)
+		if err != nil {
+			return ch, consent.ReasonNone, err
+		}
+		if save == nil {
+			return ch, consent.ReasonNoButton, nil
+		}
+		ch.Selector = consent.SafeText(tg.chain.Raw+" >> "+save.Raw, selectorWidth)
 	}
 	if err := switchOff(ctx, t, r.Second.Toggles, false); err != nil {
 		return ch, consent.ReasonNone, err
@@ -314,7 +349,6 @@ func (d *driver) viaButton(ctx context.Context, t consent.Tab, p *consent.Plan, 
 	if err := switchOff(ctx, t, r.Second.Press, true); err != nil {
 		return ch, consent.ReasonNone, err
 	}
-	ch.Selector = consent.SafeText(tg.chain.Raw+" >> "+save.Raw, selectorWidth)
 	return d.clickAndVerify(ctx, t, p, r, k, *save, nil, ch, before)
 }
 

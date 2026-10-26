@@ -36,7 +36,7 @@ reject:
     save: ["#CybotCookiebotDialogBodyLevelButtonLevelOptinAllowallSelection"]
 reopen:
   selectors: ["#CybotCookiebotDialogBodyButtonDetails"]
-  api: reopen              # the api entry to call when no selector shows
+  api: reopen              # called when no selector shows, under --click api or button,api only
 api:                       # fixed calls in the page's main world
   accept: Cookiebot.submitCustomConsent(true,true,true)
   reject: Cookiebot.submitCustomConsent(false,false,false)

@@ -10,7 +10,6 @@ import (
 	"embed"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io/fs"
 	"path"
@@ -237,14 +236,6 @@ func (d *driver) candidates(p *consent.Plan) ([]*rule, error) {
 		return nil, fmt.Errorf("--cmp %q: want auto or one of %s", consent.SafeText(want, 40), strings.Join(ids, ", "))
 	}
 	return []*rule{r}, nil
-}
-
-// errNoReopen is Reopen until the withdraw run's reopen path is built.
-var errNoReopen = errors.New("consent: reopening the banner isn't built yet")
-
-// Reopen opens the banner or preference center again (withdraw run).
-func (d *driver) Reopen(context.Context, consent.Tab, *consent.Plan, consent.CMPInfo) error {
-	return errNoReopen
 }
 
 // State reads the CMP's stored choice with the rule's verify spec; a
