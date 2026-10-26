@@ -142,7 +142,7 @@ type Match struct {
 	Status  string `yaml:"status" json:"status,omitempty"`
 	Reason  string `yaml:"reason" json:"reason,omitempty"`
 	// FirstParty, set, asks that a hit behind the issue was (or wasn't)
-	// recognised on the site's own host: server-side tagging (c12).
+	// recognized on the site's own host: server-side tagging (c12).
 	FirstParty *bool `yaml:"first_party" json:"first_party,omitempty"`
 }
 

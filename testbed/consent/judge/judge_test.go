@@ -131,7 +131,7 @@ func TestJudgeTitleIsACaseInsensitiveSubstring(t *testing.T) {
 }
 
 // TestJudgeFirstParty: c12 is caught only when a hit behind the GA4
-// issue was recognised on the site's own host.
+// issue was recognized on the site's own host.
 func TestJudgeFirstParty(t *testing.T) {
 	yes := true
 	s := scenarios.Scenario{ID: "c12", Expect: []scenarios.Match{
