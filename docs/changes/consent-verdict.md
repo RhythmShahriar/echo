@@ -64,3 +64,11 @@ Only on pages with Google hits. These issues name no tracker: their key ends in 
   - `limit`: `stopped after 20000 requests` (the plan's request limit)
   - `canceled`: `interrupted`
   - Durations read as the flags take them: `10s`, `90s`, `2m`.
+
+## V5 Levels, ignores and notes
+
+- `checks:` levels apply to consent checks: `off` removes the check's issues, `error`, `warning` or `notice` replaces their level (and so what `--fail-on` and the exit code see).
+- An `ignore:` entry hides an issue when its `check` matches and its `tracker`, `page` (a path, or a URL read as its path) and `run` match where set. The issue stays in `issues` in its place with `ignored` set to the entry and doesn't count in the summary or the exit code.
+- An entry whose `until` date (UTC) has passed, or whose `until` isn't a `YYYY-MM-DD` date, hides nothing and adds one `consent/ignore-expired` notice per entry: title `The ignore for <check> on <tracker, or page, or every page> expired on <until>; the issue counts again`, detail `ignore: <check> until <until>, reason: <reason>`. The until day itself still applies.
+- Issues are ordered by level (error, warning, notice), then page order, then run (none, accept, reject, gpc, withdraw), then tracker id.
+- `notes` are, in this order: `Evidence, not legal advice.`; `Hits held in the browser.` or `Tracker hits were sent for real (--send-hits).`; `TLS not verified.` (with `-k`); `Chrome ran without its sandbox.` (with `--no-sandbox`); `Hosts mapped with --map-host.`; `--geo <cc> set the language and time zone, not the IP address.`; `gcd decoded with an unofficial, community-documented mapping.`; then any other note (the TCF note of V4, notes browse adds). Judging a result again doesn't repeat them.

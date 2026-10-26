@@ -5,6 +5,7 @@ package verdict
 
 import (
 	"strings"
+	"time"
 
 	"github.com/RhythmShahriar/echo/consent"
 )
@@ -16,20 +17,29 @@ func init() {
 // Evaluator is the consent Evaluator: it fills each page's Consent Mode
 // summary and NeedsNone, raises the issues of the catalog and lists the
 // inconclusive runs. It keeps no state, so one value serves every check.
-type Evaluator struct{}
+type Evaluator struct {
+	// NowFunc is the clock ignore: until dates are read against (UTC
+	// dates); nil is time.Now. Tests set it to pin "today".
+	NowFunc func() time.Time
+}
 
 var _ consent.Evaluator = Evaluator{}
 
 // Evaluate judges r under p. p may be nil (a stored result judged again):
 // the result's own policy and geo are used then. Evaluate replaces
 // r.Issues and r.Inconclusive, so judging a result twice gives the same.
-func (Evaluator) Evaluate(r *consent.Result, p *consent.Plan) {
+func (e Evaluator) Evaluate(r *consent.Result, p *consent.Plan) {
 	if r == nil {
 		return
 	}
 	j := newJudge(r, p)
+	j.now = e.NowFunc
+	if j.now == nil {
+		j.now = time.Now
+	}
 	r.Issues = []consent.Issue{}
 	r.Inconclusive = []consent.Inconclusive{}
+	j.clearNotes()
 	j.markExempt()
 	for i := range r.Pages {
 		j.summarize(&r.Pages[i])
@@ -39,6 +49,7 @@ func (Evaluator) Evaluate(r *consent.Result, p *consent.Plan) {
 		j.consentMode(&r.Pages[i])
 		j.choices(&r.Pages[i])
 	}
+	j.finish()
 }
 
 // judge holds what every check of one Evaluate call reads: the result,
@@ -51,6 +62,7 @@ type judge struct {
 	exempt map[string]bool
 	info   map[string]consent.TrackerInfo // the catalog, when it is linked
 	names  map[string]string              // tracker names seen in the result's hits
+	now    func() time.Time               // the clock ignore: until dates are read against
 }
 
 func newJudge(r *consent.Result, p *consent.Plan) *judge {
