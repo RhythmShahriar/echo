@@ -1,0 +1,25 @@
+# iubenda _iub_cs-<id> fixtures (URL-encoded JSON, here decoded once).
+# Purposes: 1 necessary, 2 basic interactions, 3 experience, 4
+# measurement, 5 marketing.
+- name: accepted
+  values: {_iub_cs-12345: '{"timestamp":"2026-10-26T09:00:00.000Z","version":"1.60.0","purposes":{"1":true,"2":true,"3":true,"4":true,"5":true},"id":12345,"cons":{"rand":"a1b2c3"}}'}
+  want: {decided: true, source: "cookie:_iub_cs-12345", categories: {"1": true, "2": true, "3": true, "4": true, "5": true}}
+- name: rejected
+  values: {_iub_cs-12345: '{"timestamp":"2026-10-26T09:00:00.000Z","version":"1.60.0","purposes":{"1":true,"2":false,"3":false,"4":false,"5":false},"id":12345,"cons":{"rand":"a1b2c3"}}'}
+  want: {decided: true, source: "cookie:_iub_cs-12345", categories: {"1": true, "2": false, "3": false, "4": false, "5": false}}
+- name: still URL-encoded
+  values: {_iub_cs-12345: "%7B%22purposes%22%3A%7B%221%22%3Atrue%2C%225%22%3Afalse%7D%2C%22id%22%3A12345%7D"}
+  want: {decided: true, source: "cookie:_iub_cs-12345", categories: {"1": true, "5": false}}
+- name: undecided (no purposes)
+  values: {_iub_cs-12345: '{"timestamp":"2026-10-26T09:00:00.000Z","version":"1.60.0","id":12345}'}
+  want: {decided: false, source: "cookie:_iub_cs-12345"}
+- name: garbage
+  values: {_iub_cs-12345: "purposes"}
+  unreadable: true
+  want: {decided: false, source: "cookie:_iub_cs-12345"}
+- name: other site cookies only
+  values: {_iub_cs: "x", iub_other: "y"}
+  want: null
+- name: missing
+  values: {}
+  want: null

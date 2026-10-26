@@ -1,0 +1,21 @@
+# Complianz cmplz_<category> fixtures (allow or deny each); cookie names
+# from https://complianz.io/cookies/
+- name: accepted
+  values: {cmplz_functional: allow, cmplz_preferences: allow, cmplz_statistics: allow, cmplz_marketing: allow, cmplz_banner-status: dismissed}
+  want: {decided: true, source: "cookie:cmplz_*", categories: {functional: true, preferences: true, statistics: true, marketing: true}}
+- name: rejected
+  values: {cmplz_functional: allow, cmplz_preferences: deny, cmplz_statistics: deny, cmplz_marketing: deny, cmplz_banner-status: dismissed, cmplz_policy_id: "14", cmplz_consented_services: ""}
+  want: {decided: true, source: "cookie:cmplz_*", categories: {functional: true, preferences: false, statistics: false, marketing: false}}
+- name: undecided (banner status only)
+  values: {cmplz_banner-status: show, cmplz_policy_id: "14"}
+  want: null
+- name: other cookies ignored
+  values: {PHPSESSID: abc, cmplz_marketing: deny}
+  want: {decided: true, source: "cookie:cmplz_*", categories: {marketing: false}}
+- name: garbage
+  values: {cmplz_marketing: maybe}
+  unreadable: true
+  want: {decided: false, source: "cookie:cmplz_*"}
+- name: missing
+  values: {}
+  want: null

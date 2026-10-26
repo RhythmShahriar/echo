@@ -1,0 +1,35 @@
+# Usercentrics storage fixtures: uc_settings (services with status and
+# history), ucData and uc_user_interaction.
+- name: accepted
+  values:
+    uc_settings: '{"controllerId":"tb-1","id":"tbSettings1","language":"en","services":[{"id":"HkocEodjb7","name":"Google Analytics","status":true,"history":[{"action":"onAcceptAllServices","language":"en","status":true,"timestamp":1761400000000,"type":"explicit"}]},{"id":"ko1w5PpFl","name":"Facebook Pixel","status":true,"history":[{"action":"onAcceptAllServices","status":true,"type":"explicit"}]}],"version":"1"}'
+    uc_user_interaction: "true"
+  want: {decided: true, source: "storage:uc_settings", categories: {services_granted: true, Google Analytics: true, Facebook Pixel: true}}
+- name: rejected
+  values:
+    uc_settings: '{"services":[{"id":"H1Vl5NidjWX","name":"Usercentrics Consent Management Platform","status":true,"history":[{"action":"onDenyAllServices","status":true,"type":"explicit"}]},{"id":"HkocEodjb7","name":"Google Analytics","status":false,"history":[{"action":"onDenyAllServices","status":false,"type":"explicit"}]}]}'
+  want: {decided: true, source: "storage:uc_settings", categories: {services_granted: true, services_denied: true, Usercentrics Consent Management Platform: true, Google Analytics: false}}
+- name: undecided (implicit history only)
+  values:
+    uc_settings: '{"services":[{"id":"HkocEodjb7","name":"Google Analytics","status":false,"history":[{"action":"onInitialPageLoad","status":false,"type":"implicit"}]}]}'
+  want: {decided: false, source: "storage:uc_settings", categories: {services_denied: true, Google Analytics: false}}
+- name: services without names
+  values:
+    uc_settings: '{"services":[{"id":"a","status":true,"history":[]},{"id":"b","status":false}]}'
+    uc_user_interaction: "true"
+  want: {decided: true, source: "storage:uc_settings", categories: {services_granted: true, services_denied: true}}
+- name: ucData
+  values:
+    ucData: '{"gcm":{"adStorage":"denied"},"consent":{"services":{"HkocEodjb7":{"name":"Google Analytics","consent":false},"H1Vl5NidjWX":{"name":"Usercentrics Consent Management Platform","consent":true}}}}'
+    uc_user_interaction: "true"
+  want: {decided: true, source: "storage:ucData", categories: {services_granted: true, services_denied: true, Google Analytics: false, Usercentrics Consent Management Platform: true}}
+- name: interaction flag only
+  values: {uc_user_interaction: "true"}
+  want: {decided: true, source: "storage:uc_user_interaction"}
+- name: garbage
+  values: {uc_settings: "[not json"}
+  unreadable: true
+  want: {decided: false, source: "storage:uc_settings"}
+- name: missing
+  values: {uc_user_interaction: "false"}
+  want: null
