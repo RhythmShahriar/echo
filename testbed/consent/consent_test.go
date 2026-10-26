@@ -238,8 +238,12 @@ func TestConsentMasksEverywhere(t *testing.T) {
 	secrets := map[string]string{"URL token": token, "basic-auth password": password, "basic-auth header": basic,
 		"bearer token": bearer, "cookie": cookie}
 	for _, id := range []string{"secret-url", "pii-beacons"} {
-		for _, broken := range []bool{false, true} {
-			t.Run(fmt.Sprintf("%s broken=%v", id, broken), func(t *testing.T) {
+		for _, c := range []struct {
+			broken bool
+			json   bool // stdout carries the --json envelope instead of the text report
+		}{{false, false}, {true, false}, {true, true}} {
+			broken := c.broken
+			t.Run(fmt.Sprintf("%s broken=%v json=%v", id, broken, c.json), func(t *testing.T) {
 				if err := b.srv.SetBroken(id, broken); err != nil {
 					t.Fatal(err)
 				}
@@ -249,10 +253,16 @@ func TestConsentMasksEverywhere(t *testing.T) {
 					"-o", "result.json", "-o", "report.md", "-o", "report.xml", "-o", "report.html",
 					"-H", "Authorization: env:RHYTHM_ECHO_TB_AUTH", "-H", "X-Api-Token: env:RHYTHM_ECHO_TB_BEARER",
 					"--cookie", "env:RHYTHM_ECHO_TB_COOKIE"}, server.MapArgs(b.addr))
+				if c.json {
+					args = append(args, "--json")
+				}
 				env := echoEnv("RHYTHM_ECHO_TB_AUTH=Basic "+basic, "RHYTHM_ECHO_TB_BEARER=Bearer "+bearer, "RHYTHM_ECHO_TB_COOKIE=tb_session="+cookie)
 				stdout, stderr, _ := runEcho(t, bin, dir, env, 4*time.Minute, args...)
 				if _, err := os.Stat(filepath.Join(dir, "result.json")); err != nil {
 					t.Fatalf("no report: %v\n%s", err, stderr)
+				}
+				if c.json && !strings.HasPrefix(strings.TrimSpace(stdout), "{") {
+					t.Errorf("--json: stdout is not the JSON envelope:\n%.300s", stdout)
 				}
 				leaks := scanSecrets(t, dir, map[string]string{"stdout": stdout, "stderr": stderr}, secrets, 4)
 				for _, l := range leaks {
