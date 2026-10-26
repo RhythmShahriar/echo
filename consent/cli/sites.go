@@ -219,8 +219,8 @@ func siteOptions(s site) (*options, error) {
 	// Values come from the environment of the person running the check,
 	// under Echo's prefix only: a shared file can't read files or other
 	// variables into a request.
-	for _, h := range slices.Concat(o.headers, o.cookies) {
-		if !siteEnvValue(h) {
+	for i, h := range slices.Concat(o.headers, o.cookies) {
+		if !siteEnvValue(h, i >= len(o.headers)) {
 			return nil, usagef("site %q: consent: args: header and cookie values must be env:RHYTHM_ECHO_NAME, never a file, the value itself or one of Echo's own variables (RHYTHM_ECHO_TOKEN, RHYTHM_ECHO_URL and the like)", s.Name)
 		}
 	}
@@ -240,8 +240,13 @@ var echoOwnEnv = []string{
 }
 
 // siteEnvValue reports whether a site's -H or --cookie value comes
-// from one of Echo's variables other than its own (echoOwnEnv).
-func siteEnvValue(arg string) bool {
+// from one of Echo's variables other than its own (echoOwnEnv). A
+// cookie may also be whole, env:RHYTHM_ECHO_<NAME> holding name=value,
+// as the command line allows.
+func siteEnvValue(arg string, cookie bool) bool {
+	if cookie && strings.HasPrefix(strings.TrimSpace(arg), "env:") {
+		return siteEnvName(arg)
+	}
 	if name, value, ok := strings.Cut(arg, ":"); ok && !strings.HasPrefix(arg, "env:") && headerToken.MatchString(strings.TrimSpace(name)) {
 		return siteEnvName(value)
 	}

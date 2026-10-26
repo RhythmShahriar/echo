@@ -8,6 +8,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -370,6 +371,9 @@ func TestSitesFile(t *testing.T) {
 		"- {name: a, url: a.test, consent: {args: ['-H', 'X: env:RHYTHM_ECHO_URL']}}":        "one of Echo's own variables",
 		"- {name: a, url: a.test, consent: {args: ['--cookie', 'k=env:RHYTHM_ECHO_RELAY']}}": "one of Echo's own variables",
 		"- {name: a, url: a.test, consent: {args: ['--cookie', 'k=env:HOME']}}":              `site "a": consent: args: header and cookie values must be env:RHYTHM_ECHO_NAME`,
+		"- {name: a, url: a.test, consent: {args: ['--cookie', 'env:RHYTHM_ECHO_TOKEN']}}":   "one of Echo's own variables",
+		"- {name: a, url: a.test, consent: {args: ['--cookie', 'env:HOME']}}":                `site "a": consent: args: header and cookie values must be env:RHYTHM_ECHO_NAME`,
+		"- {name: a, url: a.test, consent: {args: ['-H', 'env:RHYTHM_ECHO_BREW_AUTH']}}":     `site "a": consent: args: header and cookie values must be env:RHYTHM_ECHO_NAME`,
 		"- {name: a, url: a.test, consent: {args: [--pages, '11']}}":                         "--pages 11: want 0 to 10",
 		"- {name: a, url: a.test, consent: {args: [--runs, decline]}}":                       `site "a": consent: args: --runs "decline"`,
 		"- {name: a, url: a.test, consent: {urls: ['ftp://x']}}":                             `site "a": consent "ftp://x": want an http or https URL`,
@@ -378,6 +382,12 @@ func TestSitesFile(t *testing.T) {
 		if _, err := prepareArgs(t, "--sites", "bad.yaml"); err == nil || !strings.Contains(err.Error(), want) {
 			t.Errorf("%q:\n got %v\nwant %s", yaml, err, want)
 		}
+	}
+	// A whole cookie from one variable, as the command line allows.
+	putFile(t, "whole.yaml", "- {name: a, url: a.test, consent: {args: ['--cookie', 'env:RHYTHM_ECHO_BREW_COOKIE']}}\n")
+	t.Setenv("RHYTHM_ECHO_BREW_COOKIE", "session="+"c2Vzcw")
+	if st := mustPrepare(t, "--sites", "whole.yaml"); len(st.plans) != 1 || !slices.Equal(st.plans[0].Cookies, []string{"session=c2Vzcw"}) {
+		t.Errorf("a whole cookie from env: %+v", st.plans)
 	}
 	if _, err := prepareArgs(t, "--sites", "sites.yaml", "https://x.test/"); err == nil || err.Error() != "give pages or --sites, not both" {
 		t.Errorf("pages and --sites: %v", err)
