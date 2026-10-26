@@ -159,7 +159,11 @@ func (c *cmd) report(pos []string) int {
 		// readResult words its errors for --against.
 		return fail(env, usagef("consent report %s", trimAgainst(err.Error(), which)))
 	}
-	r.Complete = !slices.Contains(r.Notes, noteInterrupted) && r.ExitCode(failOnNone) != exitUnavailable
+	// consent.json has no complete field (it is the envelope's data):
+	// the interrupted note and an inconclusive exit are how a result
+	// says it is incomplete.
+	interrupted := slices.Contains(r.Notes, noteInterrupted)
+	r.Complete = !interrupted && r.ExitCode(failOnNone) != exitUnavailable
 	if o.against != "" {
 		if err := consent.Need(consent.StageComparer); err != nil {
 			return fail(env, err)
@@ -205,6 +209,10 @@ func (c *cmd) report(pos []string) int {
 		if err := env.Open(html); err != nil {
 			fmt.Fprintln(env.Stderr, "rhythm echo: opening the report:", err)
 		}
+	}
+	if interrupted {
+		// The check itself exited 130 for this result: so does report.
+		return exitInterrupted
 	}
 	return r.ExitCode(st.failOn)
 }

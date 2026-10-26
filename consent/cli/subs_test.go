@@ -193,6 +193,24 @@ func TestReportLatest(t *testing.T) {
 	if code, _, _ := runMain(t, "report"); code != exitUnavailable {
 		t.Errorf("inconclusive: exit %d", code)
 	}
+	// An interrupted check's result exits 130, as the check did, even
+	// with --fail-on none.
+	dir := putResult(t, "2026-10-28T08-00-00-dddddd", "clean")
+	r := consenttest.GoldenResult("clean")
+	r.Notes = append(r.Notes, noteInterrupted)
+	data, err := jsonIndent(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	putFile(t, filepath.Join(dir, "consent.json"), data)
+	for _, args := range [][]string{{"report"}, {"report", "--fail-on", "none"}} {
+		if code, _, _ := runMain(t, args...); code != exitInterrupted {
+			t.Errorf("%v on an interrupted result: exit %d", args, code)
+		}
+	}
+	if code, out, _ := runMain(t, "report", "--json"); code != exitInterrupted || !strings.Contains(out, `"complete":false`) {
+		t.Errorf("interrupted --json: exit %d %q", code, out)
+	}
 	for args, want := range map[string]string{
 		"report nope":        "rhythm echo: consent report \"nope\": no consent result by that id in .echo/consent; rhythm echo consent report latest shows the newest\n",
 		"report baselines":   "rhythm echo: consent report \"baselines\": no consent result by that id in .echo/consent; rhythm echo consent report latest shows the newest\n",
