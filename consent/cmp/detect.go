@@ -195,15 +195,17 @@ func scanFrames(ctx context.Context, t consent.Tab, in scanInput) ([]scanResult,
 
 // info is the CMPInfo of r as seen in s.
 func (r *rule) info(s sighting, found bool) consent.CMPInfo {
+	// The first piece of each kind, so a second selector of the same
+	// banner never crowds out the global that names the CMP.
 	var ev []string
-	for _, k := range s.selectors {
-		ev = append(ev, "selector:"+k)
+	if len(s.selectors) > 0 {
+		ev = append(ev, "selector:"+s.selectors[0])
 	}
-	for _, g := range s.globals {
-		ev = append(ev, "global:"+g)
+	if len(s.globals) > 0 {
+		ev = append(ev, "global:"+s.globals[0])
 	}
-	for _, sub := range s.scripts {
-		ev = append(ev, "script:"+sub)
+	if len(s.scripts) > 0 {
+		ev = append(ev, "script:"+s.scripts[0])
 	}
 	switch {
 	case r.ID == genericID:

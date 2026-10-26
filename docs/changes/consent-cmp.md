@@ -40,7 +40,7 @@ texts, for the release notes and the docs team.
   or a loaded script URL (resource timing and `<script src>`). Page text
   is never read, so a page that only names a CMP is not present.
 - `detected_by` in the JSON holds at most two pieces joined by ` and `,
-  selector first, then global, then script:
+  the first of each kind, selector first, then global, then script:
   `selector:#CybotCookiebotDialog and global:Cookiebot`,
   `global:Cookiebot and script:consent.cookiebot.com/uc.js`, or
   `generic` for the generic rule. (`consent detect` prints it as

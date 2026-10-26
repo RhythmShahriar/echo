@@ -293,3 +293,15 @@ func TestScriptsAreConstant(t *testing.T) {
 		t.Fatalf("scan script head = %.60s", scanJS)
 	}
 }
+
+func TestDetectOnePieceOfEachKind(t *testing.T) {
+	// Two selectors of the same banner never crowd out the global.
+	d := twoRules(t)
+	pg := newFakePage()
+	pg.globals["Acme"] = true
+	pg.banner("acme", true, "#acme-banner", "#acme-root")
+	info, _ := d.Detect(context.Background(), pg.tab, consenttest.NewPlan(t), 0)
+	if info.DetectedBy != "selector:#acme-banner and global:Acme" {
+		t.Fatalf("DetectedBy = %q", info.DetectedBy)
+	}
+}
