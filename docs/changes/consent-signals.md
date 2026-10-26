@@ -90,3 +90,18 @@ one bullet each with the exact text.
   (never decided); CookieYes's `getCkyConsent()`; Usercentrics's
   per-service status list (never decided); Borlabs's
   `BorlabsCookie.Consents.getAll()` (decided when not null).
+
+## Fixtures and docs
+
+- `consent/signal/testdata/captures/README.md`: how the maintainer adds
+  real `gtag.js` hits from the owner's staging property to
+  `testdata/gcd.yaml` (not run in CI or in the testbed).
+- `testdata/gcd.yaml` rows: every row has `source` and `date`
+  (YYYY-MM-DD); a row whose `source` starts with `capture` also has
+  `gcs` and `gcs_signals` and must decode. `TestFixtureRowsHaveSource`
+  fails with `gcd.yaml row "<raw>": no source`,
+  `date "<date>" is not YYYY-MM-DD`, `date <date> out of range`,
+  `capture row without gcs and gcs_signals` or
+  `capture row that does not decode`.
+- Package docs (`go doc ./consent/signal`) gain a "Decoders" section
+  listing each decoder, its sources and that gcd is unofficial.
