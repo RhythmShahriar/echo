@@ -58,6 +58,7 @@ type Plan struct {
 	ID                              string // the result folder name
 	Dir                             string // evidence folder (absolute), created by the CLI
 	Targets                         []Target
+	PageBase                        int // pages of earlier plans in the same Dir (one plan per --sites group): file names number on from it
 	Runs                            []RunKind
 	Pages                           int
 	Settle                          time.Duration

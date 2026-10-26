@@ -228,6 +228,11 @@ func hasFinding(r consent.Run) bool {
 	return false
 }
 
+// pageNumber is the number a page (index into the plan's targets) has
+// in file names and Echo actions: page-1 is the first, after the pages
+// earlier plans wrote into the same evidence folder.
+func (c *check) pageNumber(page int) int { return c.plan.PageBase + page + 1 }
+
 // attempt makes one run of page (index) with run kind k in a fresh
 // context, bounded by --timeout.
 func (c *check) attempt(ctx context.Context, page, k int) slot {
@@ -242,18 +247,19 @@ func (c *check) attempt(ctx context.Context, page, k int) slot {
 	actx, stop := context.WithTimeoutCause(actx, p.Timeout, errRunTimeout)
 	defer stop()
 
-	a := &attempt{c: c, e: c.e, plan: p, target: t, page: page + 1, kind: kind, out: &out}
+	n := c.pageNumber(page)
+	a := &attempt{c: c, e: c.e, plan: p, target: t, page: n, kind: kind, out: &out}
 	var x runExtras
 	var events *eventFile
 	if p.Dir != "" {
 		var err error
-		if events, err = openEventFile(p.Dir, page+1, kind); err != nil {
-			c.failedWrite(eventsPath(page+1, kind), err)
+		if events, err = openEventFile(p.Dir, n, kind); err != nil {
+			c.failedWrite(eventsPath(n, kind), err)
 		} else {
 			x.sinks = append(x.sinks, events.write)
 		}
 	}
-	es, runValue := c.echoBegin(actx, page+1, kind)
+	es, runValue := c.echoBegin(actx, n, kind)
 	x.echoRun = runValue
 	run, err := c.e.open(actx, t, kind, openWait, x)
 	if err != nil {
@@ -265,7 +271,7 @@ func (c *check) attempt(ctx context.Context, page, k int) slot {
 		out.DurationMS = time.Since(started).Milliseconds()
 		return slot{run: out, done: true}
 	}
-	a.run, a.tab = run, run.Tab(page+1)
+	a.run, a.tab = run, run.Tab(n)
 	go func() {
 		select {
 		case <-run.LimitReached():
@@ -282,8 +288,8 @@ func (c *check) attempt(ctx context.Context, page, k int) slot {
 		c.saveEvents(&out, events, rec.Events)
 	}
 	if p.HAR && p.Dir != "" {
-		if rel, err := writeHAR(p.Dir, page+1, kind, rec, p.Version, p.ShowIDs); err != nil {
-			c.failedWrite(harPath(page+1, kind), err)
+		if rel, err := writeHAR(p.Dir, n, kind, rec, p.Version, p.ShowIDs); err != nil {
+			c.failedWrite(harPath(n, kind), err)
 		} else {
 			out.HARFile = rel
 		}

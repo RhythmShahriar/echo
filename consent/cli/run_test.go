@@ -713,7 +713,8 @@ func (s *secondFails) Run(ctx context.Context, p *consent.Plan) (*consent.Result
 // that finishes keeps its folder.
 func TestFatalAfterFirstSite(t *testing.T) {
 	inDir(t, "")
-	putFile(t, "sites.yaml", "sites:\n  - {name: a, url: https://a.test}\n  - {name: b, url: https://b.test}\n")
+	// b has its own args, so it is a plan of its own.
+	putFile(t, "sites.yaml", "sites:\n  - {name: a, url: https://a.test}\n  - {name: b, url: https://b.test, consent: {args: [--geo, de]}}\n")
 	s := consenttest.Fakes()
 	runner := &secondFails{filesRunner: filesRunner{consenttest.FakeRunner{Result: consenttest.GoldenResult("clean")}},
 		err: &consent.FatalError{Code: consent.FatalNoBrowser}}
@@ -734,5 +735,24 @@ func TestFatalAfterFirstSite(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(resultDir(t), "consent.json")); err != nil {
 		t.Error(err)
+	}
+}
+
+// Plans of one --sites check share a folder: each one's pages number on
+// from the pages before it, so no evidence file is written twice.
+func TestSitesPlansNumberOn(t *testing.T) {
+	inDir(t, "")
+	putFile(t, "sites.yaml", "sites:\n  - {name: a, url: https://a.test, consent: {urls: [/, /b/]}}\n  - {name: c, url: https://c.test, consent: {args: [--geo, de]}}\n  - {name: d, url: https://d.test, consent: {args: [--geo, fr]}}\n")
+	runner, _ := useRunner(t, consenttest.GoldenResult("clean"), nil)
+	if code, _, errOut := runMain(t, "--sites", "sites.yaml"); code != exitOK {
+		t.Fatalf("exit %d %s", code, errOut)
+	}
+	if len(runner.Plans) != 3 {
+		t.Fatalf("%d plans", len(runner.Plans))
+	}
+	for i, want := range []int{0, 2, 3} {
+		if got := runner.Plans[i].PageBase; got != want {
+			t.Errorf("plan %d: PageBase %d, want %d", i, got, want)
+		}
 	}
 }

@@ -224,3 +224,20 @@ func TestFillSortsEvents(t *testing.T) {
 		t.Errorf("run %+v", r)
 	}
 }
+
+// TestPageNumberAfterEarlierPlans: --sites runs one plan per group of
+// sites into one evidence folder, so a later plan's first page numbers
+// on from the earlier ones' and never overwrites their files.
+func TestPageNumberAfterEarlierPlans(t *testing.T) {
+	c := newCheck(nil, &consent.Plan{}, consent.Stages{})
+	if got := c.pageNumber(0); got != 1 {
+		t.Errorf("first plan, first page: %d, want 1", got)
+	}
+	c = newCheck(nil, &consent.Plan{PageBase: 3}, consent.Stages{})
+	if got := c.pageNumber(1); got != 5 {
+		t.Errorf("after 3 pages, second page: %d, want 5", got)
+	}
+	if eventsPath(c.pageNumber(0), consent.RunNone) != "events/page-4-none.ndjson" {
+		t.Errorf("events file %q", eventsPath(c.pageNumber(0), consent.RunNone))
+	}
+}

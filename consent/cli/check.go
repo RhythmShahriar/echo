@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -130,6 +131,7 @@ func (c *cmd) prepare(pos []string) (*setup, error) {
 			}
 			st.plans = append(st.plans, p)
 		}
+		st.plans = joinPlans(st.plans)
 	default:
 		urls := pos
 		if len(urls) == 0 {
@@ -231,6 +233,31 @@ func sitePlan(base *consent.Plan, s site, sec *secrets) (*consent.Plan, error) {
 		p.Targets = append(p.Targets, consent.Target{Site: s.Name, URL: u, Args: args})
 	}
 	return p, nil
+}
+
+// joinPlans joins neighbouring --sites plans that differ only in their
+// pages (sites without consent.args of their own, the usual case) into
+// one, so --parallel and one browser serve them all. Only neighbours
+// join, which keeps the pages in the sites file's order.
+func joinPlans(plans []*consent.Plan) []*consent.Plan {
+	var out []*consent.Plan
+	for _, p := range plans {
+		if n := len(out); n > 0 && samePlan(out[n-1], p) {
+			out[n-1].Targets = append(out[n-1].Targets, p.Targets...)
+			continue
+		}
+		out = append(out, p)
+	}
+	return out
+}
+
+// samePlan reports whether a and b would run their pages the same way.
+// Live and the browser's log are set later, so they are nil here and
+// compare equal.
+func samePlan(a, b *consent.Plan) bool {
+	x, y := *a, *b
+	x.Targets, y.Targets = nil, nil
+	return reflect.DeepEqual(x, y)
 }
 
 // nonEmpty is m, or nil when it is empty.

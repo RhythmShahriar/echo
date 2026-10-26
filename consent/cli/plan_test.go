@@ -348,6 +348,21 @@ func TestSitesFile(t *testing.T) {
 	if brew.Targets[0].URL.String() != "https://brew.test/" || brew.Targets[1].URL.Path != "/menu/" || len(brew.Runs) != 4 || brew.Headers["Authorization"] != "Basic YnJldw==" {
 		t.Errorf("brew: %+v", brew)
 	}
+	// Neighbouring sites that would run the same way share one plan;
+	// a site with its own args, and anything after it, doesn't join.
+	putFile(t, "join.yaml", `
+- {name: a, url: a.test}
+- {name: b, url: b.test, consent: {urls: [/, /shop/]}}
+- {name: c, url: c.test, consent: {args: [--geo, de]}}
+- {name: d, url: d.test}
+`)
+	st = mustPrepare(t, "--sites", "join.yaml")
+	if len(st.plans) != 3 || len(st.plans[0].Targets) != 3 || len(st.plans[1].Targets) != 1 || len(st.plans[2].Targets) != 1 {
+		t.Fatalf("joined plans: %d", len(st.plans))
+	}
+	if st.plans[0].Targets[0].Site != "a" || st.plans[0].Targets[2].URL.Path != "/shop/" || st.plans[1].Geo != "de" || st.plans[2].Targets[0].Site != "d" {
+		t.Errorf("joined plans: %+v %+v %+v", st.plans[0].Targets, st.plans[1], st.plans[2].Targets)
+	}
 	for yaml, want := range map[string]string{
 		"":                                       "no sites listed",
 		"[]":                                     "no sites listed",

@@ -148,8 +148,12 @@ func (c *cmd) runCheck(ctx context.Context, pos []string) int {
 	live := liveWriter(env.Stderr, o.live)
 	var results []*consent.Result
 	interrupted := false
+	pages := 0
 	for _, p := range st.plans {
 		p.ID, p.Dir = filepath.Base(dir), dir
+		// Every plan writes into the one folder: page numbers go on
+		// from the earlier plans' so no file is written twice.
+		p.PageBase, pages = pages, pages+len(p.Targets)
 		p.Browser.Log = env.Stderr
 		p.Live = live
 		r, err := consent.RunPlan(ctx, p)
