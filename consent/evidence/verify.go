@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path"
 	"path/filepath"
@@ -78,7 +79,7 @@ func Verify(dir, pubKeyPath string) (*report.ConsentVerify, error) {
 			return h
 		}
 		h := ""
-		if f, err := hashRegular(filepath.Join(dir, filepath.FromSlash(rel))); err == nil {
+		if f, err := hashRegular(dir, rel); err == nil {
 			h = f.SHA256
 		}
 		got[rel] = h
@@ -152,9 +153,15 @@ func safePath(rel string) bool {
 	return clean == rel && clean != "." && clean != ".." && !strings.HasPrefix(clean, "../")
 }
 
-// hashRegular hashes the file at p when it is a regular file; a link is
-// never followed, as the manifest never lists one.
-func hashRegular(p string) (consent.EvidenceFile, error) {
+// hashRegular hashes the file rel inside dir when it is a regular file
+// whose folders resolve inside dir: a link is never followed, as the
+// manifest never lists one, and a linked folder (events -> /etc) in a
+// folder handed over by someone else would read a file outside it.
+func hashRegular(dir, rel string) (consent.EvidenceFile, error) {
+	p := filepath.Join(dir, filepath.FromSlash(rel))
+	if err := insideFolder(dir, filepath.Dir(p)); err != nil {
+		return consent.EvidenceFile{}, err
+	}
 	fi, err := os.Lstat(p)
 	if err != nil {
 		return consent.EvidenceFile{}, err
@@ -163,6 +170,52 @@ func hashRegular(p string) (consent.EvidenceFile, error) {
 		return consent.EvidenceFile{}, errors.New("not a regular file")
 	}
 	return HashFile(p)
+}
+
+// insideFolder fails when sub, with its links resolved, isn't dir or a
+// folder under it.
+func insideFolder(dir, sub string) error {
+	root, err := filepath.EvalSymlinks(dir)
+	if err != nil {
+		return err
+	}
+	resolved, err := filepath.EvalSymlinks(sub)
+	if err != nil {
+		return err
+	}
+	rel, err := filepath.Rel(root, resolved)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || filepath.IsAbs(rel) {
+		return errors.New("outside the folder")
+	}
+	return nil
+}
+
+// Unlisted lists the files in the evidence folder dir that neither
+// manifest.json nor consent.json covers (v is Verify's result), as
+// slash paths in walk order. Neither the hashes nor the signature say
+// anything about them, so consent verify names them. Links are listed,
+// never followed.
+func Unlisted(dir string, v *report.ConsentVerify) []string {
+	dir = Folder(dir)
+	known := map[string]bool{ManifestFile: true, SignatureFile: true, SigstoreFile: true}
+	for _, f := range v.Files {
+		known[f.Path] = true
+	}
+	var out []string
+	_ = filepath.WalkDir(dir, func(p string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return nil //nolint:nilerr // an unreadable folder is skipped, as missing files are reported already
+		}
+		rel, rerr := filepath.Rel(dir, p)
+		if rerr != nil {
+			return nil //nolint:nilerr // can't happen under WalkDir's root
+		}
+		if rel = filepath.ToSlash(rel); !known[rel] {
+			out = append(out, rel)
+		}
+		return nil
+	})
+	return out
 }
 
 // readCapped reads a regular file of at most limit bytes.

@@ -228,6 +228,66 @@ func TestVerifyMissingFile(t *testing.T) {
 	}
 }
 
+// A folder linked out of the evidence folder (events -> elsewhere) is
+// never read through, even when the file there has the listed hash; a
+// plain folder in the same place is.
+func TestVerifyLinkedFolder(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symlinks need privileges on Windows")
+	}
+	dir := folder(t, "")
+	outside := t.TempDir()
+	put(t, outside, "page-1-none.ndjson", "{\"kind\":\"request\"}\n")
+	if err := os.RemoveAll(filepath.Join(dir, "events")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(dir, "events")); err != nil {
+		t.Fatal(err)
+	}
+	v, err := Verify(dir, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range v.Files {
+		if f.Path == "events/page-1-none.ndjson" && (f.OK || f.Got != "") {
+			t.Errorf("read through the link: %+v", f)
+		}
+	}
+	// The same file in a real folder verifies.
+	if err := os.Remove(filepath.Join(dir, "events")); err != nil {
+		t.Fatal(err)
+	}
+	put(t, dir, "events/page-1-none.ndjson", "{\"kind\":\"request\"}\n")
+	if v, err := Verify(dir, ""); err != nil || len(failed(v)) != 0 {
+		t.Errorf("real folder: %v %v", failed(v), err)
+	}
+}
+
+// Unlisted names files neither list covers, links included, and none
+// for a folder as a check wrote it.
+func TestUnlisted(t *testing.T) {
+	dir := folder(t, "")
+	v, err := Verify(dir, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := Unlisted(dir, v); len(got) != 0 {
+		t.Errorf("clean folder: %v", got)
+	}
+	put(t, dir, "report.md", "added later")
+	put(t, dir, "evidence/page-1/extra.png", "x")
+	want := "evidence/page-1/extra.png report.md"
+	if runtime.GOOS != "windows" {
+		if err := os.Symlink(t.TempDir(), filepath.Join(dir, "zlink")); err != nil {
+			t.Fatal(err)
+		}
+		want += " zlink"
+	}
+	if got := strings.Join(Unlisted(filepath.Join(dir, ResultFile), v), " "); got != want {
+		t.Errorf("unlisted: %q, want %q", got, want)
+	}
+}
+
 func jsonString(s string) string {
 	b, _ := json.Marshal(s)
 	return string(b)
