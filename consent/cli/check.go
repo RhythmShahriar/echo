@@ -318,11 +318,19 @@ func (st *setup) customTrackers(p *consent.Plan, block *config.Consent) error {
 	p.ExtraTrackers = data
 	if cl := consent.Linked().Classifier; cl != nil {
 		if err := cl.AddCustom(data); err != nil {
-			return usagef("consent: trackers: %v", err)
+			// The catalog's own errors already start with the key.
+			msg := err.Error()
+			if !strings.HasPrefix(msg, customTrackersKey) {
+				msg = customTrackersKey + msg
+			}
+			return usagef("%s", msg)
 		}
 	}
 	return nil
 }
+
+// customTrackersKey starts every error about the config's own trackers.
+const customTrackersKey = "consent: trackers: "
 
 // storeRoot is where results are kept: --store, else the folder the
 // config is in, else ./.echo.

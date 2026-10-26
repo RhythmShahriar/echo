@@ -571,3 +571,28 @@ func TestGeoTheBrowserKnows(t *testing.T) {
 		t.Errorf("site args --geo zz: %v", err)
 	}
 }
+
+// failingCatalog refuses the config's trackers as the real catalog
+// does, its error already naming the key, or as a stage that doesn't.
+type failingCatalog struct {
+	consenttest.FakeClassifier
+	err error
+}
+
+func (c *failingCatalog) AddCustom([]byte) error { return c.err }
+
+// A refused custom tracker is a usage error that names consent:
+// trackers once, whoever wrote the message.
+func TestCustomTrackerErrorPrefix(t *testing.T) {
+	inDir(t, "")
+	putFile(t, ".echo/config.yaml", "consent:\n  trackers:\n    - id: acme\n")
+	for _, msg := range []string{"consent: trackers: acme: no matches", "acme: no matches"} {
+		s := consenttest.Fakes()
+		s.Classifier = &failingCatalog{err: errors.New(msg)}
+		consenttest.Use(t, s)
+		_, err := prepareArgs(t, "https://shop.test/")
+		if err == nil || err.Error() != "consent: trackers: acme: no matches" {
+			t.Errorf("%q: %v", msg, err)
+		}
+	}
+}

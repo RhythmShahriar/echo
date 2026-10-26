@@ -456,6 +456,15 @@ func fatalText(f *consent.FatalError) string {
 	return consent.SafeText(s, 300)
 }
 
+// catalogInfo is the tracker catalog as a result names it. Info counts
+// the built-in entries; the result counts what the check matched
+// against, the config's own trackers included.
+func catalogInfo(cl consent.Classifier) consent.DataInfo {
+	info := cl.Info()
+	info.Count = len(cl.Trackers())
+	return info
+}
+
 // result is the check's setup: the browser, the user agent and the
 // settings every writer prints, with the network counts so far.
 func (c *check) result(started time.Time) *consent.Result {
@@ -484,7 +493,7 @@ func (c *check) result(started time.Time) *consent.Result {
 		Notes:        []string{},
 	}
 	if cl := c.stages.Classifier; cl != nil {
-		res.Catalog = cl.Info()
+		res.Catalog = catalogInfo(cl)
 	}
 	if cm := c.stages.CMP; cm != nil {
 		res.CMPRules = cm.Info()

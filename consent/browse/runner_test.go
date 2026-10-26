@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/RhythmShahriar/echo/consent"
+	"github.com/RhythmShahriar/echo/consent/consenttest"
 )
 
 // TestPickLinksSkipsLogoutCart: links are taken in DOM order, on the
@@ -239,5 +240,26 @@ func TestPageNumberAfterEarlierPlans(t *testing.T) {
 	}
 	if eventsPath(c.pageNumber(0), consent.RunNone) != "events/page-4-none.ndjson" {
 		t.Errorf("events file %q", eventsPath(c.pageNumber(0), consent.RunNone))
+	}
+}
+
+// customCatalog is a catalog with one tracker from the config on top of
+// its built-in ones.
+type customCatalog struct{ consenttest.FakeClassifier }
+
+func (c *customCatalog) Trackers() []consent.TrackerInfo {
+	return append(c.FakeClassifier.Trackers(), consent.TrackerInfo{ID: "acme", Sources: []string{"config"}})
+}
+
+// The result's catalog keeps Info's version and hash and counts the
+// config's own trackers too.
+func TestCatalogInfoCountsCustom(t *testing.T) {
+	plain := &consenttest.FakeClassifier{}
+	if got := catalogInfo(plain); got != plain.Info() {
+		t.Errorf("built-in only: %+v, want %+v", got, plain.Info())
+	}
+	got := catalogInfo(&customCatalog{})
+	if want := plain.Info(); got.Count != want.Count+1 || got.SHA256 != want.SHA256 || got.Version != want.Version {
+		t.Errorf("with a custom tracker: %+v", got)
 	}
 }
