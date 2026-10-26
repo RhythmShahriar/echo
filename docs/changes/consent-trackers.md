@@ -13,8 +13,8 @@ exact text they see. The docs team writes the wiki from this file.
 - Hit `params` keeps only `gcs`, `gcd`, `npa`, `dma`, `en`, `ev`, `tid` (masked to its last 4), `id` (masked), `dl` and `dr` (masked URLs). Personal fields present in the request are listed by name only, as `personal`, e.g. `"personal": "ud[em],ph"`.
 - Hit `consent` (Google) carries `gcs`, `gcd`, `npa` and `dma` raw; decoding them is the recorder's job.
 - Hit `id` is the measurement or pixel ID masked to its last 4 (`••••D001`); for Google Ads, remarketing, Floodlight, Quora, Yandex and Adobe it comes from the path.
-- Config `consent.trackers` (custom trackers) is refused for now with `consent: trackers: custom trackers from the config aren't supported in this build yet` (an empty list is accepted). Item T9 builds them.
-- Catalog file errors (for catalog authors; custom trackers will use the same messages) always start with `<file>:<line>: `, for example `catalog/bad.yaml:4: unknown key "hostz"`, `catalog/other.yaml:1: id "shop-pixel" must match the file name (other.yaml)`, `catalog/x.yaml:8: a hit on any host needs params_all, params_match or body_json to prove it`, `catalog/x.fixtures.yaml:2: hits.match "https://px.shop.example/other" doesn't match shop-pixel`, `catalog/x.fixtures.yaml:3: hits.no_match "..." matches shop-pixel`, `<id> needs at least one hits.no_match fixture`, `<id> needs at least one cookies.match and one cookies.no_match fixture`, `an exempt entry sets no cookies`, `cookies: "_shpx" is already claimed by other-pixel`.
+- Config `consent.trackers` (custom trackers): see T9 below.
+- Catalog file errors (for catalog authors; custom trackers use the same messages without the file and line, see T9) always start with `<file>:<line>: `, for example `catalog/bad.yaml:4: unknown key "hostz"`, `catalog/other.yaml:1: id "shop-pixel" must match the file name (other.yaml)`, `catalog/x.yaml:8: a hit on any host needs params_all, params_match or body_json to prove it`, `catalog/x.fixtures.yaml:2: hits.match "https://px.shop.example/other" doesn't match shop-pixel`, `catalog/x.fixtures.yaml:3: hits.no_match "..." matches shop-pixel`, `<id> needs at least one hits.no_match fixture`, `<id> needs at least one cookies.match and one cookies.no_match fixture`, `an exempt entry sets no cookies`, `cookies: "_shpx" is already claimed by other-pixel`.
 
 ## Entries
 
@@ -116,3 +116,39 @@ Notes users may notice:
 - A cookie no entry claims is not a tracker (`nil`); the report lists it under other cookies by name and length only. A tracker cookie's need (`needed`, `exempt`, `no`) comes from its entry.
 - The catalog hash now covers `_not_trackers.yaml` and its fixtures too; the entry count stays 47.
 - New catalog errors: `catalog/x.yaml:9: cookies: "PHPSESSID" is listed in _not_trackers.yaml as never a tracker`, `catalog/_not_trackers.fixtures.yaml:3: cookies.no_match "_shpx" is classified as shop-pixel`, `catalog/_not_trackers.fixtures.yaml:2: cookies.match "_shop" is no tracker: the deny list reaches too far`, `catalog/_not_trackers.yaml:1: cookies: "PHPSESSID": the deny list holds names only, never a domain`, `catalog/_other.yaml: only _not_trackers.yaml may start with _`.
+
+## Your own trackers (T9)
+
+- `consent: trackers:` in `.echo/config.yaml` lists a site's own trackers in the catalog's shape (`id`, `name`, `category`, `hits`, `scripts`, `frames`, `cookies`, `storage`, `params`, `any_host`, `consent`, `vendor`, `fix`, `docs`) plus `fixtures`. Defaults: `vendor` is the name, `consent` is `needed` (`no` for `category: necessary`), `fix` is `Load it only after the visitor consents` when consent is needed, `docs` may be left out. `sources` is always `config`; writing it is an error.
+- Fixtures: `fixtures: {match: [...], no_match: [...]}` hold URLs (`"POST https://..."` or `{method, url, body, type, site}` as in catalog fixtures). An entry with `hits`, `scripts` or `frames` needs at least one of each. `fixtures: {cookies: {match, no_match}, storage: {match, no_match}}` hold names; they are optional beside URL fixtures and required (both sides) for an entry with only cookies or only storage. A match URL must be classified as the entry (beacon, script or frame), a no_match URL not at all.
+- Your own trackers are tried before the built-in ones, for requests, cookies and storage keys: an entry for `www.google-analytics.com/g/collect` is reported under its own id instead of `ga4`; an entry may also claim a built-in cookie name such as `_ga`.
+- `consent trackers` lists them with the built-in entries, sorted by id, with `sources: ["config"]`. The catalog info (version, hash, count) stays the built-in catalog's.
+- They go through the built-in checks too: no name from `_not_trackers.yaml` and no script that looks like a hit (theirs or a built-in one).
+- Limits: 200 trackers, 100 fixtures each, fixture URLs up to 2048 bytes, the list up to 1024 KiB.
+- Errors (the config is refused, exit 2 through the CLI); every one starts with `consent: trackers: `:
+  - `consent: trackers: "ga4" is a built-in tracker; pick another id`
+  - `consent: trackers: "shop-pixel" is listed twice; give each tracker its own id`
+  - `consent: trackers: shop-pixel needs fixtures: match and no_match, each with at least one URL`
+  - `consent: trackers: shop-cookie needs fixtures: cookies: match and no_match, each with at least one name` (and `storage:` for a storage-only entry)
+  - `consent: trackers: shop-pixel: fixture "https://px.shop.example/pixel.js" should not match but does`
+  - `consent: trackers: shop-pixel: fixture "https://px.shop.example/collect?e=view" should match but doesn't`
+  - `consent: trackers: shop-pixel: cookie fixture "_shpx_other" should match but doesn't` (and `storage fixture`)
+  - `consent: trackers: shop-pixel: unknown key "hitz"`; `consent: trackers: entry 1: id "Shop Pixel" must be lowercase letters, digits and dashes` (an entry without a usable id is named by its position); `consent: trackers: entry 1: want a mapping of keys`
+  - `consent: trackers: want a list of trackers, each with id, name, category, what it matches and fixtures`
+  - `consent: trackers: shop-pixel: leave sources out: your own trackers are listed with the source config`
+  - `consent: trackers: shop-pixel: cookies: "PHPSESSID" is listed in _not_trackers.yaml as never a tracker`
+  - `consent: trackers: shop-gtm: a hit of shop-gtm and a script of google-tag-manager (catalog/google-tag-manager.yaml:<line>) both fit www.googletagmanager.com (...); a script must never look like a hit`
+  - `consent: trackers: shop-pixel-2: cookies: "_shpx" is already claimed by shop-pixel`
+  - `consent: trackers: 201 trackers is more than 200`, `consent: trackers: shop-pixel: 101 fixtures is more than 100`, `consent: trackers: shop-pixel: a fixture URL is longer than 2048 bytes`, `consent: trackers: the list is more than 1024 KiB`
+  - The catalog's own messages otherwise, without file and line: `consent: trackers: shop-pixel: category "ads": want analytics, advertising, session-replay, social, embed, functional or necessary`, `consent: trackers: shop-pixel: docs must be an https:// URL`.
+- `rhythm echo checks --test` prints one line per fixture of your own trackers (through the catalog's `FixtureReport`), for example:
+
+  ```
+  ok   shop-pixel  match    https://px.shop.example/collect?e=view
+  ok   shop-pixel  no_match https://px.shop.example/pixel.js
+  FAIL shop-wide   no_match https://stats.shop.example/sw.js  should not match but does
+  ok   shop-wide   match    storage sw_id
+  FAIL ga4         "ga4" is a built-in tracker; pick another id
+  ```
+
+  The id column is as wide as the longest id. URLs are shown with credentials and personal values masked (IDs kept). An entry that doesn't load gets one `FAIL <id>  <message>` line; a problem with the list as a whole, or one found only once the entries join the built-in catalog, a `FAIL consent: trackers: ...` line. Any `FAIL` line makes it fail.

@@ -192,6 +192,7 @@ func load(fsys fs.FS, dir string) (*Catalog, error) {
 	if err != nil {
 		return nil, err
 	}
+	c.base = slices.Clone(c.entries)
 	c.deny = deny
 	if err := c.checkDeny(); err != nil {
 		return nil, err
@@ -227,7 +228,7 @@ func loadEntry(file string, b []byte, fixFile string, fb []byte, byName bool) (*
 		return fmt.Errorf("%s:%d: %s", file, line, fmt.Sprintf(format, args...))
 	}
 	at := func(p ...any) int { return lineAt(doc, p...) }
-	if err := checkSpec(&spec, fail, at); err != nil {
+	if err := checkSpec(&spec, false, fail, at); err != nil {
 		return nil, err
 	}
 	if byName {
@@ -246,7 +247,8 @@ func loadEntry(file string, b []byte, fixFile string, fb []byte, byName bool) (*
 }
 
 // checkSpec checks the fields of an entry that don't need compiling.
-func checkSpec(s *entrySpec, fail func(int, string, ...any) error, at func(...any) int) error {
+// custom is true for a tracker from the config, which may leave docs out.
+func checkSpec(s *entrySpec, custom bool, fail func(int, string, ...any) error, at func(...any) int) error {
 	switch {
 	case !idRe.MatchString(s.ID):
 		return fail(at("id"), "id %q must be lowercase letters, digits and dashes", s.ID)
@@ -270,7 +272,7 @@ func checkSpec(s *entrySpec, fail func(int, string, ...any) error, at func(...an
 		return fail(at("fix"), "fix is required when consent is needed")
 	case strings.ContainsAny(s.Fix, "\r\n"):
 		return fail(at("fix"), "fix is one line")
-	case !strings.HasPrefix(s.Docs, "https://"):
+	case !strings.HasPrefix(s.Docs, "https://") && (!custom || s.Docs != ""):
 		return fail(at("docs"), "docs must be an https:// URL")
 	case len(s.Sources) == 0:
 		return fail(at("sources"), "sources lists where the patterns come from")
@@ -330,7 +332,7 @@ func compile(s *entrySpec, file string, fail func(int, string, ...any) error, at
 	for key, list := range map[string][]nameSpec{"cookies": s.Cookies, "storage": s.Storage} {
 		for _, n := range list {
 			if err := checkName(n, key == "cookies"); err != nil {
-				return nil, fmt.Errorf("%s:%d: %s: %w", file, n.line, key, err)
+				return nil, fail(n.line, "%s: %v", key, err)
 			}
 		}
 	}
@@ -469,14 +471,20 @@ func newCatalog(entries []*entry) (*Catalog, error) {
 				if r.kind != kind {
 					continue
 				}
+				// Custom entries have tiers of their own, tried before
+				// the built-in ones: the config's word wins.
+				tiers := &c.tiers
+				if e.custom {
+					tiers = &c.custom
+				}
 				if len(r.exact) > 0 {
-					c.tiers[tierExact] = append(c.tiers[tierExact], r)
+					tiers[tierExact] = append(tiers[tierExact], r)
 				}
 				if len(r.suffix) > 0 {
-					c.tiers[tierSuffix] = append(c.tiers[tierSuffix], r)
+					tiers[tierSuffix] = append(tiers[tierSuffix], r)
 				}
 				if r.anyHost {
-					c.tiers[tierAny] = append(c.tiers[tierAny], r)
+					tiers[tierAny] = append(tiers[tierAny], r)
 				}
 			}
 		}
@@ -484,12 +492,12 @@ func newCatalog(entries []*entry) (*Catalog, error) {
 	for _, e := range entries {
 		for _, n := range e.cookies {
 			if err := c.cookies.add(e, n); err != nil {
-				return nil, fmt.Errorf("%s:%d: cookies: %w", e.file, n.line, err)
+				return nil, fmt.Errorf("%s: cookies: %w", e.where(n.line), err)
 			}
 		}
 		for _, n := range e.storage {
 			if err := c.storage.add(e, n); err != nil {
-				return nil, fmt.Errorf("%s:%d: storage: %w", e.file, n.line, err)
+				return nil, fmt.Errorf("%s: storage: %w", e.where(n.line), err)
 			}
 		}
 	}

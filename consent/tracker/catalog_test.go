@@ -315,15 +315,6 @@ func TestTrackersInfo(t *testing.T) {
 	}
 }
 
-func TestAddCustomNotYet(t *testing.T) {
-	if err := builtin.AddCustom(nil); err != nil {
-		t.Fatalf("no custom trackers: %v", err)
-	}
-	if err := builtin.AddCustom([]byte("- id: shop-pixel\n")); !errors.Is(err, errNoCustom) {
-		t.Fatalf("custom trackers: %v", err)
-	}
-}
-
 // located errors always start with file:line, so a fuzzed file can't
 // produce a message that points nowhere.
 var lineRe = regexp.MustCompile(`^catalog/f(\.fixtures)?\.yaml:[0-9]+: `)

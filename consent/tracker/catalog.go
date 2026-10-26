@@ -5,7 +5,6 @@ package tracker
 
 import (
 	"embed"
-	"errors"
 	"fmt"
 	"regexp"
 	"slices"
@@ -63,10 +62,14 @@ var catalogFS embed.FS
 const catalogDir = "catalog"
 
 // Catalog is the tracker catalog compiled from YAML: the consent
-// Classifier. It is read-only after loading and safe for concurrent use.
+// Classifier. It is safe for concurrent use once AddCustom, if called,
+// has returned: AddCustom is called once per command, before any page
+// is checked.
 type Catalog struct {
-	entries []*entry // sorted by id
+	entries []*entry // built-in and custom, sorted by id
+	base    []*entry // the built-in entries alone
 	tiers   [3][]*rule
+	custom  [3][]*rule // the config's own rules, tried first
 	cookies names
 	storage names
 	deny    *denyList // names that are never trackers; nil in tests
@@ -79,6 +82,7 @@ var _ consent.Classifier = (*Catalog)(nil)
 type entry struct {
 	info     consent.TrackerInfo
 	file     string
+	custom   bool    // from the config's consent: trackers:
 	rules    []*rule // scripts, frames, then hits, in file order
 	cookies  []nameSpec
 	storage  []nameSpec
@@ -102,7 +106,18 @@ func init() {
 	consent.SetClassifier(c)
 }
 
-// Trackers lists the catalog sorted by id.
+// where names a line of the entry for errors: file:line for the
+// built-in catalog, "consent: trackers: <id>" for a custom entry, whose
+// YAML came out of the config and has no lines of its own.
+func (e *entry) where(line int) string {
+	if e.custom {
+		return customPrefix + e.info.ID
+	}
+	return fmt.Sprintf("%s:%d", e.file, line)
+}
+
+// Trackers lists the catalog sorted by id, custom entries included
+// (their Sources read config).
 func (c *Catalog) Trackers() []consent.TrackerInfo {
 	out := make([]consent.TrackerInfo, 0, len(c.entries))
 	for _, e := range c.entries {
@@ -114,21 +129,9 @@ func (c *Catalog) Trackers() []consent.TrackerInfo {
 }
 
 // Info names the compiled-in catalog: the data version, the SHA-256 of
-// its files and the number of entries.
+// its files and the number of entries. Custom entries don't change it:
+// the hash and count say which built-in data a result was judged with.
 func (c *Catalog) Info() consent.DataInfo { return c.info }
-
-// errNoCustom is what AddCustom says until custom trackers are built.
-var errNoCustom = errors.New("consent: trackers: custom trackers from the config aren't supported in this build yet")
-
-// AddCustom loads consent.trackers from the config. Custom trackers are
-// not built yet, so it refuses any non-empty list rather than ignore it
-// and let a site pass on trackers it never checked.
-func (c *Catalog) AddCustom(yaml []byte) error {
-	if strings.TrimSpace(string(yaml)) == "" || strings.TrimSpace(string(yaml)) == "[]" {
-		return nil
-	}
-	return errNoCustom
-}
 
 // summary is the one-line Matches text of `consent trackers`: the first
 // three host and path patterns (hits, then frames, then scripts), or the cookies when there are no rules.

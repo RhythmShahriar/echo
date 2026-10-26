@@ -330,19 +330,28 @@ func matchPath(pats []string, p string) bool {
 	return false
 }
 
-// find returns the first rule that fits q, trying the tiers in order.
+// find returns the first rule that fits q: the config's own entries
+// first, then the built-in ones, each trying the tiers in order.
 func (c *Catalog) find(q *request) *rule {
-	for _, r := range c.tiers[tierExact] {
+	if r := findIn(&c.custom, q); r != nil {
+		return r
+	}
+	return findIn(&c.tiers, q)
+}
+
+// findIn returns the first rule of tiers that fits q.
+func findIn(tiers *[3][]*rule, q *request) *rule {
+	for _, r := range tiers[tierExact] {
 		if slices.Contains(r.exact, q.host) && r.matches(q) {
 			return r
 		}
 	}
-	for _, r := range c.tiers[tierSuffix] {
+	for _, r := range tiers[tierSuffix] {
 		if slices.ContainsFunc(r.suffix, func(s string) bool { return strings.HasSuffix(q.host, s) }) && r.matches(q) {
 			return r
 		}
 	}
-	for _, r := range c.tiers[tierAny] {
+	for _, r := range tiers[tierAny] {
 		if r.kind == consent.HitBeacon && q.script {
 			// On any host only the parameters prove a hit; a script
 			// URL can carry any parameter: a first-party loader such as

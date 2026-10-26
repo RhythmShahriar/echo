@@ -120,7 +120,7 @@ func (c *Catalog) checkDeny() error {
 		}{{"cookies", e.cookies, &d.cookies}, {"storage", e.storage, &d.storage}} {
 			for _, n := range g.list {
 				if g.deny.denied(n) {
-					return fmt.Errorf("%s:%d: %s: %q is listed in %s as never a tracker", e.file, n.line, g.key, n.Name, path.Base(d.file))
+					return fmt.Errorf("%s: %s: %q is listed in %s as never a tracker", e.where(n.line), g.key, n.Name, path.Base(d.file))
 				}
 			}
 		}

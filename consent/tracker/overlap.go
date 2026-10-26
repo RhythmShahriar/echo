@@ -37,9 +37,17 @@ func checkOverlap(entries []*entry) error {
 	var errs []error
 	for _, s := range scripts {
 		for _, h := range hits {
-			if p, ok := overlaps(s, h); ok {
-				errs = append(errs, fmt.Errorf("%s:%d: a script of %s and a hit of %s (%s:%d) both fit %s; a script must never look like a hit",
-					s.e.file, s.line, s.e.info.ID, h.e.info.ID, h.e.file, h.line, p))
+			p, ok := overlaps(s, h)
+			switch {
+			case !ok:
+			case h.e.custom && !s.e.custom:
+				// Told from the config's side, so every error about the
+				// config's own trackers starts with its prefix.
+				errs = append(errs, fmt.Errorf("%s: a hit of %s and a script of %s (%s) both fit %s; a script must never look like a hit",
+					h.e.where(h.line), h.e.info.ID, s.e.info.ID, s.e.where(s.line), p))
+			default:
+				errs = append(errs, fmt.Errorf("%s: a script of %s and a hit of %s (%s) both fit %s; a script must never look like a hit",
+					s.e.where(s.line), s.e.info.ID, h.e.info.ID, h.e.where(h.line), p))
 			}
 		}
 	}

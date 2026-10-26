@@ -34,7 +34,10 @@ func newNames() names { return names{exact: map[string][]*namePat{}} }
 // already claims.
 func (n *names) add(e *entry, s nameSpec) error {
 	p := &namePat{e: e, pattern: s.Name, domain: strings.ToLower(s.Domain)}
-	clash := func(o *namePat) bool { return o.pattern == p.pattern && o.domain == p.domain }
+	// A custom entry may claim a built-in name: it is found first.
+	clash := func(o *namePat) bool {
+		return o.pattern == p.pattern && o.domain == p.domain && o.e.custom == p.e.custom
+	}
 	if before, after, ok := strings.Cut(s.Name, "*"); ok {
 		p.glob, p.prefix, p.suffix = true, before, after
 		if i := slices.IndexFunc(n.globs, clash); i >= 0 {
@@ -75,19 +78,22 @@ func (n *names) sort() {
 	}
 }
 
-// find returns the entry a name set on domain belongs to: exact names
-// first, then the most specific pattern. domain may be "" (storage).
+// find returns the entry a name set on domain belongs to: the config's
+// own entries first, then the built-in ones, each trying exact names
+// before the most specific pattern. domain may be "" (storage).
 func (n *names) find(name, domain string) *entry {
 	domain = strings.TrimPrefix(strings.ToLower(domain), ".")
-	for _, p := range n.exact[name] {
-		if p.onDomain(domain) {
-			return p.e
+	for _, custom := range []bool{true, false} {
+		for _, p := range n.exact[name] {
+			if p.e.custom == custom && p.onDomain(domain) {
+				return p.e
+			}
 		}
-	}
-	for _, p := range n.globs {
-		if len(name) >= len(p.prefix)+len(p.suffix) && strings.HasPrefix(name, p.prefix) &&
-			strings.HasSuffix(name, p.suffix) && p.onDomain(domain) {
-			return p.e
+		for _, p := range n.globs {
+			if p.e.custom == custom && len(name) >= len(p.prefix)+len(p.suffix) && strings.HasPrefix(name, p.prefix) &&
+				strings.HasSuffix(name, p.suffix) && p.onDomain(domain) {
+				return p.e
+			}
 		}
 	}
 	return nil
