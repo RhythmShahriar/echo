@@ -282,7 +282,7 @@ func TestGPCRun(t *testing.T) {
 		Storage: []consent.StorageKey{{Area: "local", Key: "_hjSession", Tracker: "hotjar", Category: consent.CatAdvertising, Need: consent.NeedNeeded, Phase: consent.PhaseGPC}},
 	})
 	Evaluator{}.Evaluate(r, nil)
-	sameKeys(t, keysOf(r, nil), "consent/gpc-ignored|/|gpc|meta-pixel")
+	sameKeys(t, keysOf(r, v2Checks), "consent/gpc-ignored|/|gpc|meta-pixel")
 	is := issue(t, r, "consent/gpc-ignored|/|gpc|meta-pixel")
 	if is.Level != model.Warning || is.Title != "Meta Pixel fired with Global Privacy Control on" ||
 		is.Detail != "facebook.com/tr?id=••••5678&ev=PageView at 0.80s; cookie _fbp written" {

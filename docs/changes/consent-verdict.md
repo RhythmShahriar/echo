@@ -31,3 +31,15 @@ result. Exact texts are in backticks.
   - cookieless pings: `<host><path>?gcs=<gcs> at <t1> and <t2>; no Google cookie written`, e.g. `region1.google-analytics.com/g/collect?gcs=G100 at 0.62s and 9.90s; no Google cookie written`
   - meta-no-consent-api: `no fbq('consent', 'revoke') or fbq('consent', 'grant') before the first Meta Pixel hit at <s.ss>s`
 - Fix lines: the tracker's catalog fix for before-choice, after-reject, after-withdraw and embed (else the check's); the check's fix for the others.
+
+## V3 Consent Mode checks
+
+Only on pages with Google hits. These issues name no tracker: their key ends in `|`.
+
+- `consent/no-default` (no Consent Mode default in any run and the first Google hit has no gcs): title `Google tags ran with no Consent Mode default`, detail `<Name> sent <host><path>?<params> at <s.ss>s with no gcs; no gtag('consent', 'default', ...) was seen in any run`.
+- `consent/default-late` (the none run's default came after its first Google hit; never with no-default): title `The Consent Mode default came <n> ms after the first Google hit`, detail `first Google hit <Name> (<host><path>?<params>) at <s.ss>s; default at <s.ss>s`.
+- `consent/v2-signals`: title `Consent Mode v2 signals ad_user_data and ad_personalization were never set`, detail `the default at <s.ss>s doesn't set ad_user_data and ad_personalization` (or one of them) and/or `gcd <raw> on <Name> at <s.ss>s shows <signals> unset (l)`, joined with `; `.
+- `consent/accept-not-granted` (Accept confirmed, no update granted ad_storage or analytics_storage and every Google hit after the click has a known gcs with both denied; at least one such hit): title `After Accept, Google was never told storage is granted`, detail `<n> Google hits after Accept, the first at <s.ss>s, carried gcs <gcs>; no Consent Mode update granted ad_storage or analytics_storage`.
+- `consent/reject-granted` (after the Reject click an update granted ad_storage or analytics_storage, or a Google hit's known gcs grants one): title `After Reject, Google was told <signal> is granted`, or `After Reject, Google was told ad_storage and analytics_storage are granted`; detail names each update (`gtag('consent', 'update') at 2.01s granted analytics_storage`, `dataLayer.push(['consent', 'update']) at ...`) and the hits (`<Name> hit with gcs G111 at 2.30s`, or `<n> Google hits with a granted gcs, the first <Name> with gcs <gcs> at <s.ss>s`).
+- A gcs or gcd Echo can't read never raises reject-granted or accept-not-granted.
+- The result note `gcd decoded with an unofficial, community-documented mapping.` is added once whenever a page with Google hits has a hit with a decoded gcd.
