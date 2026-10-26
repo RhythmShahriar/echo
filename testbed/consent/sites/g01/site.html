@@ -1,0 +1,7 @@
+{{/* g01 The correct setup: Consent Mode v2 default denied before the Google tag; GA4, Google Ads and Meta (revoked until Accept). */}}
+{{define "head"}}
+{{template "cm-default" .}}
+{{template "complianz" (dict)}}
+{{template "gtag" (dict )}}
+{{template "meta" (dict "glue" true)}}
+{{end}}

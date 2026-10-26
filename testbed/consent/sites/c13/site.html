@@ -1,0 +1,11 @@
+{{/* c13 sendBeacon to Meta on pagehide after Reject. Broken: the beacon is sent on every pagehide whatever the choice. */}}
+{{define "head"}}
+{{template "cm-default" .}}
+{{template "generic" (dict)}}
+{{template "gtag" (dict "attrs" `type="text/plain" data-consent="analytics"`)}}
+{{if .Broken}}
+<script>addEventListener('pagehide', function () { navigator.sendBeacon('https://www.facebook.com/tr?id=100000000000001&ev=PageLeave&dl=' + encodeURIComponent(location.href) + '&_tbrun=c13'); });</script>
+{{else}}
+<script>addEventListener('pagehide', function () { if (window.tbConsent.marketing) navigator.sendBeacon('https://www.facebook.com/tr?id=100000000000001&ev=PageLeave&dl=' + encodeURIComponent(location.href) + '&_tbrun=c13'); });</script>
+{{end}}
+{{end}}

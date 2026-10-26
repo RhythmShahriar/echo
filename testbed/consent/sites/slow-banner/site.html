@@ -1,0 +1,6 @@
+{{/* slow-banner: the banner shows late. Good: after 4 s, inside the default --banner-wait (10 s); broken: after 15 s, outside it. */}}
+{{define "head"}}
+{{template "cm-default" .}}
+{{if .Broken}}{{template "generic" (dict "attrs" `data-tb-delay="15000"`)}}{{else}}{{template "generic" (dict "attrs" `data-tb-delay="4000"`)}}{{end}}
+{{template "gtag" (dict "attrs" `type="text/plain" data-consent="analytics"`)}}
+{{end}}

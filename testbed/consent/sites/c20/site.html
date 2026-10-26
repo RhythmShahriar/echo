@@ -1,0 +1,11 @@
+{{/* c20 Click does nothing. Broken: a transparent overlay covers the page and the Reject handler binds 6 s late. */}}
+{{define "head"}}
+{{template "cm-default" .}}
+{{if .Broken}}
+{{template "generic" (dict "lang" "de" "attrs" `data-tb-late-reject="6000"`)}}
+{{else}}
+{{template "generic" (dict "lang" `de`)}}
+{{end}}
+{{template "gtag" (dict "attrs" `type="text/plain" data-consent="analytics"`)}}
+{{template "meta" (dict "attrs" `type="text/plain" data-consent="marketing"`)}}
+{{end}}

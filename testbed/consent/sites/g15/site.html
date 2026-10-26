@@ -1,0 +1,15 @@
+{{/* g15 A tag that waits for its own response before it sends the next hit: held answers must keep it working. */}}
+{{define "head"}}
+{{template "cm-default" .}}
+{{template "cookiebot" (dict)}}
+{{template "gtag" (dict )}}
+<script type="text/plain" data-cookieconsent="statistics">
+(async function () {
+  for (var i = 1; i <= 3; i++) {
+    try { await fetch('https://www.google-analytics.com/g/collect?v=2&tid=G-TESTBED001&gcs=G111&en=chain_' + i + '&_tbrun=g15', {method: 'POST', mode: 'no-cors', keepalive: true}); }
+    catch (e) { document.documentElement.setAttribute('data-chain', 'failed at ' + i); return; }
+  }
+  document.documentElement.setAttribute('data-chain', 'done');
+})();
+</script>
+{{end}}

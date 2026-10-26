@@ -1,0 +1,10 @@
+{{/* c04 Reject reported as granted. Broken: the OneTrust category map sends analytics_storage granted for necessary only. */}}
+{{define "head"}}
+{{template "cm-default" .}}
+{{if .Broken}}
+{{template "onetrust" (dict "attrs" `data-tb-reject-granted`)}}
+{{else}}
+{{template "onetrust" (dict)}}
+{{end}}
+{{template "gtag" (dict )}}
+{{end}}

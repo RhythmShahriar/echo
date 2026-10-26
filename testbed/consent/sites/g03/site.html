@@ -1,0 +1,8 @@
+{{/* g03 Cookiebot with auto-blocking and its Consent Mode integration. */}}
+{{define "head"}}
+{{template "cm-default" .}}
+{{template "cookiebot" (dict)}}
+{{template "gtag" (dict )}}
+{{template "meta" (dict "attrs" `type="text/plain" data-cookieconsent="marketing"`)}}
+{{template "hotjar" (dict "attrs" `type="text/plain" data-cookieconsent="statistics"`)}}
+{{end}}

@@ -1,0 +1,20 @@
+{{/* c24 Withdraw (run with --runs +withdraw). Broken: the site keeps its own marketing flag from the first Accept, so Meta loads again after the visitor withdraws. */}}
+{{define "head"}}
+{{template "cm-default" .}}
+{{template "onetrust" (dict)}}
+{{template "gtag" (dict )}}
+{{if .Broken}}
+<script>
+// The bug: the site keeps its own flag from the first Accept and never
+// clears it, so the pixel loads again after the visitor withdraws.
+tbOnConsent(function (c) { if (c.marketing) document.cookie = 'site_marketing=1; path=/; max-age=31536000; samesite=lax'; });
+if (window.tbConsent.marketing || /(?:^|; )site_marketing=1/.test(document.cookie)) {
+  !function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,document,'script','https://connect.facebook.net/en_US/fbevents.js');
+  fbq('init', '100000000000001');
+  fbq('track', 'PageView');
+}
+</script>
+{{else}}
+{{template "meta" (dict "attrs" `type="text/plain" class="optanon-category-C0004"`)}}
+{{end}}
+{{end}}

@@ -1,0 +1,13 @@
+{{/* g10 A custom banner in Arabic, right to left. */}}
+{{define "head"}}
+{{template "cm-default" .}}
+{{template "generic" (dict "lang" `ar`)}}
+{{template "gtag" (dict )}}
+{{template "meta" (dict "attrs" `type="text/plain" data-consent="marketing"`)}}
+{{end}}
+{{define "body"}}
+<h1 dir="rtl">متجر {{.ID}}</h1>
+<p dir="rtl">صفحة متجر صغيرة.</p>
+{{end}}
+{{define "lang"}}ar{{end}}
+{{define "htmlattrs"}} dir="rtl"{{end}}

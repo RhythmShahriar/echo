@@ -6,6 +6,13 @@
 <title>{{block "title" .}}{{.ID}} shop{{end}}</title>
 <link rel="icon" href="data:,">
 <style>body{font:16px/1.5 system-ui,sans-serif;margin:0;padding:0 16px}nav a{margin-right:12px}.tall{min-height:2600px}</style>
+<script>
+// The site's own consent glue: the CMP replicas fire tb-consent with
+// what the visitor allowed, on every load once a choice is stored.
+window.tbConsent = {analytics: false, marketing: false, known: false};
+window.tbOnConsent = function (cb) { window.addEventListener('tb-consent', function () { cb(window.tbConsent); }); };
+window.addEventListener('tb-consent', function (e) { window.tbConsent = {analytics: e.detail.analytics, marketing: e.detail.marketing, known: true}; }, true);
+</script>
 {{block "head" .}}{{end}}
 </head>
 <body>
@@ -14,7 +21,7 @@
 {{block "body" .}}<h1>{{.ID}} shop</h1>
 <p>A small shop page for the consent testbed.</p>{{end}}
 <section class="tall"><p>More products further down the page.</p></section>
-<footer><p>Bottom of the page.</p></footer>
+<footer><p>Bottom of the page. <a href="/page-2/">See all products</a></p></footer>
 </main>
 {{block "foot" .}}{{end}}
 </body>

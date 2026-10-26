@@ -1,0 +1,7 @@
+{{/* g02 g01 in Consent Mode advanced: cookieless pings before the choice. */}}
+{{define "head"}}
+{{template "cm-default" .}}
+{{template "complianz" (dict)}}
+{{template "gtag" (dict "mode" `advanced`)}}
+{{template "meta" (dict "glue" true)}}
+{{end}}

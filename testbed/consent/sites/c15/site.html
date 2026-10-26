@@ -1,0 +1,12 @@
+{{/* c15 GPC ignored (run with --runs +gpc). Broken: CookieYes reads the GPC signal as consent to everything. */}}
+{{define "head"}}
+{{template "cm-default" .}}
+{{if .Broken}}
+{{template "cookieyes" (dict "attrs" `data-tb-gpc-accepts`)}}
+{{else}}
+{{template "cookieyes" (dict)}}
+{{end}}
+{{template "gtag" (dict "attrs" `type="text/plain" data-cookieyes="cookieyes-analytics"`)}}
+{{template "meta" (dict "attrs" `type="text/plain" data-cookieyes="cookieyes-advertisement"`)}}
+{{template "tiktok" (dict "attrs" `type="text/plain" data-cookieyes="cookieyes-advertisement"`)}}
+{{end}}

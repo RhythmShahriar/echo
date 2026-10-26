@@ -1,0 +1,7 @@
+{{/* g07 Didomi with TCF; the TC string and Consent Mode agree. */}}
+{{define "head"}}
+{{template "cm-default" .}}
+{{template "didomi" (dict)}}
+{{template "gtag" (dict )}}
+{{template "meta" (dict "attrs" `type="didomi/javascript" data-vendor="facebook"`)}}
+{{end}}

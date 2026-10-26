@@ -1,0 +1,388 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+# Echo consent testbed scenarios: the benchmark's manifest (PRD 18.1).
+#
+# Each scenario is one site, <id>.shop.test, served from sites/<id>/ by the
+# testbed server. Switch it with ./toggle.sh <id> good|broken (state/<id>).
+# Every bad scenario's good state is also a good site, so the control pass
+# runs 40 good states.
+#
+# Fields:
+#   id, name   c01 to c25 (bad) and g01 to g15 (good)
+#   area       consent-mode, trackers, cmp, choice, server or environment
+#   cmp        the CMP on the site (a replica in Go mode)
+#   needs      go (runs in Go mode and in Docker) or docker (Docker only)
+#   runs       extra --runs, e.g. +gpc, +withdraw
+#   args       extra rhythm-echo flags; {echo} is the address of the Echo
+#              the harness starts for --echo
+#   toggle     what the broken state changes
+#   expect     findings the broken state must have, each matched on what it
+#              names: check, tracker, level, class (comparisons), title (a
+#              case-insensitive substring), run, status, reason
+#   any        true when one expect entry is enough (a scenario with more
+#              than one acceptable outcome)
+#   forbid     findings that must not appear: a scenario caught for the
+#              wrong reason doesn't count
+#   allow      good scenarios: the notices they may raise. Every error and
+#              warning is forbidden in a good state.
+#   sink_zero  the tracker sink must count no hit (default true)
+#
+# fixtures: lists the security fixture sites the environment probes use.
+
+scenarios:
+  # Bad: Consent Mode
+  - id: c01
+    name: GA4 before consent
+    area: consent-mode
+    cmp: complianz
+    needs: go
+    toggle: no Consent Mode default, so gtag config sends at once
+    expect:
+      - {check: consent/before-choice, tracker: ga4, level: error}
+      - {check: consent/no-default, level: error}
+  - id: c02
+    name: Meta Pixel ignores Consent Mode
+    area: trackers
+    cmp: complianz
+    needs: go
+    toggle: Google is set up right; fbq init and PageView run with no revoke
+    expect:
+      - {check: consent/before-choice, tracker: meta-pixel, level: error}
+      - {check: consent/after-reject, tracker: meta-pixel, level: error}
+      - {check: consent/meta-no-consent-api, tracker: meta-pixel, level: notice}
+    forbid:
+      - {check: consent/before-choice, tracker: ga4}
+  - id: c03
+    name: CMP misconfigured
+    area: cmp
+    cmp: cookiebot
+    needs: go
+    toggle: auto-blocking off, Consent Mode integration off, no default; GTM fires GA4 and Ads whatever the choice
+    expect:
+      - {check: consent/after-reject, tracker: ga4, level: error}
+      - {check: consent/after-reject, tracker: google-ads, level: error}
+  - id: c04
+    name: Reject reported as granted
+    area: consent-mode
+    cmp: onetrust
+    needs: go
+    toggle: the category map sends analytics_storage granted for necessary only
+    expect:
+      - {check: consent/reject-granted, level: error}
+  - id: c05
+    name: Consent Mode default late
+    area: consent-mode
+    cmp: usercentrics
+    needs: go
+    toggle: GTM runs first and the default is pushed 1.5 s later
+    expect:
+      - {check: consent/default-late, level: warning}
+    forbid:
+      - {check: consent/no-default}
+  - id: c06
+    name: Consent Mode v1 only
+    area: consent-mode
+    cmp: cookieyes
+    needs: go
+    toggle: the default and the updates leave out ad_user_data and ad_personalization
+    expect:
+      - {check: consent/v2-signals, level: warning}
+  - id: c07
+    name: Choice not kept
+    area: choice
+    cmp: borlabs
+    needs: go
+    toggle: the CMP cookie is written with Path=/blog, so the next page shows the banner again
+    expect:
+      - {check: consent/reject-not-kept, level: error}
+  - id: c08
+    name: A plugin update adds TikTok before consent
+    area: trackers
+    cmp: didomi
+    needs: go
+    args: [--against, good]
+    toggle: a TikTok pixel loads unblocked; compared with a baseline saved in the good state
+    expect:
+      - {class: broke, check: consent/before-choice, tracker: tiktok, title: TikTok Pixel now fires before the choice}
+  - id: c09
+    name: Session replay before consent
+    area: trackers
+    cmp: iubenda
+    needs: go
+    toggle: Clarity and Hotjar load at once and write cookies and storage before the choice
+    expect:
+      - {check: consent/before-choice, tracker: microsoft-clarity, level: error}
+      - {check: consent/before-choice, tracker: hotjar, level: error}
+  - id: c10
+    name: Reject only in the preference centre
+    area: cmp
+    cmp: onetrust
+    needs: go
+    toggle: no Reject All on the banner's first layer
+    expect:
+      - {check: consent/no-first-layer-reject, level: warning}
+      - {run: reject, status: ok}
+    forbid:
+      - {check: consent/after-reject}
+  - id: c11
+    name: YouTube embed after Reject
+    area: trackers
+    cmp: usercentrics
+    needs: go
+    args: [--click, button,api]
+    toggle: the youtube.com frame loads whatever the choice; the CMP is in a closed shadow root, so only its API can choose
+    expect:
+      - {check: consent/embed, tracker: youtube, level: warning}
+      - {check: consent/click-fallback, level: notice}
+  - id: c12
+    name: Server-side GTM before the choice
+    area: server
+    cmp: cookiebot
+    needs: go
+    toggle: no Consent Mode default, so GA4 sends to metrics.c12.shop.test at once
+    expect:
+      - {check: consent/before-choice, tracker: ga4, level: error}
+  - id: c13
+    name: sendBeacon on pagehide after Reject
+    area: trackers
+    cmp: generic
+    needs: go
+    toggle: a Meta beacon is sent on every pagehide whatever the choice
+    expect:
+      - {check: consent/after-reject, tracker: meta-pixel, level: error}
+  - id: c14
+    name: GTM in a web worker
+    area: trackers
+    cmp: complianz
+    needs: go
+    toggle: no Consent Mode default reaches the worker, so it sends at once
+    expect:
+      - {check: consent/before-choice, tracker: ga4, level: error}
+  - id: c15
+    name: GPC ignored
+    area: choice
+    cmp: cookieyes
+    needs: go
+    runs: [+gpc]
+    toggle: the CMP reads the GPC signal as consent to everything
+    expect:
+      - {check: consent/gpc-ignored, run: gpc, level: warning}
+  - id: c16
+    name: Accept never grants
+    area: consent-mode
+    cmp: didomi
+    needs: go
+    toggle: Agree is stored but no Consent Mode update is sent; the Google tag pings in advanced mode
+    expect:
+      - {check: consent/accept-not-granted, level: warning}
+      - {check: consent/cookieless-ping, tracker: ga4, level: notice}
+  - id: c17
+    name: Banner hidden from bots
+    area: cmp
+    cmp: cookiebot
+    needs: go
+    args: [-A, "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.8078.47 Safari/537.36"]
+    toggle: no banner for HeadlessChrome or webdriver and no Consent Mode default
+    expect:
+      - {check: consent/no-banner, level: warning}
+      - {check: consent/before-choice, tracker: ga4, level: error}
+  - id: c18
+    name: Server side after Reject
+    area: server
+    cmp: complianz
+    needs: go
+    args: [--echo, "{echo}"]
+    toggle: the shop's server sends a Meta Conversions API event on every page, whatever the choice
+    expect:
+      - {check: consent/server-side, level: error}
+  - id: c19
+    name: TCF mismatch
+    area: cmp
+    cmp: didomi
+    needs: go
+    toggle: after Disagree the TC string still grants purposes 1 and 3
+    expect:
+      - {check: consent/tcf-mismatch, level: warning}
+  - id: c20
+    name: Click does nothing
+    area: choice
+    cmp: generic
+    needs: go
+    args: [--click, button,api]
+    toggle: a transparent overlay covers the page and the Reject handler binds 6 s late
+    any: true
+    expect:
+      - {run: reject, status: click-failed}
+      - {check: consent/reject-broken, level: error}
+      - {check: consent/click-fallback, level: notice}
+      - {run: reject, status: ok}
+  - id: c21
+    name: Reject only hides the banner
+    area: choice
+    cmp: generic
+    needs: go
+    toggle: Reject stores nothing and runs the tags anyway
+    any: true
+    expect:
+      - {run: reject, reason: state_unchanged}
+      - {check: consent/after-reject, level: error}
+  - id: c22
+    name: Scroll-gated LinkedIn tag
+    area: trackers
+    cmp: cookieyes
+    needs: go
+    toggle: the Insight Tag loads unblocked and fires on the first scroll
+    expect:
+      - {check: consent/before-choice, tracker: linkedin, level: error}
+  - id: c23
+    name: A second plugin's GA4 snippet
+    area: trackers
+    cmp: complianz
+    needs: go
+    toggle: a minimal analytics snippet sends to /g/collect directly on every page
+    expect:
+      - {check: consent/before-choice, tracker: ga4, level: error}
+      - {check: consent/after-reject, tracker: ga4, level: error}
+  - id: c24
+    name: Withdraw keeps Meta firing
+    area: choice
+    cmp: onetrust
+    needs: go
+    runs: [+withdraw]
+    toggle: the site keeps its own marketing flag from the first Accept, so Meta loads again after the withdrawal
+    expect:
+      - {check: consent/after-withdraw, tracker: meta-pixel, run: withdraw, level: error}
+  - id: c25
+    name: Advanced Consent Mode under strict
+    area: consent-mode
+    cmp: complianz
+    needs: go
+    args: [--consent-mode, strict]
+    toggle: GTM loads at once in advanced mode and sends cookieless pings
+    expect:
+      - {check: consent/before-choice, tracker: ga4, level: error}
+      - {check: consent/script-before, tracker: google-tag-manager, level: error}
+
+  # Good: must pass with no error and no warning
+  - id: g01
+    name: The correct setup
+    area: consent-mode
+    cmp: complianz
+    needs: go
+    toggle: none (always good)
+    allow: []
+  - id: g02
+    name: The correct setup in Consent Mode advanced
+    area: consent-mode
+    cmp: complianz
+    needs: go
+    toggle: none (always good)
+    allow: [consent/cookieless-ping]
+  - id: g03
+    name: Cookiebot with auto-blocking and Consent Mode
+    area: cmp
+    cmp: cookiebot
+    needs: go
+    toggle: none (always good)
+    allow: []
+  - id: g04
+    name: OneTrust with Reject on the first layer
+    area: cmp
+    cmp: onetrust
+    needs: go
+    toggle: none (always good)
+    allow: []
+  - id: g05
+    name: CookieYes per its docs
+    area: cmp
+    cmp: cookieyes
+    needs: go
+    runs: [+gpc]
+    toggle: none (always good)
+    allow: []
+  - id: g06
+    name: Usercentrics in shadow DOM
+    area: cmp
+    cmp: usercentrics
+    needs: go
+    toggle: none (always good)
+    allow: []
+  - id: g07
+    name: Didomi with TCF agreeing with Consent Mode
+    area: cmp
+    cmp: didomi
+    needs: go
+    toggle: none (always good)
+    allow: []
+  - id: g08
+    name: Iubenda
+    area: cmp
+    cmp: iubenda
+    needs: go
+    toggle: none (always good)
+    allow: []
+  - id: g09
+    name: Borlabs
+    area: cmp
+    cmp: borlabs
+    needs: go
+    toggle: none (always good)
+    allow: []
+  - id: g10
+    name: Custom banner in Arabic
+    area: cmp
+    cmp: generic
+    needs: go
+    toggle: none (always good)
+    allow: []
+  - id: g11
+    name: Plausible before consent, Klaro for the rest
+    area: trackers
+    cmp: klaro
+    needs: go
+    toggle: none (always good)
+    allow: []
+  - id: g12
+    name: Brochure site with no trackers and no banner
+    area: environment
+    cmp: none
+    needs: go
+    toggle: none (always good)
+    allow: []
+  - id: g13
+    name: Scripts load before consent, every hit waits
+    area: trackers
+    cmp: cookieconsent
+    needs: go
+    toggle: none (always good)
+    allow: []
+  - id: g14
+    name: Lookalikes and a late banner
+    area: trackers
+    cmp: generic
+    needs: go
+    toggle: none (always good)
+    allow: []
+  - id: g15
+    name: A tag that waits for its own response
+    area: trackers
+    cmp: cookiebot
+    needs: go
+    toggle: none (always good)
+    allow: []
+
+fixtures:
+  - {id: ssrf-probe, use: "e16: private addresses the egress guard must refuse (broken adds the metadata and 10.x addresses; Docker mode only)"}
+  - {id: hostile-banner, use: "e17: markup, escape codes and bidi overrides in the banner"}
+  - {id: hostile-text, use: "e17: markup, Markdown, CSV and escape codes in page text and the dataLayer"}
+  - {id: patched-dom, use: "page scripts that override DOM and JS APIs (isolated world)"}
+  - {id: sgtm-first-party, use: "GA4 through a first-party server-side container"}
+  - {id: pii-beacons, use: "e18: personal data in hits"}
+  - {id: secret-url, use: "e18: a token in the page URL copied into every hit"}
+  - {id: huge-datalayer, use: "e15: bounded memory under a dataLayer flood"}
+  - {id: request-storm, use: "e14: more requests than the per-run limit"}
+  - {id: redirect-chain, use: "redirects: 3 hops good, 12 broken"}
+  - {id: redirect-loop, use: "redirects: a loop when broken"}
+  - {id: self-signed, use: "e12: a self-signed certificate"}
+  - {id: slow-banner, use: "the banner after 4 s good, 15 s broken"}

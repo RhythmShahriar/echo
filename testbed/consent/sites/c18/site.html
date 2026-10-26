@@ -1,0 +1,7 @@
+{{/* c18 Server side after Reject (run with --echo). Broken: the shop sends a Meta Conversions API event from the server on every page, whatever the choice (the server does it: special handling of c18). */}}
+{{define "head"}}
+{{template "cm-default" .}}
+{{template "complianz" (dict)}}
+{{template "gtag" (dict )}}
+{{template "meta" (dict "attrs" `type="text/plain" class="cmplz-script" data-category="marketing"`)}}
+{{end}}

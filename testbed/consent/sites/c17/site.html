@@ -1,0 +1,10 @@
+{{/* c17 Banner hidden from bots. Broken: Cookiebot shows no banner to HeadlessChrome or webdriver and there is no Consent Mode default. */}}
+{{define "head"}}
+{{if .Broken}}
+{{template "cookiebot" (dict "attrs" `data-tb-hide-bots`)}}
+{{else}}
+{{template "cm-default" .}}
+{{template "cookiebot" (dict)}}
+{{end}}
+{{template "gtag" (dict )}}
+{{end}}

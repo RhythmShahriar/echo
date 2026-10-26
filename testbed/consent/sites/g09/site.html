@@ -1,0 +1,7 @@
+{{/* g09 Borlabs Cookie (Borlabs 3 markup). */}}
+{{define "head"}}
+{{template "cm-default" .}}
+{{template "borlabs" (dict "attrs" `data-borlabs-version="3"`)}}
+{{template "gtag" (dict "attrs" `type="text/plain" data-borlabs-cookie-group="statistics"`)}}
+{{template "meta" (dict "attrs" `type="text/plain" data-borlabs-cookie-group="marketing"`)}}
+{{end}}

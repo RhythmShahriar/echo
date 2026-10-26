@@ -1,0 +1,21 @@
+{{/* patched-dom: page scripts that override the DOM and JS APIs a scanner might lean on. Echo's detection and clicks run in an isolated world, so they must not notice. Broken: the overrides; good: none. */}}
+{{define "head"}}
+{{if .Broken}}<script>
+(function () {
+  // What a scanner leans on and the CMP itself doesn't.
+  var noop = function () { return null; };
+  Element.prototype.getBoundingClientRect = function () { return {x: 0, y: 0, width: 0, height: 0, top: 0, left: 0, right: 0, bottom: 0}; };
+  document.elementFromPoint = noop;
+  window.getComputedStyle = function () { return {display: 'none', visibility: 'hidden', opacity: '0'}; };
+  JSON.stringify = function () { return '"patched"'; };
+  window.MutationObserver = function () { this.observe = function () {}; this.disconnect = function () {}; };
+  HTMLElement.prototype.click = function () {};
+  Object.defineProperty(HTMLElement.prototype, 'offsetWidth', {get: function () { return 0; }});
+  Object.defineProperty(HTMLElement.prototype, 'offsetHeight', {get: function () { return 0; }});
+  Document.prototype.evaluate = noop;
+})();
+</script>{{end}}
+{{template "cm-default" .}}
+{{template "complianz" (dict)}}
+{{template "gtag" (dict)}}
+{{end}}

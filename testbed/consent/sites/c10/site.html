@@ -1,0 +1,11 @@
+{{/* c10 Reject only in the preference centre. Broken: no Reject All on the OneTrust banner. */}}
+{{define "head"}}
+{{template "cm-default" .}}
+{{if .Broken}}
+{{template "onetrust" (dict "attrs" `data-tb-no-first-layer-reject`)}}
+{{else}}
+{{template "onetrust" (dict)}}
+{{end}}
+{{template "gtag" (dict )}}
+{{template "meta" (dict "attrs" `type="text/plain" class="optanon-category-C0004"`)}}
+{{end}}

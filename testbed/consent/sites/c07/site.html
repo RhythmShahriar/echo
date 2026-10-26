@@ -1,0 +1,11 @@
+{{/* c07 Choice not kept. Broken: Borlabs writes its cookie with Path=/blog, so the next page shows the banner again. */}}
+{{define "head"}}
+{{template "cm-default" .}}
+{{if .Broken}}
+{{template "borlabs" (dict "attrs" `data-tb-cookie-path="/blog"`)}}
+{{else}}
+{{template "borlabs" (dict)}}
+{{end}}
+{{template "gtag" (dict "attrs" `type="text/plain" data-borlabs-cookie-group="statistics"`)}}
+{{template "meta" (dict "attrs" `type="text/plain" data-borlabs-cookie-group="marketing"`)}}
+{{end}}

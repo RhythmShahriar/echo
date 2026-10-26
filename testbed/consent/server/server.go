@@ -132,6 +132,9 @@ func (s *Server) Hits(scenario string) []Hit { return s.sink.recordedHits(scenar
 // Reset clears the sink's counters.
 func (s *Server) Reset() { s.sink.reset() }
 
+// ResetScenario clears the sink's counters for one scenario.
+func (s *Server) ResetScenario(id string) { s.sink.resetScenario(id) }
+
 // hostOnly is the lower-case host name of a Host header, without port
 // or trailing dot.
 func hostOnly(h string) string {
@@ -311,7 +314,7 @@ func (s *Server) renderPage(w http.ResponseWriter, r *http.Request, p Page) {
 	partials, _ := filepath.Glob(filepath.Join(s.sitesDir, "_partials", "*.html"))
 	files = append(files, partials...)
 	files = append(files, filepath.Join(s.sitesDir, p.ID, "site.html"))
-	t, err := template.ParseFiles(files...)
+	t, err := template.New("_layout.html").Funcs(funcs).ParseFiles(files...)
 	if err != nil {
 		http.Error(w, "template: "+err.Error(), http.StatusInternalServerError)
 		return
@@ -326,6 +329,25 @@ func (s *Server) renderPage(w http.ResponseWriter, r *http.Request, p Page) {
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	_, _ = w.Write(buf.Bytes())
+}
+
+// funcs are the helpers site templates may call: dict builds the
+// arguments of a partial, {{template "gtag" (dict "mode" "advanced")}}.
+var funcs = template.FuncMap{
+	"dict": func(kv ...any) (map[string]any, error) {
+		if len(kv)%2 != 0 {
+			return nil, fmt.Errorf("dict: odd number of arguments")
+		}
+		m := make(map[string]any, len(kv)/2)
+		for i := 0; i < len(kv); i += 2 {
+			k, ok := kv[i].(string)
+			if !ok {
+				return nil, fmt.Errorf("dict: key %v isn't a string", kv[i])
+			}
+			m[k] = kv[i+1]
+		}
+		return m, nil
+	},
 }
 
 // AdminHandler serves the admin listener: state, sink counters and the

@@ -1,0 +1,14 @@
+{{/* ssrf-probe (e16): a page that asks for private addresses. Good: only the testbed's own admin address on loopback. Broken: also the cloud metadata address and a private 10.x address; run it broken only in the sealed Docker mode, where nothing can leave. Echo's egress guard must refuse all of them: the admin port's "internal" counter stays 0. */}}
+{{define "head"}}
+{{template "cm-default" .}}
+{{template "generic" (dict)}}
+{{template "gtag" (dict "attrs" `type="text/plain" data-consent="analytics"`)}}
+{{end}}
+{{define "body"}}<h1>{{.ID}}</h1>
+<img alt="" width="1" height="1" src="http://{{.Internal}}/_internal/img?s=ssrf-probe">
+<script>
+fetch('http://{{.Internal}}/_internal/fetch?s=ssrf-probe', {mode: 'no-cors'}).catch(function () {});
+{{if .Broken}}fetch('http://169.254.169.254/latest/meta-data/?s=ssrf-probe', {mode: 'no-cors'}).catch(function () {});
+fetch('http://10.0.0.5/_internal/lan?s=ssrf-probe', {mode: 'no-cors'}).catch(function () {});
+{{end}}</script>
+{{end}}

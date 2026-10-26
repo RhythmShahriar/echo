@@ -74,7 +74,11 @@ window.__tbcmp = window.__tbcmp || (function () {
 
   // consentUpdate sends a Consent Mode update for the categories:
   // analytics maps to analytics_storage, marketing to the three ad signals.
+  // Every call also fires the tb-consent window event the sites' own
+  // glue listens to (the layout's tbConsent), the way a site wires its
+  // other tags to its CMP.
   function consentUpdate(s, analytics, marketing) {
+    emit(window, 'tb-consent', {analytics: !!analytics, marketing: !!marketing});
     if (has(s, 'no-gcm')) return;
     var g = function (b) { return b ? 'granted' : 'denied'; };
     var st = {analytics_storage: g(analytics), ad_storage: g(marketing)};

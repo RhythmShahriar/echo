@@ -1,0 +1,10 @@
+{{/* c16 Accept never grants. Broken: Didomi stores Agree but sends no Consent Mode update; the Google tag runs in advanced mode, so its pings say denied. */}}
+{{define "head"}}
+{{template "cm-default" .}}
+{{if .Broken}}
+{{template "didomi" (dict "attrs" `data-tb-no-accept-update`)}}
+{{else}}
+{{template "didomi" (dict)}}
+{{end}}
+{{template "gtag" (dict "mode" `advanced`)}}
+{{end}}

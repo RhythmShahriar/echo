@@ -1,0 +1,11 @@
+{{/* c21 Reject only hides the banner. Broken: Reject stores nothing and runs the tags anyway. */}}
+{{define "head"}}
+{{template "cm-default" .}}
+{{if .Broken}}
+{{template "generic" (dict "attrs" `data-tb-hide-only`)}}
+{{else}}
+{{template "generic" (dict)}}
+{{end}}
+{{template "gtag" (dict "attrs" `type="text/plain" data-consent="analytics"`)}}
+{{template "meta" (dict "attrs" `type="text/plain" data-consent="marketing"`)}}
+{{end}}

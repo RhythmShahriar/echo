@@ -1,0 +1,15 @@
+{{/* request-storm (e14): the page fires more requests than Echo's per-run limit (20,000), so the run ends limit-reached (inconclusive). Broken: 25,000 requests; good: 20. */}}
+{{define "head"}}
+{{template "cm-default" .}}
+{{template "complianz" (dict)}}
+<script>
+(function () {
+  var total = {{if .Broken}}25000{{else}}20{{end}}, sent = 0;
+  function batch() {
+    for (var i = 0; i < 500 && sent < total; i++, sent++) fetch('/storm/' + sent + '.json', {cache: 'no-store'}).catch(function () {});
+    if (sent < total) setTimeout(batch, 10);
+  }
+  addEventListener('load', batch);
+})();
+</script>
+{{end}}

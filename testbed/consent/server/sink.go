@@ -83,6 +83,17 @@ func (s *sink) reset() {
 	s.unmapped = map[string]map[string]int{}
 }
 
+// resetScenario clears what was counted for one scenario.
+func (s *sink) resetScenario(id string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.hits, id)
+	delete(s.recorded, id)
+	delete(s.forbidden, id)
+	delete(s.internal, id)
+	delete(s.unmapped, id)
+}
+
 // hit records a tracker hit from r to host.
 func (s *sink) hit(r *http.Request, host string) {
 	body, _ := io.ReadAll(io.LimitReader(r.Body, maxBody))
