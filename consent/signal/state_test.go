@@ -156,8 +156,8 @@ func TestStateBannerAndUnknown(t *testing.T) {
 }
 
 // TestNoValueLeaks stores a secret-looking value (assembled at run time)
-// in every CMP's cookie (readable or not) and checks it appears in no
-// state and no error.
+// in every CMP's cookie (readable or not), both as a value and as a
+// category name. It must appear in no state and no error.
 func TestNoValueLeaks(t *testing.T) {
 	secret := "sk_" + "live_" + strings.Repeat("Q7xZ", 8)
 	cases := []struct {
@@ -169,6 +169,9 @@ func TestNoValueLeaks(t *testing.T) {
 		{consent.VerifySpec{Parser: "onetrust"}, "consentId=" + secret + "&interactionCount=1&groups=C0001:1"},
 		{consent.VerifySpec{Parser: "onetrust"}, secret},
 		{consent.VerifySpec{Parser: "cookieyes"}, "consentid:" + secret + ",action:yes,necessary:yes"},
+		{consent.VerifySpec{Parser: "cookieyes"}, "consentid:x," + secret + ":yes,action:yes"},
+		{consent.VerifySpec{Parser: "onetrust"}, "interactionCount=1&groups=" + secret + ":1"},
+		{consent.VerifySpec{Parser: "borlabs"}, `{"consents":{"` + secret + `":["x"]}}`},
 		{consent.VerifySpec{Parser: "borlabs"}, `{"consents":{"essential":["x"]},"uid":"` + secret + `"}`},
 		{consent.VerifySpec{Parser: "borlabs"}, secret},
 		{consent.VerifySpec{Parser: "didomi"}, secret},

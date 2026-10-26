@@ -19,6 +19,7 @@ import (
 	"strings"
 
 	"github.com/RhythmShahriar/echo/consent"
+	"github.com/RhythmShahriar/echo/mask"
 )
 
 // Parser reads a CMP's stored choice from its values, keyed by cookie or
@@ -109,9 +110,18 @@ type categories map[string]bool
 
 // set records name as granted or not, once the name is made safe; names
 // past the cap or empty are dropped. A name set twice keeps false if
-// either was false.
+// either was false. The page writes the names, so one the masker would
+// change (an API key, a token, a URL with a credential) is dropped
+// whole: a masked key could still collide with a real one and a
+// category named like a secret says nothing about consent. The check
+// runs before SafeText cuts the name, since a cut secret may no longer
+// look like one.
 func (c categories) set(name string, granted bool) {
-	name = consent.SafeText(strings.TrimSpace(name), maxName)
+	name = strings.TrimSpace(name)
+	if mask.Text(name) != name {
+		return
+	}
+	name = consent.SafeText(name, maxName)
 	if name == "" {
 		return
 	}
