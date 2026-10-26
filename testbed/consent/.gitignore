@@ -6,3 +6,5 @@
 /bench/work-a/
 /bench/work-b/
 /bench/work-*.md
+# make runtime: binaries and gate certificates for Docker mode
+/runtime/

@@ -44,7 +44,7 @@ func startEchoUp(ctx context.Context, bin, dir string) (*echoUp, error) {
 	if err != nil {
 		return nil, err
 	}
-	cmd := exec.Command(bin, "up", "--seal", "--listen", echoAPI, "--smtp", "off", "--proxy", echoProxy, //nolint:gosec,noctx // the binary under test; stopped by stop
+	cmd := exec.Command(bin, "up", "--seal", "--listen", echoAPI, "--smtp", "off", "--proxy", echoProxy, "--mitm", //nolint:gosec,noctx // the binary under test; stopped by stop
 		"--store", filepath.Join(dir, "store"), "--plain")
 	cmd.Dir = dir
 	cmd.Env = append(os.Environ(), "RHYTHM_OFFLINE=1", "XDG_CONFIG_HOME="+filepath.Join(dir, "config"))

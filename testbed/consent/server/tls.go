@@ -173,11 +173,16 @@ func (c *CA) leaf(name string) (*tls.Certificate, error) {
 // issue makes a server certificate for name signed by parent, or
 // self-signed when parent is nil.
 func issue(name string, key *ecdsa.PrivateKey, parent *x509.Certificate, parentKey *ecdsa.PrivateKey) (*tls.Certificate, error) {
+	return issueNames([]string{name}, key, parent, parentKey)
+}
+
+// issueNames is issue for a certificate that covers several names.
+func issueNames(names []string, key *ecdsa.PrivateKey, parent *x509.Certificate, parentKey *ecdsa.PrivateKey) (*tls.Certificate, error) {
 	now := time.Now()
 	tmpl := &x509.Certificate{
 		SerialNumber: serial(),
-		Subject:      pkix.Name{CommonName: name},
-		DNSNames:     []string{name},
+		Subject:      pkix.Name{CommonName: names[0]},
+		DNSNames:     names,
 		NotBefore:    now.Add(-time.Hour),
 		NotAfter:     now.AddDate(0, 3, 0),
 		KeyUsage:     x509.KeyUsageDigitalSignature,
@@ -196,6 +201,64 @@ func issue(name string, key *ecdsa.PrivateKey, parent *x509.Certificate, parentK
 		chain = append(chain, parent.Raw)
 	}
 	return &tls.Certificate{Certificate: chain, PrivateKey: key}, nil
+}
+
+// The files WriteGateCerts writes for the Docker gate.
+const (
+	GateCertFile       = "gate.pem"
+	GateKeyFile        = "gate-key.pem"
+	SelfSignedCertFile = "self-signed.pem"
+	SelfSignedKeyFile  = "self-signed-key.pem"
+)
+
+// GateNames are the names the Docker gate's certificate covers: every
+// scenario site and its sub-hosts (*.shop.test, *.<id>.shop.test) and
+// every stand-in host. ids are the scenario and fixture sites.
+func GateNames(ids []string) []string {
+	names := []string{"*" + SiteSuffix}
+	for _, id := range ids {
+		names = append(names, "*."+id+SiteSuffix)
+	}
+	return append(names, TagHosts()...)
+}
+
+// WriteGateCerts writes the Docker gate's certificates into dir: one
+// for names issued by the CA (with the CA after it, as nginx wants the
+// chain) and a self-signed one for SelfSignedHost. nginx can't issue a
+// certificate per name as the Go server does, so the gate gets one that
+// covers them all.
+func (c *CA) WriteGateCerts(dir string, names []string) error {
+	if err := os.MkdirAll(dir, 0o750); err != nil {
+		return err
+	}
+	write := func(certFile, keyFile string, cert *tls.Certificate) error {
+		var pemCerts []byte
+		for _, der := range cert.Certificate {
+			pemCerts = append(pemCerts, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der})...)
+		}
+		keyDER, err := x509.MarshalECPrivateKey(cert.PrivateKey.(*ecdsa.PrivateKey))
+		if err != nil {
+			return err
+		}
+		// nginx in the gate reads the key as another user: the folder
+		// is the testbed's own and git-ignored.
+		if err := os.WriteFile(filepath.Join(dir, keyFile), pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: keyDER}), 0o644); err != nil { //nolint:gosec // a throwaway testbed key, see above
+			return err
+		}
+		return os.WriteFile(filepath.Join(dir, certFile), pemCerts, 0o644) //nolint:gosec // a certificate is public
+	}
+	gate, err := issueNames(names, c.leafKey, c.cert, c.key)
+	if err != nil {
+		return err
+	}
+	if err := write(GateCertFile, GateKeyFile, gate); err != nil {
+		return err
+	}
+	self, err := issue(SelfSignedHost, c.leafKey, nil, nil)
+	if err != nil {
+		return err
+	}
+	return write(SelfSignedCertFile, SelfSignedKeyFile, self)
 }
 
 func serial() *big.Int {

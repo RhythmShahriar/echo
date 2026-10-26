@@ -387,6 +387,24 @@ fixtures:
   - {id: self-signed, use: "e12: a self-signed certificate"}
   - {id: slow-banner, use: "the banner after 4 s good, 15 s broken"}
 
+# Docker variants: the scenarios PRD 18.1 also runs on the real
+# WordPress plugins (Complianz, CookieYes) in the sealed Docker testbed.
+# Each keeps its scenario's expectations; its site is <site>.shop.test,
+# the WordPress of docker-compose.yml with that plugin and the scenario's
+# state (state/<of>) turned on by the testbed's mu-plugin
+# (wp/mu-plugins/consent-testbed.php, which lists the same variants).
+variants:
+  - {id: c01-wp, of: c01, cmp: complianz-wp, site: c01-wp, needs: docker}
+  - {id: c02-wp, of: c02, cmp: complianz-wp, site: c02-wp, needs: docker}
+  - {id: c06-wp, of: c06, cmp: cookieyes-wp, site: c06-wp, needs: docker}
+  - {id: c14-wp, of: c14, cmp: complianz-wp, site: c14-wp, needs: docker}
+  - {id: c22-wp, of: c22, cmp: cookieyes-wp, site: c22-wp, needs: docker}
+  - {id: c23-wp, of: c23, cmp: complianz-wp, site: c23-wp, needs: docker}
+  - {id: c25-wp, of: c25, cmp: complianz-wp, site: c25-wp, needs: docker}
+  - {id: g01-wp, of: g01, cmp: complianz-wp, site: g01-wp, needs: docker}
+  - {id: g02-wp, of: g02, cmp: complianz-wp, site: g02-wp, needs: docker}
+  - {id: g05-wp, of: g05, cmp: cookieyes-wp, site: g05-wp, needs: docker}
+
 # Environment probes (PRD 18.1 e01 to e18): the site is what it always
 # was; what's around Echo goes wrong. Each names its probe in
 # bench/probes.go, which sets up the good or the broken state on its own

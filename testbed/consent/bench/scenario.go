@@ -29,7 +29,8 @@ type Bench struct {
 	tools   *Tools // the other tools; nil judges none
 
 	mu      sync.Mutex
-	pages   []time.Duration // per page, from each report
+	states  map[string]*sync.Mutex // one per state file: a scenario and its Docker variant share one
+	pages   []time.Duration        // per page, from each report
 	clicks  map[string]*ClickRow
 	rssMax  int64
 	leaks   int
@@ -41,7 +42,7 @@ func newBench(bed Bed, work string, timeout time.Duration, log func(string)) *Be
 	if log == nil {
 		log = func(string) {}
 	}
-	return &Bench{bed: bed, work: work, timeout: timeout, log: log, clicks: map[string]*ClickRow{}}
+	return &Bench{bed: bed, work: work, timeout: timeout, log: log, clicks: map[string]*ClickRow{}, states: map[string]*sync.Mutex{}}
 }
 
 // siteURL is a scenario's start page.
@@ -222,6 +223,8 @@ func (b *Bench) record(s scenarios.Scenario, o Observed, ex Exec, broken bool) {
 // good one's only state. It leaves the scenario good.
 func (b *Bench) runScenario(ctx context.Context, j job) Outcome {
 	s := j.S
+	unlock := b.lockState(j.State)
+	defer unlock()
 	start := time.Now()
 	out := Outcome{Scenario: s, Tools: map[string]Verdict{}}
 	defer func() { _ = b.bed.SetBroken(j.State, false) }()
@@ -255,4 +258,18 @@ func (b *Bench) judgeTools(ctx context.Context, j job, out *Outcome) {
 		return
 	}
 	out.Tools[toolWEC] = b.tools.wec.judge(ctx, j.S)
+}
+
+// lockState holds state file id for one scenario's run, so a scenario
+// and its Docker variant never switch it under each other.
+func (b *Bench) lockState(id string) (unlock func()) {
+	b.mu.Lock()
+	m := b.states[id]
+	if m == nil {
+		m = &sync.Mutex{}
+		b.states[id] = m
+	}
+	b.mu.Unlock()
+	m.Lock()
+	return m.Unlock
 }

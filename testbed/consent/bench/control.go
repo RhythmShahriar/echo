@@ -37,6 +37,8 @@ func (b *Bench) controlPass(ctx context.Context, list []scenarios.Scenario, roun
 func (b *Bench) control(ctx context.Context, s scenarios.Scenario, rounds int) Control {
 	c := Control{ID: s.ID}
 	first := ""
+	unlock := b.lockState(s.ID)
+	defer unlock()
 	for r := 1; r <= rounds && ctx.Err() == nil; r++ {
 		o, _ := b.check(ctx, jobOf(s), false, path.Join("control", s.ID, fmt.Sprint(r)))
 		c.Rounds++

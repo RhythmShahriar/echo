@@ -7,6 +7,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"slices"
@@ -355,5 +357,73 @@ func TestExecReadsTheRunnersPeakMemory(t *testing.T) {
 	missing := run(execCommand(t.Context(), filepath.Join(dir, "none")))
 	if missing.Exit != -1 || !strings.Contains(missing.Stderr, "bench: ") {
 		t.Errorf("a missing binary = %+v", missing)
+	}
+}
+
+// TestDockerBedSumsBothSinks: Docker mode reads the tracker hosts' sink
+// (tags) and the sites' own (shop) and adds them up.
+func TestDockerBedSumsBothSinks(t *testing.T) {
+	var resets []string
+	sink := func(c server.Count, hits []server.Hit) *httptest.Server {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			switch r.URL.Path {
+			case "/_admin/health":
+				_, _ = w.Write([]byte("ok\n"))
+			case "/_sink/count":
+				_ = json.NewEncoder(w).Encode(c)
+			case "/_sink/hits":
+				_ = json.NewEncoder(w).Encode(hits)
+			case "/_sink/reset":
+				resets = append(resets, r.URL.Query().Get("scenario"))
+				w.WriteHeader(http.StatusNoContent)
+			}
+		}))
+		t.Cleanup(srv.Close)
+		return srv
+	}
+	t0 := time.Date(2026, 10, 26, 9, 0, 0, 0, time.UTC)
+	tags := sink(server.Count{Hits: 2, By: map[string]int{"www.facebook.com/tr": 2}}, []server.Hit{{Host: "www.facebook.com", At: t0.Add(time.Second)}})
+	shop := sink(server.Count{Hits: 1, Forbidden: 1, By: map[string]int{"metrics.c12.shop.test/g/collect": 1}}, []server.Hit{{Host: "metrics.c12.shop.test", At: t0}})
+	b := &dockerBed{admins: []string{tags.URL, shop.URL}, client: http.DefaultClient}
+	c, err := b.Count("c12")
+	if err != nil || c.Hits != 3 || c.Forbidden != 1 || c.By["www.facebook.com/tr"] != 2 || c.By["metrics.c12.shop.test/g/collect"] != 1 {
+		t.Errorf("count = %+v, %v", c, err)
+	}
+	hits, err := b.Hits("c12")
+	if err != nil || len(hits) != 2 || hits[0].Host != "metrics.c12.shop.test" {
+		t.Errorf("hits = %+v, %v", hits, err)
+	}
+	if err := b.ResetSink("c12"); err != nil || !slices.Equal(resets, []string{"c12", "c12"}) {
+		t.Errorf("reset: %v %v", err, resets)
+	}
+	shop.Close()
+	if _, err := b.Count("c12"); err == nil {
+		t.Error("a sink that doesn't answer: no error")
+	}
+}
+
+// TestLockState: a scenario and its Docker variant share one state file,
+// so their runs never overlap.
+func TestLockState(t *testing.T) {
+	b := newBench(nil, t.TempDir(), time.Minute, nil)
+	unlock := b.lockState("c01")
+	got := make(chan bool, 1)
+	go func() {
+		u := b.lockState("c01")
+		got <- true
+		u()
+	}()
+	other := b.lockState("c02") // another state isn't held up
+	other()
+	select {
+	case <-got:
+		t.Fatal("c01-wp ran while c01 held the state")
+	case <-time.After(50 * time.Millisecond):
+	}
+	unlock()
+	select {
+	case <-got:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the state was never released")
 	}
 }

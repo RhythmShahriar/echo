@@ -15,6 +15,7 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -98,8 +99,9 @@ func (b *goBed) Command(ctx context.Context, rel string, args []string) *exec.Cm
 // work folder and the admin port the gate publishes.
 const (
 	composeProject = "echo-consent-testbed"
-	runnerBench    = "/bench" // testbed/consent/bench, bind-mounted in the runner
-	dockerAdmin    = "127.0.0.1:18951"
+	runnerBench    = "/bench"          // testbed/consent/bench, bind-mounted in the runner
+	dockerAdmin    = "127.0.0.1:18951" // tags: the tracker hosts' sink and the state endpoints
+	dockerSiteSink = "127.0.0.1:18952" // shop: first-party hits on *.shop.test (a server-side container)
 	dockerEcho     = "http://echo:8025"
 )
 
@@ -110,7 +112,7 @@ type dockerBed struct {
 	local   *server.Server // over the same state folder, for Render and SetBroken
 	compose string         // the docker-compose.yml
 	work    string         // the work folder as the runner sees it, under /bench
-	admin   string         // the sink and state endpoints
+	admins  []string       // the sinks: tags, then shop
 	client  *http.Client
 }
 
@@ -125,10 +127,12 @@ func newDockerBed(root, work string) (*dockerBed, error) {
 	if err != nil {
 		return nil, err
 	}
-	b := &dockerBed{local: srv, compose: filepath.Join(root, "docker-compose.yml"), work: path.Join(runnerBench, filepath.ToSlash(rel)), admin: "http://" + dockerAdmin,
+	b := &dockerBed{local: srv, compose: filepath.Join(root, "docker-compose.yml"), work: path.Join(runnerBench, filepath.ToSlash(rel)), admins: []string{"http://" + dockerAdmin, "http://" + dockerSiteSink},
 		client: &http.Client{Timeout: 10 * time.Second}}
-	if _, err := b.get("/_admin/health"); err != nil {
-		return nil, fmt.Errorf("the Docker testbed doesn't answer on %s (make -C testbed/consent up): %w", dockerAdmin, err)
+	for _, a := range b.admins {
+		if _, err := b.get(a, "/_admin/health"); err != nil {
+			return nil, fmt.Errorf("the Docker testbed doesn't answer on %s (make -C testbed/consent up): %w", strings.TrimPrefix(a, "http://"), err)
+		}
 	}
 	return b, nil
 }
@@ -138,8 +142,8 @@ func (b *dockerBed) Render() http.Handler                   { return b.local.Han
 func (b *dockerBed) EchoURL() string                        { return dockerEcho }
 func (b *dockerBed) Close()                                 {}
 
-func (b *dockerBed) get(p string) ([]byte, error) {
-	resp, err := b.client.Get(b.admin + p) //nolint:noctx // a loopback admin port with a client timeout
+func (b *dockerBed) get(admin, p string) ([]byte, error) {
+	resp, err := b.client.Get(admin + p) //nolint:noctx // a loopback admin port with a client timeout
 	if err != nil {
 		return nil, err
 	}
@@ -155,37 +159,64 @@ func (b *dockerBed) get(p string) ([]byte, error) {
 }
 
 func (b *dockerBed) ResetSink(id string) error {
-	req, err := http.NewRequest(http.MethodPost, b.admin+"/_sink/reset?scenario="+url.QueryEscape(id), nil) //nolint:noctx // as get
-	if err != nil {
-		return err
-	}
-	resp, err := b.client.Do(req)
-	if err != nil {
-		return err
-	}
-	_ = resp.Body.Close()
-	if resp.StatusCode/100 != 2 {
-		return errors.New("sink reset answered " + resp.Status)
+	for _, a := range b.admins {
+		req, err := http.NewRequest(http.MethodPost, a+"/_sink/reset?scenario="+url.QueryEscape(id), nil) //nolint:noctx // as get
+		if err != nil {
+			return err
+		}
+		resp, err := b.client.Do(req)
+		if err != nil {
+			return err
+		}
+		_ = resp.Body.Close()
+		if resp.StatusCode/100 != 2 {
+			return errors.New("sink reset answered " + resp.Status)
+		}
 	}
 	return nil
 }
 
+// Count adds up both sinks: the tracker hosts' and the sites' own.
 func (b *dockerBed) Count(id string) (server.Count, error) {
-	var c server.Count
-	body, err := b.get("/_sink/count?scenario=" + url.QueryEscape(id))
-	if err == nil {
-		err = json.Unmarshal(body, &c)
+	total := server.Count{By: map[string]int{}, Unmapped: map[string]int{}}
+	for _, a := range b.admins {
+		var c server.Count
+		body, err := b.get(a, "/_sink/count?scenario="+url.QueryEscape(id))
+		if err == nil {
+			err = json.Unmarshal(body, &c)
+		}
+		if err != nil {
+			return total, err
+		}
+		total.Hits += c.Hits
+		total.Forbidden += c.Forbidden
+		total.Internal += c.Internal
+		for k, n := range c.By {
+			total.By[k] += n
+		}
+		for k, n := range c.Unmapped {
+			total.Unmapped[k] += n
+		}
 	}
-	return c, err
+	return total, nil
 }
 
+// Hits joins both sinks' recorded hits, oldest first.
 func (b *dockerBed) Hits(id string) ([]server.Hit, error) {
-	var h []server.Hit
-	body, err := b.get("/_sink/hits?scenario=" + url.QueryEscape(id))
-	if err == nil {
-		err = json.Unmarshal(body, &h)
+	var all []server.Hit
+	for _, a := range b.admins {
+		var h []server.Hit
+		body, err := b.get(a, "/_sink/hits?scenario="+url.QueryEscape(id))
+		if err == nil {
+			err = json.Unmarshal(body, &h)
+		}
+		if err != nil {
+			return all, err
+		}
+		all = append(all, h...)
 	}
-	return h, err
+	slices.SortStableFunc(all, func(x, y server.Hit) int { return x.At.Compare(y.At) })
+	return all, nil
 }
 
 // Command runs rhythm-echo in the runner, through GNU time so the

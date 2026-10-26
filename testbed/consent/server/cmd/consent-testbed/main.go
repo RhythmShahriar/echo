@@ -11,6 +11,7 @@
 //	consent-testbed [-root testbed/consent] [-listen 127.0.0.1:23400] [-admin 127.0.0.1:23401] [-tls]
 //	consent-testbed -print-map
 //	consent-testbed -make-ca testbed/consent/ca
+//	consent-testbed -gate-certs testbed/consent/runtime/gate
 package main
 
 import (
@@ -39,6 +40,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 	printMap := fs.Bool("print-map", false, "print the rhythm-echo --map-host flags for -listen and exit")
 	echoProxy := fs.String("echo-proxy", "", "Echo's proxy (http://127.0.0.1:8026) for c18's server-side event; without it none is sent")
 	echoCA := fs.String("echo-ca", "", "Echo's CA certificate (PEM) for -echo-proxy")
+	internal := fs.String("internal", "", "the private address the ssrf-probe page asks for (default -admin)")
+	gateCerts := fs.String("gate-certs", "", "write the Docker gate's certificates, issued by the testbed CA, into this folder and exit")
 	if err := fs.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return 0
@@ -57,7 +60,13 @@ func run(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintln(stdout, "consent-testbed: wrote the testbed CA to", *makeCA)
 		return 0
 	}
-	opts := server.Options{Root: *root, Admin: *admin, EchoProxy: *echoProxy, EchoCA: *echoCA,
+	if *gateCerts != "" {
+		return writeGateCerts(*root, *caDir, *gateCerts, stdout, stderr)
+	}
+	if *internal == "" {
+		internal = admin
+	}
+	opts := server.Options{Root: *root, Admin: *internal, EchoProxy: *echoProxy, EchoCA: *echoCA,
 		Log: func(m string) { fmt.Fprintln(stderr, "consent-testbed:", m) }}
 	if *useTLS {
 		dir := *caDir
@@ -98,6 +107,35 @@ func run(args []string, stdout, stderr io.Writer) int {
 	err = <-errc
 	fmt.Fprintln(stderr, "consent-testbed:", err)
 	return 1
+}
+
+// writeGateCerts writes the gate's certificates for every site under
+// root/sites into dir.
+func writeGateCerts(root, caDir, dir string, stdout, stderr io.Writer) int {
+	if caDir == "" {
+		caDir = filepath.Join(root, "ca")
+	}
+	ca, err := server.LoadCA(caDir)
+	if err != nil {
+		fmt.Fprintln(stderr, "consent-testbed:", err)
+		return 1
+	}
+	srv, err := server.New(server.Options{Root: root})
+	if err != nil {
+		fmt.Fprintln(stderr, "consent-testbed:", err)
+		return 1
+	}
+	ids, err := srv.Sites()
+	if err != nil {
+		fmt.Fprintln(stderr, "consent-testbed:", err)
+		return 1
+	}
+	if err := ca.WriteGateCerts(dir, server.GateNames(ids)); err != nil {
+		fmt.Fprintln(stderr, "consent-testbed:", err)
+		return 1
+	}
+	fmt.Fprintln(stdout, "consent-testbed: wrote the gate's certificates to", dir)
+	return 0
 }
 
 // defaultRoot is testbed/consent when run from the repository root, or
