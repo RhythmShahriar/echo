@@ -1,0 +1,1169 @@
+html
+  head
+    meta
+    meta
+    meta
+    meta
+    meta
+    title
+      | Echo consent check of https://g01.consent.test/
+    style
+  body
+    div class=wrap
+      header class=top
+        div class=brand
+          span class=dot
+            | ♪
+          | rhythm echo consent
+          small
+            | 1.2.0
+        div class=meta
+          | https://g01.consent.test/ · 2026-10-26 09:20 UTC
+      section id=verdict class=tone-ok
+        h1 class=verdict
+          | All clear
+        p class=sub
+          | 1 page, 3 runs, 3 trackers, policy advanced
+        ul class=chips
+          li class=chip k-error
+            b
+              | 0
+            | errors
+          li class=chip k-warning
+            b
+              | 0
+            | warnings
+          li class=chip k-notice
+            b
+              | 0
+            | notices
+          li class=chip k-changed
+            b
+              | 0
+            | couldn't check
+        ul class=flags
+          li class=flag
+            | Hits held in the browser
+          li class=flag warn
+            | Hosts mapped with --map-host
+          li class=flag
+            | Evidence, not legal advice
+        div class=hash
+          | consent.json sha256 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+        div class=tools
+          button
+            | Open all
+          button
+            | Close all
+      h2
+        | Pages and runs
+      div class=scroll
+        table class=matrix
+          thead
+            tr
+              th
+                | Page
+              th
+                | Banner
+              th
+                | No choice
+              th
+                | Accept
+              th
+                | Reject
+          tbody
+            tr
+              td
+                code
+                  | https://g01.consent.test/
+              td
+                | Complianz
+              td class=ok
+                a href=#run-1-none
+                  | nothing fired
+              td class=ok
+                a href=#run-1-accept
+                  | Google Analytics 4, Google Ads, Meta Pixel
+              td class=ok
+                a href=#run-1-reject
+                  | nothing fired
+      h2
+        | Banners and choices
+      details id=page-1
+        summary
+          | https://g01.consent.test/
+          small
+            | Complianz, found after 0.4s, detected by #cmplz-cookiebanner-container
+        h3
+          | No choice
+        p class=sub
+          | No choice made
+        div class=shots
+          figure
+            figcaption
+              | Banner
+            div class=shot
+              img src=data:image/png;base64,...
+        h3
+          | Accept
+        p class=sub
+          | Clicked "Accept" (.cmplz-accept) on the first layer, 1 click at 2.01s, confirmed by cookie:cmplz_marketing
+        div class=shots
+          figure
+            figcaption
+              | Banner
+            div class=shot
+              img src=data:image/png;base64,...
+              span class=box
+          figure
+            figcaption
+              | After the choice
+            div class=shot
+              img src=data:image/png;base64,...
+        h3
+          | Reject
+        p class=sub
+          | Clicked "Deny" (.cmplz-deny) on the first layer, 1 click at 1.98s, confirmed by cookie:cmplz_marketing
+        div class=shots
+          figure
+            figcaption
+              | Banner
+            div class=shot
+              img src=data:image/png;base64,...
+              span class=box
+          figure
+            figcaption
+              | After the choice
+            div class=shot
+              img src=data:image/png;base64,...
+      h2
+        | Timelines
+      details id=run-1-none
+        summary
+          | / · No choice
+          small
+            | nothing fired; Meta Pixel held back
+        svg class=timeline
+          text class=lbl
+            | hits
+          line class=row
+          text class=lbl
+            | cookies
+          line class=row
+          text class=lbl
+            | signals
+          line class=row
+          line class=axis
+          line class=tick
+          text class=tl
+            | 0s
+          line class=tick
+          text class=tl
+            | 2s
+          line class=tick
+          text class=tl
+            | 4s
+          line class=tick
+          text class=tl
+            | 6s
+          line class=tick
+          text class=tl
+            | 8s
+          line class=tick
+          text class=tl
+            | 10s
+          line class=tick
+          text class=tl
+            | 12s
+          line class=tick
+          text class=tl
+            | 14s
+          polygon class=signal
+            title
+              | 0.12s gtag default all four denied
+          polygon class=signal
+            title
+              | 0.59s fbq revoke
+        ul class=legend
+          li
+            | hollow: cookie
+          li
+            | diamond: signal
+          li
+            | dashed line: the choice
+        div class=scroll
+          table
+            thead
+              tr
+                th
+                  | Time
+                th
+                  | Type
+                th
+                  | Tracker
+                th
+                  | Visit
+                th
+                  | What
+            tbody
+              tr
+                td
+                  | 0.00s
+                td
+                  | load
+                td
+                td
+                  | 0
+                td
+                  code
+                    | https://g01.consent.test/
+              tr
+                td
+                  | 0.12s
+                td
+                  | signal
+                td
+                td
+                td
+                  code
+                    | gtag default all four denied
+              tr id=run-1-none-e1
+                td
+                  | 0.30s
+                td
+                  | script
+                td
+                  | google-tag-manager
+                td
+                td
+                  code
+                    | https://www.googletagmanager.com/gtm.js?id=GTM-••••XK2
+              tr
+                td
+                  | 0.41s
+                td
+                  | banner
+                td
+                td
+                td
+                  code
+                    | Complianz shown
+              tr
+                td
+                  | 0.59s
+                td
+                  | signal
+                td
+                td
+                td
+                  code
+                    | fbq revoke
+              tr id=run-1-none-e2
+                td
+                  | 0.61s
+                td
+                  | script
+                td
+                  | Meta Pixel
+                td
+                td
+                  code
+                    | https://connect.facebook.net/en_US/fbevents.js
+              tr
+                td
+                  | 9.40s
+                td
+                  | page
+                td
+                td
+                  | 1
+                td
+                  code
+                    | https://g01.consent.test/shop/
+              tr
+                td
+                  | 12.90s
+                td
+                  | reload
+                td
+                td
+                  | 2
+                td
+                  code
+                    | https://g01.consent.test/
+      details id=run-1-accept
+        summary
+          | / · Accept
+          small
+            | Google Analytics 4, Google Ads, Meta Pixel fired; update granted at 2.0s; kept on 1 more page
+        svg class=timeline
+          text class=lbl
+            | hits
+          line class=row
+          text class=lbl
+            | cookies
+          line class=row
+          text class=lbl
+            | signals
+          line class=row
+          line class=axis
+          line class=tick
+          text class=tl
+            | 0s
+          line class=tick
+          text class=tl
+            | 2s
+          line class=tick
+          text class=tl
+            | 4s
+          line class=tick
+          text class=tl
+            | 6s
+          line class=tick
+          text class=tl
+            | 8s
+          line class=tick
+          text class=tl
+            | 10s
+          line class=tick
+          text class=tl
+            | 12s
+          line class=tick
+          text class=tl
+            | 14s
+          line class=choice
+            title
+              | choice at 2.01s
+          a href=#run-1-accept-e4
+            circle class=hit c0
+              title
+                | 2.30s Google Analytics 4 page_view gcs=G111 gcd=13r3r3r3r5 (held)
+          a href=#run-1-accept-e5
+            circle class=hit c1
+              title
+                | 2.34s Google Ads gcs=G111 gcd=13r3r3r3r5 (held)
+          a href=#run-1-accept-e6
+            circle class=hit c2
+              title
+                | 2.38s Meta Pixel PageView (held)
+          a href=#run-1-accept-e7
+            circle class=hit c0
+              title
+                | 9.70s Google Analytics 4 page_view gcs=G111 gcd=13r3r3r3r5 (held)
+          a href=#run-1-accept-e8
+            circle class=hit c1
+              title
+                | 9.74s Google Ads gcs=G111 gcd=13r3r3r3r5 (held)
+          a href=#run-1-accept-e9
+            circle class=hit c2
+              title
+                | 9.78s Meta Pixel PageView (held)
+          a href=#run-1-accept-e10
+            circle class=hit c0
+              title
+                | 13.20s Google Analytics 4 page_view gcs=G111 gcd=13r3r3r3r5 (held)
+          a href=#run-1-accept-e11
+            circle class=hit c1
+              title
+                | 13.24s Google Ads gcs=G111 gcd=13r3r3r3r5 (held)
+          a href=#run-1-accept-e12
+            circle class=hit c2
+              title
+                | 13.28s Meta Pixel PageView (held)
+          circle class=cookie c0
+            title
+              | 2.32s cookie _ga
+          circle class=cookie c2
+            title
+              | 2.40s cookie _fbp
+          circle class=cookie cg
+            title
+              | 2.01s cookie cmplz_marketing
+          polygon class=signal
+            title
+              | 0.12s gtag default all four denied
+          polygon class=signal
+            title
+              | 2.03s gtag update all four granted
+          polygon class=signal
+            title
+              | 0.59s fbq revoke
+          polygon class=signal
+            title
+              | 2.04s fbq grant
+        ul class=legend
+          li
+            span class=sw c0
+            | Google Analytics 4
+          li
+            span class=sw c1
+            | Google Ads
+          li
+            span class=sw c2
+            | Meta Pixel
+          li
+            | hollow: cookie
+          li
+            | diamond: signal
+          li
+            | dashed line: the choice
+        div class=scroll
+          table
+            thead
+              tr
+                th
+                  | Time
+                th
+                  | Type
+                th
+                  | Tracker
+                th
+                  | Visit
+                th
+                  | What
+            tbody
+              tr
+                td
+                  | 0.00s
+                td
+                  | load
+                td
+                td
+                  | 0
+                td
+                  code
+                    | https://g01.consent.test/
+              tr
+                td
+                  | 0.12s
+                td
+                  | signal
+                td
+                td
+                td
+                  code
+                    | gtag default all four denied
+              tr id=run-1-accept-e3
+                td
+                  | 0.30s
+                td
+                  | script
+                td
+                  | google-tag-manager
+                td
+                td
+                  code
+                    | https://www.googletagmanager.com/gtm.js?id=GTM-••••XK2
+              tr
+                td
+                  | 0.41s
+                td
+                  | banner
+                td
+                td
+                td
+                  code
+                    | Complianz shown
+              tr
+                td
+                  | 0.59s
+                td
+                  | signal
+                td
+                td
+                td
+                  code
+                    | fbq revoke
+              tr
+                td
+                  | 2.01s
+                td
+                  | click
+                td
+                td
+                td
+                  code
+                    | "Accept" (.cmplz-accept)
+              tr
+                td
+                  | 2.01s
+                td
+                  | cookie
+                td
+                td
+                td
+                  code
+                    | cmplz_marketing on g01.consent.test
+              tr
+                td
+                  | 2.03s
+                td
+                  | signal
+                td
+                td
+                td
+                  code
+                    | gtag update all four granted
+              tr
+                td
+                  | 2.04s
+                td
+                  | signal
+                td
+                td
+                td
+                  code
+                    | fbq grant
+              tr id=run-1-accept-e4
+                td
+                  | 2.30s
+                td
+                  | hit
+                td
+                  | Google Analytics 4
+                td
+                  | 0
+                td
+                  code
+                    | https://region1.google-analytics.com/g/collect?v=2&tid=G-••••7Q2X&cid=••••3021&en=page_view&gcs=G111&gcd=13r3r3r3r5&dl=https%3A%2F%2Fg01.consent.test%2F (held)
+              tr
+                td
+                  | 2.32s
+                td
+                  | cookie
+                td
+                  | Google Analytics 4
+                td
+                td
+                  code
+                    | _ga on .g01.consent.test
+              tr id=run-1-accept-e5
+                td
+                  | 2.34s
+                td
+                  | hit
+                td
+                  | Google Ads
+                td
+                  | 0
+                td
+                  code
+                    | https://googleads.g.doubleclick.net/pagead/viewthroughconversion/••••4567/?gcs=G111&gcd=13r3r3r3r5 (held)
+              tr id=run-1-accept-e6
+                td
+                  | 2.38s
+                td
+                  | hit
+                td
+                  | Meta Pixel
+                td
+                  | 0
+                td
+                  code
+                    | https://www.facebook.com/tr?id=••••5678&ev=PageView&dl=https%3A%2F%2Fg01.consent.test%2F (held)
+              tr
+                td
+                  | 2.40s
+                td
+                  | cookie
+                td
+                  | Meta Pixel
+                td
+                td
+                  code
+                    | _fbp on .g01.consent.test
+              tr
+                td
+                  | 9.40s
+                td
+                  | page
+                td
+                td
+                  | 1
+                td
+                  code
+                    | https://g01.consent.test/shop/
+              tr id=run-1-accept-e7
+                td
+                  | 9.70s
+                td
+                  | hit
+                td
+                  | Google Analytics 4
+                td
+                  | 1
+                td
+                  code
+                    | https://region1.google-analytics.com/g/collect?v=2&tid=G-••••7Q2X&cid=••••3021&en=page_view&gcs=G111&gcd=13r3r3r3r5&dl=https%3A%2F%2Fg01.consent.test%2F (held)
+              tr id=run-1-accept-e8
+                td
+                  | 9.74s
+                td
+                  | hit
+                td
+                  | Google Ads
+                td
+                  | 1
+                td
+                  code
+                    | https://googleads.g.doubleclick.net/pagead/viewthroughconversion/••••4567/?gcs=G111&gcd=13r3r3r3r5 (held)
+              tr id=run-1-accept-e9
+                td
+                  | 9.78s
+                td
+                  | hit
+                td
+                  | Meta Pixel
+                td
+                  | 1
+                td
+                  code
+                    | https://www.facebook.com/tr?id=••••5678&ev=PageView&dl=https%3A%2F%2Fg01.consent.test%2F (held)
+              tr
+                td
+                  | 12.90s
+                td
+                  | reload
+                td
+                td
+                  | 2
+                td
+                  code
+                    | https://g01.consent.test/
+              tr id=run-1-accept-e10
+                td
+                  | 13.20s
+                td
+                  | hit
+                td
+                  | Google Analytics 4
+                td
+                  | 2
+                td
+                  code
+                    | https://region1.google-analytics.com/g/collect?v=2&tid=G-••••7Q2X&cid=••••3021&en=page_view&gcs=G111&gcd=13r3r3r3r5&dl=https%3A%2F%2Fg01.consent.test%2F (held)
+              tr id=run-1-accept-e11
+                td
+                  | 13.24s
+                td
+                  | hit
+                td
+                  | Google Ads
+                td
+                  | 2
+                td
+                  code
+                    | https://googleads.g.doubleclick.net/pagead/viewthroughconversion/••••4567/?gcs=G111&gcd=13r3r3r3r5 (held)
+              tr id=run-1-accept-e12
+                td
+                  | 13.28s
+                td
+                  | hit
+                td
+                  | Meta Pixel
+                td
+                  | 2
+                td
+                  code
+                    | https://www.facebook.com/tr?id=••••5678&ev=PageView&dl=https%3A%2F%2Fg01.consent.test%2F (held)
+      details id=run-1-reject
+        summary
+          | / · Reject
+          small
+            | nothing fired; update denied at 2.0s; kept on 1 more page
+        svg class=timeline
+          text class=lbl
+            | hits
+          line class=row
+          text class=lbl
+            | cookies
+          line class=row
+          text class=lbl
+            | signals
+          line class=row
+          line class=axis
+          line class=tick
+          text class=tl
+            | 0s
+          line class=tick
+          text class=tl
+            | 2s
+          line class=tick
+          text class=tl
+            | 4s
+          line class=tick
+          text class=tl
+            | 6s
+          line class=tick
+          text class=tl
+            | 8s
+          line class=tick
+          text class=tl
+            | 10s
+          line class=tick
+          text class=tl
+            | 12s
+          line class=tick
+          text class=tl
+            | 14s
+          line class=choice
+            title
+              | choice at 1.98s
+          circle class=cookie cg
+            title
+              | 1.98s cookie cmplz_marketing
+          polygon class=signal
+            title
+              | 0.12s gtag default all four denied
+          polygon class=signal
+            title
+              | 2.00s gtag update all four denied
+          polygon class=signal
+            title
+              | 0.59s fbq revoke
+        ul class=legend
+          li
+            | hollow: cookie
+          li
+            | diamond: signal
+          li
+            | dashed line: the choice
+        div class=scroll
+          table
+            thead
+              tr
+                th
+                  | Time
+                th
+                  | Type
+                th
+                  | Tracker
+                th
+                  | Visit
+                th
+                  | What
+            tbody
+              tr
+                td
+                  | 0.00s
+                td
+                  | load
+                td
+                td
+                  | 0
+                td
+                  code
+                    | https://g01.consent.test/
+              tr
+                td
+                  | 0.12s
+                td
+                  | signal
+                td
+                td
+                td
+                  code
+                    | gtag default all four denied
+              tr id=run-1-reject-e13
+                td
+                  | 0.30s
+                td
+                  | script
+                td
+                  | google-tag-manager
+                td
+                td
+                  code
+                    | https://www.googletagmanager.com/gtm.js?id=GTM-••••XK2
+              tr
+                td
+                  | 0.41s
+                td
+                  | banner
+                td
+                td
+                td
+                  code
+                    | Complianz shown
+              tr
+                td
+                  | 0.59s
+                td
+                  | signal
+                td
+                td
+                td
+                  code
+                    | fbq revoke
+              tr
+                td
+                  | 1.98s
+                td
+                  | click
+                td
+                td
+                td
+                  code
+                    | "Deny" (.cmplz-deny)
+              tr
+                td
+                  | 1.98s
+                td
+                  | cookie
+                td
+                td
+                td
+                  code
+                    | cmplz_marketing on g01.consent.test
+              tr
+                td
+                  | 2.00s
+                td
+                  | signal
+                td
+                td
+                td
+                  code
+                    | gtag update all four denied
+              tr
+                td
+                  | 9.40s
+                td
+                  | page
+                td
+                td
+                  | 1
+                td
+                  code
+                    | https://g01.consent.test/shop/
+              tr
+                td
+                  | 12.90s
+                td
+                  | reload
+                td
+                td
+                  | 2
+                td
+                  code
+                    | https://g01.consent.test/
+      h2
+        | Consent Mode
+      details
+        summary
+          | https://g01.consent.test/
+          small
+            | Consent Mode: v2 default, all four signals denied at 0.12s
+        div class=scroll
+          table
+            thead
+              tr
+                th
+                  | Run
+                th
+                  | Time
+                th
+                  | Command
+                th
+                  | State
+            tbody
+              tr
+                td
+                  | No choice
+                td
+                  | 0.12s
+                td
+                  code
+                    | gtag consent default
+                td
+                  | all four denied
+              tr
+                td
+                  | Accept
+                td
+                  | 0.12s
+                td
+                  code
+                    | gtag consent default
+                td
+                  | all four denied
+              tr
+                td
+                  | Accept
+                td
+                  | 2.03s
+                td
+                  code
+                    | gtag consent update
+                td
+                  | all four granted
+              tr
+                td
+                  | Reject
+                td
+                  | 0.12s
+                td
+                  code
+                    | gtag consent default
+                td
+                  | all four denied
+              tr
+                td
+                  | Reject
+                td
+                  | 2.00s
+                td
+                  code
+                    | gtag consent update
+                td
+                  | all four denied
+        div class=scroll
+          table
+            thead
+              tr
+                th
+                  | Run
+                th
+                  | Time
+                th
+                  | Tracker
+                th
+                  | gcs
+                th
+                  | gcs decoded
+                th
+                  | gcd
+                th
+                  | gcd decoded
+            tbody
+              tr
+                td
+                  | Accept
+                td
+                  | 2.30s
+                td
+                  | Google Analytics 4
+                td
+                  code
+                    | G111
+                td
+                  | ad_storage granted, analytics_storage granted
+                td
+                  code
+                    | 13r3r3r3r5
+                td
+                  | ad_storage default denied, update granted (r); analytics_storage default denied, update granted (r); ad_user_data default denied, update granted (r); ad_personalization default denied, update granted (r)
+              tr
+                td
+                  | Accept
+                td
+                  | 2.34s
+                td
+                  | Google Ads
+                td
+                  code
+                    | G111
+                td
+                  | ad_storage granted, analytics_storage granted
+                td
+                  code
+                    | 13r3r3r3r5
+                td
+                  | ad_storage default denied, update granted (r); analytics_storage default denied, update granted (r); ad_user_data default denied, update granted (r); ad_personalization default denied, update granted (r)
+              tr
+                td
+                  | Accept
+                td
+                  | 9.70s
+                td
+                  | Google Analytics 4
+                td
+                  code
+                    | G111
+                td
+                  | ad_storage granted, analytics_storage granted
+                td
+                  code
+                    | 13r3r3r3r5
+                td
+                  | ad_storage default denied, update granted (r); analytics_storage default denied, update granted (r); ad_user_data default denied, update granted (r); ad_personalization default denied, update granted (r)
+              tr
+                td
+                  | Accept
+                td
+                  | 9.74s
+                td
+                  | Google Ads
+                td
+                  code
+                    | G111
+                td
+                  | ad_storage granted, analytics_storage granted
+                td
+                  code
+                    | 13r3r3r3r5
+                td
+                  | ad_storage default denied, update granted (r); analytics_storage default denied, update granted (r); ad_user_data default denied, update granted (r); ad_personalization default denied, update granted (r)
+              tr
+                td
+                  | Accept
+                td
+                  | 13.20s
+                td
+                  | Google Analytics 4
+                td
+                  code
+                    | G111
+                td
+                  | ad_storage granted, analytics_storage granted
+                td
+                  code
+                    | 13r3r3r3r5
+                td
+                  | ad_storage default denied, update granted (r); analytics_storage default denied, update granted (r); ad_user_data default denied, update granted (r); ad_personalization default denied, update granted (r)
+              tr
+                td
+                  | Accept
+                td
+                  | 13.24s
+                td
+                  | Google Ads
+                td
+                  code
+                    | G111
+                td
+                  | ad_storage granted, analytics_storage granted
+                td
+                  code
+                    | 13r3r3r3r5
+                td
+                  | ad_storage default denied, update granted (r); analytics_storage default denied, update granted (r); ad_user_data default denied, update granted (r); ad_personalization default denied, update granted (r)
+      p class=sub
+        | gcd decoded with an unofficial, community-documented mapping.
+      h2
+        | Run details
+      dl
+        dt
+          | Echo
+        dd
+          | 1.2.0
+        dt
+          | Browser
+        dd
+          | Chrome for Testing 156.0.8078.47
+        dt
+          | OS
+        dd
+          | linux/amd64
+        dt
+          | User agent
+        dd
+          | Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36 rhythm-echo-consent/1.2.0
+        dt
+          | Geo
+        dd
+          | none
+        dt
+          | Locale
+        dd
+          | en-US
+        dt
+          | Time zone
+        dd
+          | UTC
+        dt
+          | Viewport
+        dd
+          | desktop
+        dt
+          | Started
+        dd
+          | 2026-10-26 09:20:41 UTC
+        dt
+          | Duration
+        dd
+          | 21.23s
+        dt
+          | Policy
+        dd
+          | advanced
+        dt
+          | Tracker hits
+        dd
+          | held in the browser
+        dt
+          | Hosts mapped
+        dd
+          | yes (--map-host)
+        dt
+          | Sandbox
+        dd
+          | on
+        dt
+          | TLS
+        dd
+          | verified
+        dt
+          | Tracker catalogue
+        dd
+          | 1.2.0 (sha256 4be1c0ff..., 47 entries)
+        dt
+          | CMP rules
+        dd
+          | 1.2.0 (sha256 9c1dfeed..., 9 entries)
+        dt
+          | Network
+        dd
+          | 412 requests, 9 held, 0 refused, 5 browser internal
+        dt
+          | Result
+        dd
+          | 2026-10-26T09-14-03-a1b2c3
+        dt
+          | Evidence folder
+        dd
+          | .echo/consent/2026-10-26T09-14-03-a1b2c3
+      footer
+        p
+          | What a pass means. In these runs, from this machine, with this browser and these settings, no tracker on Echo's list sent a request or set a cookie before the visitor chose or after Reject. It does not mean the site complies with the GDPR, ePrivacy, CCPA/CPRA or any other law. Evidence, not legal advice.
+        p
+          | One visitor, one place. Banners differ by country, language and device. Geo-targeted banners may not show to a CI runner in the US; Echo can set the browser's language and time zone (
+          code
+            | --geo
+          | ) but not its IP address. Run it from the region that matters, or through a proxy there.
+        p
+          | Blind spots. Trackers that are not on the list; server-side tagging on your own domain when its requests don't look like GA4 or Meta; fingerprinting without network requests; tags that wait longer than the settle time or need more interaction than a scroll and one more page; sites that hide tags from automated browsers.
+        p
+          | Consent Mode advanced. Google says its tags in advanced mode "send measurements without cookies" while consent is denied. Whether that is acceptable before consent is disputed. Echo reports these pings as
+          code
+            | consent/cookieless-ping
+          | under the default policy
+          code
+            | advanced
+          | ;
+          code
+            | --consent-mode basic
+          | or
+          code
+            | strict
+          | counts them as hits.
+        p
+          | gcd is unofficial. Google doesn't document the
+          code
+            | gcd
+          | parameter. Echo shows the raw value next to a reading based on community documentation and treats letters it doesn't know as unknown.
+        p
+          | Pseudonymised, not anonymised. Masked or hashed identifiers in reports can still be personal data. Treat reports like logs.
+        p
+          | What leaves the machine. Requests to the site and to the scripts it loads (which shows this machine's IP address to those servers). No tracking hits unless
+          code
+            | --send-hits
+          | . Nothing goes to Rhythm. The update check contacts GitHub (
+          code
+            | RHYTHM_OFFLINE=1
+          | turns it off).
+        p
+          | Banners Echo can't handle are reported as "couldn't check" (exit 3), never as a pass. Tested CMPs and the dates their fixtures were captured are in the benchmark.
+        p
+          | A signature proves who made the evidence file and that it hasn't changed. It doesn't prove the site behaves the same for every visitor, region or day. Keyless signing in the Action writes the repository and workflow name to the public Rekor log.
+    script

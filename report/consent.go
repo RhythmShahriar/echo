@@ -40,7 +40,8 @@ type ConsentMarkdownOptions struct {
 // ConsentHTMLOptions shape the HTML evidence report.
 type ConsentHTMLOptions struct {
 	EvidenceDir   string // the evidence folder screenshots are read from
-	ConsentSHA256 string // the hash of consent.json, quoted in the footer
+	ConsentSHA256 string // the hash of consent.json, quoted in the verdict bar
+	FailOn        string // --fail-on, for the verdict word; "" is error
 }
 
 // ConsentCatalog is the data of the consent-catalog kind: consent cmps
@@ -73,11 +74,6 @@ type VerifySignature struct {
 	Present bool   `json:"present"`
 	OK      bool   `json:"ok"`
 	Key     string `json:"key"` // the public key file, or its id
-}
-
-// WriteConsentHTML writes the HTML evidence report of a consent check.
-func WriteConsentHTML(w io.Writer, r *consent.Result, o ConsentHTMLOptions) error {
-	return errConsentNotBuilt
 }
 
 // WriteConsentJUnit writes a consent check as JUnit XML, one test case

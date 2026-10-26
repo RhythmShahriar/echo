@@ -307,6 +307,9 @@ func TestReportRecordsSandboxOff(t *testing.T) {
 	if out := consentMDOf(t, r, ConsentMarkdownOptions{}); !strings.Contains(out, " Chrome ran without its sandbox. ") {
 		t.Errorf("markdown:\n%s", out)
 	}
+	if out := consentHTMLOf(t, r, ConsentHTMLOptions{}); !strings.Contains(out, `<li class="flag warn">sandbox off</li>`) || !strings.Contains(out, "<dt>Sandbox</dt><dd>off</dd>") {
+		t.Errorf("html doesn't mark the sandbox off")
+	}
 }
 
 func TestConsentInsecureMarked(t *testing.T) {
@@ -327,6 +330,9 @@ func TestConsentInsecureMarked(t *testing.T) {
 	}
 	if out := consentMDOf(t, r, ConsentMarkdownOptions{}); !strings.Contains(out, " TLS not verified. ") {
 		t.Errorf("markdown:\n%s", out)
+	}
+	if out := consentHTMLOf(t, r, ConsentHTMLOptions{}); !strings.Contains(out, `<li class="flag warn">TLS not verified</li>`) || !strings.Contains(out, "<dt>TLS</dt><dd>not verified</dd>") {
+		t.Errorf("html doesn't mark TLS not verified")
 	}
 }
 

@@ -304,54 +304,95 @@ func (m *consentMD) banner(pg *consent.Page) string {
 	return md(cmpLabel(pg.CMP))
 }
 
-// cell is one run of the matrix: `-` when the run wasn't asked, `?
-// <why>` when it couldn't choose, `✗ <trackers>` with an error or
-// warning (and on how many pages after the choice), else what fired.
-func (m *consentMD) cell(pg *consent.Page, run *consent.Run) string {
+// The states of a matrix cell.
+const (
+	cellClear        = iota // ran, nothing to report
+	cellIssue               // an error or warning
+	cellInconclusive        // couldn't choose or check
+	cellSkipped             // the page didn't make this run
+)
+
+// matrixCell is one run of a page in the matrix, for Markdown and HTML.
+// Names are safe to print and not escaped for either.
+type matrixCell struct {
+	state      int
+	names      []string // the trackers (or checks) at issue, or the trackers that fired
+	cookieless []bool   // per name when clear: it sent only cookieless pings
+	pages      int      // with an issue after Reject or Withdraw: the pages it fired on
+	why        string   // inconclusive: why, in a few words
+}
+
+// matrixCell sums up run for the matrix: the trackers of its errors and
+// warnings (check names without consent/ for issues that name none), or
+// what fired.
+func (t *consentText) matrixCell(pg *consent.Page, run *consent.Run) matrixCell {
 	if run == nil {
-		return "-"
+		return matrixCell{state: cellSkipped}
 	}
 	if run.Inconclusive() {
-		return "? " + cmp.Or(reasonWords[run.Reason], md(string(run.Reason)))
+		return matrixCell{state: cellInconclusive, why: cmp.Or(reasonWords[run.Reason], Safe(string(run.Reason)))}
 	}
-	var names, checks []string
-	var ids []string
-	for _, is := range m.t.runIssues(pg, run) {
+	var c matrixCell
+	var checks, ids []string
+	for _, is := range t.runIssues(pg, run) {
 		if is.Level == model.Notice {
 			continue
 		}
 		if is.Tracker == "" {
-			if c := md(strings.TrimPrefix(is.Check, "consent/")); !slices.Contains(checks, c) {
-				checks = append(checks, c)
+			if ch := Safe(strings.TrimPrefix(is.Check, "consent/")); !slices.Contains(checks, ch) {
+				checks = append(checks, ch)
 			}
 			continue
 		}
-		if n := md(m.t.name(is.Tracker)); !slices.Contains(names, n) {
-			names = append(names, n)
+		if n := t.name(is.Tracker); !slices.Contains(c.names, n) {
+			c.names = append(c.names, n)
 			ids = append(ids, is.Tracker)
 		}
 	}
-	if len(names)+len(checks) > 0 {
-		s := "✗ " + andCommaList(append(names, checks...))
-		if n := afterPages(run, ids); n > 1 {
-			s += fmt.Sprintf(" (%d pages)", n)
-		}
-		return s
+	if len(c.names)+len(checks) > 0 {
+		c.state = cellIssue
+		c.names = append(c.names, checks...)
+		c.pages = afterPages(run, ids)
+		return c
 	}
-	var fired []string
 	seen := map[string]bool{}
 	for _, h := range run.Hits {
 		if h.Kind == consent.HitScript || !relevant(run.Kind, h.Phase) || h.Need == consent.NeedNo || seen[h.Tracker] {
 			continue
 		}
 		seen[h.Tracker] = true
-		n := md(m.t.name(h.Tracker))
-		if h.Cookieless && m.r.Policy == consent.PolicyAdvanced {
-			n += " (cookieless)"
-		}
-		fired = append(fired, n)
+		c.names = append(c.names, t.name(h.Tracker))
+		c.cookieless = append(c.cookieless, h.Cookieless && t.r.Policy == consent.PolicyAdvanced)
 	}
-	return andCommaList(fired)
+	return c
+}
+
+// cell is one run of the matrix in Markdown: `-` when the run wasn't
+// asked, `? <why>` when it couldn't choose, `✗ <trackers>` with an error
+// or warning (and on how many pages after the choice), else what fired.
+func (m *consentMD) cell(pg *consent.Page, run *consent.Run) string {
+	c := m.t.matrixCell(pg, run)
+	switch c.state {
+	case cellSkipped:
+		return "-"
+	case cellInconclusive:
+		return "? " + md(c.why)
+	}
+	names := make([]string, len(c.names))
+	for i, n := range c.names {
+		names[i] = md(n)
+		if i < len(c.cookieless) && c.cookieless[i] {
+			names[i] += " (cookieless)"
+		}
+	}
+	if c.state == cellIssue {
+		s := "✗ " + andCommaList(names)
+		if c.pages > 1 {
+			s += fmt.Sprintf(" (%d pages)", c.pages)
+		}
+		return s
+	}
+	return andCommaList(names)
 }
 
 // afterPages counts the visits after the choice of a Reject or Withdraw

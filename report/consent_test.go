@@ -16,7 +16,6 @@ func TestConsentWritersNotBuilt(t *testing.T) {
 	var b strings.Builder
 	r := &consent.Result{}
 	for name, err := range map[string]error{
-		"html":    WriteConsentHTML(&b, r, ConsentHTMLOptions{}),
 		"junit":   WriteConsentJUnit(&b, r, ""),
 		"catalog": WriteConsentCatalog(&b, nil, nil, "cmps", false, ConsentTextOptions{}),
 	} {

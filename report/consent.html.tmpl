@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="{{.CSP}}">
+<meta name="referrer" content="no-referrer">
+<meta name="generator" content="rhythm-echo {{.Version}}">
+<title>{{.Title}}</title>
+<style>
+:root {
+  --dot: #E8603A; --bg: #FAFAF9; --card: #FFFFFF; --text: #100F0D; --muted: #6B7280; --line: #E7E5E4; --soft: #F5F5F4;
+  --broke: #DC2626; --new: #EA580C; --changed: #CA8A04; --fixed: #059669; --ok: #059669;
+  --error: #DC2626; --warning: #EA580C; --notice: #6B7280;
+  --cell-ok: #ECFDF5; --cell-bad: #FEF2F2; --cell-inco: #FFFBEB; --cell-skip: #F5F5F4;
+  --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+  --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --dot: #FF7C52; --bg: #100F0D; --card: #1A1917; --text: #F5F5F4; --muted: #A8A29E; --line: #2E2C29; --soft: #23211E;
+    --broke: #EF4444; --new: #F97316; --changed: #EAB308; --fixed: #10B981; --ok: #10B981;
+    --error: #EF4444; --warning: #F97316; --notice: #A8A29E;
+    --cell-ok: #0F2A20; --cell-bad: #3A1414; --cell-inco: #3A2E0C; --cell-skip: #23211E;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.55 var(--sans); }
+.wrap { max-width: 1120px; margin: 0 auto; padding: 0 16px 64px; }
+header.top { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 22px 0 18px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.brand { font-weight: 700; }
+.brand .dot { color: var(--dot); }
+.meta { color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
+.verdict { font-size: clamp(28px, 5vw, 42px); line-height: 1.1; font-weight: 750; margin: 28px 0 6px; }
+.verdict::before { content: ""; display: inline-block; width: .42em; height: .42em; border-radius: 50%; margin-right: .32em; vertical-align: .14em; background: var(--tone); }
+.tone-broke { --tone: var(--broke); } .tone-new { --tone: var(--new); } .tone-changed { --tone: var(--changed); } .tone-ok { --tone: var(--ok); }
+.sub { color: var(--muted); margin: 0; }
+.chips, .flags { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; padding: 0; list-style: none; }
+.chip, .flag { border: 1px solid var(--line); background: var(--card); border-radius: 999px; padding: 4px 12px; font-size: 13px; }
+.chip b { color: var(--c, var(--muted)); margin-right: 4px; }
+.flag.warn { border-color: var(--warning); color: var(--warning); }
+.k-broke, .k-error { --c: var(--error); } .k-new, .k-warning { --c: var(--warning); } .k-changed { --c: var(--changed); } .k-fixed { --c: var(--fixed); } .k-notice { --c: var(--notice); }
+.hash { font: 12px var(--mono); color: var(--muted); margin-top: 10px; overflow-wrap: anywhere; }
+h2 { font-size: 13px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin: 36px 0 12px; }
+h3 { font-size: 16px; margin: 18px 0 8px; overflow-wrap: anywhere; }
+.scroll { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+th, td { text-align: left; vertical-align: top; padding: 6px 8px; border-bottom: 1px solid var(--line); overflow-wrap: anywhere; }
+th { color: var(--muted); font-weight: 600; font-size: 12px; }
+td.ok { background: var(--cell-ok); } td.bad { background: var(--cell-bad); } td.inco { background: var(--cell-inco); } td.skip { background: var(--cell-skip); color: var(--muted); }
+td a, .item a { color: inherit; }
+code { font: 12.5px var(--mono); background: var(--soft); border-radius: 5px; padding: 1px 5px; overflow-wrap: anywhere; }
+.item { background: var(--card); border: 1px solid var(--line); border-left: 4px solid var(--c, var(--muted)); border-radius: 12px; padding: 12px 16px; margin-bottom: 10px; }
+.item h4 { margin: 0 0 4px; font-size: 15px; overflow-wrap: anywhere; }
+.item .facts { color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
+.badge { display: inline-block; font-size: 11px; font-weight: 700; letter-spacing: .06em; color: #fff; background: var(--c, var(--muted)); border-radius: 6px; padding: 1px 6px; margin-right: 6px; }
+.shots { display: flex; flex-wrap: wrap; gap: 12px; }
+figure { margin: 0; flex: 1 1 320px; max-width: 520px; }
+figcaption { color: var(--muted); font-size: 12.5px; margin-bottom: 4px; }
+.shot { position: relative; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; line-height: 0; }
+.shot img { width: 100%; height: auto; display: block; }
+.shot .box { position: absolute; border: 3px solid var(--dot); border-radius: 4px; box-shadow: 0 0 0 2px #fff; }
+.missing { border: 1px dashed var(--line); border-radius: 8px; padding: 28px; color: var(--muted); text-align: center; font-size: 13px; }
+details { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; margin-bottom: 10px; }
+summary { cursor: pointer; font-weight: 600; overflow-wrap: anywhere; }
+summary small { color: var(--muted); font-weight: 400; }
+svg.timeline { width: 100%; height: auto; margin: 10px 0; font: 10px var(--sans); }
+svg .lbl, svg .tl { fill: var(--muted); }
+svg .tl { text-anchor: middle; }
+svg .row { stroke: var(--line); }
+svg .axis, svg .tick { stroke: var(--muted); }
+svg .choice { stroke: var(--text); stroke-width: 2; stroke-dasharray: 4 3; }
+svg .hit { fill: var(--c); stroke: var(--card); stroke-width: 1; }
+svg .hit.script { fill-opacity: .45; }
+svg .hit.late { stroke: #DC2626; stroke-width: 2.5; }
+svg .cookie { fill: none; stroke: var(--c); stroke-width: 2; }
+svg .signal { fill: var(--muted); }
+.c0 { --c: #1F77B4; } .c1 { --c: #FF7F0E; } .c2 { --c: #2CA02C; } .c3 { --c: #9467BD; } .c4 { --c: #8C564B; } .c5 { --c: #E377C2; }
+.c6 { --c: #17BECF; } .c7 { --c: #BCBD22; } .c8 { --c: #3366CC; } .c9 { --c: #DD4477; } .c10 { --c: #66AA00; } .c11 { --c: #B07AA1; } .cg { --c: #9CA3AF; }
+.legend { display: flex; flex-wrap: wrap; gap: 10px; font-size: 12.5px; color: var(--muted); padding: 0; list-style: none; margin: 0 0 8px; }
+.sw { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: var(--c); margin-right: 4px; vertical-align: -1px; }
+tr.late td { color: var(--error); }
+tr:target td { outline: 2px solid var(--dot); }
+dl { display: grid; grid-template-columns: minmax(120px, 200px) 1fr; gap: 4px 16px; font-size: 13.5px; }
+dt { color: var(--muted); } dd { margin: 0; overflow-wrap: anywhere; }
+.tools { margin-top: 14px; display: flex; gap: 8px; }
+button { border: 1px solid var(--line); background: var(--card); color: var(--muted); border-radius: 8px; padding: 4px 10px; cursor: pointer; font: inherit; font-size: 12.5px; }
+footer { margin-top: 44px; border-top: 1px solid var(--line); padding-top: 12px; color: var(--muted); font-size: 13px; }
+footer p { margin: 0 0 10px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+<header class="top">
+  <div class="brand"><span class="dot">♪</span> rhythm echo consent <small>{{.Version}}</small></div>
+  <div class="meta">{{.Target}}{{if .Started}} · {{.Started}}{{end}}</div>
+</header>
+
+<section id="verdict" class="tone-{{.Tone}}">
+  <h1 class="verdict">{{.Head}}</h1>
+  <p class="sub">{{.Line}}</p>
+  <ul class="chips">{{range .Chips}}<li class="chip k-{{.Key}}"><b>{{.N}}</b>{{.Label}}</li>{{end}}</ul>
+  <ul class="flags">{{range .Flags}}<li class="flag{{if .Warn}} warn{{end}}">{{.Text}}</li>{{end}}<li class="flag">Evidence, not legal advice</li></ul>
+  {{if .Hash}}<div class="hash">consent.json sha256 {{.Hash}}</div>{{end}}
+  <div class="tools"><button type="button" data-toggle="open">Open all</button><button type="button" data-toggle="close">Close all</button></div>
+</section>
+
+{{if .Matrix}}
+<h2>Pages and runs</h2>
+{{range .Matrix}}
+{{if .Site}}<h3>{{.Site}}</h3>{{end}}
+<div class="scroll"><table class="matrix">
+<thead><tr><th>Page</th><th>Banner</th>{{range $.Kinds}}<th>{{.}}</th>{{end}}</tr></thead>
+<tbody>{{range .Rows}}<tr><td><code>{{.Page}}</code></td><td>{{.Banner}}</td>{{range .Cells}}<td class="{{.Class}}">{{if .Anchor}}<a href="#{{.Anchor}}">{{.Text}}</a>{{else}}{{.Text}}{{end}}</td>{{end}}</tr>{{end}}</tbody>
+</table></div>
+{{end}}
+{{end}}
+
+{{if or .Levels .Ignored .Inconclusive}}
+<h2>Issues</h2>
+{{range .Levels}}
+<h3>{{.Name}} ({{len .Issues}})</h3>
+{{range .Issues}}
+<div class="item k-{{.Level}}">
+  <h4><span class="badge">{{.Level}}</span>{{.Title}}</h4>
+  <div class="facts"><code>{{.Check}}</code> · <code>{{.Page}}</code> · {{.Run}}{{if .Anchor}} · <a href="#{{.Anchor}}">timeline</a>{{end}}{{if .Docs}} · <a href="{{.Docs}}" rel="noreferrer noopener" target="_blank">{{.DocsName}} docs</a>{{end}}</div>
+  {{if .Detail}}<div class="facts">{{.Detail}}</div>{{end}}
+  {{if .Fix}}<div class="facts">Fix: {{.Fix}}</div>{{end}}
+  <div class="facts">key <code>{{.Key}}</code></div>
+</div>
+{{end}}
+{{end}}
+{{if .Ignored}}
+<h3>Ignored ({{len .Ignored}})</h3>
+{{range .Ignored}}
+<div class="item">
+  <h4><span class="badge">{{.Level}}</span>{{.Title}}</h4>
+  <div class="facts"><code>{{.Check}}</code> · <code>{{.Page}}</code> · {{.Run}} · ignored {{.Ignored}}</div>
+</div>
+{{end}}
+{{end}}
+{{if .Inconclusive}}
+<h3>Couldn't check ({{len .Inconclusive}})</h3>
+{{range .Inconclusive}}
+<div class="item k-changed">
+  <h4><span class="badge">?</span><code>{{.Page}}</code> · {{.Run}}</h4>
+  <div class="facts">{{.Detail}}{{if .Anchor}} · <a href="#{{.Anchor}}">timeline</a>{{end}}</div>
+</div>
+{{end}}
+{{end}}
+{{end}}
+
+{{if .Pages}}
+<h2>Banners and choices</h2>
+{{range .Pages}}
+<details open id="{{.ID}}">
+<summary>{{.URL}} <small>{{.Banner}}{{if .Detected}}, {{.Detected}}{{end}}</small></summary>
+{{range .Choices}}
+<h3>{{.Run}}</h3>
+<p class="sub">{{.How}}</p>
+<div class="shots">{{range .Shots}}
+<figure><figcaption>{{.Label}}</figcaption>{{if .Src}}<div class="shot"><img src="{{.Src}}" alt="{{.Label}} screenshot">{{with .Box}}<span class="box" style="left: {{.Left}}%; top: {{.Top}}%; width: {{.Width}}%; height: {{.Height}}%"></span>{{end}}</div>{{else}}<div class="missing">{{.Missing}}</div>{{end}}</figure>
+{{end}}</div>
+{{end}}
+</details>
+{{end}}
+{{end}}
+
+{{if .Runs}}
+<h2>Timelines</h2>
+{{range .Runs}}
+<details id="{{.ID}}">
+<summary>{{.Title}} <small>{{.Summary}}</small></summary>
+{{.SVG}}
+<ul class="legend">{{range .Legend}}<li><span class="sw {{.Class}}"></span>{{.Name}}</li>{{end}}<li>hollow: cookie</li><li>diamond: signal</li><li>dashed line: the choice</li></ul>
+<div class="scroll"><table>
+<thead><tr><th>Time</th><th>Type</th><th>Tracker</th><th>Visit</th><th>What</th></tr></thead>
+<tbody>{{range .Events}}<tr{{if .ID}} id="{{.ID}}"{{end}}{{if .Late}} class="late"{{end}}><td>{{.Time}}</td><td>{{.Type}}</td><td>{{.Tracker}}</td><td>{{.Visit}}</td><td><code>{{.What}}</code></td></tr>{{end}}</tbody>
+</table></div>
+</details>
+{{end}}
+{{end}}
+
+{{if .ConsentMode}}
+<h2>Consent Mode</h2>
+{{range .ConsentMode}}
+<details open>
+<summary>{{.Page}} {{if .Summary}}<small>{{.Summary}}</small>{{end}}</summary>
+{{if .Commands}}<div class="scroll"><table>
+<thead><tr><th>Run</th><th>Time</th><th>Command</th><th>State</th></tr></thead>
+<tbody>{{range .Commands}}<tr><td>{{.Run}}</td><td>{{.Time}}</td><td><code>{{.Command}}</code></td><td>{{.State}}</td></tr>{{end}}</tbody>
+</table></div>{{end}}
+{{if .Hits}}<div class="scroll"><table>
+<thead><tr><th>Run</th><th>Time</th><th>Tracker</th><th>gcs</th><th>gcs decoded</th><th>gcd</th><th>gcd decoded</th></tr></thead>
+<tbody>{{range .Hits}}<tr><td>{{.Run}}</td><td>{{.Time}}</td><td>{{.Tracker}}</td><td><code>{{.GCS}}</code></td><td>{{.GCSDecoded}}</td><td><code>{{.GCD}}</code></td><td>{{.GCDDecoded}}</td></tr>{{end}}</tbody>
+</table></div>{{end}}
+</details>
+{{end}}
+{{if .GCDNote}}<p class="sub">gcd decoded with an unofficial, community-documented mapping.</p>{{end}}
+{{end}}
+
+{{if .Exempt}}
+<h2>Seen, no consent needed</h2>
+<div class="scroll"><table>
+<thead><tr><th>Service</th><th>Category</th><th>Consent</th><th>Hits</th><th>Docs</th></tr></thead>
+<tbody>{{range .Exempt}}<tr><td>{{.Name}}</td><td>{{.Category}}</td><td>{{.Need}}</td><td>{{.Hits}}</td><td>{{if .Docs}}<a href="{{.Docs}}" rel="noreferrer noopener" target="_blank">docs</a>{{end}}</td></tr>{{end}}</tbody>
+</table></div>
+{{end}}
+
+<h2>Run details</h2>
+<dl>{{range .Details}}<dt>{{.Name}}</dt><dd>{{.Value}}</dd>{{end}}</dl>
+
+{{with .Comparison}}
+<h2>Comparison against {{.Against}}</h2>
+{{if .Changes}}<div class="scroll"><table>
+<thead><tr><th>Change</th><th>What</th><th>Page</th><th>Run</th><th>Before and after</th></tr></thead>
+<tbody>{{range .Changes}}<tr><td class="k-{{.Class}}"><b>{{.Word}}</b></td><td>{{.Title}}</td><td><code>{{.Page}}</code></td><td>{{.Run}}</td><td>{{.BeforeAfter}}</td></tr>{{end}}</tbody>
+</table></div>{{else}}<p class="sub">No changes.</p>{{end}}
+{{end}}
+
+<footer>
+{{range .Limits}}<p>{{.}}</p>{{end}}
+</footer>
+</div>
+<script>
+(function () {
+  function openTo(id) {
+    var el = id ? document.getElementById(id) : null;
+    if (!el) return;
+    for (var p = el; p; p = p.parentElement) { if (p.tagName === "DETAILS") p.open = true; }
+    el.scrollIntoView({ block: "center" });
+  }
+  document.addEventListener("click", function (e) {
+    var t = e.target;
+    if (!t || !t.closest) return;
+    var b = t.closest("[data-toggle]");
+    if (b) {
+      var open = b.getAttribute("data-toggle") === "open";
+      Array.prototype.forEach.call(document.querySelectorAll("details"), function (d) { d.open = open; });
+      return;
+    }
+    var a = t.closest("a");
+    var href = a ? a.getAttribute("href") : "";
+    if (href && href.charAt(0) === "#") {
+      e.preventDefault();
+      openTo(href.slice(1));
+      if (history.replaceState) history.replaceState(null, "", href);
+    }
+  });
+  if (location.hash) openTo(location.hash.slice(1));
+})();
+</script>
+</body>
+</html>

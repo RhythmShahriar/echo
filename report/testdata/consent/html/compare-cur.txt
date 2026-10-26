@@ -1,0 +1,519 @@
+♪
+rhythm echo consent
+1.2.0
+https://c08.consent.test/ · 2026-10-26 09:20 UTC
+Broke
+1 page, 3 runs, 4 trackers, policy advanced
+2
+broke
+1
+new
+0
+changed
+0
+fixed
+Hits held in the browser
+Hosts mapped with --map-host
+Evidence, not legal advice
+consent.json sha256 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+Open all
+Close all
+Pages and runs
+Page
+Banner
+No choice
+Accept
+Reject
+https://c08.consent.test/
+Complianz
+✗ TikTok Pixel
+Google Analytics 4, Google Ads, Meta Pixel, TikTok Pixel
+✗ TikTok Pixel
+Issues
+Errors (2)
+error
+TikTok Pixel fired before the visitor chose
+consent/before-choice
+·
+/
+· No choice ·
+timeline
+analytics.tiktok.com/api/v2/pixel?sdkid=••••9KQ1&event=Pageview at 0.91s; cookie _ttp written
+Fix: Load the tracker only after the visitor accepts: let the consent banner block its script, or start it with consent denied and grant it on Accept.
+key
+consent/before-choice|/|none|tiktok-pixel
+error
+TikTok Pixel fired before the visitor chose
+consent/before-choice
+·
+/
+· Reject ·
+timeline
+analytics.tiktok.com/api/v2/pixel?sdkid=••••9KQ1&event=Pageview at 0.91s
+Fix: Load the tracker only after the visitor accepts: let the consent banner block its script, or start it with consent denied and grant it on Accept.
+key
+consent/before-choice|/|reject|tiktok-pixel
+Banners and choices
+https://c08.consent.test/
+Complianz, found after 0.4s, detected by #cmplz-cookiebanner-container
+No choice
+No choice made
+Banner
+Accept
+Clicked "Accept" (.cmplz-accept) on the first layer, 1 click at 2.01s, confirmed by cookie:cmplz_marketing
+Banner
+After the choice
+Reject
+Clicked "Deny" (.cmplz-deny) on the first layer, 1 click at 1.98s, confirmed by cookie:cmplz_marketing
+Banner
+After the choice
+Timelines
+/ · No choice
+TikTok Pixel fired before the choice; Meta Pixel held back
+hits
+cookies
+signals
+0s
+2s
+4s
+6s
+8s
+10s
+12s
+14s
+0.91s TikTok Pixel Pageview (held)
+0.93s cookie _ttp
+0.12s gtag default all four denied
+0.59s fbq revoke
+TikTok Pixel
+hollow: cookie
+diamond: signal
+dashed line: the choice
+Time
+Type
+Tracker
+Visit
+What
+0.00s
+load
+0
+https://c08.consent.test/
+0.12s
+signal
+gtag default all four denied
+0.30s
+script
+google-tag-manager
+https://www.googletagmanager.com/gtm.js?id=GTM-••••XK2
+0.41s
+banner
+Complianz shown
+0.59s
+signal
+fbq revoke
+0.61s
+script
+Meta Pixel
+https://connect.facebook.net/en_US/fbevents.js
+0.70s
+script
+TikTok Pixel
+https://analytics.tiktok.com/i18n/pixel/events.js
+0.91s
+hit
+TikTok Pixel
+0
+https://analytics.tiktok.com/api/v2/pixel?sdkid=••••9KQ1&event=Pageview (held)
+0.93s
+cookie
+TikTok Pixel
+_ttp on .c08.consent.test
+9.40s
+page
+1
+https://c08.consent.test/shop/
+12.90s
+reload
+2
+https://c08.consent.test/
+/ · Accept
+Google Analytics 4, Google Ads, Meta Pixel, TikTok Pixel fired; update granted at 2.0s; kept on 1 more page
+hits
+cookies
+signals
+0s
+2s
+4s
+6s
+8s
+10s
+12s
+14s
+choice at 2.01s
+2.30s Google Analytics 4 page_view gcs=G111 gcd=13r3r3r3r5 (held)
+2.34s Google Ads gcs=G111 gcd=13r3r3r3r5 (held)
+2.38s Meta Pixel PageView (held)
+2.42s TikTok Pixel Pageview (held)
+9.70s Google Analytics 4 page_view gcs=G111 gcd=13r3r3r3r5 (held)
+9.74s Google Ads gcs=G111 gcd=13r3r3r3r5 (held)
+9.78s Meta Pixel PageView (held)
+9.82s TikTok Pixel Pageview (held)
+13.20s Google Analytics 4 page_view gcs=G111 gcd=13r3r3r3r5 (held)
+13.24s Google Ads gcs=G111 gcd=13r3r3r3r5 (held)
+13.28s Meta Pixel PageView (held)
+13.32s TikTok Pixel Pageview (held)
+2.32s cookie _ga
+2.40s cookie _fbp
+2.01s cookie cmplz_marketing
+0.12s gtag default all four denied
+2.03s gtag update all four granted
+0.59s fbq revoke
+2.04s fbq grant
+Google Analytics 4
+Google Ads
+Meta Pixel
+TikTok Pixel
+hollow: cookie
+diamond: signal
+dashed line: the choice
+Time
+Type
+Tracker
+Visit
+What
+0.00s
+load
+0
+https://c08.consent.test/
+0.12s
+signal
+gtag default all four denied
+0.30s
+script
+google-tag-manager
+https://www.googletagmanager.com/gtm.js?id=GTM-••••XK2
+0.41s
+banner
+Complianz shown
+0.59s
+signal
+fbq revoke
+2.01s
+click
+"Accept" (.cmplz-accept)
+2.01s
+cookie
+cmplz_marketing on c08.consent.test
+2.03s
+signal
+gtag update all four granted
+2.04s
+signal
+fbq grant
+2.30s
+hit
+Google Analytics 4
+0
+https://region1.google-analytics.com/g/collect?v=2&tid=G-••••7Q2X&cid=••••3021&en=page_view&gcs=G111&gcd=13r3r3r3r5&dl=https%3A%2F%2Fc08.consent.test%2F (held)
+2.32s
+cookie
+Google Analytics 4
+_ga on .c08.consent.test
+2.34s
+hit
+Google Ads
+0
+https://googleads.g.doubleclick.net/pagead/viewthroughconversion/••••4567/?gcs=G111&gcd=13r3r3r3r5 (held)
+2.38s
+hit
+Meta Pixel
+0
+https://www.facebook.com/tr?id=••••5678&ev=PageView&dl=https%3A%2F%2Fc08.consent.test%2F (held)
+2.40s
+cookie
+Meta Pixel
+_fbp on .c08.consent.test
+2.42s
+hit
+TikTok Pixel
+0
+https://analytics.tiktok.com/api/v2/pixel?sdkid=••••9KQ1&event=Pageview (held)
+9.40s
+page
+1
+https://c08.consent.test/shop/
+9.70s
+hit
+Google Analytics 4
+1
+https://region1.google-analytics.com/g/collect?v=2&tid=G-••••7Q2X&cid=••••3021&en=page_view&gcs=G111&gcd=13r3r3r3r5&dl=https%3A%2F%2Fc08.consent.test%2F (held)
+9.74s
+hit
+Google Ads
+1
+https://googleads.g.doubleclick.net/pagead/viewthroughconversion/••••4567/?gcs=G111&gcd=13r3r3r3r5 (held)
+9.78s
+hit
+Meta Pixel
+1
+https://www.facebook.com/tr?id=••••5678&ev=PageView&dl=https%3A%2F%2Fc08.consent.test%2F (held)
+9.82s
+hit
+TikTok Pixel
+1
+https://analytics.tiktok.com/api/v2/pixel?sdkid=••••9KQ1&event=Pageview (held)
+12.90s
+reload
+2
+https://c08.consent.test/
+13.20s
+hit
+Google Analytics 4
+2
+https://region1.google-analytics.com/g/collect?v=2&tid=G-••••7Q2X&cid=••••3021&en=page_view&gcs=G111&gcd=13r3r3r3r5&dl=https%3A%2F%2Fc08.consent.test%2F (held)
+13.24s
+hit
+Google Ads
+2
+https://googleads.g.doubleclick.net/pagead/viewthroughconversion/••••4567/?gcs=G111&gcd=13r3r3r3r5 (held)
+13.28s
+hit
+Meta Pixel
+2
+https://www.facebook.com/tr?id=••••5678&ev=PageView&dl=https%3A%2F%2Fc08.consent.test%2F (held)
+13.32s
+hit
+TikTok Pixel
+2
+https://analytics.tiktok.com/api/v2/pixel?sdkid=••••9KQ1&event=Pageview (held)
+/ · Reject
+TikTok Pixel fired before the choice; update denied at 2.0s; kept on 1 more page
+hits
+cookies
+signals
+0s
+2s
+4s
+6s
+8s
+10s
+12s
+14s
+choice at 1.98s
+0.91s TikTok Pixel Pageview (held)
+1.98s cookie cmplz_marketing
+0.12s gtag default all four denied
+2.00s gtag update all four denied
+0.59s fbq revoke
+TikTok Pixel
+hollow: cookie
+diamond: signal
+dashed line: the choice
+Time
+Type
+Tracker
+Visit
+What
+0.00s
+load
+0
+https://c08.consent.test/
+0.12s
+signal
+gtag default all four denied
+0.30s
+script
+google-tag-manager
+https://www.googletagmanager.com/gtm.js?id=GTM-••••XK2
+0.41s
+banner
+Complianz shown
+0.59s
+signal
+fbq revoke
+0.91s
+hit
+TikTok Pixel
+0
+https://analytics.tiktok.com/api/v2/pixel?sdkid=••••9KQ1&event=Pageview (held)
+1.98s
+click
+"Deny" (.cmplz-deny)
+1.98s
+cookie
+cmplz_marketing on c08.consent.test
+2.00s
+signal
+gtag update all four denied
+9.40s
+page
+1
+https://c08.consent.test/shop/
+12.90s
+reload
+2
+https://c08.consent.test/
+Consent Mode
+https://c08.consent.test/
+Consent Mode: v2 default, all four signals denied at 0.12s
+Run
+Time
+Command
+State
+No choice
+0.12s
+gtag consent default
+all four denied
+Accept
+0.12s
+gtag consent default
+all four denied
+Accept
+2.03s
+gtag consent update
+all four granted
+Reject
+0.12s
+gtag consent default
+all four denied
+Reject
+2.00s
+gtag consent update
+all four denied
+Run
+Time
+Tracker
+gcs
+gcs decoded
+gcd
+gcd decoded
+Accept
+2.30s
+Google Analytics 4
+G111
+ad_storage granted, analytics_storage granted
+13r3r3r3r5
+ad_storage default denied, update granted (r); analytics_storage default denied, update granted (r); ad_user_data default denied, update granted (r); ad_personalization default denied, update granted (r)
+Accept
+2.34s
+Google Ads
+G111
+ad_storage granted, analytics_storage granted
+13r3r3r3r5
+ad_storage default denied, update granted (r); analytics_storage default denied, update granted (r); ad_user_data default denied, update granted (r); ad_personalization default denied, update granted (r)
+Accept
+9.70s
+Google Analytics 4
+G111
+ad_storage granted, analytics_storage granted
+13r3r3r3r5
+ad_storage default denied, update granted (r); analytics_storage default denied, update granted (r); ad_user_data default denied, update granted (r); ad_personalization default denied, update granted (r)
+Accept
+9.74s
+Google Ads
+G111
+ad_storage granted, analytics_storage granted
+13r3r3r3r5
+ad_storage default denied, update granted (r); analytics_storage default denied, update granted (r); ad_user_data default denied, update granted (r); ad_personalization default denied, update granted (r)
+Accept
+13.20s
+Google Analytics 4
+G111
+ad_storage granted, analytics_storage granted
+13r3r3r3r5
+ad_storage default denied, update granted (r); analytics_storage default denied, update granted (r); ad_user_data default denied, update granted (r); ad_personalization default denied, update granted (r)
+Accept
+13.24s
+Google Ads
+G111
+ad_storage granted, analytics_storage granted
+13r3r3r3r5
+ad_storage default denied, update granted (r); analytics_storage default denied, update granted (r); ad_user_data default denied, update granted (r); ad_personalization default denied, update granted (r)
+gcd decoded with an unofficial, community-documented mapping.
+Run details
+Echo
+1.2.0
+Browser
+Chrome for Testing 156.0.8078.47
+OS
+linux/amd64
+User agent
+Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36 rhythm-echo-consent/1.2.0
+Geo
+none
+Locale
+en-US
+Time zone
+UTC
+Viewport
+desktop
+Started
+2026-10-26 09:20:41 UTC
+Duration
+21.23s
+Policy
+advanced
+Tracker hits
+held in the browser
+Hosts mapped
+yes (--map-host)
+Sandbox
+on
+TLS
+verified
+Tracker catalogue
+1.2.0 (sha256 4be1c0ff..., 47 entries)
+CMP rules
+1.2.0 (sha256 9c1dfeed..., 9 entries)
+Network
+412 requests, 14 held, 0 refused, 5 browser internal
+Result
+2026-10-26T10-02-11-f7a8b9
+Evidence folder
+.echo/consent/2026-10-26T10-02-11-f7a8b9
+Comparison against baseline from 2026-10-19 08:02 UTC
+Change
+What
+Page
+Run
+Before and after
+BROKE
+TikTok Pixel now fires before the choice
+/
+No choice
+was none, now error
+BROKE
+TikTok Pixel now fires before the choice
+/
+Reject
+was none, now error
+NEW
+TikTok Pixel fires after Accept
+/
+Accept
+was none, now tiktok-pixel
+What a pass means. In these runs, from this machine, with this browser and these settings, no tracker on Echo's list sent a request or set a cookie before the visitor chose or after Reject. It does not mean the site complies with the GDPR, ePrivacy, CCPA/CPRA or any other law. Evidence, not legal advice.
+One visitor, one place. Banners differ by country, language and device. Geo-targeted banners may not show to a CI runner in the US; Echo can set the browser's language and time zone (
+--geo
+) but not its IP address. Run it from the region that matters, or through a proxy there.
+Blind spots. Trackers that are not on the list; server-side tagging on your own domain when its requests don't look like GA4 or Meta; fingerprinting without network requests; tags that wait longer than the settle time or need more interaction than a scroll and one more page; sites that hide tags from automated browsers.
+Consent Mode advanced. Google says its tags in advanced mode "send measurements without cookies" while consent is denied. Whether that is acceptable before consent is disputed. Echo reports these pings as
+consent/cookieless-ping
+under the default policy
+advanced
+;
+--consent-mode basic
+or
+strict
+counts them as hits.
+gcd is unofficial. Google doesn't document the
+gcd
+parameter. Echo shows the raw value next to a reading based on community documentation and treats letters it doesn't know as unknown.
+Pseudonymised, not anonymised. Masked or hashed identifiers in reports can still be personal data. Treat reports like logs.
+What leaves the machine. Requests to the site and to the scripts it loads (which shows this machine's IP address to those servers). No tracking hits unless
+--send-hits
+. Nothing goes to Rhythm. The update check contacts GitHub (
+RHYTHM_OFFLINE=1
+turns it off).
+Banners Echo can't handle are reported as "couldn't check" (exit 3), never as a pass. Tested CMPs and the dates their fixtures were captured are in the benchmark.
+A signature proves who made the evidence file and that it hasn't changed. It doesn't prove the site behaves the same for every visitor, region or day. Keyless signing in the Action writes the repository and workflow name to the public Rekor log.
