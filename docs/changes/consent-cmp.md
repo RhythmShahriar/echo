@@ -183,3 +183,65 @@ texts, for the release notes and the docs team.
   pages each, plus `cookieyes/cookie-law-info.html`), with
   `expect.yaml`. All rows pass Detect, Find and Choose (Accept and
   Reject) in headless Chrome as well as in the FakeTab tests.
+
+## C6 Usercentrics and Borlabs rules
+
+- `consent cmps` rows:
+  - `usercentrics  #usercentrics-root (shadow DOM), window.UC_UI  button, api  first layer or settings, api  uc_settings storage`
+  - `borlabs  #BorlabsCookieBox, window.BorlabsCookie  button  first layer or settings  borlabs-cookie cookie`
+  (PRD 6.4 shows Borlabs as `button, api` and `first layer or
+  individual`: Borlabs documents an API to read consents, not to make a
+  choice, so the rule has no API choice; the column words are the
+  listing's own, `first layer or settings`.)
+- DETECTED BY marks a detect selector that is the shadow host of the
+  banner with ` (shadow DOM)`, as for a shadow selector.
+- Rule format: `banner.selector` and `reject.second_layer.toggles_off`
+  take one selector or a list. Any visible banner of the list is the
+  banner shown; Accept and Reject controls must sit inside one of them.
+- When a selector matches several elements, the first visible one is
+  used (a CMP that prints one hidden banner per consent type).
+- Closed shadow roots: a banner behind one is found when hit tests land
+  on its host (`found: true`). Its buttons can't be reached, so Find and
+  Choose return `no_button` at once instead of waiting `--banner-wait`;
+  under `--click button,api` the choice is the API's with
+  `fallback: true` (the run's `consent/click-fallback`).
+- Usercentrics: detected by `#usercentrics-root`, `#usercentrics-cmp-ui`,
+  `window.UC_UI`, `window.__ucCmp` or an `app.usercentrics.eu` or
+  `web.cmp.usercentrics.eu` script. Banner, Accept, Deny, More and Save
+  in the v2 root (`[data-testid=uc-default-banner]`,
+  `uc-accept-all-button`, `uc-deny-all-button`, `uc-more-button`,
+  `uc-save-button`) and the v3 root (`#uc-main-dialog`, `#accept`,
+  `#deny`, `#more`, `#save`, the `#...` names of Usercentrics's custom
+  CSS documentation). API calls try v2 first:
+  `(window.UC_UI ? UC_UI.acceptAllConsents() : __ucCmp.acceptAllConsents())`,
+  the same with `denyAllConsents` and `showSecondLayer` (the lane text
+  had the UC_UI calls only; v3 pages have only `__ucCmp`). Verified
+  from localStorage `uc_settings` (or `ucData`) and
+  `uc_user_interaction`: Reject needs some service denied, Accept none
+  (essential services stay granted after Deny). `verified_by` is the
+  state reader's source, `storage:uc_settings` or `storage:ucData`.
+  The v2 toggles have no documented selector: every enabled checkbox in
+  the root is switched off; v3 uses `.uc-toggle`.
+- Borlabs Cookie: detected by `#BorlabsCookieBox`, `._brlbs-box-wrap`,
+  `.brlbs-cmpnt-container` (Borlabs 3, an addition to the lane text),
+  `window.BorlabsCookie` or a `/borlabs-cookie/` script. Accept
+  `._brlbs-btn-accept-all`, `[data-cookie-accept-all]` or
+  `[data-borlabs-cookie-actions=accept-all]` (the Borlabs 3 button, as
+  the testbed lane noted); Reject `[data-cookie-refuse]` or
+  `[data-borlabs-cookie-actions=reject]` (`._brlbs-refuse-btn` stays
+  first as the lane text has it; in Borlabs 2 it is the paragraph around
+  the link, so the link's attribute is what gets clicked); settings
+  `[data-cookie-individual]` or `[data-borlabs-cookie-actions=preferences]`,
+  the group checkboxes off, Save `[data-cookie-accept]` or
+  `[data-borlabs-cookie-actions=save-consents]`. Verified from the
+  `borlabs-cookie` cookie: Reject needs the statistics and marketing
+  groups empty or absent; Accept a decided state.
+- Reopen data (used by the withdraw run): Usercentrics `#uc-privacy-button`
+  in either root or the API; Borlabs `.borlabs-cookie-open-dialog-preferences`
+  (Borlabs 3 docs) and `.borlabs-cookie-preference`.
+- Replica pages for both (seven standard pages, plus
+  `usercentrics/closed-shadow.html` and `borlabs/version-3.html`; the
+  Usercentrics second-layer and two-banners pages use the v3 markup).
+  All rows pass Detect, Find and Choose in headless Chrome and in the
+  FakeTab tests; on the closed root `--click button` gives `no_button`
+  in a few ms and `--click button,api` a verified API choice.

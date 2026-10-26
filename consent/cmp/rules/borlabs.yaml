@@ -1,0 +1,51 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+# Borlabs Cookie (WordPress plugin, commercial). Version 2 prints
+# ._brlbs- classes and data-cookie-* links; version 3 prints
+# data-borlabs-cookie-actions buttons in .brlbs-cmpnt-container. Both
+# keep #BorlabsCookieBox and window.BorlabsCookie; the borlabs-cookie
+# cookie holds the consents by group. Borlabs documents a JavaScript API
+# to read consents, not to make a choice, so the rule clicks only.
+id: borlabs
+name: Borlabs Cookie
+priority: 20
+detect:
+  selectors: ["#BorlabsCookieBox", "._brlbs-box-wrap", ".brlbs-cmpnt-container"]
+  globals: [BorlabsCookie]
+  scripts: [/borlabs-cookie/]
+banner:
+  selector: "#BorlabsCookieBox"
+accept: ["._brlbs-btn-accept-all", "[data-cookie-accept-all]", "[data-borlabs-cookie-actions=accept-all]"]
+reject:
+  # The v2 refuse class sits on a paragraph around the link, so the
+  # link's attribute is what gets clicked.
+  first_layer: ["._brlbs-refuse-btn", "[data-cookie-refuse]", "[data-borlabs-cookie-actions=reject]"]
+  second_layer:
+    open: ["._brlbs-manage-btn", "[data-cookie-individual]", "[data-borlabs-cookie-actions=preferences]"]
+    toggles_off: ["._brlbs-checkbox input:not([disabled])", ".brlbs-checkbox input:not([disabled])"]
+    save: ["[data-cookie-accept]", "[data-borlabs-cookie-actions=save-consents]"]
+reopen:
+  selectors: [".borlabs-cookie-open-dialog-preferences", ".borlabs-cookie-preference"]
+api:
+  state: "JSON.stringify(BorlabsCookie.Consents ? BorlabsCookie.Consents.getAll() : null)"
+verify:
+  parser: borlabs
+  cookies: [borlabs-cookie]
+  # Groups are each site's setup: Accept needs a decided state, Reject
+  # statistics and marketing empty or absent.
+  accepted: {}
+  rejected: {statistics: false, marketing: false}
+sources:
+  - https://borlabs.io/kb/javascript-api/
+  - https://borlabs.io/kb/javascript-api-v3/
+  - https://borlabs.io/kb/what-information-does-borlabs-cookie-store/
+fixtures:
+  - testdata/borlabs/first-layer.html
+  - testdata/borlabs/second-layer.html
+  - testdata/borlabs/hidden.html
+  - testdata/borlabs/late.html
+  - testdata/borlabs/two-banners.html
+  - testdata/borlabs/text-only.html
+  - testdata/borlabs/script-no-banner.html
+  - testdata/borlabs/version-3.html

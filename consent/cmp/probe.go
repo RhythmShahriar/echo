@@ -36,6 +36,7 @@ type probeResult struct {
 	Disabled bool        `json:"disabled"`
 	Inside   bool        `json:"inside"`
 	Top      bool        `json:"top"`
+	Closed   bool        `json:"closed"` // not found: behind a closed shadow root
 	Text     string      `json:"text"`
 	Box      consent.Box `json:"box"`
 }
@@ -48,8 +49,8 @@ func (p probeResult) clickable() bool {
 }
 
 type probeInput struct {
-	Targets []keyed          `json:"targets"`
-	Within  *consent.Locator `json:"within,omitempty"`
+	Targets []keyed           `json:"targets"`
+	Within  []consent.Locator `json:"within,omitempty"` // nil: anywhere on the page
 }
 
 // toggle is one switch of a second layer as the toggles script sees it.
@@ -78,7 +79,7 @@ func evalJSON(ctx context.Context, t consent.Tab, js string, in, out any) error 
 
 // probe asks about every locator in locs at once, so one call answers a
 // whole poll.
-func probe(ctx context.Context, t consent.Tab, locs []consent.Locator, within *consent.Locator) (map[string]probeResult, error) {
+func probe(ctx context.Context, t consent.Tab, locs []consent.Locator, within []consent.Locator) (map[string]probeResult, error) {
 	in := probeInput{Within: within}
 	for _, l := range locs {
 		in.Targets = append(in.Targets, keyed{Key: locKey(l), Loc: l})

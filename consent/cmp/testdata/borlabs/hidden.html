@@ -1,0 +1,51 @@
+<!doctype html>
+<!-- Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+     SPDX-License-Identifier: MIT -->
+<!-- Replica of a Borlabs Cookie page for Echo's CMP tests (returning visitor: the dialog markup is there and hidden), written
+     fresh from Borlabs Cookie's public JavaScript API and knowledge base pages
+     and the markup its dialog carries on public pages; none of Borlabs Cookie's code.
+     Source: https://borlabs.io/kb/javascript-api-v3/
+     Captured 2026-10-26. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Shop with Borlabs Cookie: returning visitor: the dialog markup is there and hidden</title>
+<style>
+  body { font: 16px/1.5 sans-serif; margin: 0; padding: 24px; }
+  #BorlabsCookieBox { display: none; position: fixed; left: 0; right: 0; bottom: 0; z-index: 999999; background: #fff;
+    border-top: 2px solid #0063e3; padding: 16px 24px; box-shadow: 0 -4px 16px rgba(0,0,0,.2); }
+  #BorlabsCookieBox.show-cookie-box { display: block; }
+  .replica-prefs { display: none; }
+  .replica-open .replica-prefs { display: block; }
+  ._brlbs-btn, .brlbs-btn { display: inline-block; margin: 4px 8px 4px 0; padding: 8px 16px; font-size: 15px; border: 1px solid #333; }
+  .newsletter { position: fixed; top: 24px; right: 24px; z-index: 1000; width: 280px; background: #ffe; border: 1px solid #aa8; padding: 16px; }
+</style>
+</head>
+<body>
+<h1>Corner Shop</h1>
+<p>Hand-made goods, shipped from a small workshop.</p>
+<div data-nosnippet>
+<div id="BorlabsCookieBox" class="BorlabsCookie" role="dialog" aria-labelledby="CookieBoxTextHeadline" aria-modal="true">
+  <div class="bottom-center _brlbs-bar-wrap">
+    <div class="_brlbs-box-wrap _brlbs-bar">
+      <span class="_brlbs-h3" id="CookieBoxTextHeadline">Privacy Preference</span>
+      <p class="_brlbs-flex-center">We need your consent before you can continue on our website.</p>
+      <p class="_brlbs-accept"><a href="#" role="button" class="_brlbs-btn _brlbs-btn-accept-all _brlbs-cursor" data-cookie-accept-all>Accept all</a></p>
+      <p class="_brlbs-refuse-btn"><a href="#" role="button" class="_brlbs-cursor" data-cookie-refuse>Accept only essential cookies</a></p>
+      <p class="_brlbs-manage-btn"><a href="#" role="button" class="_brlbs-cursor" data-cookie-individual>Individual Privacy Preferences</a></p>
+      <div class="replica-prefs" id="CookiePrefs">
+      <label class="_brlbs-checkbox"><input type="checkbox" name="cookieGroup[]" value="essential" checked disabled> Essential</label>
+      <label class="_brlbs-checkbox"><input type="checkbox" name="cookieGroup[]" value="statistics" data-borlabs-cookie-checkbox> Statistics</label>
+      <label class="_brlbs-checkbox"><input type="checkbox" name="cookieGroup[]" value="marketing" data-borlabs-cookie-checkbox> Marketing</label>
+      <label class="_brlbs-checkbox"><input type="checkbox" name="cookieGroup[]" value="external-media" data-borlabs-cookie-checkbox> External Media</label>
+      <p><a href="#" role="button" class="_brlbs-btn _brlbs-cursor" data-cookie-accept>Save</a></p>
+      </div>
+      <p class="_brlbs-legal"><a href="/privacy-policy/">Privacy Policy</a></p>
+    </div>
+  </div>
+</div>
+</div>
+<script id="borlabs-cookie-js" src="wp-content/plugins/borlabs-cookie/assets/javascript/borlabs-cookie.min.js" data-show="never"></script>
+</body>
+</html>

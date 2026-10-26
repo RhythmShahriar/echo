@@ -31,15 +31,15 @@ type ruleFile struct {
 		Scripts   []string `yaml:"scripts"`
 	} `yaml:"detect"`
 	Banner struct {
-		Selector string `yaml:"selector"`
+		Selector oneOrMany `yaml:"selector"`
 	} `yaml:"banner"`
 	Accept []string `yaml:"accept"`
 	Reject struct {
 		FirstLayer  []string `yaml:"first_layer"`
 		SecondLayer *struct {
-			Open       []string `yaml:"open"`
-			TogglesOff string   `yaml:"toggles_off"`
-			Save       []string `yaml:"save"`
+			Open       []string  `yaml:"open"`
+			TogglesOff oneOrMany `yaml:"toggles_off"`
+			Save       []string  `yaml:"save"`
 		} `yaml:"second_layer"`
 	} `yaml:"reject"`
 	Reopen struct {
@@ -68,6 +68,28 @@ type ruleFile struct {
 	Fixtures []string `yaml:"fixtures"`
 }
 
+// oneOrMany is a YAML value written as one string or a list of them:
+// a banner or a set of toggles some CMPs draw in two ways (Usercentrics
+// v2 and v3).
+type oneOrMany []string
+
+// UnmarshalYAML reads a string as a list of one.
+func (o *oneOrMany) UnmarshalYAML(n *yaml.Node) error {
+	switch {
+	case n.Kind == yaml.ScalarNode && n.Tag == "!!null":
+		*o = nil
+	case n.Kind == yaml.ScalarNode:
+		*o = oneOrMany{n.Value}
+	default:
+		var l []string
+		if err := n.Decode(&l); err != nil {
+			return err
+		}
+		*o = l
+	}
+	return nil
+}
+
 // chain is one Accept or Reject path: the steps clicked in order, with
 // the text the rule wrote it as (what Choice.Selector shows).
 type chain struct {
@@ -78,9 +100,9 @@ type chain struct {
 // secondLayer is a Reject that lives in the settings: open them, switch
 // every toggle off, save.
 type secondLayer struct {
-	Open       []chain
-	TogglesOff consent.Locator
-	Save       []chain
+	Open    []chain
+	Toggles []consent.Locator // switched off when on
+	Save    []chain
 }
 
 // apiCalls are the fixed calls a rule may make in the page's main world.
@@ -103,8 +125,8 @@ type rule struct {
 	SelRaw     []string          // as written, for DetectedBy
 	Globals    []string
 	Scripts    []string
-	Banner     consent.Locator
-	BannerRaw  string
+	Banners    []consent.Locator // any one visible is the banner shown
+	BannerRaw  string            // the first, as written
 	Accept     []chain
 	FirstLayer []chain
 	Second     *secondLayer
@@ -262,6 +284,19 @@ func (c *checker) locator(path, s string) consent.Locator {
 	return steps[0]
 }
 
+// locators parses one-step locators written as one string or a list.
+func (c *checker) locators(path string, raw oneOrMany) []consent.Locator {
+	out := make([]consent.Locator, 0, len(raw))
+	for i, s := range raw {
+		p := path
+		if len(raw) > 1 {
+			p = fmt.Sprintf("%s.%d", path, i)
+		}
+		out = append(out, c.locator(p, s))
+	}
+	return out
+}
+
 // chains parses a list of click chains.
 func (c *checker) chains(path string, raw []string) []chain {
 	out := make([]chain, 0, len(raw))
@@ -344,11 +379,11 @@ func (c *checker) rule(f *ruleFile) *rule {
 		c.fail("detect", "want at least one selector, global or script")
 	}
 
-	if f.Banner.Selector == "" {
+	if len(f.Banner.Selector) == 0 || f.Banner.Selector[0] == "" {
 		c.fail("banner.selector", "missing")
 	} else {
-		r.Banner = c.locator("banner.selector", f.Banner.Selector)
-		r.BannerRaw = f.Banner.Selector
+		r.Banners = c.locators("banner.selector", f.Banner.Selector)
+		r.BannerRaw = f.Banner.Selector[0]
 	}
 	r.Accept = c.chains("accept", f.Accept)
 	r.FirstLayer = c.chains("reject.first_layer", f.Reject.FirstLayer)
@@ -360,9 +395,7 @@ func (c *checker) rule(f *ruleFile) *rule {
 		if len(s.Save) == 0 {
 			c.fail("reject.second_layer.save", "missing")
 		}
-		if s.TogglesOff != "" {
-			r.Second.TogglesOff = c.locator("reject.second_layer.toggles_off", s.TogglesOff)
-		}
+		r.Second.Toggles = c.locators("reject.second_layer.toggles_off", s.TogglesOff)
 	}
 	if f.ID != genericID {
 		if len(r.Accept) == 0 && f.API.Accept == "" {

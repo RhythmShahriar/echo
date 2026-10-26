@@ -1,0 +1,90 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+# What Echo should see on each Usercentrics replica page (format in
+# ../README.md). found, present, banner_after_ms, detected_by and the
+# layers are checked in a real browser by the testbed's X8; sees answers
+# the FakeTab tests of consent/cmp.
+cmp: usercentrics
+pages:
+  - page: first-layer.html
+    found: true
+    present: true
+    detected_by: "selector:#usercentrics-root and global:UC_UI"
+    accept_layer: 1
+    reject_layer: 1
+    sees:
+      selectors: ["#usercentrics-root"]
+      globals: [UC_UI]
+      scripts: [app.usercentrics.eu]
+      banner: true
+      controls: ["#usercentrics-root ::shadow [data-testid=uc-accept-all-button]", "#usercentrics-root ::shadow [data-testid=uc-deny-all-button]", "#usercentrics-root ::shadow [data-testid=uc-more-button]"]
+  - page: second-layer.html
+    found: true
+    present: true
+    detected_by: "selector:#usercentrics-cmp-ui and global:__ucCmp"
+    accept_layer: 1
+    reject_layer: 2
+    sees:
+      selectors: ["#usercentrics-cmp-ui"]
+      globals: [__ucCmp]
+      scripts: [web.cmp.usercentrics.eu]
+      banner: true
+      controls: ["#usercentrics-cmp-ui ::shadow #accept", "#usercentrics-cmp-ui ::shadow #more"]
+      settings: ["#usercentrics-cmp-ui ::shadow #save"]
+      toggles: [false, false]
+  - page: hidden.html
+    found: false
+    present: true
+    detected_by: "selector:#usercentrics-root and global:UC_UI"
+    sees:
+      selectors: ["#usercentrics-root"]
+      globals: [UC_UI]
+      scripts: [app.usercentrics.eu]
+  - page: late.html
+    found: true
+    present: true
+    banner_after_ms: 4000
+    detected_by: "selector:#usercentrics-root and global:UC_UI"
+    accept_layer: 1
+    reject_layer: 1
+    sees:
+      selectors: ["#usercentrics-root"]
+      globals: [UC_UI]
+      scripts: [app.usercentrics.eu]
+      banner: true
+      controls: ["#usercentrics-root ::shadow [data-testid=uc-accept-all-button]", "#usercentrics-root ::shadow [data-testid=uc-deny-all-button]", "#usercentrics-root ::shadow [data-testid=uc-more-button]"]
+  - page: two-banners.html
+    found: true
+    present: true
+    detected_by: "selector:#usercentrics-cmp-ui and global:__ucCmp"
+    accept_layer: 1
+    reject_layer: 1
+    sees:
+      selectors: ["#usercentrics-cmp-ui"]
+      globals: [__ucCmp]
+      scripts: [web.cmp.usercentrics.eu]
+      banner: true
+      controls: ["#usercentrics-cmp-ui ::shadow #accept", "#usercentrics-cmp-ui ::shadow #deny", "#usercentrics-cmp-ui ::shadow #more"]
+      decoys: ["#newsletter-accept", ".newsletter-close"]
+  - page: text-only.html
+    found: false
+    present: false
+  - page: script-no-banner.html
+    found: false
+    present: true
+    detected_by: "global:UC_UI and script:app.usercentrics.eu"
+    sees:
+      globals: [UC_UI]
+      scripts: [app.usercentrics.eu]
+  - page: closed-shadow.html
+    found: true
+    present: true
+    detected_by: "selector:#usercentrics-root and global:UC_UI"
+    fallback: true
+    sees:
+      selectors: ["#usercentrics-root"]
+      globals: [UC_UI]
+      scripts: [app.usercentrics.eu]
+      banner: true
+      closed: ["#usercentrics-root ::shadow [data-testid=uc-accept-all-button]", "#usercentrics-root ::shadow [data-testid=uc-deny-all-button]", "#usercentrics-root ::shadow [data-testid=uc-more-button]"]

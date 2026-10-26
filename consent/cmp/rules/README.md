@@ -55,8 +55,14 @@ fixtures: [testdata/cookiebot/first-layer.html]
 ```
 
 Selectors use the `--accept-selector` syntax: `a >> b` is two steps
-clicked in order, `host::shadow button` enters host's open shadow root.
-Detect selectors, the banner and the toggles are one step each.
+clicked in order, `host ::shadow button` enters host's open shadow root.
+Detect selectors, the banner and the toggles are one step each. The
+banner and `toggles_off` take one selector or a list, for a CMP that
+draws its banner in more than one way (Usercentrics v2 and v3): any
+visible one is the banner. When several elements match a selector the
+first visible one counts. A banner behind a closed shadow root counts
+as shown when hit tests land on its host; its buttons can't be reached,
+so only the rule's `api` can choose there (`--click button,api`).
 
 The loader refuses, with the file and line:
 

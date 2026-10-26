@@ -153,9 +153,13 @@ func (r *rule) listing() consent.CMPRuleInfo {
 	var by []string
 	if len(r.Selectors) > 0 {
 		l := r.Selectors[0]
-		if len(l.Shadow) > 0 {
+		switch {
+		case len(l.Shadow) > 0:
 			by = append(by, l.Shadow[0]+" (shadow DOM)")
-		} else {
+		case len(r.Banners) > 0 && len(r.Banners[0].Shadow) > 0 && r.Banners[0].Shadow[0] == l.CSS:
+			// The host of a banner drawn in its shadow root.
+			by = append(by, l.CSS+" (shadow DOM)")
+		default:
 			by = append(by, l.CSS)
 		}
 	}

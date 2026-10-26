@@ -62,6 +62,9 @@ func replicaPage(d *driver, r *rule, row expectPage) *fakePage {
 	if len(row.Sees.Selectors) > 0 {
 		pg.banner(r.ID, false, row.Sees.Selectors...)
 	}
+	for _, c := range row.Sees.Closed {
+		pg.controls[c] = probeResult{Closed: true}
+	}
 	if row.BannerAfterMS > 0 {
 		pg.at(row.BannerAfterMS, show)
 	} else {
@@ -116,7 +119,12 @@ type replicaState struct {
 }
 
 func (s *replicaState) store(cats map[string]bool) {
-	src := "cookie:" + s.r.Verify.Cookies[0]
+	var src string
+	if len(s.r.Verify.Cookies) > 0 {
+		src = "cookie:" + s.r.Verify.Cookies[0]
+	} else {
+		src = "storage:" + s.r.Verify.Storage[0]
+	}
 	s.fs.State = &consent.CMPState{CMP: s.r.ID, Source: src, Decided: true, Categories: maps.Clone(cats)}
 	s.pg.banner(s.r.ID, false)
 }
@@ -124,9 +132,9 @@ func (s *replicaState) store(cats map[string]bool) {
 func (s *replicaState) click(_ *consenttest.FakeTab, l consent.Locator) {
 	key := locKey(l)
 	switch {
-	case slices.ContainsFunc(s.r.Accept, func(c chain) bool { return c.Raw == key }):
+	case slices.ContainsFunc(s.r.Accept, func(c chain) bool { return chainText(c.Steps) == key }):
 		s.store(s.r.Accepted)
-	case slices.ContainsFunc(s.r.FirstLayer, func(c chain) bool { return c.Raw == key }):
+	case slices.ContainsFunc(s.r.FirstLayer, func(c chain) bool { return chainText(c.Steps) == key }):
 		s.store(s.r.Rejected)
 	case s.opens[key]:
 		for _, c := range s.row.Sees.Settings {
@@ -159,7 +167,7 @@ func TestReplicaChoose(t *testing.T) {
 		opens := map[string]bool{}
 		if r.Second != nil {
 			for _, c := range r.Second.Open {
-				opens[c.Raw] = true
+				opens[chainText(c.Steps)] = true
 			}
 		}
 		for _, row := range readExpect(t, r.ID).Pages {
@@ -179,6 +187,10 @@ func TestReplicaChoose(t *testing.T) {
 				want := row.AcceptLayer
 				if k == consent.RunReject {
 					want = row.RejectLayer
+				}
+				if row.Fallback {
+					replicaFallback(t, d, r, pg, p, info, k, name)
+					continue
 				}
 				found, reason, err := d.Find(context.Background(), pg.tab, p, info, k)
 				if err != nil || reason != consent.ReasonNone || found.Layer != want {
@@ -212,6 +224,34 @@ func TestReplicaChoose(t *testing.T) {
 	}
 }
 
+// replicaFallback checks a banner Echo sees and can't click (a closed
+// shadow root): --click button finds no button at once, --click
+// button,api makes the choice with the CMP's API and says it fell back.
+func replicaFallback(t *testing.T, d *driver, r *rule, pg *fakePage, p *consent.Plan, info consent.CMPInfo, k consent.RunKind, name string) {
+	t.Helper()
+	start := pg.tab.Now()
+	found, reason, err := d.Find(context.Background(), pg.tab, p, info, k)
+	if err != nil || reason != consent.ReasonNoButton || found != nil {
+		t.Errorf("%s: Find %+v, %q, %v; want no_button", name, found, reason, err)
+	}
+	if waited := pg.tab.Now() - start; waited > 0 {
+		t.Errorf("%s: waited %d ms for controls behind a closed shadow root", name, waited)
+	}
+	want := map[string]bool{}
+	maps.Copy(want, wanted(r, k))
+	call := apiCall(r, k)
+	consenttest.Use(t, consent.Stages{State: &apiState{tab: pg.tab, call: call,
+		state: &consent.CMPState{CMP: r.ID, Source: "storage:" + r.Verify.Storage[0], Decided: true, Categories: want}}})
+	p.Click = consent.ClickButtonAPI
+	ch, reason, err := d.Choose(context.Background(), pg.tab, p, info, k)
+	if err != nil || reason != consent.ReasonNone || ch == nil || ch.How != "api" || !ch.Fallback || !ch.Verified || ch.Selector != call {
+		t.Errorf("%s: Choose button,api %+v, %q, %v; want a verified API fallback", name, ch, reason, err)
+	}
+	if len(pg.tab.Clicked) != 0 {
+		t.Errorf("%s: clicked %v", name, clicked(pg))
+	}
+}
+
 var (
 	tokenRE  = regexp.MustCompile(`[#.][A-Za-z_][A-Za-z0-9_-]*`)
 	scriptRE = regexp.MustCompile(`<script[^>]*\ssrc="([^"]+)"`)
@@ -233,7 +273,7 @@ func TestReplicaMarkup(t *testing.T) {
 				t.Fatal(err)
 			}
 			html := string(b)
-			seen := slices.Concat(row.Sees.Selectors, row.Sees.Controls, row.Sees.Settings, row.Sees.Decoys)
+			seen := slices.Concat(row.Sees.Selectors, row.Sees.Controls, row.Sees.Settings, row.Sees.Decoys, row.Sees.Closed)
 			for _, sel := range seen {
 				for _, tok := range tokenRE.FindAllString(sel, -1) {
 					attr := `id="` + tok[1:] + `"`

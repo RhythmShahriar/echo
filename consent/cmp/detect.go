@@ -82,10 +82,7 @@ func scanFor(rules []*rule) scanInput {
 		for _, l := range r.Selectors {
 			sr.Selectors = append(sr.Selectors, keyed{Key: locKey(l), Loc: l})
 		}
-		if r.BannerRaw != "" {
-			b := r.Banner
-			sr.Banner = &b
-		}
+		sr.Banners = r.Banners
 		in.Rules = append(in.Rules, sr)
 		for _, s := range r.Scripts {
 			if !seen[s] {
@@ -211,7 +208,7 @@ func (r *rule) info(s sighting, found bool) consent.CMPInfo {
 	case r.ID == genericID:
 		ev = []string{"generic"}
 	case len(ev) == 0 && found:
-		ev = []string{"selector:" + locKey(r.Banner)}
+		ev = []string{"selector:" + locKey(r.Banners[0])}
 	}
 	if len(ev) > 2 {
 		ev = ev[:2]
@@ -237,8 +234,7 @@ func (d *driver) BannerShowing(ctx context.Context, t consent.Tab, info consent.
 }
 
 func bannerShowing(ctx context.Context, t consent.Tab, r *rule) (bool, error) {
-	b := r.Banner
-	scans, err := scanFrames(ctx, t, scanInput{Rules: []scanRule{{ID: r.ID, Banner: &b}}})
+	scans, err := scanFrames(ctx, t, scanInput{Rules: []scanRule{{ID: r.ID, Banners: r.Banners}}})
 	if err != nil {
 		return false, err
 	}

@@ -25,7 +25,10 @@ tab, styled switches pre-ticked), `onetrust/preference-centre.html`
 (the preference center with styled switches, two pre-ticked) and
 `cookieyes/cookie-law-info.html` (the older Cookie Law Info bar:
 present, not found, since it keeps its choice in other cookies).
-Complianz has none.
+`usercentrics/closed-shadow.html` (the banner in a closed shadow root:
+found, no button, the API under `--click button,api`) and
+`borlabs/version-3.html` (the Borlabs Cookie 3 markup). Complianz has
+none.
 
 ## expect.yaml
 
@@ -39,6 +42,8 @@ pages:
     detected_by: "selector:#CybotCookiebotDialog and global:Cookiebot"
     accept_layer: 1        # the layer Find reports for Accept
     reject_layer: 1        # 1, or 2 when Reject is only in the settings
+    fallback: false        # true: no button to click (closed shadow root);
+                           # --click button,api makes the choice with the API
     sees:                  # the page as the scripts see it (FakeTab tests)
       selectors: ["#CybotCookiebotDialog"]
       globals: [Cookiebot]
@@ -48,6 +53,7 @@ pages:
       settings: [...]      # clickable once the settings are open
       toggles: [false, true, true]   # the switches when the settings open
       decoys: ["#newsletter-accept"] # never clicked
+      closed: [...]        # controls behind a closed shadow root
 ```
 
 The `consent/cmp` tests answer a FakeTab from `sees` and check the

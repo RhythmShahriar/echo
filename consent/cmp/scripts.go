@@ -57,8 +57,8 @@ func locKey(l consent.Locator) string {
 // scanRule is one rule as the scan script gets it.
 type scanRule struct {
 	ID        string           `json:"id"`
-	Selectors []keyed          `json:"selectors"`
-	Banner    *consent.Locator `json:"banner,omitempty"`
+	Selectors []keyed            `json:"selectors"`
+	Banners   []consent.Locator `json:"banners,omitempty"`
 }
 
 type scanInput struct {

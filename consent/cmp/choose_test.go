@@ -42,10 +42,12 @@ func decide(pg *fakePage, fs *consenttest.FakeState, statistics bool) {
 	pg.banner("acme", false)
 }
 
+// clicked lists the clicks by locator key (the CSS, after the shadow
+// hosts when there are any).
 func clicked(pg *fakePage) []string {
 	var out []string
 	for _, l := range pg.tab.Clicked {
-		out = append(out, l.CSS)
+		out = append(out, locKey(l))
 	}
 	return out
 }

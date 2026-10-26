@@ -11,7 +11,7 @@ for (const r of (input.rules || []).slice(0, MAX)) {
   for (const s of (r.selectors || []).slice(0, MAX)) {
     if (find(s.loc)) matched.push(s.key);
   }
-  out.rules[r.id] = { matched: matched, banner: r.banner ? visible(find(r.banner)) : false };
+  out.rules[r.id] = { matched: matched, banner: (r.banners || []).slice(0, MAX).some(shown) };
 }
 const subs = (input.scripts || []).slice(0, MAX);
 if (subs.length) {

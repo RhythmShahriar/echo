@@ -18,10 +18,12 @@ function up(n) {
   return n.nodeType === 11 ? n.host : null;
 }
 
-// rootOf is the document, same-origin frame document or shadow root a
-// locator's CSS is looked up in; null when it isn't there (a closed
-// shadow root, a frame of another origin).
-function rootOf(loc) {
+// walk follows a locator's frame and shadow hosts. root is the
+// document, same-origin frame document or shadow root its CSS is looked
+// up in; null when it isn't there (a frame of another origin, a missing
+// host). closed is the host whose shadow root the page can't open (a
+// closed root, or none attached yet).
+function walk(loc) {
   let root = document;
   if (loc.frame && !String(location.href).includes(loc.frame)) {
     root = null;
@@ -31,21 +33,64 @@ function rootOf(loc) {
       if (!src.includes(loc.frame)) continue;
       try { if (f.contentDocument) { root = f.contentDocument; break; } } catch (e) { /* another origin */ }
     }
-    if (!root) return null;
+    if (!root) return { root: null, closed: null };
   }
   for (const host of loc.shadow || []) {
     let h = null;
-    try { h = root.querySelector(host); } catch (e) { return null; }
-    if (!h || !h.shadowRoot) return null;
+    try { h = root.querySelector(host); } catch (e) { return { root: null, closed: null }; }
+    if (!h) return { root: null, closed: null };
+    if (!h.shadowRoot) return { root: null, closed: h };
     root = h.shadowRoot;
   }
-  return root;
+  return { root: root, closed: null };
 }
 
+function rootOf(loc) {
+  return walk(loc).root;
+}
+
+// find is the first match of a locator that is visible, else the first
+// match: a CMP that prints one banner per consent type hides all but
+// one; the visible one is what a visitor clicks.
 function find(loc) {
   const root = rootOf(loc);
   if (!root) return null;
-  try { return root.querySelector(loc.css); } catch (e) { return null; }
+  let all = [];
+  try { all = root.querySelectorAll(loc.css); } catch (e) { return null; }
+  if (!all.length) return null;
+  for (let i = 0; i < all.length && i < MAX; i++) {
+    if (visible(all[i])) return all[i];
+  }
+  return all[0];
+}
+
+// closedShown reports whether something drawn inside host's closed
+// shadow root is on screen: hit tests from the document retarget to the
+// host, so a point that lands on its content returns the host itself.
+function closedShown(host) {
+  if (!host || !host.isConnected) return false;
+  const win = (host.ownerDocument && host.ownerDocument.defaultView) || window;
+  for (let n = host, i = 0; n && i < 256; n = up(n), i++) {
+    if (n.nodeType === 1 && win.getComputedStyle(n).display === "none") return false;
+  }
+  const doc = host.ownerDocument || document;
+  const steps = 12;
+  for (let i = 0; i <= steps; i++) {
+    for (let j = 0; j <= steps; j++) {
+      const x = Math.min(win.innerWidth - 1, (win.innerWidth * i) / steps);
+      const y = Math.min(win.innerHeight - 1, (win.innerHeight * j) / steps);
+      if (doc.elementFromPoint(x, y) === host) return true;
+    }
+  }
+  return false;
+}
+
+// shown is the banner test for a locator: its element visible, or, when
+// it sits behind a closed shadow root, the host's content on screen.
+function shown(loc) {
+  const w = walk(loc);
+  if (w.closed) return closedShown(w.closed);
+  return visible(find(loc));
 }
 
 // visible: sized, not display:none or visibility hidden, not (with its

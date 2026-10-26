@@ -195,7 +195,7 @@ func TestRuleParses(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if r.Banner.CSS != "#acme-banner" || len(r.Accept) != 1 || r.Second == nil || r.Second.TogglesOff.CSS != "#acme-prefs input.toggle:not([disabled])" {
+	if r.Banners[0].CSS != "#acme-banner" || len(r.Accept) != 1 || r.Second == nil || r.Second.Toggles[0].CSS != "#acme-prefs input.toggle:not([disabled])" {
 		t.Fatalf("rule = %+v", r)
 	}
 	if r.Verify.StateJS != "JSON.stringify(Acme.state)" || r.ReopenAPI != "reopen" || r.Verify.Cookies[0] != "acme_consent" {
@@ -207,6 +207,41 @@ func TestRuleParses(t *testing.T) {
 	}
 	if got := shadow.Accept[0].Steps[0]; got.CSS != "#accept" || !slices.Equal(got.Shadow, []string{"#root"}) || len(shadow.Accept[1].Steps) != 2 {
 		t.Fatalf("accept = %+v", shadow.Accept)
+	}
+}
+
+func TestRuleLists(t *testing.T) {
+	src := strings.NewReplacer(`  selector: "#acme-banner"`, "  selector: [\"#acme-banner\", \"#acme-root ::shadow .banner\"]",
+		`toggles_off: "#acme-prefs input.toggle:not([disabled])"`, `toggles_off: ["#acme-prefs input.toggle", "#acme-root ::shadow input"]`).Replace(acmeRule)
+	r, err := parseRule("acme.yaml", []byte(src))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(r.Banners) != 2 || r.Banners[1].CSS != ".banner" || !slices.Equal(r.Banners[1].Shadow, []string{"#acme-root"}) || r.BannerRaw != "#acme-banner" {
+		t.Fatalf("banners = %+v (%q)", r.Banners, r.BannerRaw)
+	}
+	if len(r.Second.Toggles) != 2 || r.Second.Toggles[1].CSS != "input" {
+		t.Fatalf("toggles = %+v", r.Second.Toggles)
+	}
+	for _, tc := range []struct{ from, to, want string }{
+		{`  selector: "#acme-banner"`, `  selector: ["#acme-banner", ""]`, "line 9: banner.selector.1: selector is empty"},
+		{`  selector: "#acme-banner"`, `  selector: []`, "line 9: banner.selector: missing"},
+		{`  selector: "#acme-banner"`, `  selector: ["#a >> #b"]`, "line 9: banner.selector: want one step, not a chain with >>"},
+		{`  selector: "#acme-banner"`, `  selector: {a: b}`, "line 9: cannot unmarshal !!map into []string"},
+	} {
+		_, err := parseRule("acme.yaml", []byte(strings.Replace(acmeRule, tc.from, tc.to, 1)))
+		if err == nil || !strings.Contains(err.Error(), "acme.yaml: "+tc.want) {
+			t.Errorf("%s: err = %v; want %q", tc.to, err, tc.want)
+		}
+	}
+	host := strings.NewReplacer(`  selector: "#acme-banner"`, `  selector: "#acme-root ::shadow .banner"`,
+		`selectors: ["#acme-banner"]`, `selectors: ["#acme-root"]`).Replace(acmeRule)
+	d, err := load(mapFS(map[string]string{"acme.yaml": host}), "rules")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := d.Rules()[0].DetectedBy; got != "#acme-root (shadow DOM), window.Acme" {
+		t.Errorf("DetectedBy = %q", got)
 	}
 }
 
@@ -352,6 +387,7 @@ type expectPage struct {
 	DetectedBy    string `yaml:"detected_by"`
 	AcceptLayer   int    `yaml:"accept_layer"`
 	RejectLayer   int    `yaml:"reject_layer"`
+	Fallback      bool   `yaml:"fallback"` // no button to click: --click button,api uses the API
 	Sees          sees   `yaml:"sees"`
 }
 
@@ -366,6 +402,7 @@ type sees struct {
 	Settings  []string `yaml:"settings"` // clickable once the settings are open
 	Toggles   []bool   `yaml:"toggles"`  // each toggle's state when the settings open
 	Decoys    []string `yaml:"decoys"`   // other controls on the page, never clicked
+	Closed    []string `yaml:"closed"`   // controls behind a closed shadow root
 }
 
 func readExpect(t *testing.T, id string) expectFile {

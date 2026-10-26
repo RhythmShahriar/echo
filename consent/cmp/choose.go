@@ -165,14 +165,14 @@ func chainsFor(p *consent.Plan, r *rule, k consent.RunKind) ([]chain, *secondLay
 	return r.FirstLayer, r.Second
 }
 
-// within is the banner container the first-layer controls must be in;
-// nil when the CMP has none (custom selectors on an unknown banner).
-func within(r *rule) *consent.Locator {
+// within are the banner containers the first-layer controls must be in
+// (one of them); nil when the CMP has none (custom selectors on an
+// unknown banner).
+func within(r *rule) []consent.Locator {
 	if r == nil || r.BannerRaw == "" {
 		return nil
 	}
-	b := r.Banner
-	return &b
+	return r.Banners
 }
 
 // one is a one-step chain for l.
@@ -209,6 +209,11 @@ func (d *driver) locate(ctx context.Context, t consent.Tab, p *consent.Plan, r *
 					return &target{layer: 1, chain: c, probe: pr}, consent.ReasonNone, nil
 				}
 			}
+			if behindClosedRoot(res) {
+				// A closed shadow root never opens to the page's scripts:
+				// waiting can't help, only the CMP's API can choose.
+				return nil, consent.ReasonNoButton, nil
+			}
 			if second != nil && (now-start >= secondGrace.Milliseconds() || now >= deadline) {
 				for _, c := range second.Open {
 					if pr := res[locKey(c.Steps[0])]; pr.clickable() {
@@ -226,9 +231,22 @@ func (d *driver) locate(ctx context.Context, t consent.Tab, p *consent.Plan, r *
 	}
 }
 
+// behindClosedRoot reports whether a probe found no control at all and
+// at least one is behind a closed shadow root.
+func behindClosedRoot(res map[string]probeResult) bool {
+	closed := false
+	for _, pr := range res {
+		if pr.Found {
+			return false
+		}
+		closed = closed || pr.Closed
+	}
+	return closed
+}
+
 // waitClickable waits up to --banner-wait for the first of chains whose
 // first step is clickable inside in (nil: anywhere on the page).
-func (d *driver) waitClickable(ctx context.Context, t consent.Tab, p *consent.Plan, chains []chain, in *consent.Locator) (*chain, error) {
+func (d *driver) waitClickable(ctx context.Context, t consent.Tab, p *consent.Plan, chains []chain, in []consent.Locator) (*chain, error) {
 	var locs []consent.Locator
 	for _, c := range chains {
 		locs = append(locs, c.Steps[0])
@@ -282,10 +300,8 @@ func (d *driver) viaButton(ctx context.Context, t consent.Tab, p *consent.Plan, 
 	if save == nil {
 		return ch, consent.ReasonNoButton, nil
 	}
-	if r.Second.TogglesOff.CSS != "" {
-		if err := switchOff(ctx, t, r.Second.TogglesOff); err != nil {
-			return ch, consent.ReasonNone, err
-		}
+	if err := switchOff(ctx, t, r.Second.Toggles); err != nil {
+		return ch, consent.ReasonNone, err
 	}
 	ch.Selector = consent.SafeText(tg.chain.Raw+" >> "+save.Raw, selectorWidth)
 	return d.clickAndVerify(ctx, t, p, r, k, *save, nil, ch, before)
@@ -294,7 +310,7 @@ func (d *driver) viaButton(ctx context.Context, t consent.Tab, p *consent.Plan, 
 // clickSteps clicks each of steps once, in order, waiting for each to be
 // clickable; the first inside in, the rest anywhere (a step can open a
 // dialog outside the banner).
-func (d *driver) clickSteps(ctx context.Context, t consent.Tab, p *consent.Plan, steps []consent.Locator, in *consent.Locator, ch *consent.Choice) (consent.Reason, error) {
+func (d *driver) clickSteps(ctx context.Context, t consent.Tab, p *consent.Plan, steps []consent.Locator, in []consent.Locator, ch *consent.Choice) (consent.Reason, error) {
 	for i, l := range steps {
 		where := in
 		if i > 0 {
@@ -322,19 +338,22 @@ func (d *driver) clickSteps(ctx context.Context, t consent.Tab, p *consent.Plan,
 	return consent.ReasonNone, nil
 }
 
-// switchOff clicks every enabled switch of l that is on, once. A switch
-// still on afterwards shows in the stored state the verify step reads.
-func switchOff(ctx context.Context, t consent.Tab, l consent.Locator) error {
-	list, err := toggles(ctx, t, l)
-	if err != nil {
-		return err
-	}
-	for _, tg := range list {
-		if !tg.On || tg.Disabled || tg.Path == "" {
-			continue
-		}
-		if _, err := t.Click(ctx, consent.Locator{CSS: tg.Path, Shadow: l.Shadow, Frame: l.Frame}); err != nil {
+// switchOff clicks every enabled switch of locs that is on, once. A
+// switch still on afterwards shows in the stored state the verify step
+// reads.
+func switchOff(ctx context.Context, t consent.Tab, locs []consent.Locator) error {
+	for _, l := range locs {
+		list, err := toggles(ctx, t, l)
+		if err != nil {
 			return err
+		}
+		for _, tg := range list {
+			if !tg.On || tg.Disabled || tg.Path == "" {
+				continue
+			}
+			if _, err := t.Click(ctx, consent.Locator{CSS: tg.Path, Shadow: l.Shadow, Frame: l.Frame}); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
@@ -343,7 +362,7 @@ func switchOff(ctx context.Context, t consent.Tab, l consent.Locator) error {
 // clickAndVerify clicks c (the steps before the last once, the last up
 // to maxClicks times) and waits up to --settle after each click of the
 // last step for the CMP to store the choice and close its banner.
-func (d *driver) clickAndVerify(ctx context.Context, t consent.Tab, p *consent.Plan, r *rule, k consent.RunKind, c chain, in *consent.Locator, ch *consent.Choice, before *consent.CMPState) (*consent.Choice, consent.Reason, error) {
+func (d *driver) clickAndVerify(ctx context.Context, t consent.Tab, p *consent.Plan, r *rule, k consent.RunKind, c chain, in []consent.Locator, ch *consent.Choice, before *consent.CMPState) (*consent.Choice, consent.Reason, error) {
 	last := c.Steps[len(c.Steps)-1]
 	if len(c.Steps) > 1 {
 		if reason, err := d.clickSteps(ctx, t, p, c.Steps[:len(c.Steps)-1], in, ch); reason != consent.ReasonNone || err != nil {
