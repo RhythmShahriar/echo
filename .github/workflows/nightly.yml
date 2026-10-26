@@ -5,8 +5,10 @@
 # container network, PHP's mail() through rhythm-echo sendmail plus the
 # WordPress connector inside a real WordPress), PHPStan with the WordPress
 # stubs on the mu-plugin and Echo Staging Seal, the Node and Laravel
-# connectors end to end against Echo's conformance stand-in and WordPress's
-# Plugin Check on the mu-plugin.
+# connectors end to end against Echo's conformance stand-in, WordPress's
+# Plugin Check on the mu-plugin and the consent checks: the benchmark in
+# the sealed consent testbed, the consent fuzz targets and the tests with
+# every consent stage required on three OSes.
 name: nightly
 on:
   schedule:
@@ -87,3 +89,76 @@ jobs:
           slug: rhythm-echo
           # An mu-plugin installed by the CLI has no readme.txt.
           exclude-checks: plugin_readme
+
+  # The consent benchmark of record (PRD 18.2) in the sealed Docker
+  # testbed, then make reproduce: two more full runs whose outcomes must
+  # match. The benchmark exits 1 when any target is missed, which fails
+  # the job; the scoreboard is uploaded either way.
+  consent-testbed:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - name: Start the sealed consent testbed
+        run: make -C testbed/consent up
+      - name: Benchmark
+        run: make bench-consent
+      - name: Reproduce
+        run: make -C testbed/consent reproduce
+      - name: Upload the scoreboard
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: benchmark-consent
+          path: |
+            docs/benchmark-consent.md
+            testbed/consent/bench/work/results.json
+          if-no-files-found: warn
+      - name: Stop the testbed
+        if: always()
+        run: make -C testbed/consent down
+
+  # Every consent fuzz target for two minutes each. A crasher lands in its
+  # package's testdata/fuzz folder; upload those so it can be replayed.
+  consent-fuzz:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - run: make fuzz-consent FUZZTIME=2m
+      - name: Upload the crashers
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: consent-fuzz-crashers
+          path: |
+            consent/**/testdata/fuzz/
+            report/testdata/fuzz/
+          if-no-files-found: ignore
+
+  # The tests with every consent stage required: a stage that isn't
+  # linked into the build fails here instead of skipping, on every OS
+  # the release ships for.
+  consent-integrated:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      ECHO_CONSENT_REQUIRE_LINKED: "1"
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - run: make test-integrated
+      - run: make test-browser
