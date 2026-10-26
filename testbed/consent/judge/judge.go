@@ -126,8 +126,28 @@ func Matches(m scenarios.Match, e *Envelope) bool {
 			(m.Level == "" || string(is.Level) == m.Level) &&
 			(m.Run == "" || string(is.Run) == m.Run) &&
 			(m.Title == "" || containsFold(is.Title, m.Title)) &&
-			(m.Status == "" && m.Reason == "")
+			(m.Status == "" && m.Reason == "") &&
+			(m.FirstParty == nil || issueFirstParty(e, is, *m.FirstParty))
 	})
+}
+
+// issueFirstParty reports whether a hit behind is has FirstParty set to
+// want: the hits its evidence names (by sequence number in its run) or,
+// when it names none, the hits of its tracker in its run.
+func issueFirstParty(e *Envelope, is consent.Issue, want bool) bool {
+	found := false
+	e.Runs(func(_ consent.Page, r consent.Run) {
+		if is.Run != "" && r.Kind != is.Run {
+			return
+		}
+		for _, h := range r.Hits {
+			named := slices.Contains(is.Evidence, h.Seq) || (len(is.Evidence) == 0 && (is.Tracker == "" || h.Tracker == is.Tracker))
+			if named && h.FirstParty == want {
+				found = true
+			}
+		}
+	})
+	return found
 }
 
 // runMatches finds a run with the status and reason m names. A reason

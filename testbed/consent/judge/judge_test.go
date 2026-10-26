@@ -130,6 +130,50 @@ func TestJudgeTitleIsACaseInsensitiveSubstring(t *testing.T) {
 	}
 }
 
+// TestJudgeFirstParty: c12 is caught only when a hit behind the GA4
+// issue was recognised on the site's own host.
+func TestJudgeFirstParty(t *testing.T) {
+	yes := true
+	s := scenarios.Scenario{ID: "c12", Expect: []scenarios.Match{
+		{Check: "consent/before-choice", Tracker: "ga4", Level: "error", FirstParty: &yes}}}
+	ga4 := issue("consent/before-choice", "ga4", model.Error, "GA4 fired before the visitor chose")
+	hits := func(firstParty ...bool) func(*consent.Result) {
+		return func(r *consent.Result) {
+			for i, fp := range firstParty {
+				r.Pages[0].Runs[0].Hits = append(r.Pages[0].Runs[0].Hits, consent.HitRef{Seq: int64(i + 1),
+					Hit: consent.Hit{Tracker: "ga4", FirstParty: fp}})
+			}
+		}
+	}
+	withEvidence := ga4
+	withEvidence.Evidence = []int64{2}
+	for _, c := range []struct {
+		name  string
+		issue consent.Issue
+		mod   func(*consent.Result)
+		want  string
+	}{
+		{"first-party hit", ga4, hits(true), Caught},
+		{"vendor host only", ga4, hits(false), Missed},
+		{"no hits", ga4, hits(), Missed},
+		{"evidence names the first-party hit", withEvidence, hits(false, true), Caught},
+		{"evidence names a vendor hit", func() consent.Issue { i := withEvidence; i.Evidence = []int64{1}; return i }(), hits(false, true), Missed},
+		{"first-party hit in another run", ga4, func(r *consent.Result) {
+			r.Pages[0].Runs[2].Hits = []consent.HitRef{{Seq: 1, Hit: consent.Hit{Tracker: "ga4", FirstParty: true}}}
+		}, Missed},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			v := Bad(s, Observed{Env: fakeEnvelope(true, []consent.Issue{c.issue}, c.mod)})
+			if v.Outcome != c.want {
+				t.Errorf("verdict = %+v, want %s", v, c.want)
+			}
+		})
+	}
+	if got := s.Expect[0].String(); !strings.Contains(got, "first_party=true") {
+		t.Errorf("String() = %q", got)
+	}
+}
+
 func TestJudgeRunOutcomesAndAny(t *testing.T) {
 	s := scenarios.Scenario{ID: "c21", Any: true, Expect: []scenarios.Match{
 		{Run: "reject", Reason: "state_unchanged"},

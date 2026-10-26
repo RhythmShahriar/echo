@@ -142,7 +142,7 @@ scenarios:
     needs: go
     toggle: no Consent Mode default, so GA4 sends to metrics.c12.shop.test at once
     expect:
-      - {check: consent/before-choice, tracker: ga4, level: error}
+      - {check: consent/before-choice, tracker: ga4, level: error, first_party: true}
   - id: c13
     name: sendBeacon on pagehide after Reject
     area: trackers
