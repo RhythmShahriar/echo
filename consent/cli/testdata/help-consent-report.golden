@@ -1,0 +1,34 @@
+rhythm echo consent report: show a saved consent result again
+
+Usage:
+  rhythm echo consent report [<id>|latest] [flags]
+
+Flags:
+      --against <name|path|last>
+                             compare with a baseline, a consent.json, a result
+                             folder or the previous result (last)
+      --accept <key>         take this change (its key from -v) as intended
+                             (repeatable)
+      --json                 write JSON to stdout
+      --md                   write Markdown to stdout
+      --junit                write JUnit XML to stdout
+      --html                 write the HTML report to stdout
+  -o, --output <file>        also write a report to a file, its format from
+                             .json .md .xml or .html (repeatable)
+      --open                 open the HTML report when done
+  -q, --quiet                only the verdict and what failed
+      --plain                no color or glyphs (screen readers, logs)
+      --no-color             no color
+  -v, --verbose              add every run's timeline and the change keys
+      --fail-on <level>      exit 1 at or above error (the default), warning or
+                             notice; with --against broke (the default), new or
+                             changed; none: never
+      --config <file>        settings (default the nearest .echo/config.yaml;
+                             optional)
+      --store <dir>          where results are kept (default the config's
+                             folder, else ./.echo)
+
+Exit codes: as rhythm echo consent for that result: 0 ok, 1 findings, 2 usage
+error, 3 couldn't check.
+rhythm echo consent --help lists the consent check's flags.
+rhythm echo help lists every command.

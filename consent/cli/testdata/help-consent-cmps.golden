@@ -1,0 +1,14 @@
+rhythm echo consent cmps: the consent banners Echo knows how to click
+
+Usage:
+  rhythm echo consent cmps [--json]
+
+Flags:
+      --json                 write JSON to stdout
+  -q, --quiet                only the verdict and what failed
+      --plain                no color or glyphs (screen readers, logs)
+      --no-color             no color
+
+Exit codes: 0 ok, 2 usage error, 3 couldn't run.
+rhythm echo consent --help lists the consent check's flags.
+rhythm echo help lists every command.
