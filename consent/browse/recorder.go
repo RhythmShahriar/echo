@@ -147,6 +147,10 @@ type recorder struct {
 	storage      map[string]int                                        // last snapshot's storage keys and value lengths
 	lastSnapshot int64
 
+	activity atomic.Int64 // unix ns of the last request that started or ended, for settle
+	loads    atomic.Int64 // load events of the tab's top frame
+	topNavs  []topNav     // top-frame document requests, for a click that navigates away
+
 	limit    chan struct{} // closed when Limits.Requests is reached
 	counts   struct{ requests, held, refused, internal atomic.Int64 }
 	dropped  atomic.Int64
@@ -437,6 +441,10 @@ func (r *recorder) handle(msg *rod.Message) {
 		if msg.Load(&e) {
 			r.extraInfo(&e)
 		}
+	case "Page.loadEventFired":
+		if t.kind == kindPage {
+			r.loads.Add(1)
+		}
 	case "Network.loadingFailed":
 		var e proto.NetworkLoadingFailed
 		if msg.Load(&e) {
@@ -508,8 +516,13 @@ func (r *recorder) pendingFor(id proto.NetworkRequestID) *pending {
 // first document request of the tab starts the run clock. A redirect
 // ends the hop before it.
 func (r *recorder) willBeSent(t *target, e *proto.NetworkRequestWillBeSent) {
+	r.activity.Store(time.Now().UnixNano())
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	if t.kind == kindPage && e.Type == proto.NetworkResourceTypeDocument && e.Request != nil &&
+		string(e.FrameID) == string(t.id) && len(r.topNavs) < maxTopNavs {
+		r.topNavs = append(r.topNavs, topNav{host: hostOfURL(e.Request.URL), at: time.Now()})
+	}
 	if r.base == 0 && t.kind == kindPage && e.Type == proto.NetworkResourceTypeDocument {
 		r.base = float64(e.WallTime)
 	}
@@ -556,6 +569,7 @@ func (r *recorder) willBeSent(t *target, e *proto.NetworkRequestWillBeSent) {
 // status -1 means finished without a new status; errText is Chrome's
 // error, or the guard's refusal header on a response.
 func (r *recorder) completed(id proto.NetworkRequestID, status int, errText string) {
+	r.activity.Store(time.Now().UnixNano())
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	p := r.reqs[id]
