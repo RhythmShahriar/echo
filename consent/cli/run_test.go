@@ -394,6 +394,18 @@ func TestSaveAgainst(t *testing.T) {
 			t.Errorf("--against %s: %s", against, errOut)
 		}
 	}
+	// The saved baseline wins over a folder of the same name here; that
+	// folder is still reached as ./baseline.
+	if err := os.Mkdir("baseline", 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if code, _, errOut := runMain(t, "--against", "baseline", "https://shop.test/"); code == exitUsage {
+		t.Errorf("--against baseline next to ./baseline: %s", errOut)
+	}
+	dot := "." + string(filepath.Separator) + "baseline"
+	if code, _, errOut := runMain(t, "--against", dot, "https://shop.test/"); code != exitUsage || errOut != "rhythm echo: --against "+dot+": no consent.json in that folder\n" {
+		t.Errorf("--against %s: %d %q", dot, code, errOut)
+	}
 	// An incomplete check is never saved as a baseline.
 	useRunner(t, consenttest.GoldenResult("inconclusive"), nil)
 	_, out, errOut = runMain(t, "--save", "partial", "https://shop.test/")
