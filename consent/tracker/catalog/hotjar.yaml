@@ -17,7 +17,9 @@ hits:
 scripts:
   - hosts: [static.hotjar.com]
     paths: ["/c/hotjar-*.js"]
+  # Modules only: *.hotjar.com/api/ takes hits, script.hotjar.com too.
   - hosts: [script.hotjar.com]
+    paths: ["/*.js"]
 cookies:
   - "_hjSessionUser_*"
   - "_hjSession_*"

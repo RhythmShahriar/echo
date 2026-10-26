@@ -32,6 +32,7 @@ const (
 // rule is one compiled hits, scripts or frames rule.
 type rule struct {
 	e        *entry
+	line     int // in e.file, for errors
 	kind     consent.HitKind
 	exact    []string
 	suffix   []string // ".google-analytics.com"
@@ -61,6 +62,9 @@ const masked = "••••"
 // maxPairs bounds how many parameters one query or body line is read
 // for, so a hostile request can't make classifying it slow.
 const maxPairs = 512
+
+// maxHost is the longest DNS name (RFC 1035), in its ASCII form.
+const maxHost = 253
 
 // maxValue caps one stored value (an event name, a parameter).
 const maxValue = 256
@@ -93,6 +97,9 @@ type request struct {
 	method string
 	host   string
 	path   string
+	// script is true when the request loads a script or a page rather
+	// than sending data: its type says so or its path names a .js file.
+	script bool
 	query  map[string]string
 	body   []byte
 
@@ -123,13 +130,20 @@ func newRequest(r *consent.Request, body []byte) (*request, bool) {
 	if m == "" {
 		m = "GET"
 	}
-	return &request{method: m, host: host, path: p, query: parseQuery(u.RawQuery), body: body}, true
+	typ := strings.ToLower(r.Type)
+	script := typ == "script" || typ == "document" || strings.HasSuffix(strings.ToLower(p), ".js")
+	return &request{method: m, host: host, path: p, script: script, query: parseQuery(u.RawQuery), body: body}, true
 }
 
 // normHost lowercases a host, drops a trailing dot and writes an
 // internationalized name in its ASCII form, the form catalog hosts use.
 func normHost(h string) string {
 	h = strings.TrimSuffix(strings.ToLower(h), ".")
+	if len(h) > maxHost {
+		// No DNS name is longer, so no tracker host is either; IDNA on a
+		// hostile 8 KiB host would only cost time.
+		return ""
+	}
 	if a, err := idna.Lookup.ToASCII(h); err == nil {
 		h = a
 	}
@@ -307,6 +321,12 @@ func (c *Catalog) find(q *request) *rule {
 		}
 	}
 	for _, r := range c.tiers[tierAny] {
+		if r.kind == consent.HitBeacon && q.script {
+			// On any host only the parameters prove a hit; a script
+			// URL can carry any parameter: a first-party loader such as
+			// /gtag/js?id=G-...&v=2&tid=G-... is never a beacon.
+			continue
+		}
 		if r.matches(q) {
 			return r
 		}

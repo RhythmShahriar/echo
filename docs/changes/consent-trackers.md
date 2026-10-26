@@ -92,3 +92,11 @@ Notes users may notice:
 - Necessary services (category `necessary`, consent `no`): `stripe` (Stripe.js), `paypal` (PayPal checkout), `recaptcha` (Google reCAPTCHA, also on www.recaptcha.net), `hcaptcha` and `turnstile` (Cloudflare Turnstile). Google Fonts is category `functional` with consent `no`. These are listed under "Seen, no consent needed", never judged and never held.
 - Google Fonts stylesheet and font loads are reported with kind `script` (a load, never held).
 - For the docs: the Munich Regional Court (LG Muenchen I, 3 O 17493/20, 20 January 2022) held that loading Google Fonts from Google's servers without consent shares the visitor's IP address unlawfully. Echo does not judge it; the docs can suggest self-hosting the fonts.
+
+## Matcher and Hold (T6)
+
+- The catalog refuses to load when a script rule and a hit rule can fit one URL (same host or overlapping host patterns, a GET-capable hit and path patterns that meet), in one entry or across two. The message names both rules: `catalog/shop-tag.yaml:7: a script of shop-tag and a hit of shop-pixel (catalog/shop-pixel.yaml:7) both fit px.shop.example (script path (any), hit path /collect); a script must never look like a hit`. Custom trackers (T9) get the same check.
+- hotjar scripts on `script.hotjar.com` now need a `/*.js` path and Microsoft Clarity scripts on `scripts.clarity.ms` a `/*/*.js` path, so a hit on those hosts is never taken for a script load.
+- A hit rule on any host never matches a script or page load: a request of type `script` or `document`, or one whose path ends in `.js`, is never a beacon there, whatever parameters it carries (`/gtag/js?id=G-...&v=2&tid=G-...` on a first-party loader stays a script).
+- A host longer than 253 bytes (the longest DNS name) is never a tracker.
+- Query parameter order never changes a hit.

@@ -279,7 +279,7 @@ func compile(s *entrySpec, file string, fail func(int, string, ...any) error, at
 			if err != nil {
 				return nil, err
 			}
-			r.e = e
+			r.e, r.line = e, at(g.key, i)
 			e.rules = append(e.rules, r)
 		}
 	}
@@ -469,6 +469,9 @@ func newCatalog(entries []*entry) (*Catalog, error) {
 	}
 	c.cookies.sort()
 	c.storage.sort()
+	if err := checkOverlap(entries); err != nil {
+		return nil, err
+	}
 	return c, nil
 }
 

@@ -16,7 +16,10 @@ hits:
 scripts:
   - hosts: [www.clarity.ms]
     paths: ["/tag/*", "/s/**"]
+  # A path, so a /collect hit on scripts.clarity.ms can't pass for the
+  # script (*.clarity.ms takes hits).
   - hosts: [scripts.clarity.ms]
+    paths: ["/*/*.js"]
 cookies:
   - _clck
   - _clsk
