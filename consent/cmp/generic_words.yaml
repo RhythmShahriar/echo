@@ -263,156 +263,196 @@ never_choice:
   - המשך
   - הבנתי
 
+# Negation words, matched as whole words. A text that reads as Accept
+# yet holds one of these is never Accept: "Don't accept all cookies"
+# refuses although "accept all cookies" is its longest phrase. The usual
+# negated forms are also Reject phrases below, so a plain "Ne pas
+# accepter" is a Reject. No Accept phrase may hold one of these. "non"
+# is left out: "Accept non-essential cookies" accepts.
+negation:
+  - not
+  - don t
+  - dont
+  - never
+  - nicht
+  - kein
+  - keine
+  - niemals
+  - pas
+  - jamais
+  - "no"
+  - nunca
+  - não
+  - nie
+  - ne
+  - nu
+  - nem
+  - ei
+  - ikke
+  - inte
+  - ekki
+  - ní
+  - niet
+  - geen
+  - mhux
+  - değil
+  - не
+  - ні
+  - δεν
+  - όχι
+  - לא
+  - لا
+
 # Per language: accept and reject (at least three each), the button
 # that opens the settings and the one that saves them.
 languages:
   bg:
     accept: [приемам всички, приемам, приеми всички, приеми, приемане, съгласен съм, разреши всички]
-    reject: [отхвърлям всички, отхвърлям, отхвърли всички, отхвърли, откажи, отказвам, само необходимите, само задължителните, не съм съгласен]
+    reject: [отхвърлям всички, отхвърлям, отхвърли всички, отхвърли, откажи, отказвам, само необходимите, само задължителните, не съм съгласен, не приемам, не приемай, не разрешавай]
     settings: [настройки, персонализиране, предпочитания, управление на бисквитките, опции]
     save: [запази, запазване, запази настройките, потвърди избора, запази избора]
   cs:
     accept: [přijmout vše, přijmout, přijmout všechny, souhlasím, souhlasit, povolit vše, přijmout všechny cookies]
-    reject: [odmítnout vše, odmítnout, odmítnout všechny, pouze nezbytné, jen nezbytné, nesouhlasím, pouze nezbytné cookies]
+    reject: [odmítnout vše, odmítnout, odmítnout všechny, pouze nezbytné, jen nezbytné, nesouhlasím, pouze nezbytné cookies, nepřijímat, nepřijímám, nepovolit]
     settings: [nastavení, přizpůsobit, předvolby, upravit nastavení, spravovat cookies]
     save: [uložit, uložit nastavení, uložit volby, potvrdit výběr, uložit a zavřít]
   da:
     accept: [accepter alle, accepter, accepter alle cookies, tillad alle, jeg accepterer, tillad alle cookies]
-    reject: [afvis alle, afvis, afvis alle cookies, kun nødvendige, kun nødvendige cookies, afslå, afslå alle]
+    reject: [afvis alle, afvis, afvis alle cookies, kun nødvendige, kun nødvendige cookies, afslå, afslå alle, accepter ikke, jeg accepterer ikke, tillad ikke]
     settings: [indstillinger, tilpas, præferencer, cookieindstillinger, administrer]
     save: [gem, gem indstillinger, gem valg, bekræft valg, tillad valgte]
   de:
     accept: [alle akzeptieren, akzeptieren, alles akzeptieren, alle cookies akzeptieren, zustimmen, alle zulassen, zulassen, einverstanden, annehmen, alle annehmen, ich stimme zu, akzeptieren und schließen]
-    reject: [alle ablehnen, ablehnen, nur notwendige, nur notwendige cookies, nur notwendige akzeptieren, nur essenzielle, nur essenzielle cookies, nur essenzielle akzeptieren, nur erforderliche, nur technisch notwendige, nicht zustimmen, verweigern, alle verweigern]
+    reject: [alle ablehnen, ablehnen, nur notwendige, nur notwendige cookies, nur notwendige akzeptieren, nur essenzielle, nur essenzielle cookies, nur essenzielle akzeptieren, nur erforderliche, nur technisch notwendige, nicht zustimmen, verweigern, alle verweigern, nicht akzeptieren, ich akzeptiere nicht, ich stimme nicht zu, nicht einverstanden, nicht annehmen, nicht zulassen]
     settings: [einstellungen, cookie einstellungen, anpassen, individuelle einstellungen, präferenzen, optionen, mehr optionen, verwalten]
     save: [speichern, auswahl speichern, einstellungen speichern, auswahl bestätigen, auswahl erlauben, bestätigen, auswahl akzeptieren]
   el:
     accept: [αποδοχή όλων, αποδοχή, αποδέχομαι, συμφωνώ, επιτρέψτε όλα, αποδοχή όλων των cookies]
-    reject: [απόρριψη όλων, απόρριψη, απορρίπτω, μόνο τα απαραίτητα, μόνο απαραίτητα, δεν συμφωνώ, άρνηση]
+    reject: [απόρριψη όλων, απόρριψη, απορρίπτω, μόνο τα απαραίτητα, μόνο απαραίτητα, δεν συμφωνώ, άρνηση, δεν αποδέχομαι, δεν επιτρέπω, όχι αποδοχή]
     settings: [ρυθμίσεις, προσαρμογή, προτιμήσεις, διαχείριση, επιλογές]
     save: [αποθήκευση, αποθήκευση ρυθμίσεων, αποθήκευση επιλογών, επιβεβαίωση επιλογών]
   en:
     accept: [accept all, accept all cookies, accept, accept cookies, i accept, allow all, allow all cookies, allow cookies, agree, i agree, agree and close, accept and close]
-    reject: [reject all, reject, reject all cookies, reject cookies, decline, decline all, deny, deny all, refuse, refuse all, i do not accept, disagree, necessary only, only necessary, only necessary cookies, necessary cookies only, use necessary cookies only, accept only necessary, accept necessary, accept only essential, accept essential only, essential only, only essential, reject non essential, continue without accepting]
+    reject: [reject all, reject, reject all cookies, reject cookies, decline, decline all, deny, deny all, refuse, refuse all, i do not accept, disagree, necessary only, only necessary, only necessary cookies, necessary cookies only, use necessary cookies only, accept only necessary, accept necessary, accept only essential, accept essential only, essential only, only essential, reject non essential, continue without accepting, do not accept, "don't accept", do not agree, "don't agree", "i don't agree", do not allow, "don't allow", do not consent, "don't consent", "i don't accept"]
     settings: [settings, cookie settings, preferences, manage preferences, customize, customise, manage cookies, manage options, more options, options, privacy settings]
     save: [save, save settings, save preferences, save my choices, confirm my choices, confirm choices, save and close, save selection, allow selection, accept selected, accept selection]
   es:
     accept: [aceptar todo, aceptar, acepto, aceptar todas, aceptar cookies, aceptar todas las cookies, permitir todas, consentir]
-    reject: [rechazar todo, rechazar, rechazar todas, rechazar cookies, solo necesarias, solo cookies necesarias, denegar, no acepto, continuar sin aceptar]
+    reject: [rechazar todo, rechazar, rechazar todas, rechazar cookies, solo necesarias, solo cookies necesarias, denegar, no acepto, continuar sin aceptar, no aceptar, no permitir, no consiento, no estoy de acuerdo]
     settings: [configuración, configurar, personalizar, preferencias, gestionar preferencias, ajustes, opciones]
     save: [guardar, guardar preferencias, guardar configuración, confirmar mis preferencias, confirmar selección, guardar y cerrar]
   et:
     accept: [nõustu kõigiga, nõustun kõigiga, nõustun, nõustu, luba kõik, aktsepteeri kõik]
-    reject: [keeldu kõigist, keeldu, keeldun, ainult vajalikud, ainult hädavajalikud, lükka tagasi, lükka kõik tagasi]
+    reject: [keeldu kõigist, keeldu, keeldun, ainult vajalikud, ainult hädavajalikud, lükka tagasi, lükka kõik tagasi, ei nõustu, ma ei nõustu, ära luba]
     settings: [seaded, kohanda, eelistused, küpsiste seaded, halda]
     save: [salvesta, salvesta seaded, salvesta valik, kinnita valik]
   fi:
     accept: [hyväksy kaikki, hyväksy, hyväksyn, salli kaikki, hyväksy evästeet]
-    reject: [hylkää kaikki, hylkää, kiellä, kiellä kaikki, vain välttämättömät, vain välttämättömät evästeet, en hyväksy, kieltäydy]
+    reject: [hylkää kaikki, hylkää, kiellä, kiellä kaikki, vain välttämättömät, vain välttämättömät evästeet, en hyväksy, kieltäydy, älä hyväksy, älä salli, en salli]
     settings: [asetukset, mukauta, evästeasetukset, valinnat, hallinnoi]
     save: [tallenna, tallenna asetukset, tallenna valinnat, vahvista valinnat]
   fr:
     accept: [tout accepter, accepter, accepter tout, j accepte, accepter et fermer, accepter les cookies, tout autoriser, autoriser]
-    reject: [tout refuser, refuser, refuser tout, refuser et fermer, continuer sans accepter, je refuse, refuser les cookies, tout rejeter, rejeter, uniquement les cookies nécessaires, cookies nécessaires uniquement]
+    reject: [tout refuser, refuser, refuser tout, refuser et fermer, continuer sans accepter, je refuse, refuser les cookies, tout rejeter, rejeter, uniquement les cookies nécessaires, cookies nécessaires uniquement, ne pas accepter, "je n'accepte pas", "je ne suis pas d'accord", ne pas autoriser, ne pas consentir]
     settings: [paramètres, personnaliser, préférences, gérer les préférences, paramétrer les cookies, paramétrer, gérer mes choix, gérer les cookies]
     save: [enregistrer, enregistrer mes choix, confirmer mes choix, sauvegarder, valider, valider mes choix, enregistrer et fermer]
   ga:
     accept: [glac le gach rud, glac leo go léir, glac, aontaím, ceadaigh gach rud]
-    reject: [diúltaigh do gach rud, diúltaigh, diúltaigh do chuile cheann, riachtanach amháin, na fianáin riachtanacha amháin, ní aontaím]
+    reject: [diúltaigh do gach rud, diúltaigh, diúltaigh do chuile cheann, riachtanach amháin, na fianáin riachtanacha amháin, ní aontaím, ná glac, ná ceadaigh]
     settings: [socruithe, saincheap, roghanna, bainistigh fianáin]
     save: [sábháil, sábháil socruithe, sábháil roghanna, deimhnigh roghanna]
   he:
     accept: [קבל הכל, אישור הכל, אשר הכל, אני מסכים, מסכים, קבל, אני מסכימה]
-    reject: [דחה הכל, דחה, דחיית הכל, רק הכרחיים, רק עוגיות הכרחיות, אני לא מסכים, לא מסכים, סרב]
+    reject: [דחה הכל, דחה, דחיית הכל, רק הכרחיים, רק עוגיות הכרחיות, אני לא מסכים, לא מסכים, סרב, לא לקבל, לא מאשר, אל תאשר]
     settings: [הגדרות עוגיות, התאמה אישית, העדפות, ניהול העדפות, הגדרות]
     save: [שמור, שמירה, שמור הגדרות, שמירת העדפות, אישור הבחירה]
   hr:
     accept: [prihvati sve, prihvati, prihvaćam, slažem se, dopusti sve, prihvati sve kolačiće]
-    reject: [odbij sve, odbij, odbijam, samo nužni, samo nužni kolačići, ne slažem se]
+    reject: [odbij sve, odbij, odbijam, samo nužni, samo nužni kolačići, ne slažem se, ne prihvaćam, ne prihvati, ne dopusti]
     settings: [postavke, prilagodi, postavke kolačića, upravljaj kolačićima, mogućnosti]
     save: [spremi, spremi postavke, spremi odabir, potvrdi odabir]
   hu:
     accept: [összes elfogadása, elfogadom, elfogad, mindet elfogadom, elfogadás, összes engedélyezése, egyetértek]
-    reject: [összes elutasítása, elutasítom, elutasít, elutasítás, csak a szükségesek, csak szükséges, nem fogadom el, mindet elutasítom]
+    reject: [összes elutasítása, elutasítom, elutasít, elutasítás, csak a szükségesek, csak szükséges, nem fogadom el, mindet elutasítom, nem engedélyezem, ne fogadja el]
     settings: [beállítások, testreszabás, sütibeállítások, preferenciák, sütik kezelése]
     save: [mentés, beállítások mentése, kiválasztottak mentése, választás megerősítése]
   is:
     accept: [samþykkja allt, samþykkja, samþykkja allar, ég samþykki, leyfa allt]
-    reject: [hafna öllu, hafna, hafna öllum, aðeins nauðsynlegar, eingöngu nauðsynlegar, neita]
+    reject: [hafna öllu, hafna, hafna öllum, aðeins nauðsynlegar, eingöngu nauðsynlegar, neita, ekki samþykkja, ég samþykki ekki, ekki leyfa]
     settings: [stillingar, sérsníða, kjörstillingar, stjórna vafrakökum]
     save: [vista, vista stillingar, vista val, staðfesta val]
   it:
     accept: [accetta tutto, accetta, accetto, accetta tutti, accetta tutti i cookie, acconsento, consenti, accetta e chiudi]
-    reject: [rifiuta tutto, rifiuta, rifiuto, rifiuta tutti, rifiuta tutti i cookie, solo necessari, solo cookie necessari, continua senza accettare, nega, rifiuta e chiudi]
+    reject: [rifiuta tutto, rifiuta, rifiuto, rifiuta tutti, rifiuta tutti i cookie, solo necessari, solo cookie necessari, continua senza accettare, nega, rifiuta e chiudi, non accetto, non accettare, non acconsento, non consentire]
     settings: [impostazioni, personalizza, preferenze, gestisci preferenze, gestisci le opzioni, opzioni]
     save: [salva, salva preferenze, salva le mie scelte, conferma le scelte, conferma, salva e chiudi]
   lt:
     accept: [priimti visus, priimti, sutinku, leisti visus, priimti viską]
-    reject: [atmesti visus, atmesti, atsisakyti, tik būtini, tik būtinieji, nesutinku, atmesti viską]
+    reject: [atmesti visus, atmesti, atsisakyti, tik būtini, tik būtinieji, nesutinku, atmesti viską, nepriimti, nepriimu, neleisti]
     settings: [nustatymai, tinkinti, nuostatos, slapukų nustatymai, valdyti]
     save: [išsaugoti, išsaugoti nustatymus, išsaugoti pasirinkimą, patvirtinti pasirinkimą]
   lv:
     accept: [pieņemt visus, pieņemt, piekrītu, atļaut visus, pieņemt visu]
-    reject: [noraidīt visus, noraidīt, atteikties, tikai nepieciešamās, tikai obligātās, nepiekrītu]
+    reject: [noraidīt visus, noraidīt, atteikties, tikai nepieciešamās, tikai obligātās, nepiekrītu, nepieņemt, nepieņemu, neatļaut]
     settings: [iestatījumi, pielāgot, sīkdatņu iestatījumi, pārvaldīt]
     save: [saglabāt, saglabāt iestatījumus, saglabāt izvēli, apstiprināt izvēli]
   mt:
     accept: [aċċetta kollox, aċċetta, aċċetta kollha, naqbel, nippermetti kollox]
-    reject: [irrifjuta kollox, irrifjuta, iċħad, meħtieġa biss, dawk meħtieġa biss, ma naqbilx]
+    reject: [irrifjuta kollox, irrifjuta, iċħad, meħtieġa biss, dawk meħtieġa biss, ma naqbilx, ma naċċettax, taċċettax]
     settings: [settings, preferenzi, ippersonalizza, immaniġġja l cookies]
     save: [issejvja, issejvja l preferenzi, ikkonferma l għażliet]
   nl:
     accept: [alles accepteren, accepteren, alle cookies accepteren, akkoord, ik ga akkoord, toestaan, alles toestaan, alle cookies toestaan]
-    reject: [alles weigeren, weigeren, alle weigeren, afwijzen, alles afwijzen, alleen noodzakelijke, alleen noodzakelijke cookies, alleen functionele cookies, niet akkoord]
+    reject: [alles weigeren, weigeren, alle weigeren, afwijzen, alles afwijzen, alleen noodzakelijke, alleen noodzakelijke cookies, alleen functionele cookies, niet akkoord, niet accepteren, niet toestaan, ik ga niet akkoord]
     settings: [instellingen, cookie instellingen, aanpassen, voorkeuren, voorkeuren beheren, opties]
     save: [opslaan, voorkeuren opslaan, keuze opslaan, selectie opslaan, bevestigen, mijn keuzes bevestigen]
   "no":
     accept: [godta alle, godta, aksepter alle, aksepter, tillat alle, jeg godtar]
-    reject: [avvis alle, avvis, bare nødvendige, bare nødvendige informasjonskapsler, avslå, avslå alle]
+    reject: [avvis alle, avvis, bare nødvendige, bare nødvendige informasjonskapsler, avslå, avslå alle, ikke godta, godta ikke, jeg godtar ikke, ikke tillat]
     settings: [innstillinger, tilpass, preferanser, administrer informasjonskapsler]
     save: [lagre, lagre innstillinger, lagre valg, bekreft valg]
   pl:
     accept: [akceptuję, akceptuj, akceptuj wszystkie, akceptuję wszystkie, zaakceptuj wszystkie, zgadzam się, zezwól na wszystkie, zgoda na wszystkie]
-    reject: [odrzuć wszystkie, odrzuć, odrzuć wszystko, odrzucam, tylko niezbędne, tylko niezbędne pliki cookie, nie zgadzam się, odmów]
+    reject: [odrzuć wszystkie, odrzuć, odrzuć wszystko, odrzucam, tylko niezbędne, tylko niezbędne pliki cookie, nie zgadzam się, odmów, nie akceptuję, nie akceptuj, nie zezwalaj, nie zgadzam]
     settings: [ustawienia, ustawienia plików cookie, dostosuj, preferencje, zarządzaj preferencjami, opcje]
     save: [zapisz, zapisz ustawienia, zapisz preferencje, zapisz wybór, potwierdź wybór, potwierdź moje wybory]
   pt:
     accept: [aceitar tudo, aceitar, aceito, aceitar todos, aceitar todos os cookies, permitir todos, concordo, aceitar e fechar]
-    reject: [rejeitar tudo, rejeitar, rejeitar todos, recusar, recusar tudo, apenas necessários, somente necessários, apenas cookies necessários, continuar sem aceitar]
+    reject: [rejeitar tudo, rejeitar, rejeitar todos, recusar, recusar tudo, apenas necessários, somente necessários, apenas cookies necessários, continuar sem aceitar, não aceitar, não aceito, não concordo, não permitir]
     settings: [definições, configurações, personalizar, preferências, gerir preferências, gerenciar preferências]
     save: [guardar, salvar, guardar preferências, salvar preferências, confirmar escolhas, confirmar as minhas escolhas]
   ro:
     accept: [acceptă tot, accept, acceptă, accept toate, acceptă toate, sunt de acord, permite toate]
-    reject: [respinge tot, respinge, resping, respinge toate, refuz, refuză tot, doar necesare, numai cele necesare, nu sunt de acord]
+    reject: [respinge tot, respinge, resping, respinge toate, refuz, refuză tot, doar necesare, numai cele necesare, nu sunt de acord, nu accept, nu accepta, nu permite]
     settings: [setări, personalizează, preferințe, gestionează, opțiuni]
     save: [salvează, salvează setările, salvează preferințele, confirmă alegerile]
   sk:
     accept: [prijať všetko, prijať, prijať všetky, súhlasím, povoliť všetko, akceptovať]
-    reject: [odmietnuť všetko, odmietnuť, odmietnuť všetky, len nevyhnutné, iba nevyhnutné, nesúhlasím]
+    reject: [odmietnuť všetko, odmietnuť, odmietnuť všetky, len nevyhnutné, iba nevyhnutné, nesúhlasím, neprijať, neprijímam, nepovoliť]
     settings: [nastavenia, prispôsobiť, predvoľby, spravovať cookies, možnosti]
     save: [uložiť, uložiť nastavenia, uložiť výber, potvrdiť výber]
   sl:
     accept: [sprejmi vse, sprejmi, sprejmem, strinjam se, dovoli vse, sprejmi vse piškotke]
-    reject: [zavrni vse, zavrni, zavrnem, samo nujni, samo nujni piškotki, ne strinjam se]
+    reject: [zavrni vse, zavrni, zavrnem, samo nujni, samo nujni piškotki, ne strinjam se, ne sprejmem, ne sprejmi, ne dovoli]
     settings: [nastavitve, prilagodi, nastavitve piškotkov, upravljaj piškotke, možnosti]
     save: [shrani, shrani nastavitve, shrani izbiro, potrdi izbiro]
   sv:
     accept: [acceptera alla, acceptera, godkänn alla, godkänn, jag godkänner, tillåt alla, jag accepterar]
-    reject: [avvisa alla, avvisa, neka, neka alla, endast nödvändiga, bara nödvändiga, avböj, avböj alla]
+    reject: [avvisa alla, avvisa, neka, neka alla, endast nödvändiga, bara nödvändiga, avböj, avböj alla, acceptera inte, godkänn inte, tillåt inte, jag accepterar inte]
     settings: [inställningar, anpassa, preferenser, cookieinställningar, hantera cookies]
     save: [spara, spara inställningar, spara val, bekräfta val, bekräfta mina val]
   tr:
     accept: [tümünü kabul et, kabul et, kabul ediyorum, hepsini kabul et, tümüne izin ver, onaylıyorum]
-    reject: [tümünü reddet, reddet, reddediyorum, hepsini reddet, yalnızca gerekli, sadece gerekli, sadece zorunlu, kabul etmiyorum]
+    reject: [tümünü reddet, reddet, reddediyorum, hepsini reddet, yalnızca gerekli, sadece gerekli, sadece zorunlu, kabul etmiyorum, kabul etme, izin verme, onaylamıyorum]
     settings: [ayarlar, çerez ayarları, özelleştir, tercihler, seçenekler]
     save: [kaydet, ayarları kaydet, tercihleri kaydet, seçimi onayla, seçimleri kaydet]
   uk:
     accept: [прийняти всі, прийняти все, прийняти, приймаю, погоджуюсь, дозволити всі]
-    reject: [відхилити всі, відхилити, відхиляю, лише необхідні, тільки необхідні, не погоджуюсь, відмовитися]
+    reject: [відхилити всі, відхилити, відхиляю, лише необхідні, тільки необхідні, не погоджуюсь, відмовитися, не приймати, не приймаю, не дозволяти]
     settings: [налаштування, налаштувати, параметри, вподобання, керувати файлами cookie]
     save: [зберегти, зберегти налаштування, зберегти вибір, підтвердити вибір]
   ar:
     accept: [قبول الكل, قبول, أوافق, موافق, السماح للكل, اقبل الكل, قبول جميع ملفات تعريف الارتباط]
-    reject: [رفض الكل, رفض, أرفض, الضرورية فقط, الملفات الضرورية فقط, لا أوافق, رفض جميع ملفات تعريف الارتباط]
+    reject: [رفض الكل, رفض, أرفض, الضرورية فقط, الملفات الضرورية فقط, لا أوافق, رفض جميع ملفات تعريف الارتباط, لا أقبل, عدم القبول, لا تسمح]
     settings: [الإعدادات, إعدادات, تخصيص, التفضيلات, إدارة التفضيلات, خيارات]
     save: [حفظ, حفظ الإعدادات, حفظ التفضيلات, تأكيد الاختيارات, حفظ الاختيارات]

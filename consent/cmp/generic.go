@@ -38,6 +38,7 @@ type wordsFile struct {
 	Ignore       []string             `yaml:"ignore"`
 	Policy       []string             `yaml:"policy"`
 	NeverChoice  []string             `yaml:"never_choice"`
+	Negation     []string             `yaml:"negation"`
 	Languages    map[string]langWords `yaml:"languages"`
 }
 
@@ -75,6 +76,7 @@ type phrase struct {
 type lexicon struct {
 	phrases [classSave + 1][]phrase
 	never   map[string]bool
+	negate  []string     // normalised negation words, matched as whole words
 	scan    genericWords // what the page script gets
 }
 
@@ -142,6 +144,7 @@ func loadWords(data []byte) (*lexicon, error) {
 	for _, w := range normAll(f.NeverChoice) {
 		lx.never[w] = true
 	}
+	lx.negate = normAll(f.Negation)
 	for _, code := range genericLanguages {
 		if _, ok := f.Languages[code]; !ok {
 			return nil, fmt.Errorf("generic_words.yaml: languages: %s missing", code)
@@ -166,6 +169,9 @@ func loadWords(data []byte) (*lexicon, error) {
 				if prev, ok := meaning[p]; ok && prev != c {
 					return nil, fmt.Errorf("generic_words.yaml: languages: %s: %q is both %s and %s", code, p, prev, c)
 				}
+				if c == classAccept && lx.negated(" "+p+" ") {
+					return nil, fmt.Errorf("generic_words.yaml: languages: %s: accept phrase %q holds a negation word", code, p)
+				}
 				if _, ok := meaning[p]; !ok {
 					meaning[p] = c
 					lx.phrases[c] = append(lx.phrases[c], phrase{text: p, runes: utf8.RuneCountInString(p)})
@@ -179,11 +185,25 @@ func loadWords(data []byte) (*lexicon, error) {
 	return lx, nil
 }
 
+// negated reports whether padded (a normalised text with a space at
+// each end) holds a negation word as a whole word.
+func (lx *lexicon) negated(padded string) bool {
+	for _, w := range lx.negate {
+		if strings.Contains(padded, " "+w+" ") {
+			return true
+		}
+	}
+	return false
+}
+
 // classify says what a button's text means and how long the phrase
 // that decided it is (longer is more specific). The longest phrase
 // found as whole words wins; a tie between two meanings, a text that is
-// exactly a never_choice phrase (for Accept and Reject) or a text too
-// long for a label means nothing.
+// exactly a never_choice phrase (for Accept and Reject), an Accept with
+// a negation word in it or a text too long for a label means nothing.
+// The negation guard is the backstop for the negated forms the word
+// lists lack: "Ne pas accepter" holds "accepter" and an Accept run
+// must never click it.
 func (lx *lexicon) classify(text string) (btnClass, int) {
 	n := normText(text)
 	if n == "" || utf8.RuneCountInString(n) > maxButtonRunes {
@@ -208,6 +228,9 @@ func (lx *lexicon) classify(text string) (btnClass, int) {
 		return classNone, 0
 	}
 	if lx.never[n] && (best == classAccept || best == classReject) {
+		return classNone, 0
+	}
+	if best == classAccept && lx.negated(padded) {
 		return classNone, 0
 	}
 	return best, bestLen
