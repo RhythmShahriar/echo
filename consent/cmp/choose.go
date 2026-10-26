@@ -33,9 +33,10 @@ const (
 // target is the control a choice starts with: the chain clicked on the
 // first layer, or the opener of the settings on the second.
 type target struct {
-	layer int
-	chain chain
-	probe probeResult
+	layer  int
+	chain  chain
+	probe  probeResult
+	within []consent.Locator // the banner the first click must be inside; nil: anywhere
 }
 
 // choice is the Choice Find reports for the target, before any click.
@@ -185,6 +186,9 @@ func one(l consent.Locator) chain { return chain{Raw: locKey(l), Steps: []consen
 func (d *driver) locate(ctx context.Context, t consent.Tab, p *consent.Plan, r *rule, k consent.RunKind) (*target, consent.Reason, error) {
 	chains, second := chainsFor(p, r, k)
 	if len(chains) == 0 && second == nil {
+		if r != nil && r.ID == genericID {
+			return d.genericLocate(ctx, t, p, k)
+		}
 		return nil, consent.ReasonNoButton, nil
 	}
 	var locs []consent.Locator
@@ -207,7 +211,7 @@ func (d *driver) locate(ctx context.Context, t consent.Tab, p *consent.Plan, r *
 		if err == nil {
 			for _, c := range chains {
 				if pr := res[locKey(c.Steps[0])]; pr.clickable() {
-					return &target{layer: 1, chain: c, probe: pr}, consent.ReasonNone, nil
+					return &target{layer: 1, chain: c, probe: pr, within: within(r)}, consent.ReasonNone, nil
 				}
 			}
 			if behindClosedRoot(res) {
@@ -218,7 +222,7 @@ func (d *driver) locate(ctx context.Context, t consent.Tab, p *consent.Plan, r *
 			if second != nil && (now-start >= secondGrace.Milliseconds() || now >= deadline) {
 				for _, c := range second.Open {
 					if pr := res[locKey(c.Steps[0])]; pr.clickable() {
-						return &target{layer: 2, chain: c, probe: pr}, consent.ReasonNone, nil
+						return &target{layer: 2, chain: c, probe: pr, within: within(r)}, consent.ReasonNone, nil
 					}
 				}
 			}
@@ -286,13 +290,16 @@ func (d *driver) viaButton(ctx context.Context, t consent.Tab, p *consent.Plan, 
 	}
 	ch := tg.choice()
 	if tg.layer == 1 {
-		return d.clickAndVerify(ctx, t, p, r, k, tg.chain, within(r), ch, before)
+		return d.clickAndVerify(ctx, t, p, r, k, tg.chain, tg.within, ch, before)
 	}
 
 	// Second layer: open the settings, wait for Save, switch every
 	// enabled toggle off, then save.
-	if reason, err := d.clickSteps(ctx, t, p, tg.chain.Steps, within(r), ch); reason != consent.ReasonNone || err != nil {
+	if reason, err := d.clickSteps(ctx, t, p, tg.chain.Steps, tg.within, ch); reason != consent.ReasonNone || err != nil {
 		return ch, reason, err
+	}
+	if r.ID == genericID {
+		return d.genericSettings(ctx, t, p, r, k, tg, ch, before)
 	}
 	save, err := d.waitClickable(ctx, t, p, r.Second.Save, nil)
 	if err != nil {
@@ -413,6 +420,17 @@ func (d *driver) clickAndVerify(ctx context.Context, t consent.Tab, p *consent.P
 			return ch, consent.ReasonNone, err
 		}
 		ch.State = st
+		if verified && r != nil && r.ID == genericID {
+			// The generic rule has no stored state to read: the banner
+			// must stay gone when the page loads again.
+			gone, err := d.staysGone(ctx, t, p)
+			if err != nil {
+				return ch, consent.ReasonNone, err
+			}
+			if !gone {
+				return ch, consent.ReasonStateUnchanged, nil
+			}
+		}
 		if verified {
 			ch.Verified = true
 			ch.VerifiedBy = verifiedBy(r, st)
@@ -438,7 +456,7 @@ func (d *driver) settle(ctx context.Context, t consent.Tab, p *consent.Plan, r *
 		if err != nil {
 			return false, false, nil, err
 		}
-		showing, err := stillShowing(ctx, t, r, clicked)
+		showing, err := d.stillShowing(ctx, t, r, clicked)
 		if err != nil {
 			return false, false, st, err
 		}
@@ -464,7 +482,10 @@ func (d *driver) settle(ctx context.Context, t consent.Tab, p *consent.Plan, r *
 
 // stillShowing is the rule's banner visible test, or for a banner
 // without a rule whether the clicked control is still there.
-func stillShowing(ctx context.Context, t consent.Tab, r *rule, clicked consent.Locator) (bool, error) {
+func (d *driver) stillShowing(ctx context.Context, t consent.Tab, r *rule, clicked consent.Locator) (bool, error) {
+	if r != nil && r.ID == genericID {
+		return genericShowing(ctx, t)
+	}
 	if r != nil && r.BannerRaw != "" {
 		return bannerShowing(ctx, t, r)
 	}

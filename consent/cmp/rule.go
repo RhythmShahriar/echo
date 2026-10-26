@@ -383,9 +383,12 @@ func (c *checker) rule(f *ruleFile) *rule {
 		c.fail("detect", "want at least one selector, global or script")
 	}
 
-	if len(f.Banner.Selector) == 0 || f.Banner.Selector[0] == "" {
+	switch {
+	case f.ID == genericID && len(f.Banner.Selector) == 0:
+		// The generic rule finds its banner by its words (generic.go).
+	case len(f.Banner.Selector) == 0 || f.Banner.Selector[0] == "":
 		c.fail("banner.selector", "missing")
-	} else {
+	default:
 		r.Banners = c.locators("banner.selector", f.Banner.Selector)
 		r.BannerRaw = f.Banner.Selector[0]
 	}

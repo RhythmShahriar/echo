@@ -6,6 +6,7 @@ package cmp
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"testing"
 	"time"
 
@@ -24,7 +25,11 @@ type fakePage struct {
 	scripts  []string
 	controls map[string]probeResult
 	toggles  []toggle
+	generic  []genContainer // what the generic script finds
 	timers   []fakeTimer
+	// onReload runs at the first wait after each Tab.Reload.
+	onReload func(pg *fakePage)
+	reloads  int
 }
 
 type fakeTimer struct {
@@ -57,6 +62,7 @@ func (pg *fakePage) sync() {
 	pg.tab.Isolated["cmp-scan"] = answer(scanResult{Rules: pg.rules, Scripts: pg.scripts})
 	pg.tab.Isolated["cmp-probe"] = answer(pg.controls)
 	pg.tab.Isolated["cmp-toggles"] = answer(pg.toggles)
+	pg.tab.Isolated["cmp-generic"] = answer(genResult{Containers: pg.generic})
 }
 
 // banner shows or hides rule id's banner, matching sel.
@@ -88,6 +94,12 @@ func (pg *fakePage) at(ms int64, do func(pg *fakePage)) {
 }
 
 func (pg *fakePage) fire() {
+	if pg.tab.Reloads > pg.reloads {
+		pg.reloads = pg.tab.Reloads
+		if pg.onReload != nil {
+			pg.onReload(pg)
+		}
+	}
 	now := pg.tab.Now()
 	var left []fakeTimer
 	for _, t := range pg.timers {
@@ -131,4 +143,15 @@ func testDriver(t *testing.T, files map[string]string) *driver {
 		t.Fatal(err)
 	}
 	return d
+}
+
+// cookieBar is a generic banner: a container with a cookie word and one
+// clickable button per text, #bar > button:nth-of-type(i).
+func cookieBar(texts ...string) genContainer {
+	c := genContainer{Path: "#bar", Cookie: true, Text: "We use cookies"}
+	for i, s := range texts {
+		c.Buttons = append(c.Buttons, genButton{Path: fmt.Sprintf("#bar > button:nth-of-type(%d)", i+1), Text: s,
+			Visible: true, Kind: true, Top: true, Box: consent.Box{X: 10, Y: 20, W: 80, H: 30}})
+	}
+	return c
 }

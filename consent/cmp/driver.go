@@ -58,7 +58,8 @@ func init() {
 
 // load reads every <dir>/*.yaml of fsys as a rule and builds the driver.
 // Info().SHA256 is the SHA-256 of the rule files concatenated in name
-// order, so `sha256sum` over the same files in the same order gives it.
+// order and then generic_words.yaml, so `sha256sum` over the same files
+// in the same order gives it.
 func load(fsys fs.FS, dir string) (*driver, error) {
 	entries, err := fs.ReadDir(fsys, dir)
 	if err != nil {
@@ -99,6 +100,8 @@ func load(fsys fs.FS, dir string) (*driver, error) {
 		}
 		return cmp.Or(cmp.Compare(a.Priority, b.Priority), strings.Compare(a.ID, b.ID))
 	})
+	// The generic rule's words decide as much as a rule file does.
+	sum.Write(genericWordsYAML)
 	d.info = consent.DataInfo{Version: consent.DataVersion, SHA256: hex.EncodeToString(sum.Sum(nil)), Count: len(d.rules)}
 	d.globalsJS = globalsScript(d.rules)
 	return d, nil
@@ -150,6 +153,12 @@ func (d *driver) Rules() []consent.CMPRuleInfo {
 
 // listing is the rule's row of `consent cmps`.
 func (r *rule) listing() consent.CMPRuleInfo {
+	if r.ID == genericID {
+		return consent.CMPRuleInfo{
+			ID: r.ID, Name: r.Name, DetectedBy: fmt.Sprintf("buttons whose text means accept or reject (%d languages)", len(genericLanguages)),
+			Accept: "button", Reject: "first layer or settings", StateFrom: r.stateFrom(), Sources: slices.Clone(r.Sources),
+		}
+	}
 	var by []string
 	if len(r.Selectors) > 0 {
 		l := r.Selectors[0]

@@ -165,3 +165,22 @@ function box(el) {
   const r = el.getBoundingClientRect();
   return { X: r.left, Y: r.top, W: r.width, H: r.height };
 }
+
+// cssPath is a selector for el from root: its id when unique, else
+// tag:nth-of-type steps from the nearest unique id or the root.
+function cssPath(el, root) {
+  const parts = [];
+  for (let n = el, i = 0; n && n.nodeType === 1 && i < 32; n = n.parentElement, i++) {
+    if (n.id && root.querySelectorAll("#" + CSS.escape(n.id)).length === 1) {
+      parts.unshift("#" + CSS.escape(n.id));
+      break;
+    }
+    let k = 1;
+    for (let s = n.previousElementSibling; s; s = s.previousElementSibling) {
+      if (s.tagName === n.tagName) k++;
+    }
+    parts.unshift(n.tagName.toLowerCase() + ":nth-of-type(" + k + ")");
+    if (n.parentNode === root) break;
+  }
+  return parts.join(" > ");
+}

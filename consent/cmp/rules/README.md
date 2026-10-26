@@ -2,10 +2,11 @@
 
 One file per consent management platform, `<id>.yaml`, compiled into
 Echo. `rhythm echo consent cmps` lists them with the version and the
-SHA-256 of these files concatenated in name order:
+SHA-256 of these files concatenated in name order, followed by the
+generic rule's words:
 
 ```sh
-cat $(ls consent/cmp/rules/*.yaml | sort) | sha256sum
+cat $(ls consent/cmp/rules/*.yaml | sort) consent/cmp/generic_words.yaml | sha256sum
 ```
 
 Every rule is written from the vendor's public documentation and markup,
@@ -80,6 +81,14 @@ The loader refuses, with the file and line:
   `eval(`, `Function(`, `fetch(`, `XMLHttpRequest`, `document.cookie=`
   or `localStorage.setItem`;
 - a missing `id`, `name`, `banner`, `verify.parser` or `sources`.
+
+`generic.yaml` is the rule for a banner no other rule knows. It has no
+selectors: `consent/cmp/generic.go` looks for a visible fixed, sticky,
+high (z-index 1000 or more) or modal element with a cookie or consent
+word and ranks its buttons by text with the phrases of
+`consent/cmp/generic_words.yaml` (30 languages; the file explains the
+matching). It is tried last and verified by the banner staying gone
+after a reload.
 
 Each rule needs replica pages under `testdata/<id>/` with an
 `expect.yaml` row each; `TestEveryRuleHasFixtures` lists the pages.

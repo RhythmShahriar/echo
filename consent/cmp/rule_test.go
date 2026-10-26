@@ -253,6 +253,8 @@ func TestRulesHash(t *testing.T) {
 		b, _ := fs.ReadFile(rulesFS, f)
 		sum.Write(b)
 	}
+	lex, _ := os.ReadFile("generic_words.yaml")
+	sum.Write(lex)
 	d, err := load(rulesFS, "rules")
 	if err != nil {
 		t.Fatal(err)
@@ -387,24 +389,28 @@ type expectPage struct {
 	DetectedBy    string `yaml:"detected_by"`
 	AcceptLayer   int    `yaml:"accept_layer"`
 	RejectLayer   int    `yaml:"reject_layer"`
-	Fallback      bool   `yaml:"fallback"` // no button to click: --click button,api uses the API
-	TCF           bool   `yaml:"tcf"`      // the page defines __tcfapi
-	Stores        string `yaml:"stores"`   // tcf: the choice is kept in the TC string only
+	Fallback      bool   `yaml:"fallback"`      // no button to click: --click button,api uses the API
+	TCF           bool   `yaml:"tcf"`           // the page defines __tcfapi
+	Stores        string `yaml:"stores"`        // tcf: the choice is kept in the TC string only
+	AcceptText    string `yaml:"accept_text"`   // generic: the Accept Find reports
+	RejectText    string `yaml:"reject_text"`   // generic: the Reject (or settings opener) Find reports
+	RejectReason  string `yaml:"reject_reason"` // generic: why the Reject isn't verified
 	Sees          sees   `yaml:"sees"`
 }
 
 // sees is the page as the CMP scripts see it in a browser; the FakeTab
 // tests answer the scripts from it.
 type sees struct {
-	Selectors []string `yaml:"selectors"`
-	Globals   []string `yaml:"globals"`
-	Scripts   []string `yaml:"scripts"`
-	Banner    bool     `yaml:"banner"`
-	Controls  []string `yaml:"controls"` // clickable on the first layer
-	Settings  []string `yaml:"settings"` // clickable once the settings are open
-	Toggles   []bool   `yaml:"toggles"`  // each toggle's state when the settings open
-	Decoys    []string `yaml:"decoys"`   // other controls on the page, never clicked
-	Closed    []string `yaml:"closed"`   // controls behind a closed shadow root
+	Selectors []string     `yaml:"selectors"`
+	Globals   []string     `yaml:"globals"`
+	Scripts   []string     `yaml:"scripts"`
+	Banner    bool         `yaml:"banner"`
+	Controls  []string     `yaml:"controls"` // clickable on the first layer
+	Settings  []string     `yaml:"settings"` // clickable once the settings are open
+	Toggles   []bool       `yaml:"toggles"`  // each toggle's state when the settings open
+	Decoys    []string     `yaml:"decoys"`   // other controls on the page, never clicked
+	Closed    []string     `yaml:"closed"`   // controls behind a closed shadow root
+	Generic   *genericSees `yaml:"generic"`  // what the generic script reports
 }
 
 func readExpect(t *testing.T, id string) expectFile {
@@ -446,7 +452,7 @@ func FuzzCMPRuleYAML(f *testing.F) {
 			}
 			return
 		}
-		if r.BannerRaw == "" || r.Name == "" || len(r.Sources) == 0 {
+		if (r.BannerRaw == "" && r.ID != genericID) || r.Name == "" || len(r.Sources) == 0 {
 			t.Fatalf("a rule without banner, name or sources was accepted: %+v", r)
 		}
 	})

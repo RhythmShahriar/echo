@@ -115,6 +115,20 @@ func (d *driver) poll(ctx context.Context, t consent.Tab, rules []*rule, in scan
 	var present *rule
 	var presentSeen sighting
 	for _, r := range rules {
+		if r.ID == genericID {
+			// Last in the order: no named rule shows a banner.
+			_, ok, err := genericBanner(ctx, t)
+			if err != nil {
+				return consent.CMPInfo{}, err
+			}
+			if ok {
+				info := r.info(sighting{}, true)
+				info.BannerAtMS = now
+				info.TCF = globals[tcfGlobal]
+				return info, nil
+			}
+			continue
+		}
 		s := sighting{}
 		for _, sc := range scans {
 			res := sc.Rules[r.ID]
@@ -227,7 +241,10 @@ func (r *rule) info(s sighting, found bool) consent.CMPInfo {
 // only through custom selectors has no container and never shows.
 func (d *driver) BannerShowing(ctx context.Context, t consent.Tab, info consent.CMPInfo) (bool, error) {
 	r := d.ruleFor(info)
-	if r == nil || r.BannerRaw == "" {
+	switch {
+	case r != nil && r.ID == genericID:
+		return genericShowing(ctx, t)
+	case r == nil || r.BannerRaw == "":
 		return false, nil
 	}
 	return bannerShowing(ctx, t, r)

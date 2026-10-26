@@ -119,7 +119,8 @@ func TestDetectOrder(t *testing.T) {
 	pg.drive(d)
 	pg.banner("acme", true, "#acme-banner")
 	pg.banner("beta", true, "#beta-banner")
-	pg.banner("generic", true)
+	pg.generic = []genContainer{cookieBar("Accept all", "Reject all")}
+	pg.sync()
 	p := consenttest.NewPlan(t)
 	info, _ := d.Detect(context.Background(), pg.tab, p, time.Second)
 	if info.ID != "beta" {

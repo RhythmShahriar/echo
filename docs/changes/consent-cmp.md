@@ -302,3 +302,61 @@ texts, for the release notes and the docs team.
   and `iubenda/floating.html`). All rows pass Detect, Find and Choose
   (button and `--click api`) in headless Chrome (the TCF page verified
   by its TC string) as well as in the FakeTab tests.
+
+## C8 Generic rule
+
+- `consent cmps` row:
+  `generic  buttons whose text means accept or reject (30 languages)  button  first layer or settings  banner gone and stays gone`.
+- The rules hash now also covers the generic rule's words:
+  `cat $(ls consent/cmp/rules/*.yaml | sort) consent/cmp/generic_words.yaml | sha256sum`
+  (it replaces the C1 command).
+- Detection (`--cmp auto` after every named rule, or `--cmp generic`):
+  a visible element that is fixed, sticky, has z-index 1000 or more, or
+  is `role=dialog`, `role=alertdialog` or `aria-modal=true` (the
+  outermost of nested ones), in the page or a same-origin frame, whose
+  text has a cookie noun (cookie, piškotk, sīkdat, slapuk, küpsis, fianá,
+  бисквитк, κουκίδ, çerez, ملفات تعريف الارتباط, עוגיות, vafrakök,
+  informasjonskaps, eväste, süti, kolačić, sušen) or a consent word
+  (consent, Einwilligung, Zustimmung, consentement, consenso,
+  toestemming, zgoda, consentimento, samtycke, samtykke, suostumus,
+  souhlas, súhlas, hozzájárulás, privatnost and the Bulgarian, Ukrainian,
+  Greek, Arabic and Hebrew words), with at least one clickable control
+  whose text means Accept or Reject. `detected_by: generic`, `present`
+  equals `found`.
+- Ignored: an element with a newsletter, subscribe, login, password,
+  cart, checkout, shipping, delivery, age (over 18, älter als 18...),
+  chat, returns or coupon word and no cookie noun (a consent word alone
+  isn't enough there). Interpretation of the lane text: a real banner
+  that names cookies stays a banner even when it mentions a cart.
+- Button text: NFKC, lower case, combining marks dropped (so accents and
+  Greek tonos don't matter; an addition to the lane's NFKC), zero-width
+  and other format characters removed, other non-letters read as
+  spaces. Phrases in `consent/cmp/generic_words.yaml`: accept, reject,
+  settings and save for bg cs da de el en es et fi fr ga hr hu it lt lv
+  mt nl pl pt ro sk sl sv no is tr uk ar he (at least three accept and
+  three reject each; the loader refuses a phrase with two meanings). The
+  longest phrase found as whole words decides: "Continuer sans accepter"
+  and "Accept only necessary" are Reject, "Accept selection" is Save. A
+  text that is exactly a never_choice phrase (continue, close, ok, got
+  it, x, ×, more, settings, learn more, privacy policy and their
+  translations) is never Accept or Reject; a tie between meanings or a
+  text over 80 characters is nothing.
+- Never clicked: a link that loads another page or whose address holds a
+  policy word (privacy, cookie, policy, datenschutz, politique,
+  privacidad, informativa, polityka...).
+- Reject: a Reject button; else, after 1 s, the settings button
+  (`layer: 2`), then a Save (or Reject) button in a cookie dialog, with
+  every enabled checkbox or `role=switch` of that dialog switched off;
+  `selector` is `<opener> >> <save>`. `selector` of a generic choice is
+  the control's CSS path, e.g.
+  `html:nth-of-type(1) > body:nth-of-type(1) > div:nth-of-type(2) > button:nth-of-type(1)`,
+  prefixed `frame(<url>) ` in a frame.
+- Verified (`verified_by: banner`) when the banner is gone after the
+  click and still gone for `--settle` after Echo reloads the page; a
+  banner that comes back gives `state_unchanged`. The generic rule
+  reloads the page once inside Choose.
+- Fixtures: `consent/cmp/testdata/generic/` (10 positive pages, 7
+  negative pages, 30 generated language pages) with `expect.yaml`. All
+  pass Detect, Find and Choose in headless Chrome and in the FakeTab
+  tests; on the negative pages nothing is found and `--cmp generic`
+  clicks nothing (`no_button`).

@@ -33,6 +33,22 @@ found, no button, the API under `--click button,api`) and
 Accept and "Learn more and customize", with a close button never
 clicked). Complianz has none.
 
+## generic
+
+`generic/` holds hand-made banners (no vendor) for the generic rule,
+drawn by `generic/banner.js`: English, German with Reject only in the
+settings, Arabic and Hebrew right to left, text split across elements
+with `&nbsp;`, French "Continuer sans accepter", a policy link that says
+Reject (never clicked), a late banner, a banner drawn in a same-origin
+frame and one whose Reject only hides it (it comes back after the
+reload: `state_unchanged`). The negative pages are never a banner and
+nothing on them is clicked: a newsletter offer, an age gate, a login
+dialog, a cart drawer, a returns form with Reject, a chat widget and a
+shipping notice with OK. `lang-<code>.html` (one per language) and
+their rows are generated from `generic_words.yaml` by
+`TestGenericLanguagePages` (`-update` rewrites them). Generic rows add
+`accept_text`, `reject_text`, `reject_reason` and `sees.generic`.
+
 ## expect.yaml
 
 ```yaml

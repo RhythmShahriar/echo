@@ -6,23 +6,6 @@
 // itself, or its label when the control is drawn by a styled slider).
 // With input.press the matches are buttons that switch a purpose off
 // when pressed: one not pressed yet counts as on.
-function cssPath(el, root) {
-  const parts = [];
-  for (let n = el, i = 0; n && n.nodeType === 1 && i < 32; n = n.parentElement, i++) {
-    if (n.id && root.querySelectorAll("#" + CSS.escape(n.id)).length === 1) {
-      parts.unshift("#" + CSS.escape(n.id));
-      break;
-    }
-    let k = 1;
-    for (let s = n.previousElementSibling; s; s = s.previousElementSibling) {
-      if (s.tagName === n.tagName) k++;
-    }
-    parts.unshift(n.tagName.toLowerCase() + ":nth-of-type(" + k + ")");
-    if (n.parentNode === root) break;
-  }
-  return parts.join(" > ");
-}
-
 function clickTarget(el, root) {
   if (visible(el)) return el;
   if (el.id) {
