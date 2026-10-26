@@ -13,15 +13,15 @@ import (
 	"github.com/RhythmShahriar/echo/consent/consenttest"
 )
 
-// The geo table covers the 27 EU states, GB, NO, IS, CH, US, CA, BR, AU,
-// JP and IN, each with a language tag and an IANA zone.
+// The geo table covers the 27 EU states, GB, NO, IS, LI, CH, US, CA, BR,
+// AU, JP and IN, each with a language tag and an IANA zone.
 func TestGeoTable(t *testing.T) {
 	eu := []string{"AT", "BE", "BG", "HR", "CY", "CZ", "DK", "EE", "FI", "FR", "DE", "GR", "HU", "IE", "IT", "LV", "LT", "LU",
 		"MT", "NL", "PL", "PT", "RO", "SK", "SI", "ES", "SE"}
 	if len(eu) != 27 {
 		t.Fatalf("%d EU states in the test", len(eu))
 	}
-	want := append(eu, "GB", "NO", "IS", "CH", "US", "CA", "BR", "AU", "JP", "IN")
+	want := append(eu, "GB", "NO", "IS", "LI", "CH", "US", "CA", "BR", "AU", "JP", "IN")
 	slices.Sort(want)
 	if got := GeoCountries(); !slices.Equal(got, want) {
 		t.Errorf("GeoCountries = %v", got)
@@ -40,6 +40,14 @@ func TestGeoTable(t *testing.T) {
 	for _, in := range []string{"", "XX", "ZZ", "deu"} {
 		if _, ok := GeoFor(in); ok {
 			t.Errorf("GeoFor(%q) found a country", in)
+		}
+		if (Runner{}).KnowsGeo(in) {
+			t.Errorf("KnowsGeo(%q)", in)
+		}
+	}
+	for _, in := range []string{"de", "UK", "el", "li"} {
+		if !(Runner{}).KnowsGeo(in) {
+			t.Errorf("KnowsGeo(%q) is false", in)
 		}
 	}
 }

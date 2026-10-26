@@ -52,6 +52,7 @@ var geos = map[string]Geo{
 	"GB": {"en-GB", "Europe/London"},
 	"NO": {"nb-NO", "Europe/Oslo"},
 	"IS": {"is-IS", "Atlantic/Reykjavik"},
+	"LI": {"de-LI", "Europe/Vaduz"},
 	"CH": {"de-CH", "Europe/Zurich"},
 	"US": {"en-US", "America/New_York"},
 	"CA": {"en-CA", "America/Toronto"},
@@ -86,6 +87,13 @@ func GeoCountries() []string {
 	}
 	slices.Sort(out)
 	return out
+}
+
+// KnowsGeo reports whether --geo knows country code cc (any case, UK
+// and EL included), so the CLI can refuse one it would only ignore.
+func (Runner) KnowsGeo(cc string) bool {
+	_, ok := GeoFor(cc)
+	return ok
 }
 
 // planLocale is the locale a run uses: --locale, else --geo's, else the

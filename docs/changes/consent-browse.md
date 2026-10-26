@@ -77,9 +77,13 @@ with the exact texts.
   note `the page opened a file chooser; Echo canceled it`.
 - `--cookie name=value` becomes a host-only cookie for the target
   (Secure when the target is https); anything after `;` is ignored.
-- `--geo` knows the 27 EU states, GB, NO, IS, CH, US, CA, BR, AU, JP and
-  IN (`UK` and `EL` read as GB and GR); `browse.GeoCountries()` lists
-  them for the CLI's usage error. `--locale` and `--timezone` win.
+- `--geo` knows the 27 EU states, GB, NO, IS, LI, CH, US, CA, BR, AU,
+  JP and IN (`UK` and `EL` read as GB and GR). Any other country is a
+  usage error before the check (exit 2): `rhythm echo: --geo "zz": Echo
+  has no language and time zone for that country; use --locale and
+  --timezone, or an EU or EEA country, GB, CH, US, CA, BR, AU, JP or IN`
+  (`consent: geo "zz": ...` from the config). `--locale` and
+  `--timezone` win.
 - The gpc run sends `Sec-GPC: 1` with every request and defines
   `navigator.globalPrivacyControl` as `true` before page scripts; its
   events are all in phase `gpc`.

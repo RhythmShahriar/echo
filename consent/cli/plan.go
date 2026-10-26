@@ -186,11 +186,19 @@ var (
 	zoneName    = regexp.MustCompile(`^(UTC|[A-Za-z][A-Za-z0-9_+-]*(/[A-Za-z0-9_+-]+)+)$`)
 )
 
+// geoKnower is the optional method of the browser runner that says
+// whether --geo knows a country: one it doesn't know would only be
+// ignored, the run looking like the machine's own place.
+type geoKnower interface{ KnowsGeo(cc string) bool }
+
 // parseGeo reads a country code (ISO 3166-1 alpha-2), lower case.
 func parseGeo(what, v string) (string, error) {
 	g := strings.TrimSpace(v)
 	if !countryCode.MatchString(g) {
 		return "", usagef("%s %q: want a two-letter country code (ISO 3166-1 alpha-2), e.g. de", what, v)
+	}
+	if k, ok := consent.Linked().Runner.(geoKnower); ok && !k.KnowsGeo(g) {
+		return "", usagef("%s %q: Echo has no language and time zone for that country; use --locale and --timezone, or an EU or EEA country, GB, CH, US, CA, BR, AU, JP or IN", what, v)
 	}
 	return strings.ToLower(g), nil
 }

@@ -537,3 +537,37 @@ func TestProxyFlag(t *testing.T) {
 		}
 	}
 }
+
+// geoRunner is a runner that knows only de and gb, as the browser
+// runner knows its own table.
+type geoRunner struct{ consenttest.FakeRunner }
+
+func (*geoRunner) KnowsGeo(cc string) bool {
+	return strings.EqualFold(cc, "de") || strings.EqualFold(cc, "gb")
+}
+
+// A country the browser has no language and time zone for is refused
+// before the check, from the flag, the config and a site's args alike;
+// one it knows passes.
+func TestGeoTheBrowserKnows(t *testing.T) {
+	inDir(t, "")
+	s := consenttest.Fakes()
+	s.Runner = &geoRunner{}
+	consenttest.Use(t, s)
+	if p := mustPrepare(t, "--geo", "DE", "https://shop.test/").plans[0]; p.Geo != "de" {
+		t.Errorf("geo %q", p.Geo)
+	}
+	want := `--geo "zz": Echo has no language and time zone for that country; use --locale and --timezone, or an EU or EEA country, GB, CH, US, CA, BR, AU, JP or IN`
+	if _, err := prepareArgs(t, "--geo", "zz", "https://shop.test/"); err == nil || err.Error() != want {
+		t.Errorf("--geo zz: %v", err)
+	}
+	putFile(t, ".echo/config.yaml", "consent:\n  geo: zz\n")
+	if _, err := prepareArgs(t, "https://shop.test/"); err == nil || !strings.Contains(err.Error(), `consent: geo "zz": Echo has no language and time zone`) {
+		t.Errorf("consent: geo zz: %v", err)
+	}
+	putFile(t, ".echo/config.yaml", "")
+	putFile(t, "sites.yaml", "- {name: a, url: a.test, consent: {args: [--geo, zz]}}\n")
+	if _, err := prepareArgs(t, "--sites", "sites.yaml"); err == nil || !strings.Contains(err.Error(), "Echo has no language and time zone") {
+		t.Errorf("site args --geo zz: %v", err)
+	}
+}
