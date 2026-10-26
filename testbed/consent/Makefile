@@ -55,9 +55,9 @@ runtime: ## build what the containers run into runtime/: rhythm-echo (release fl
 
 up: runtime ## build and start the sealed testbed, then set up WordPress (fresh every time)
 	$(COMPOSE) build -q wp runner
-	$(COMPOSE) up -d --wait gate dns shop tags db wp echo runner
+	$(COMPOSE) --profile echo up -d --wait gate dns shop tags db wp echo runner
 	$(COMPOSE) exec -T -u www-data wp sh /seed.sh
 	@echo "Sites: https://<id>.shop.test through 127.0.0.1:18950; sinks 127.0.0.1:18951 (tags) and 18952 (sites)"
 
 down: ## stop and delete everything, volumes included; runtime/ and ca/ stay
-	$(COMPOSE) --profile test down -v --remove-orphans
+	$(COMPOSE) --profile test --profile echo down -v --remove-orphans
