@@ -71,6 +71,9 @@ const maxLine = 64 << 10
 // maxEvent caps one event name.
 const maxEvent = 100
 
+// maxPageURL is the longest dl or dr value a beacon keeps.
+const maxPageURL = 2048
+
 // maxHost is the longest DNS name (RFC 1035), in its ASCII form.
 const maxHost = 253
 
@@ -293,7 +296,7 @@ func (r *rule) matches(q *request) bool {
 		}
 		for _, k := range r.bodyJSON {
 			// Only a JSON string proves the key: Plausible's n and u are
-			// strings, and anything else fails closed.
+			// strings; anything else fails closed.
 			if raw, ok := q.json[k]; !ok || len(raw) == 0 || raw[0] != '"' {
 				return false
 			}
@@ -490,6 +493,12 @@ func (e *entry) params(q *request) map[string]string {
 		case "tid", "id":
 			v = consent.MaskID(safeText(v, maxValue))
 		case "dl", "dr":
+			if len(v) > maxPageURL {
+				// Masking costs time in proportion to the text; a cut
+				// URL could split a secret so the masker misses it: an
+				// overlong page URL isn't kept at all.
+				continue
+			}
 			v = safeText(consent.MaskURL(v, false), 1024)
 		default:
 			v = safeText(v, maxValue)
@@ -562,7 +571,7 @@ func google(q *request) *consent.GoogleConsent {
 }
 
 // safeText is consent.SafeText capped at n bytes as well as n runes:
-// an escaped control byte takes up to six bytes, and stored values have
+// an escaped control byte takes up to six bytes; stored values have
 // a byte budget (PRD 13.8). A cut ends on a whole rune and an ellipsis.
 func safeText(s string, n int) string {
 	t := consent.SafeText(s, n)

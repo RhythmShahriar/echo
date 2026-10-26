@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+// SPDX-License-Identifier: MIT
+
 package tracker
 
 import (
@@ -98,12 +101,13 @@ func TestMetaFormBody(t *testing.T) {
 			}
 		}
 	}
-	// The same as a GET image and with a query and a body: query wins.
+	// The same as a GET image; with a query and a body: the query's
+	// event, then the body's, as for any beacon.
 	if h := builtin.Request(get("https://www.facebook.com/tr/?"+body, "image"), nil, shop); h == nil || h.Params["cd"] != "cd[content_ids],cd[currency],cd[value]" {
 		t.Errorf("GET = %+v", h)
 	}
 	r = &consent.Request{Method: "POST", URL: "https://www.facebook.com/tr/?id=1234567890&ev=PageView"}
-	if h := builtin.Request(r, []byte("ev=Lead&cd[x]=1"), shop); h == nil || !slices.Equal(h.Events, []string{"PageView"}) || h.Params["cd"] != "cd[x]" {
+	if h := builtin.Request(r, []byte("ev=Lead&cd[x]=1"), shop); h == nil || !slices.Equal(h.Events, []string{"PageView", "Lead"}) || h.Params["ev"] != "PageView" || h.Params["cd"] != "cd[x]" {
 		t.Errorf("query and body = %+v", h)
 	}
 }
@@ -293,4 +297,12 @@ func metaPersonal(t *testing.T) []string {
 	}
 	t.Fatal("no meta-pixel entry")
 	return nil
+}
+
+func TestLongPageURLDropped(t *testing.T) {
+	long := "https://shop.test/?q=" + strings.Repeat("a", maxPageURL)
+	h := builtin.Request(get("https://www.google-analytics.com/g/collect?v=2&tid=G-TESTBED001&dl="+url.QueryEscape(long)+"&dr=https%3A%2F%2Fshop.test%2F", "ping"), nil, shop)
+	if h == nil || h.Params["dl"] != "" || h.Params["dr"] != "https://shop.test/" {
+		t.Fatalf("hit = %+v", h)
+	}
 }

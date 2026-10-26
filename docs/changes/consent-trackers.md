@@ -100,3 +100,12 @@ Notes users may notice:
 - A hit rule on any host never matches a script or page load: a request of type `script` or `document`, or one whose path ends in `.js`, is never a beacon there, whatever parameters it carries (`/gtag/js?id=G-...&v=2&tid=G-...` on a first-party loader stays a script).
 - A host longer than 253 bytes (the longest DNS name) is never a tracker.
 - Query parameter order never changes a hit.
+
+## Hit parsing (T7)
+
+- A GA4 POST batch gives one event per body line (`\n` or `\r\n`, empty lines skipped), after an event in the query if there is one. At most 256 events (`consent.Limits.BatchEvents`) are kept; a longer batch adds `"events_truncated": "true"` to the hit's `params`. A body line over 64 KiB is ignored.
+- Meta Pixel custom data parameters are listed by name only, sorted, as `"cd": "cd[content_ids],cd[currency],cd[value]"` (at most 32 names); their values are never kept.
+- Meta Pixel `personal` now also names `ud[ge]`, `ud[db]`, `ud[ct]`, `ud[st]`, `ud[zp]` and `ud[country]` when present (Meta's advanced matching fields), never their values.
+- A `dl` or `dr` page URL over 2048 bytes is left out of `params` rather than cut and masked.
+- Every value a hit keeps is at most 1024 bytes (event names 100 characters, other parameters 256, `dl` and `dr` 1024, Consent Mode values 64).
+- Plausible on any host needs a JSON object body whose `n` and `u` are JSON strings; any other body (a number or null for `n` or `u`, an array, a cut or malformed object, a form body) is not Plausible.
