@@ -21,8 +21,5 @@ func init() { consent.SetSignals(Decoder{}) }
 // errNotBuilt is what the decoders this build doesn't have yet return.
 var errNotBuilt = errors.New("consent: decoder not built yet")
 
-// TCF decodes a TCF consent string.
-func (Decoder) TCF(string) (*consent.TCF, error) { return nil, errNotBuilt }
-
 // GPP decodes a GPP string.
 func (Decoder) GPP(string) (*consent.GPP, error) { return nil, errNotBuilt }
