@@ -1,0 +1,991 @@
+{
+  "schema": "rhythm-echo/v1",
+  "kind": "consent",
+  "tool": "rhythm-echo",
+  "version": "1.2.0",
+  "complete": true,
+  "summary": {
+    "broke": 2,
+    "new": 1,
+    "changed": 0,
+    "fixed": 0,
+    "errors": 2,
+    "warnings": 0,
+    "notices": 0,
+    "pages": 1,
+    "runs": 3,
+    "failed_runs": 0,
+    "inconclusive_runs": 0,
+    "trackers": 4,
+    "before_choice": 1,
+    "after_reject": 0,
+    "held": 14
+  },
+  "verdict": "findings",
+  "data": {
+    "id": "2026-10-26T10-02-11-f7a8b9",
+    "started": "2026-10-26T09:20:41Z",
+    "duration_ms": 21230,
+    "echo": "1.2.0",
+    "browser": "Chrome for Testing 156.0.8078.47",
+    "user_agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36 rhythm-echo-consent/1.2.0",
+    "os": "linux/amd64",
+    "sandbox": true,
+    "tls_verified": true,
+    "held": true,
+    "mapped": true,
+    "policy": "advanced",
+    "geo": "",
+    "locale": "en-US",
+    "timezone": "UTC",
+    "viewport": "desktop",
+    "catalog": {
+      "version": "1.2.0",
+      "sha256": "4be1c0ffee5a1e7d2b0c9a8f7e6d5c4b3a291807f6e5d4c3b2a19087f6e5d4c3",
+      "count": 47
+    },
+    "cmp_rules": {
+      "version": "1.2.0",
+      "sha256": "9c1dfeed2b3a4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5",
+      "count": 9
+    },
+    "network": {
+      "requests": 412,
+      "held": 14,
+      "refused": 0,
+      "browser_internal": 5
+    },
+    "pages": [
+      {
+        "site": "",
+        "url": "https://c08.consent.test/",
+        "final_url": "https://c08.consent.test/",
+        "redirects": [],
+        "cmp": {
+          "id": "complianz",
+          "name": "Complianz",
+          "found": true,
+          "present": true,
+          "detected_by": "selector:#cmplz-cookiebanner-container",
+          "banner_at_ms": 410,
+          "tcf": false,
+          "reject_layer": 1
+        },
+        "consent_mode": {
+          "present": true,
+          "v2": true,
+          "default_at_ms": 120,
+          "first_google_hit_ms": 0,
+          "default_before_first_hit": true,
+          "default": {
+            "ad_personalization": "denied",
+            "ad_storage": "denied",
+            "ad_user_data": "denied",
+            "analytics_storage": "denied"
+          },
+          "wait_for_update_ms": 500
+        },
+        "needs_no_consent": false,
+        "runs": [
+          {
+            "run": "none",
+            "status": "ok",
+            "reason": "",
+            "attempts": 1,
+            "duration_ms": 14100,
+            "choice": null,
+            "visits": [
+              {
+                "url": "https://c08.consent.test/",
+                "step": "load",
+                "at_ms": 0,
+                "banner": true
+              },
+              {
+                "url": "https://c08.consent.test/shop/",
+                "step": "page",
+                "at_ms": 9400,
+                "banner": true
+              },
+              {
+                "url": "https://c08.consent.test/",
+                "step": "reload",
+                "at_ms": 12900,
+                "banner": true
+              }
+            ],
+            "hits": [
+              {
+                "seq": 4,
+                "at_ms": 910,
+                "phase": "before",
+                "visit": 0,
+                "url": "https://analytics.tiktok.com/api/v2/pixel?sdkid=••••9KQ1&event=Pageview",
+                "held": true,
+                "tracker": "tiktok-pixel",
+                "name": "TikTok Pixel",
+                "category": "advertising",
+                "need": "needed",
+                "kind": "beacon",
+                "id": "••••9KQ1",
+                "events": [
+                  "Pageview"
+                ]
+              }
+            ],
+            "cookies": [
+              {
+                "name": "_ttp",
+                "domain": ".c08.consent.test",
+                "path": "/",
+                "expires": 1824000000,
+                "length": 27,
+                "tracker": "tiktok-pixel",
+                "category": "advertising",
+                "need": "needed",
+                "phase": "before",
+                "at_ms": 930,
+                "set_by": "script"
+              }
+            ],
+            "storage": [],
+            "scripts": [
+              {
+                "tracker": "google-tag-manager",
+                "url": "https://www.googletagmanager.com/gtm.js?id=GTM-••••XK2",
+                "at_ms": 300,
+                "phase": "before",
+                "seq": 1
+              },
+              {
+                "tracker": "meta-pixel",
+                "url": "https://connect.facebook.net/en_US/fbevents.js",
+                "at_ms": 610,
+                "phase": "before",
+                "seq": 2
+              },
+              {
+                "tracker": "tiktok-pixel",
+                "url": "https://analytics.tiktok.com/i18n/pixel/events.js",
+                "at_ms": 700,
+                "phase": "before",
+                "seq": 3
+              }
+            ],
+            "signals": [
+              {
+                "source": "gtag",
+                "command": "default",
+                "at_ms": 120,
+                "state": {
+                  "ad_personalization": "denied",
+                  "ad_storage": "denied",
+                  "ad_user_data": "denied",
+                  "analytics_storage": "denied"
+                },
+                "wait_for_update_ms": 500
+              },
+              {
+                "source": "fbq",
+                "command": "revoke",
+                "at_ms": 590
+              }
+            ],
+            "screenshots": {
+              "after": "",
+              "banner": "evidence/page-1/none-banner.png"
+            },
+            "events_file": "events/page-1-none.ndjson",
+            "truncated": false,
+            "dropped": 0
+          },
+          {
+            "run": "accept",
+            "status": "ok",
+            "reason": "",
+            "attempts": 1,
+            "duration_ms": 14100,
+            "choice": {
+              "how": "button",
+              "selector": ".cmplz-accept",
+              "text": "Accept",
+              "layer": 1,
+              "clicks": 1,
+              "at_ms": 2010,
+              "box": {
+                "X": 912,
+                "Y": 790,
+                "W": 120,
+                "H": 40
+              },
+              "verified": true,
+              "verified_by": "cookie:cmplz_marketing",
+              "state": {
+                "cmp": "complianz",
+                "source": "cookie:cmplz_*",
+                "decided": true,
+                "categories": {
+                  "marketing": true,
+                  "statistics": true
+                }
+              },
+              "fallback": false
+            },
+            "visits": [
+              {
+                "url": "https://c08.consent.test/",
+                "step": "load",
+                "at_ms": 0,
+                "banner": true
+              },
+              {
+                "url": "https://c08.consent.test/shop/",
+                "step": "page",
+                "at_ms": 9400,
+                "banner": false
+              },
+              {
+                "url": "https://c08.consent.test/",
+                "step": "reload",
+                "at_ms": 12900,
+                "banner": false
+              }
+            ],
+            "hits": [
+              {
+                "seq": 6,
+                "at_ms": 2300,
+                "phase": "after-accept",
+                "visit": 0,
+                "url": "https://region1.google-analytics.com/g/collect?v=2&tid=G-••••7Q2X&cid=••••3021&en=page_view&gcs=G111&gcd=13r3r3r3r5&dl=https%3A%2F%2Fc08.consent.test%2F",
+                "held": true,
+                "tracker": "ga4",
+                "name": "Google Analytics 4",
+                "category": "analytics",
+                "need": "needed",
+                "kind": "beacon",
+                "id": "••••7Q2X",
+                "events": [
+                  "page_view"
+                ],
+                "consent": {
+                  "gcs": "G111",
+                  "gcs_decoded": {
+                    "known": true,
+                    "ad_storage": "granted",
+                    "analytics_storage": "granted"
+                  },
+                  "gcd": "13r3r3r3r5",
+                  "gcd_decoded": {
+                    "known": true,
+                    "ad_storage": {
+                      "letter": "r",
+                      "default": "denied",
+                      "update": "granted",
+                      "known": true
+                    },
+                    "analytics_storage": {
+                      "letter": "r",
+                      "default": "denied",
+                      "update": "granted",
+                      "known": true
+                    },
+                    "ad_user_data": {
+                      "letter": "r",
+                      "default": "denied",
+                      "update": "granted",
+                      "known": true
+                    },
+                    "ad_personalization": {
+                      "letter": "r",
+                      "default": "denied",
+                      "update": "granted",
+                      "known": true
+                    }
+                  },
+                  "gcd_unofficial": true
+                }
+              },
+              {
+                "seq": 7,
+                "at_ms": 2340,
+                "phase": "after-accept",
+                "visit": 0,
+                "url": "https://googleads.g.doubleclick.net/pagead/viewthroughconversion/••••4567/?gcs=G111&gcd=13r3r3r3r5",
+                "held": true,
+                "tracker": "google-ads",
+                "name": "Google Ads",
+                "category": "advertising",
+                "need": "needed",
+                "kind": "beacon",
+                "id": "••••4567",
+                "consent": {
+                  "gcs": "G111",
+                  "gcs_decoded": {
+                    "known": true,
+                    "ad_storage": "granted",
+                    "analytics_storage": "granted"
+                  },
+                  "gcd": "13r3r3r3r5",
+                  "gcd_decoded": {
+                    "known": true,
+                    "ad_storage": {
+                      "letter": "r",
+                      "default": "denied",
+                      "update": "granted",
+                      "known": true
+                    },
+                    "analytics_storage": {
+                      "letter": "r",
+                      "default": "denied",
+                      "update": "granted",
+                      "known": true
+                    },
+                    "ad_user_data": {
+                      "letter": "r",
+                      "default": "denied",
+                      "update": "granted",
+                      "known": true
+                    },
+                    "ad_personalization": {
+                      "letter": "r",
+                      "default": "denied",
+                      "update": "granted",
+                      "known": true
+                    }
+                  },
+                  "gcd_unofficial": true
+                }
+              },
+              {
+                "seq": 8,
+                "at_ms": 2380,
+                "phase": "after-accept",
+                "visit": 0,
+                "url": "https://www.facebook.com/tr?id=••••5678&ev=PageView&dl=https%3A%2F%2Fc08.consent.test%2F",
+                "held": true,
+                "tracker": "meta-pixel",
+                "name": "Meta Pixel",
+                "category": "advertising",
+                "need": "needed",
+                "kind": "beacon",
+                "id": "••••5678",
+                "events": [
+                  "PageView"
+                ]
+              },
+              {
+                "seq": 9,
+                "at_ms": 2420,
+                "phase": "after-accept",
+                "visit": 0,
+                "url": "https://analytics.tiktok.com/api/v2/pixel?sdkid=••••9KQ1&event=Pageview",
+                "held": true,
+                "tracker": "tiktok-pixel",
+                "name": "TikTok Pixel",
+                "category": "advertising",
+                "need": "needed",
+                "kind": "beacon",
+                "id": "••••9KQ1",
+                "events": [
+                  "Pageview"
+                ]
+              },
+              {
+                "seq": 10,
+                "at_ms": 9700,
+                "phase": "after-accept",
+                "visit": 1,
+                "url": "https://region1.google-analytics.com/g/collect?v=2&tid=G-••••7Q2X&cid=••••3021&en=page_view&gcs=G111&gcd=13r3r3r3r5&dl=https%3A%2F%2Fc08.consent.test%2F",
+                "held": true,
+                "tracker": "ga4",
+                "name": "Google Analytics 4",
+                "category": "analytics",
+                "need": "needed",
+                "kind": "beacon",
+                "id": "••••7Q2X",
+                "events": [
+                  "page_view"
+                ],
+                "consent": {
+                  "gcs": "G111",
+                  "gcs_decoded": {
+                    "known": true,
+                    "ad_storage": "granted",
+                    "analytics_storage": "granted"
+                  },
+                  "gcd": "13r3r3r3r5",
+                  "gcd_decoded": {
+                    "known": true,
+                    "ad_storage": {
+                      "letter": "r",
+                      "default": "denied",
+                      "update": "granted",
+                      "known": true
+                    },
+                    "analytics_storage": {
+                      "letter": "r",
+                      "default": "denied",
+                      "update": "granted",
+                      "known": true
+                    },
+                    "ad_user_data": {
+                      "letter": "r",
+                      "default": "denied",
+                      "update": "granted",
+                      "known": true
+                    },
+                    "ad_personalization": {
+                      "letter": "r",
+                      "default": "denied",
+                      "update": "granted",
+                      "known": true
+                    }
+                  },
+                  "gcd_unofficial": true
+                }
+              },
+              {
+                "seq": 11,
+                "at_ms": 9740,
+                "phase": "after-accept",
+                "visit": 1,
+                "url": "https://googleads.g.doubleclick.net/pagead/viewthroughconversion/••••4567/?gcs=G111&gcd=13r3r3r3r5",
+                "held": true,
+                "tracker": "google-ads",
+                "name": "Google Ads",
+                "category": "advertising",
+                "need": "needed",
+                "kind": "beacon",
+                "id": "••••4567",
+                "consent": {
+                  "gcs": "G111",
+                  "gcs_decoded": {
+                    "known": true,
+                    "ad_storage": "granted",
+                    "analytics_storage": "granted"
+                  },
+                  "gcd": "13r3r3r3r5",
+                  "gcd_decoded": {
+                    "known": true,
+                    "ad_storage": {
+                      "letter": "r",
+                      "default": "denied",
+                      "update": "granted",
+                      "known": true
+                    },
+                    "analytics_storage": {
+                      "letter": "r",
+                      "default": "denied",
+                      "update": "granted",
+                      "known": true
+                    },
+                    "ad_user_data": {
+                      "letter": "r",
+                      "default": "denied",
+                      "update": "granted",
+                      "known": true
+                    },
+                    "ad_personalization": {
+                      "letter": "r",
+                      "default": "denied",
+                      "update": "granted",
+                      "known": true
+                    }
+                  },
+                  "gcd_unofficial": true
+                }
+              },
+              {
+                "seq": 12,
+                "at_ms": 9780,
+                "phase": "after-accept",
+                "visit": 1,
+                "url": "https://www.facebook.com/tr?id=••••5678&ev=PageView&dl=https%3A%2F%2Fc08.consent.test%2F",
+                "held": true,
+                "tracker": "meta-pixel",
+                "name": "Meta Pixel",
+                "category": "advertising",
+                "need": "needed",
+                "kind": "beacon",
+                "id": "••••5678",
+                "events": [
+                  "PageView"
+                ]
+              },
+              {
+                "seq": 13,
+                "at_ms": 9820,
+                "phase": "after-accept",
+                "visit": 1,
+                "url": "https://analytics.tiktok.com/api/v2/pixel?sdkid=••••9KQ1&event=Pageview",
+                "held": true,
+                "tracker": "tiktok-pixel",
+                "name": "TikTok Pixel",
+                "category": "advertising",
+                "need": "needed",
+                "kind": "beacon",
+                "id": "••••9KQ1",
+                "events": [
+                  "Pageview"
+                ]
+              },
+              {
+                "seq": 14,
+                "at_ms": 13200,
+                "phase": "after-accept",
+                "visit": 2,
+                "url": "https://region1.google-analytics.com/g/collect?v=2&tid=G-••••7Q2X&cid=••••3021&en=page_view&gcs=G111&gcd=13r3r3r3r5&dl=https%3A%2F%2Fc08.consent.test%2F",
+                "held": true,
+                "tracker": "ga4",
+                "name": "Google Analytics 4",
+                "category": "analytics",
+                "need": "needed",
+                "kind": "beacon",
+                "id": "••••7Q2X",
+                "events": [
+                  "page_view"
+                ],
+                "consent": {
+                  "gcs": "G111",
+                  "gcs_decoded": {
+                    "known": true,
+                    "ad_storage": "granted",
+                    "analytics_storage": "granted"
+                  },
+                  "gcd": "13r3r3r3r5",
+                  "gcd_decoded": {
+                    "known": true,
+                    "ad_storage": {
+                      "letter": "r",
+                      "default": "denied",
+                      "update": "granted",
+                      "known": true
+                    },
+                    "analytics_storage": {
+                      "letter": "r",
+                      "default": "denied",
+                      "update": "granted",
+                      "known": true
+                    },
+                    "ad_user_data": {
+                      "letter": "r",
+                      "default": "denied",
+                      "update": "granted",
+                      "known": true
+                    },
+                    "ad_personalization": {
+                      "letter": "r",
+                      "default": "denied",
+                      "update": "granted",
+                      "known": true
+                    }
+                  },
+                  "gcd_unofficial": true
+                }
+              },
+              {
+                "seq": 15,
+                "at_ms": 13240,
+                "phase": "after-accept",
+                "visit": 2,
+                "url": "https://googleads.g.doubleclick.net/pagead/viewthroughconversion/••••4567/?gcs=G111&gcd=13r3r3r3r5",
+                "held": true,
+                "tracker": "google-ads",
+                "name": "Google Ads",
+                "category": "advertising",
+                "need": "needed",
+                "kind": "beacon",
+                "id": "••••4567",
+                "consent": {
+                  "gcs": "G111",
+                  "gcs_decoded": {
+                    "known": true,
+                    "ad_storage": "granted",
+                    "analytics_storage": "granted"
+                  },
+                  "gcd": "13r3r3r3r5",
+                  "gcd_decoded": {
+                    "known": true,
+                    "ad_storage": {
+                      "letter": "r",
+                      "default": "denied",
+                      "update": "granted",
+                      "known": true
+                    },
+                    "analytics_storage": {
+                      "letter": "r",
+                      "default": "denied",
+                      "update": "granted",
+                      "known": true
+                    },
+                    "ad_user_data": {
+                      "letter": "r",
+                      "default": "denied",
+                      "update": "granted",
+                      "known": true
+                    },
+                    "ad_personalization": {
+                      "letter": "r",
+                      "default": "denied",
+                      "update": "granted",
+                      "known": true
+                    }
+                  },
+                  "gcd_unofficial": true
+                }
+              },
+              {
+                "seq": 16,
+                "at_ms": 13280,
+                "phase": "after-accept",
+                "visit": 2,
+                "url": "https://www.facebook.com/tr?id=••••5678&ev=PageView&dl=https%3A%2F%2Fc08.consent.test%2F",
+                "held": true,
+                "tracker": "meta-pixel",
+                "name": "Meta Pixel",
+                "category": "advertising",
+                "need": "needed",
+                "kind": "beacon",
+                "id": "••••5678",
+                "events": [
+                  "PageView"
+                ]
+              },
+              {
+                "seq": 17,
+                "at_ms": 13320,
+                "phase": "after-accept",
+                "visit": 2,
+                "url": "https://analytics.tiktok.com/api/v2/pixel?sdkid=••••9KQ1&event=Pageview",
+                "held": true,
+                "tracker": "tiktok-pixel",
+                "name": "TikTok Pixel",
+                "category": "advertising",
+                "need": "needed",
+                "kind": "beacon",
+                "id": "••••9KQ1",
+                "events": [
+                  "Pageview"
+                ]
+              }
+            ],
+            "cookies": [
+              {
+                "name": "_ga",
+                "domain": ".c08.consent.test",
+                "path": "/",
+                "expires": 1824000000,
+                "length": 30,
+                "tracker": "ga4",
+                "category": "analytics",
+                "need": "needed",
+                "phase": "after-accept",
+                "at_ms": 2320,
+                "set_by": "script"
+              },
+              {
+                "name": "_fbp",
+                "domain": ".c08.consent.test",
+                "path": "/",
+                "expires": 1824000000,
+                "length": 29,
+                "tracker": "meta-pixel",
+                "category": "advertising",
+                "need": "needed",
+                "phase": "after-accept",
+                "at_ms": 2400,
+                "set_by": "script"
+              },
+              {
+                "name": "cmplz_marketing",
+                "domain": "c08.consent.test",
+                "path": "/",
+                "expires": 1824000000,
+                "length": 5,
+                "phase": "after-accept",
+                "at_ms": 2012,
+                "set_by": "script"
+              }
+            ],
+            "storage": [],
+            "scripts": [
+              {
+                "tracker": "google-tag-manager",
+                "url": "https://www.googletagmanager.com/gtm.js?id=GTM-••••XK2",
+                "at_ms": 300,
+                "phase": "before",
+                "seq": 5
+              }
+            ],
+            "signals": [
+              {
+                "source": "gtag",
+                "command": "default",
+                "at_ms": 120,
+                "state": {
+                  "ad_personalization": "denied",
+                  "ad_storage": "denied",
+                  "ad_user_data": "denied",
+                  "analytics_storage": "denied"
+                },
+                "wait_for_update_ms": 500
+              },
+              {
+                "source": "gtag",
+                "command": "update",
+                "at_ms": 2030,
+                "state": {
+                  "ad_personalization": "granted",
+                  "ad_storage": "granted",
+                  "ad_user_data": "granted",
+                  "analytics_storage": "granted"
+                }
+              },
+              {
+                "source": "fbq",
+                "command": "revoke",
+                "at_ms": 590
+              },
+              {
+                "source": "fbq",
+                "command": "grant",
+                "at_ms": 2040
+              }
+            ],
+            "final_state": {
+              "cmp": "complianz",
+              "source": "cookie:cmplz_*",
+              "decided": true,
+              "categories": {
+                "marketing": true,
+                "statistics": true
+              }
+            },
+            "screenshots": {
+              "after": "evidence/page-1/accept-after.png",
+              "banner": "evidence/page-1/accept-banner.png"
+            },
+            "events_file": "events/page-1-accept.ndjson",
+            "truncated": false,
+            "dropped": 0
+          },
+          {
+            "run": "reject",
+            "status": "ok",
+            "reason": "",
+            "attempts": 1,
+            "duration_ms": 14100,
+            "choice": {
+              "how": "button",
+              "selector": ".cmplz-deny",
+              "text": "Deny",
+              "layer": 1,
+              "clicks": 1,
+              "at_ms": 1980,
+              "box": {
+                "X": 912,
+                "Y": 790,
+                "W": 120,
+                "H": 40
+              },
+              "verified": true,
+              "verified_by": "cookie:cmplz_marketing",
+              "state": {
+                "cmp": "complianz",
+                "source": "cookie:cmplz_*",
+                "decided": true,
+                "categories": {
+                  "marketing": false,
+                  "statistics": false
+                }
+              },
+              "fallback": false
+            },
+            "visits": [
+              {
+                "url": "https://c08.consent.test/",
+                "step": "load",
+                "at_ms": 0,
+                "banner": true
+              },
+              {
+                "url": "https://c08.consent.test/shop/",
+                "step": "page",
+                "at_ms": 9400,
+                "banner": false
+              },
+              {
+                "url": "https://c08.consent.test/",
+                "step": "reload",
+                "at_ms": 12900,
+                "banner": false
+              }
+            ],
+            "hits": [
+              {
+                "seq": 19,
+                "at_ms": 910,
+                "phase": "before",
+                "visit": 0,
+                "url": "https://analytics.tiktok.com/api/v2/pixel?sdkid=••••9KQ1&event=Pageview",
+                "held": true,
+                "tracker": "tiktok-pixel",
+                "name": "TikTok Pixel",
+                "category": "advertising",
+                "need": "needed",
+                "kind": "beacon",
+                "id": "••••9KQ1",
+                "events": [
+                  "Pageview"
+                ]
+              }
+            ],
+            "cookies": [
+              {
+                "name": "cmplz_marketing",
+                "domain": "c08.consent.test",
+                "path": "/",
+                "expires": 1824000000,
+                "length": 4,
+                "phase": "after-reject",
+                "at_ms": 1982,
+                "set_by": "script"
+              }
+            ],
+            "storage": [],
+            "scripts": [
+              {
+                "tracker": "google-tag-manager",
+                "url": "https://www.googletagmanager.com/gtm.js?id=GTM-••••XK2",
+                "at_ms": 300,
+                "phase": "before",
+                "seq": 18
+              }
+            ],
+            "signals": [
+              {
+                "source": "gtag",
+                "command": "default",
+                "at_ms": 120,
+                "state": {
+                  "ad_personalization": "denied",
+                  "ad_storage": "denied",
+                  "ad_user_data": "denied",
+                  "analytics_storage": "denied"
+                },
+                "wait_for_update_ms": 500
+              },
+              {
+                "source": "gtag",
+                "command": "update",
+                "at_ms": 2000,
+                "state": {
+                  "ad_personalization": "denied",
+                  "ad_storage": "denied",
+                  "ad_user_data": "denied",
+                  "analytics_storage": "denied"
+                }
+              },
+              {
+                "source": "fbq",
+                "command": "revoke",
+                "at_ms": 590
+              }
+            ],
+            "final_state": {
+              "cmp": "complianz",
+              "source": "cookie:cmplz_*",
+              "decided": true,
+              "categories": {
+                "marketing": false,
+                "statistics": false
+              }
+            },
+            "screenshots": {
+              "after": "evidence/page-1/reject-after.png",
+              "banner": "evidence/page-1/reject-banner.png"
+            },
+            "events_file": "events/page-1-reject.ndjson",
+            "truncated": false,
+            "dropped": 0
+          }
+        ]
+      }
+    ],
+    "issues": [
+      {
+        "check": "consent/before-choice",
+        "level": "error",
+        "key": "consent/before-choice|/|none|tiktok-pixel",
+        "page": "/",
+        "run": "none",
+        "tracker": "tiktok-pixel",
+        "policy": "advanced",
+        "title": "TikTok Pixel fired before the visitor chose",
+        "detail": "analytics.tiktok.com/api/v2/pixel?sdkid=••••9KQ1&event=Pageview at 0.91s; cookie _ttp written",
+        "fix": "Load the tracker only after the visitor accepts: let the consent banner block its script, or start it with consent denied and grant it on Accept.",
+        "evidence": [
+          4
+        ]
+      },
+      {
+        "check": "consent/before-choice",
+        "level": "error",
+        "key": "consent/before-choice|/|reject|tiktok-pixel",
+        "page": "/",
+        "run": "reject",
+        "tracker": "tiktok-pixel",
+        "policy": "advanced",
+        "title": "TikTok Pixel fired before the visitor chose",
+        "detail": "analytics.tiktok.com/api/v2/pixel?sdkid=••••9KQ1&event=Pageview at 0.91s",
+        "fix": "Load the tracker only after the visitor accepts: let the consent banner block its script, or start it with consent denied and grant it on Accept.",
+        "evidence": [
+          19
+        ]
+      }
+    ],
+    "inconclusive": [],
+    "comparison": {
+      "against": "baseline",
+      "base_id": "2026-10-19T08-02-00-bbbbbb",
+      "base_at": "2026-10-19T08:02:00Z",
+      "changes": [
+        {
+          "class": "broke",
+          "key": "consent/before-choice|/|none|tiktok-pixel",
+          "page": "/",
+          "run": "none",
+          "title": "TikTok Pixel now fires before the choice",
+          "after": "error"
+        },
+        {
+          "class": "broke",
+          "key": "consent/before-choice|/|reject|tiktok-pixel",
+          "page": "/",
+          "run": "reject",
+          "title": "TikTok Pixel now fires before the choice",
+          "after": "error"
+        },
+        {
+          "class": "new",
+          "key": "tracker|/|accept|tiktok-pixel",
+          "page": "/",
+          "run": "accept",
+          "title": "TikTok Pixel fires after Accept",
+          "after": "tiktok-pixel"
+        }
+      ]
+    },
+    "evidence": {
+      "folder": ".echo/consent/2026-10-26T10-02-11-f7a8b9",
+      "files": []
+    },
+    "notes": [
+      "Evidence, not legal advice.",
+      "Hits held in the browser.",
+      "Hosts mapped with --map-host.",
+      "gcd decoded with an unofficial, community-documented mapping."
+    ]
+  }
+}

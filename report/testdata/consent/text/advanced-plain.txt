@@ -1,0 +1,17 @@
+rhythm echo 1.2.0 - consent check of https://g02.consent.test/
+
+Hits held: tracking hits are recorded and stopped in the browser. Nothing reached Google, Meta or any other tracker.
+Hosts mapped with --map-host.
+
+https://g02.consent.test/
+  Banner: Complianz, found after 0.4s, Reject on the banner
+  Consent Mode: v2 default, all four signals denied at 0.12s, before the first Google hit
+  [1/3] No choice   ok Google Analytics 4: 2 cookieless pings (gcs G100); no tracker cookies; Meta Pixel held back
+  [2/3] Accept      ok Google Analytics 4, Google Ads, Meta Pixel fired; update granted at 2.0s; kept on 1 more page
+  [3/3] Reject      ok nothing fired; update denied at 2.0s; kept on 1 more page
+
+All clear - 0 errors, 0 warnings, 1 notice - 3 runs, 3 trackers, policy advanced
+
+  notice  consent/cookieless-ping  Google Analytics 4 sent 2 cookieless pings before the choice (allowed under --consent-mode advanced)
+
+Evidence, not legal advice.

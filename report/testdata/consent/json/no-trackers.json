@@ -1,0 +1,234 @@
+{
+  "schema": "rhythm-echo/v1",
+  "kind": "consent",
+  "tool": "rhythm-echo",
+  "version": "1.2.0",
+  "complete": true,
+  "summary": {
+    "broke": 0,
+    "new": 0,
+    "changed": 0,
+    "fixed": 0,
+    "errors": 0,
+    "warnings": 0,
+    "notices": 0,
+    "pages": 1,
+    "runs": 3,
+    "failed_runs": 0,
+    "inconclusive_runs": 0,
+    "trackers": 0,
+    "before_choice": 0,
+    "after_reject": 0,
+    "held": 0
+  },
+  "verdict": "ok",
+  "data": {
+    "id": "2026-10-26T09-45-10-a0b0c0",
+    "started": "2026-10-26T09:20:41Z",
+    "duration_ms": 21230,
+    "echo": "1.2.0",
+    "browser": "Chrome for Testing 156.0.8078.47",
+    "user_agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36 rhythm-echo-consent/1.2.0",
+    "os": "linux/amd64",
+    "sandbox": true,
+    "tls_verified": true,
+    "held": true,
+    "mapped": true,
+    "policy": "advanced",
+    "geo": "",
+    "locale": "en-US",
+    "timezone": "UTC",
+    "viewport": "desktop",
+    "catalog": {
+      "version": "1.2.0",
+      "sha256": "4be1c0ffee5a1e7d2b0c9a8f7e6d5c4b3a291807f6e5d4c3b2a19087f6e5d4c3",
+      "count": 47
+    },
+    "cmp_rules": {
+      "version": "1.2.0",
+      "sha256": "9c1dfeed2b3a4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5",
+      "count": 9
+    },
+    "network": {
+      "requests": 21,
+      "held": 0,
+      "refused": 0,
+      "browser_internal": 2
+    },
+    "pages": [
+      {
+        "site": "",
+        "url": "https://g12.consent.test/",
+        "final_url": "https://g12.consent.test/",
+        "redirects": [],
+        "cmp": {
+          "id": "",
+          "name": "",
+          "found": false,
+          "present": false,
+          "detected_by": "",
+          "banner_at_ms": 0,
+          "tcf": false,
+          "reject_layer": 0
+        },
+        "consent_mode": {
+          "present": false,
+          "v2": false,
+          "default_at_ms": 0,
+          "first_google_hit_ms": 0,
+          "default_before_first_hit": false
+        },
+        "needs_no_consent": true,
+        "runs": [
+          {
+            "run": "none",
+            "status": "ok",
+            "reason": "",
+            "attempts": 1,
+            "duration_ms": 14100,
+            "choice": null,
+            "visits": [
+              {
+                "url": "https://g12.consent.test/",
+                "step": "load",
+                "at_ms": 0,
+                "banner": false
+              },
+              {
+                "url": "https://g12.consent.test/shop/",
+                "step": "page",
+                "at_ms": 9400,
+                "banner": false
+              },
+              {
+                "url": "https://g12.consent.test/",
+                "step": "reload",
+                "at_ms": 12900,
+                "banner": false
+              }
+            ],
+            "hits": [],
+            "cookies": [
+              {
+                "name": "PHPSESSID",
+                "domain": "g12.consent.test",
+                "path": "/",
+                "http_only": true,
+                "secure": true,
+                "same_site": "Lax",
+                "length": 26,
+                "phase": "before",
+                "at_ms": 95,
+                "set_by": "response:g12.consent.test"
+              }
+            ],
+            "storage": [],
+            "scripts": [],
+            "signals": [],
+            "screenshots": {
+              "after": "",
+              "banner": ""
+            },
+            "events_file": "events/page-1-none.ndjson",
+            "truncated": false,
+            "dropped": 0
+          },
+          {
+            "run": "accept",
+            "status": "no-banner",
+            "reason": "",
+            "detail": "No banner and no trackers: nothing to consent to",
+            "attempts": 1,
+            "duration_ms": 14100,
+            "choice": null,
+            "visits": [
+              {
+                "url": "https://g12.consent.test/",
+                "step": "load",
+                "at_ms": 0,
+                "banner": false
+              },
+              {
+                "url": "https://g12.consent.test/shop/",
+                "step": "page",
+                "at_ms": 9400,
+                "banner": false
+              },
+              {
+                "url": "https://g12.consent.test/",
+                "step": "reload",
+                "at_ms": 12900,
+                "banner": false
+              }
+            ],
+            "hits": [],
+            "cookies": [],
+            "storage": [],
+            "scripts": [],
+            "signals": [],
+            "screenshots": {
+              "after": "",
+              "banner": ""
+            },
+            "events_file": "events/page-1-accept.ndjson",
+            "truncated": false,
+            "dropped": 0
+          },
+          {
+            "run": "reject",
+            "status": "no-banner",
+            "reason": "",
+            "detail": "No banner and no trackers: nothing to consent to",
+            "attempts": 1,
+            "duration_ms": 14100,
+            "choice": null,
+            "visits": [
+              {
+                "url": "https://g12.consent.test/",
+                "step": "load",
+                "at_ms": 0,
+                "banner": false
+              },
+              {
+                "url": "https://g12.consent.test/shop/",
+                "step": "page",
+                "at_ms": 9400,
+                "banner": false
+              },
+              {
+                "url": "https://g12.consent.test/",
+                "step": "reload",
+                "at_ms": 12900,
+                "banner": false
+              }
+            ],
+            "hits": [],
+            "cookies": [],
+            "storage": [],
+            "scripts": [],
+            "signals": [],
+            "screenshots": {
+              "after": "",
+              "banner": ""
+            },
+            "events_file": "events/page-1-reject.ndjson",
+            "truncated": false,
+            "dropped": 0
+          }
+        ]
+      }
+    ],
+    "issues": [],
+    "inconclusive": [],
+    "comparison": null,
+    "evidence": {
+      "folder": ".echo/consent/2026-10-26T09-45-10-a0b0c0",
+      "files": []
+    },
+    "notes": [
+      "Evidence, not legal advice.",
+      "Hits held in the browser.",
+      "Hosts mapped with --map-host."
+    ]
+  }
+}

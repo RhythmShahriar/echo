@@ -1,4 +1,170 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "type": "object"
+  "$id": "https://github.com/RhythmShahriar/echo/report/schema/consent-verify.schema.json",
+  "title": "rhythm-echo/v1 consent-verify",
+  "description": "What `consent verify --json` writes. Generated from the Go types (report/consent_schema_test.go).",
+  "type": "object",
+  "required": [
+    "schema",
+    "kind",
+    "tool",
+    "version",
+    "complete",
+    "summary",
+    "verdict",
+    "data"
+  ],
+  "properties": {
+    "complete": {
+      "type": "boolean"
+    },
+    "data": {
+      "$ref": "#/$defs/consentVerify"
+    },
+    "kind": {
+      "const": "consent-verify"
+    },
+    "schema": {
+      "const": "rhythm-echo/v1"
+    },
+    "summary": {
+      "properties": {
+        "actions": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "broke": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "changed": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "errors": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "failed_actions": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "fixed": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "messages": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "new": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "notices": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "warnings": {
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "broke",
+        "new",
+        "changed",
+        "fixed",
+        "errors",
+        "warnings",
+        "notices",
+        "actions",
+        "messages",
+        "failed_actions"
+      ],
+      "type": "object"
+    },
+    "tool": {
+      "const": "rhythm-echo"
+    },
+    "verdict": {
+      "enum": [
+        "ok",
+        "findings",
+        "error"
+      ]
+    },
+    "version": {
+      "type": "string"
+    }
+  },
+  "$defs": {
+    "consentVerify": {
+      "properties": {
+        "files": {
+          "items": {
+            "$ref": "#/$defs/verifyFile"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "folder": {
+          "type": "string"
+        },
+        "signature": {
+          "$ref": "#/$defs/verifySignature"
+        }
+      },
+      "required": [
+        "folder",
+        "files",
+        "signature"
+      ],
+      "type": "object"
+    },
+    "verifyFile": {
+      "properties": {
+        "got": {
+          "type": "string"
+        },
+        "ok": {
+          "type": "boolean"
+        },
+        "path": {
+          "type": "string"
+        },
+        "want": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "ok",
+        "want",
+        "got"
+      ],
+      "type": "object"
+    },
+    "verifySignature": {
+      "properties": {
+        "key": {
+          "type": "string"
+        },
+        "ok": {
+          "type": "boolean"
+        },
+        "present": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "present",
+        "ok",
+        "key"
+      ],
+      "type": "object"
+    }
+  }
 }

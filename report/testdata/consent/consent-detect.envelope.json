@@ -1,0 +1,47 @@
+{
+  "schema": "rhythm-echo/v1",
+  "kind": "consent-detect",
+  "tool": "rhythm-echo",
+  "version": "1.2.0",
+  "complete": true,
+  "summary": {
+    "broke": 0,
+    "new": 0,
+    "changed": 0,
+    "fixed": 0,
+    "errors": 0,
+    "warnings": 1,
+    "notices": 0,
+    "actions": 0,
+    "messages": 0,
+    "failed_actions": 0
+  },
+  "verdict": "findings",
+  "data": {
+    "url": "https://staging.shop.test/",
+    "cmp": {
+      "id": "onetrust",
+      "name": "OneTrust",
+      "found": true,
+      "present": true,
+      "detected_by": "script:cdn.cookielaw.org",
+      "banner_at_ms": 1430,
+      "tcf": false,
+      "reject_layer": 2
+    },
+    "accept": {
+      "how": "button",
+      "selector": "#onetrust-accept-btn-handler",
+      "text": "Accept all",
+      "layer": 2,
+      "clicks": 0,
+      "at_ms": 0,
+      "verified": false,
+      "verified_by": "",
+      "fallback": false
+    },
+    "reject": null,
+    "screenshot": ".echo/consent/detect/2026-10-26T09-14-03-a1b2c3.png",
+    "browser": "Chrome for Testing 156.0.8078.47"
+  }
+}

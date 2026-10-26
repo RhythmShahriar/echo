@@ -1,0 +1,50 @@
+rhythm echo 1.2.0 - consent check of https://g01.consent.test/
+
+Hits held: tracking hits are recorded and stopped in the browser. Nothing reached Google, Meta or any other tracker.
+Hosts mapped with --map-host.
+gcd decoded with an unofficial, community-documented mapping.
+
+https://g01.consent.test/
+  Banner: Complianz, found after 0.4s, Reject on the banner
+  Consent Mode: v2 default, all four signals denied at 0.12s
+  [1/3] No choice   nothing fired; Meta Pixel held back
+     0.00s  load   https://g01.consent.test/
+     0.12s  gtag   consent default  all four denied
+     0.30s  script googletagmanager.com/gtm.js?id=GTM-••••XK2
+     0.41s  banner Complianz shown
+     0.61s  script connect.facebook.net/en_US/fbevents.js
+     9.40s  page   /shop/ (link 1 of 1)
+    12.90s  reload https://g01.consent.test/
+  [2/3] Accept      Google Analytics 4, Google Ads, Meta Pixel fired; update granted at 2.0s; kept on 1 more page
+     0.00s  load   https://g01.consent.test/
+     0.12s  gtag   consent default  all four denied
+     0.30s  script googletagmanager.com/gtm.js?id=GTM-••••XK2
+     0.41s  banner Complianz shown
+     2.01s  click  "Accept" (.cmplz-accept)
+     2.03s  gtag   consent update   all four granted
+     2.30s  hit    Google Analytics 4 page_view gcs=G111 gcd=13r3r3r3r5 (held)
+     2.32s  cookie _ga (Google Analytics 4)
+     2.34s  hit    Google Ads gcs=G111 gcd=13r3r3r3r5 (held)
+     2.38s  hit    Meta Pixel PageView (held)
+     2.40s  cookie _fbp (Meta Pixel)
+     9.40s  page   /shop/ (link 1 of 1)
+     9.70s  hit    Google Analytics 4 page_view gcs=G111 gcd=13r3r3r3r5 (held)
+     9.74s  hit    Google Ads gcs=G111 gcd=13r3r3r3r5 (held)
+     9.78s  hit    Meta Pixel PageView (held)
+    12.90s  reload https://g01.consent.test/
+    13.20s  hit    Google Analytics 4 page_view gcs=G111 gcd=13r3r3r3r5 (held)
+    13.24s  hit    Google Ads gcs=G111 gcd=13r3r3r3r5 (held)
+    13.28s  hit    Meta Pixel PageView (held)
+  [3/3] Reject      nothing fired; update denied at 2.0s; kept on 1 more page
+     0.00s  load   https://g01.consent.test/
+     0.12s  gtag   consent default  all four denied
+     0.30s  script googletagmanager.com/gtm.js?id=GTM-••••XK2
+     0.41s  banner Complianz shown
+     1.98s  click  "Deny" (.cmplz-deny)
+     2.00s  gtag   consent update   all four denied
+     9.40s  page   /shop/ (link 1 of 1)
+    12.90s  reload https://g01.consent.test/
+
+All clear - 0 errors, 0 warnings, 0 notices - 3 runs, 3 trackers, policy advanced
+
+Evidence, not legal advice.

@@ -1,0 +1,60 @@
+{
+  "schema": "rhythm-echo/v1",
+  "kind": "consent-catalog",
+  "tool": "rhythm-echo",
+  "version": "1.2.0",
+  "complete": true,
+  "summary": {
+    "broke": 0,
+    "new": 0,
+    "changed": 0,
+    "fixed": 0,
+    "errors": 0,
+    "warnings": 0,
+    "notices": 0,
+    "actions": 0,
+    "messages": 0,
+    "failed_actions": 0
+  },
+  "verdict": "ok",
+  "data": {
+    "cmps": [
+      {
+        "ID": "cookiebot",
+        "Name": "Cookiebot",
+        "DetectedBy": "#CybotCookiebotDialog, window.Cookiebot",
+        "Accept": "#CybotCookiebotDialogBodyLevelButtonLevelOptinAllowAll",
+        "Reject": "#CybotCookiebotDialogBodyButtonDecline",
+        "StateFrom": "cookie CookieConsent",
+        "Sources": [
+          "https://www.cookiebot.com/en/developer/"
+        ]
+      }
+    ],
+    "trackers": [
+      {
+        "ID": "meta-pixel",
+        "Name": "Meta Pixel",
+        "Vendor": "Meta",
+        "Category": "advertising",
+        "Need": "needed",
+        "Matches": "facebook.com/tr, connect.facebook.net/*/fbevents.js",
+        "Fix": "Block the pixel until Accept.",
+        "Docs": "https://developers.facebook.com/docs/meta-pixel/implementation/gdpr",
+        "Sources": [
+          "https://developers.facebook.com/docs/meta-pixel/"
+        ]
+      }
+    ],
+    "catalog": {
+      "version": "1.2.0",
+      "sha256": "4b4b4b4b4b4b4b4b4b4b4b4b4b4b4b4b4b4b4b4b4b4b4b4b4b4b4b4b4b4b4b4b",
+      "count": 47
+    },
+    "rules": {
+      "version": "1.2.0",
+      "sha256": "9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c",
+      "count": 9
+    }
+  }
+}

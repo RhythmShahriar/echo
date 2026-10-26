@@ -1,0 +1,4 @@
+Banner:  OneTrust, found after 1.4s (by its script on cdn.cookielaw.org)
+Accept:  "Accept all" (#onetrust-accept-btn-handler), second layer
+Reject:  not found on the banner or in its settings
+Screenshot: .echo/consent/detect/2026-10-26T09-14-03-a1b2c3.png

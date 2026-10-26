@@ -1,0 +1,5 @@
+ok  consent.json                       sha256 eeeeeeee...b855
+ok  report.html                        sha256 55555555...b855
+ok  evidence/page-1/reject-banner.png  sha256 aaaaaaaa...b855
+Signature: doesn't match (ed25519, key team.pub)
+Not verified: the signature doesn't match; 3 files match.

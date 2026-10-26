@@ -1,0 +1,5 @@
+ok  consent.json                       sha256 eeeeeeee...b855
+ok  report.html                        sha256 55555555...b855
+missing  evidence/page-1/reject-banner.png
+Signature: none
+Not verified: 1 missing; 2 files match.

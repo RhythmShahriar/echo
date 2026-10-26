@@ -1,0 +1,3 @@
+Broke - 2 broke, 1 new, 0 changed, 0 fixed - 3 runs, 4 trackers
+  BROKE   TikTok Pixel now fires before the choice            / (No choice, Reject)
+  NEW     TikTok Pixel fires after Accept                     /

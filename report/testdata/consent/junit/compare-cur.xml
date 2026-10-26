@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites name="rhythm-echo consent" tests="3" failures="2" skipped="0" time="21.230">
+  <testsuite name="/" tests="3" failures="2" skipped="0" time="42.300" timestamp="2026-10-26T09:20:41Z">
+    <properties>
+      <property name="consent.json.sha256" value="e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"></property>
+    </properties>
+    <testcase name="/ · No choice" classname="rhythm-echo.consent" time="14.100">
+      <failure message="consent/before-choice: TikTok Pixel fired before the visitor chose" type="error">analytics.tiktok.com/api/v2/pixel?sdkid=••••9KQ1&amp;event=Pageview at 0.91s; cookie _ttp written&#xA;fix: Load the tracker only after the visitor accepts: let the consent banner block its script, or start it with consent denied and grant it on Accept.</failure>
+    </testcase>
+    <testcase name="/ · Accept" classname="rhythm-echo.consent" time="14.100">
+      <system-out>Google Analytics 4, Google Ads, Meta Pixel, TikTok Pixel fired; update granted at 2.0s; kept on 1 more page</system-out>
+    </testcase>
+    <testcase name="/ · Reject" classname="rhythm-echo.consent" time="14.100">
+      <failure message="consent/before-choice: TikTok Pixel fired before the visitor chose" type="error">analytics.tiktok.com/api/v2/pixel?sdkid=••••9KQ1&amp;event=Pageview at 0.91s&#xA;fix: Load the tracker only after the visitor accepts: let the consent banner block its script, or start it with consent denied and grant it on Accept.</failure>
+    </testcase>
+  </testsuite>
+</testsuites>

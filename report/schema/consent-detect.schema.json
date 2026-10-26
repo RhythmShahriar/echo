@@ -1,4 +1,318 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "type": "object"
+  "$id": "https://github.com/RhythmShahriar/echo/report/schema/consent-detect.schema.json",
+  "title": "rhythm-echo/v1 consent-detect",
+  "description": "What `consent detect --json` writes. Generated from the Go types (report/consent_schema_test.go).",
+  "type": "object",
+  "required": [
+    "schema",
+    "kind",
+    "tool",
+    "version",
+    "complete",
+    "summary",
+    "verdict",
+    "data"
+  ],
+  "properties": {
+    "complete": {
+      "type": "boolean"
+    },
+    "data": {
+      "$ref": "#/$defs/detectResult"
+    },
+    "kind": {
+      "const": "consent-detect"
+    },
+    "schema": {
+      "const": "rhythm-echo/v1"
+    },
+    "summary": {
+      "properties": {
+        "actions": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "broke": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "changed": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "errors": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "failed_actions": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "fixed": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "messages": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "new": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "notices": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "warnings": {
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "broke",
+        "new",
+        "changed",
+        "fixed",
+        "errors",
+        "warnings",
+        "notices",
+        "actions",
+        "messages",
+        "failed_actions"
+      ],
+      "type": "object"
+    },
+    "tool": {
+      "const": "rhythm-echo"
+    },
+    "verdict": {
+      "enum": [
+        "ok",
+        "findings",
+        "error"
+      ]
+    },
+    "version": {
+      "type": "string"
+    }
+  },
+  "$defs": {
+    "box": {
+      "properties": {
+        "H": {
+          "type": "number"
+        },
+        "W": {
+          "type": "number"
+        },
+        "X": {
+          "type": "number"
+        },
+        "Y": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "X",
+        "Y",
+        "W",
+        "H"
+      ],
+      "type": "object"
+    },
+    "choiceOrNull": {
+      "properties": {
+        "api_worked": {
+          "type": "boolean"
+        },
+        "at_ms": {
+          "type": "integer"
+        },
+        "box": {
+          "$ref": "#/$defs/box"
+        },
+        "clicks": {
+          "type": "integer"
+        },
+        "fallback": {
+          "type": "boolean"
+        },
+        "how": {
+          "type": "string"
+        },
+        "layer": {
+          "type": "integer"
+        },
+        "selector": {
+          "type": "string"
+        },
+        "state": {
+          "$ref": "#/$defs/cmpState"
+        },
+        "text": {
+          "type": "string"
+        },
+        "verified": {
+          "type": "boolean"
+        },
+        "verified_by": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "how",
+        "selector",
+        "text",
+        "layer",
+        "clicks",
+        "at_ms",
+        "verified",
+        "verified_by",
+        "fallback"
+      ],
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "cmpInfo": {
+      "properties": {
+        "banner_at_ms": {
+          "type": "integer"
+        },
+        "detected_by": {
+          "type": "string"
+        },
+        "found": {
+          "type": "boolean"
+        },
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "present": {
+          "type": "boolean"
+        },
+        "reject_layer": {
+          "type": "integer"
+        },
+        "tcf": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "found",
+        "present",
+        "detected_by",
+        "banner_at_ms",
+        "tcf",
+        "reject_layer"
+      ],
+      "type": "object"
+    },
+    "cmpState": {
+      "properties": {
+        "categories": {
+          "additionalProperties": {
+            "type": "boolean"
+          },
+          "type": "object"
+        },
+        "cmp": {
+          "type": "string"
+        },
+        "decided": {
+          "type": "boolean"
+        },
+        "source": {
+          "type": "string"
+        },
+        "tcf": {
+          "$ref": "#/$defs/tcf"
+        }
+      },
+      "required": [
+        "cmp",
+        "source",
+        "decided"
+      ],
+      "type": "object"
+    },
+    "detectResult": {
+      "properties": {
+        "accept": {
+          "$ref": "#/$defs/choiceOrNull"
+        },
+        "browser": {
+          "type": "string"
+        },
+        "cmp": {
+          "$ref": "#/$defs/cmpInfo"
+        },
+        "reject": {
+          "$ref": "#/$defs/choiceOrNull"
+        },
+        "screenshot": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "url",
+        "cmp",
+        "accept",
+        "reject",
+        "screenshot",
+        "browser"
+      ],
+      "type": "object"
+    },
+    "tcf": {
+      "properties": {
+        "cmp_id": {
+          "type": "integer"
+        },
+        "purposes_consent": {
+          "items": {
+            "type": "integer"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "purposes_li": {
+          "items": {
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "valid": {
+          "type": "boolean"
+        },
+        "vendors_consent": {
+          "type": "integer"
+        },
+        "version": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "version",
+        "cmp_id",
+        "purposes_consent",
+        "vendors_consent",
+        "valid"
+      ],
+      "type": "object"
+    }
+  }
 }

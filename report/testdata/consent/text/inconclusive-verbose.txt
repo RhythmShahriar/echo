@@ -1,0 +1,25 @@
+rhythm echo 1.2.0 - consent check of https://e13.consent.test/
+
+Hits held: tracking hits are recorded and stopped in the browser. Nothing reached Google, Meta or any other tracker.
+Hosts mapped with --map-host.
+
+https://e13.consent.test/
+  Banner: none found within 10s (Cookiebot's script loaded)
+  [1/3] No choice   nothing fired
+     0.00s  load   https://e13.consent.test/
+     0.20s  script consent.cookiebot.com/uc.js
+     9.40s  page   /shop/ (link 1 of 1)
+    12.90s  reload https://e13.consent.test/
+  [2/3] Accept      ? couldn't choose: no banner
+     0.00s  load   https://e13.consent.test/
+  [3/3] Reject      ? couldn't choose: no banner
+     0.00s  load   https://e13.consent.test/
+
+Couldn't check - 0 errors, 0 warnings, 0 notices - 3 runs, 0 trackers, policy advanced
+
+  ? /  Accept: no banner showed within 10s (Cookiebot's script loaded)
+  ? /  Reject: no banner showed within 10s (Cookiebot's script loaded)
+  Many banners show only to visitors in some countries: try --geo de, or an EU --proxy.
+  A banner Echo doesn't know: --accept-selector and --reject-selector (consent detect helps).
+
+Evidence, not legal advice.

@@ -1,4 +1,253 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "type": "object"
+  "$id": "https://github.com/RhythmShahriar/echo/report/schema/consent-catalog.schema.json",
+  "title": "rhythm-echo/v1 consent-catalog",
+  "description": "What `consent cmps --json` and `consent trackers --json` write. Generated from the Go types (report/consent_schema_test.go).",
+  "type": "object",
+  "required": [
+    "schema",
+    "kind",
+    "tool",
+    "version",
+    "complete",
+    "summary",
+    "verdict",
+    "data"
+  ],
+  "properties": {
+    "complete": {
+      "type": "boolean"
+    },
+    "data": {
+      "$ref": "#/$defs/consentCatalog"
+    },
+    "kind": {
+      "const": "consent-catalog"
+    },
+    "schema": {
+      "const": "rhythm-echo/v1"
+    },
+    "summary": {
+      "properties": {
+        "actions": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "broke": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "changed": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "errors": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "failed_actions": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "fixed": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "messages": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "new": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "notices": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "warnings": {
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "broke",
+        "new",
+        "changed",
+        "fixed",
+        "errors",
+        "warnings",
+        "notices",
+        "actions",
+        "messages",
+        "failed_actions"
+      ],
+      "type": "object"
+    },
+    "tool": {
+      "const": "rhythm-echo"
+    },
+    "verdict": {
+      "enum": [
+        "ok",
+        "findings",
+        "error"
+      ]
+    },
+    "version": {
+      "type": "string"
+    }
+  },
+  "$defs": {
+    "cmpRuleInfo": {
+      "properties": {
+        "Accept": {
+          "type": "string"
+        },
+        "DetectedBy": {
+          "type": "string"
+        },
+        "ID": {
+          "type": "string"
+        },
+        "Name": {
+          "type": "string"
+        },
+        "Reject": {
+          "type": "string"
+        },
+        "Sources": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "StateFrom": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "ID",
+        "Name",
+        "DetectedBy",
+        "Accept",
+        "Reject",
+        "StateFrom",
+        "Sources"
+      ],
+      "type": "object"
+    },
+    "consentCatalog": {
+      "properties": {
+        "catalog": {
+          "$ref": "#/$defs/dataInfo"
+        },
+        "cmps": {
+          "items": {
+            "$ref": "#/$defs/cmpRuleInfo"
+          },
+          "type": "array"
+        },
+        "rules": {
+          "$ref": "#/$defs/dataInfo"
+        },
+        "trackers": {
+          "items": {
+            "$ref": "#/$defs/trackerInfo"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "catalog",
+        "rules"
+      ],
+      "type": "object"
+    },
+    "dataInfo": {
+      "properties": {
+        "count": {
+          "type": "integer"
+        },
+        "sha256": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "version",
+        "sha256",
+        "count"
+      ],
+      "type": "object"
+    },
+    "trackerInfo": {
+      "properties": {
+        "Category": {
+          "enum": [
+            "analytics",
+            "advertising",
+            "session-replay",
+            "social",
+            "embed",
+            "functional",
+            "necessary"
+          ],
+          "type": "string"
+        },
+        "Docs": {
+          "type": "string"
+        },
+        "Fix": {
+          "type": "string"
+        },
+        "ID": {
+          "type": "string"
+        },
+        "Matches": {
+          "type": "string"
+        },
+        "Name": {
+          "type": "string"
+        },
+        "Need": {
+          "enum": [
+            "needed",
+            "exempt",
+            "no"
+          ],
+          "type": "string"
+        },
+        "Sources": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "Vendor": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "ID",
+        "Name",
+        "Vendor",
+        "Category",
+        "Need",
+        "Matches",
+        "Fix",
+        "Docs",
+        "Sources"
+      ],
+      "type": "object"
+    }
+  }
 }

@@ -1,0 +1,2 @@
+Banner:  none found within 10s (Cookiebot's script loaded)
+Screenshot: .echo/consent/detect/2026-10-26T09-14-03-a1b2c3.png

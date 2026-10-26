@@ -1,0 +1,533 @@
+html
+  head
+    meta
+    meta
+    meta
+    meta
+    meta
+    title
+      | Echo consent check of https://e13.consent.test/
+    style
+  body
+    div class=wrap
+      header class=top
+        div class=brand
+          span class=dot
+            | ♪
+          | rhythm echo consent
+          small
+            | 1.2.0
+        div class=meta
+          | https://e13.consent.test/ · 2026-10-26 09:20 UTC
+      section id=verdict class=tone-changed
+        h1 class=verdict
+          | Couldn't check
+        p class=sub
+          | 1 page, 3 runs, 0 trackers, policy advanced
+        ul class=chips
+          li class=chip k-error
+            b
+              | 0
+            | errors
+          li class=chip k-warning
+            b
+              | 0
+            | warnings
+          li class=chip k-notice
+            b
+              | 0
+            | notices
+          li class=chip k-changed
+            b
+              | 2
+            | couldn't check
+        ul class=flags
+          li class=flag
+            | Hits held in the browser
+          li class=flag warn
+            | Hosts mapped with --map-host
+          li class=flag
+            | Evidence, not legal advice
+        div class=hash
+          | consent.json sha256 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+        div class=tools
+          button
+            | Open all
+          button
+            | Close all
+      h2
+        | Pages and runs
+      div class=scroll
+        table class=matrix
+          thead
+            tr
+              th
+                | Page
+              th
+                | Banner
+              th
+                | No choice
+              th
+                | Accept
+              th
+                | Reject
+          tbody
+            tr
+              td
+                code
+                  | https://e13.consent.test/
+              td
+                | none
+              td class=ok
+                a href=#run-1-none
+                  | nothing fired
+              td class=inco
+                a href=#run-1-accept
+                  | ? no banner
+              td class=inco
+                a href=#run-1-reject
+                  | ? no banner
+      h2
+        | Issues
+      h3
+        | Couldn't check (2)
+      div class=item k-changed
+        h4
+          span class=badge
+            | ?
+          code
+            | /
+          | · Accept
+        div class=facts
+          | Accept: no banner showed within 10s (Cookiebot's script loaded) ·
+          a href=#run-1-accept
+            | timeline
+      div class=item k-changed
+        h4
+          span class=badge
+            | ?
+          code
+            | /
+          | · Reject
+        div class=facts
+          | Reject: no banner showed within 10s (Cookiebot's script loaded) ·
+          a href=#run-1-reject
+            | timeline
+      h2
+        | Banners and choices
+      details id=page-1
+        summary
+          | https://e13.consent.test/
+          small
+            | none found (Cookiebot's script loaded), detected by its script on consent.cookiebot.com
+        h3
+          | No choice
+        p class=sub
+          | No choice made
+        div class=shots
+          figure
+            figcaption
+              | Banner
+            div class=missing
+              | screenshot not taken
+        h3
+          | Accept
+        p class=sub
+          | Couldn't choose: no banner
+        div class=shots
+          figure
+            figcaption
+              | Banner
+            div class=missing
+              | screenshot not taken
+        h3
+          | Reject
+        p class=sub
+          | Couldn't choose: no banner
+        div class=shots
+          figure
+            figcaption
+              | Banner
+            div class=missing
+              | screenshot not taken
+      h2
+        | Timelines
+      details id=run-1-none
+        summary
+          | / · No choice
+          small
+            | nothing fired
+        svg class=timeline
+          text class=lbl
+            | hits
+          line class=row
+          text class=lbl
+            | cookies
+          line class=row
+          text class=lbl
+            | signals
+          line class=row
+          line class=axis
+          line class=tick
+          text class=tl
+            | 0s
+          line class=tick
+          text class=tl
+            | 2s
+          line class=tick
+          text class=tl
+            | 4s
+          line class=tick
+          text class=tl
+            | 6s
+          line class=tick
+          text class=tl
+            | 8s
+          line class=tick
+          text class=tl
+            | 10s
+          line class=tick
+          text class=tl
+            | 12s
+          line class=tick
+          text class=tl
+            | 14s
+        ul class=legend
+          li
+            | hollow: cookie
+          li
+            | diamond: signal
+          li
+            | dashed line: the choice
+        div class=scroll
+          table
+            thead
+              tr
+                th
+                  | Time
+                th
+                  | Type
+                th
+                  | Tracker
+                th
+                  | Visit
+                th
+                  | What
+            tbody
+              tr
+                td
+                  | 0.00s
+                td
+                  | load
+                td
+                td
+                  | 0
+                td
+                  code
+                    | https://e13.consent.test/
+              tr id=run-1-none-e1
+                td
+                  | 0.20s
+                td
+                  | script
+                td
+                  | cookiebot
+                td
+                td
+                  code
+                    | https://consent.cookiebot.com/uc.js
+              tr
+                td
+                  | 9.40s
+                td
+                  | page
+                td
+                td
+                  | 1
+                td
+                  code
+                    | https://e13.consent.test/shop/
+              tr
+                td
+                  | 12.90s
+                td
+                  | reload
+                td
+                td
+                  | 2
+                td
+                  code
+                    | https://e13.consent.test/
+      details id=run-1-accept
+        summary
+          | / · Accept
+          small
+            | couldn't choose: no banner
+        svg class=timeline
+          text class=lbl
+            | hits
+          line class=row
+          text class=lbl
+            | cookies
+          line class=row
+          text class=lbl
+            | signals
+          line class=row
+          line class=axis
+          line class=tick
+          text class=tl
+            | 0s
+          line class=tick
+          text class=tl
+            | 2s
+          line class=tick
+          text class=tl
+            | 4s
+          line class=tick
+          text class=tl
+            | 6s
+          line class=tick
+          text class=tl
+            | 8s
+          line class=tick
+          text class=tl
+            | 10s
+          line class=tick
+          text class=tl
+            | 12s
+          line class=tick
+          text class=tl
+            | 14s
+        ul class=legend
+          li
+            | hollow: cookie
+          li
+            | diamond: signal
+          li
+            | dashed line: the choice
+        div class=scroll
+          table
+            thead
+              tr
+                th
+                  | Time
+                th
+                  | Type
+                th
+                  | Tracker
+                th
+                  | Visit
+                th
+                  | What
+            tbody
+              tr
+                td
+                  | 0.00s
+                td
+                  | load
+                td
+                td
+                  | 0
+                td
+                  code
+                    | https://e13.consent.test/
+      details id=run-1-reject
+        summary
+          | / · Reject
+          small
+            | couldn't choose: no banner
+        svg class=timeline
+          text class=lbl
+            | hits
+          line class=row
+          text class=lbl
+            | cookies
+          line class=row
+          text class=lbl
+            | signals
+          line class=row
+          line class=axis
+          line class=tick
+          text class=tl
+            | 0s
+          line class=tick
+          text class=tl
+            | 2s
+          line class=tick
+          text class=tl
+            | 4s
+          line class=tick
+          text class=tl
+            | 6s
+          line class=tick
+          text class=tl
+            | 8s
+          line class=tick
+          text class=tl
+            | 10s
+          line class=tick
+          text class=tl
+            | 12s
+          line class=tick
+          text class=tl
+            | 14s
+        ul class=legend
+          li
+            | hollow: cookie
+          li
+            | diamond: signal
+          li
+            | dashed line: the choice
+        div class=scroll
+          table
+            thead
+              tr
+                th
+                  | Time
+                th
+                  | Type
+                th
+                  | Tracker
+                th
+                  | Visit
+                th
+                  | What
+            tbody
+              tr
+                td
+                  | 0.00s
+                td
+                  | load
+                td
+                td
+                  | 0
+                td
+                  code
+                    | https://e13.consent.test/
+      h2
+        | Run details
+      dl
+        dt
+          | Echo
+        dd
+          | 1.2.0
+        dt
+          | Browser
+        dd
+          | Chrome for Testing 156.0.8078.47
+        dt
+          | OS
+        dd
+          | linux/amd64
+        dt
+          | User agent
+        dd
+          | Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36 rhythm-echo-consent/1.2.0
+        dt
+          | Geo
+        dd
+          | none
+        dt
+          | Locale
+        dd
+          | en-US
+        dt
+          | Time zone
+        dd
+          | UTC
+        dt
+          | Viewport
+        dd
+          | desktop
+        dt
+          | Started
+        dd
+          | 2026-10-26 09:20:41 UTC
+        dt
+          | Duration
+        dd
+          | 21.23s
+        dt
+          | Policy
+        dd
+          | advanced
+        dt
+          | Tracker hits
+        dd
+          | held in the browser
+        dt
+          | Hosts mapped
+        dd
+          | yes (--map-host)
+        dt
+          | Sandbox
+        dd
+          | on
+        dt
+          | TLS
+        dd
+          | verified
+        dt
+          | Tracker catalog
+        dd
+          | 1.2.0 (sha256 4be1c0ff..., 47 entries)
+        dt
+          | CMP rules
+        dd
+          | 1.2.0 (sha256 9c1dfeed..., 9 entries)
+        dt
+          | Network
+        dd
+          | 38 requests, 0 held, 0 refused, 3 browser internal
+        dt
+          | Result
+        dd
+          | 2026-10-26T09-40-00-d1e2f3
+        dt
+          | Evidence folder
+        dd
+          | .echo/consent/2026-10-26T09-40-00-d1e2f3
+      footer
+        p
+          | What a pass means. In these runs, from this machine, with this browser and these settings, no tracker on Echo's list sent a request or set a cookie before the visitor chose or after Reject. It does not mean the site complies with the GDPR, ePrivacy, CCPA/CPRA or any other law. Evidence, not legal advice.
+        p
+          | One visitor, one place. Banners differ by country, language and device. Geo-targeted banners may not show to a CI runner in the US; Echo can set the browser's language and time zone (
+          code
+            | --geo
+          | ) but not its IP address. Run it from the region that matters, or through a proxy there.
+        p
+          | Blind spots. Trackers that are not on the list; server-side tagging on your own domain when its requests don't look like GA4 or Meta; fingerprinting without network requests; tags that wait longer than the settle time or need more interaction than a scroll and one more page; sites that hide tags from automated browsers.
+        p
+          | Consent Mode advanced. Google says its tags in advanced mode "send measurements without cookies" while consent is denied. Whether that is acceptable before consent is disputed. Echo reports these pings as
+          code
+            | consent/cookieless-ping
+          | under the default policy
+          code
+            | advanced
+          | ;
+          code
+            | --consent-mode basic
+          | or
+          code
+            | strict
+          | counts them as hits.
+        p
+          | gcd is unofficial. Google doesn't document the
+          code
+            | gcd
+          | parameter. Echo shows the raw value next to a reading based on community documentation and treats letters it doesn't know as unknown.
+        p
+          | Pseudonymised, not anonymised. Masked or hashed identifiers in reports can still be personal data. Treat reports like logs.
+        p
+          | What leaves the machine. Requests to the site and to the scripts it loads (which shows this machine's IP address to those servers). No tracking hits unless
+          code
+            | --send-hits
+          | . Nothing goes to Rhythm. The update check contacts GitHub (
+          code
+            | RHYTHM_OFFLINE=1
+          | turns it off).
+        p
+          | Banners Echo can't handle are reported as "couldn't check" (exit 3), never as a pass. Tested CMPs and the dates their fixtures were captured are in the benchmark.
+        p
+          | A signature proves who made the evidence file and that it hasn't changed. It doesn't prove the site behaves the same for every visitor, region or day. Keyless signing in the Action writes the repository and workflow name to the public Rekor log.
+    script

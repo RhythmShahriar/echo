@@ -1,0 +1,16 @@
+rhythm echo 1.2.0 - consent check of https://g01.consent.test/
+
+Hits held: tracking hits are recorded and stopped in the browser. Nothing reached Google, Meta or any other tracker.
+Hosts mapped with --map-host.
+
+https://g01.consent.test/
+  Banner: Complianz, found after 0.4s, Reject on the banner
+  Consent Mode: v2 default, all four signals denied at 0.12s
+  [1/3] No choice   nothing fired; Meta Pixel held back
+  [2/3] Accept      Google Analytics 4, Google Ads, Meta Pixel fired; update granted at 2.0s; kept on 1 more page
+  [3/3] Reject      nothing fired; update denied at 2.0s; kept on 1 more page
+
+All clear - 0 errors, 0 warnings, 0 notices - 3 runs, 3 trackers, policy advanced
+
+Evidence, not legal advice.
+full report: .echo/consent/2026-10-26T09-20-41-c4d5e6/report.html

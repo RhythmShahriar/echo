@@ -1,0 +1,5 @@
+TRACKER    NAME                CATEGORY   CONSENT  MATCHES
+ga4        Google Analytics 4  analytics  needed   /g/collect (any host with tid=G-), region*.google-analytics.com
+plausible  Plausible           analytics  exempt   plausible.io/api/event (cookieless)
+stripe     Stripe.js           necessary  no       js.stripe.com, m.stripe.network
+3 trackers, catalogue version 1.2.0 (sha256 fake...). Add your own under consent: trackers:.

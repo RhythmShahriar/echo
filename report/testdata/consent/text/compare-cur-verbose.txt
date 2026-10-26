@@ -1,0 +1,62 @@
+rhythm echo 1.2.0 - consent check of https://c08.consent.test/ against baseline from 2026-10-19 08:02
+
+Hits held: tracking hits are recorded and stopped in the browser. Nothing reached Google, Meta or any other tracker.
+Hosts mapped with --map-host.
+gcd decoded with an unofficial, community-documented mapping.
+
+https://c08.consent.test/
+  Banner: Complianz, found after 0.4s, Reject on the banner
+  Consent Mode: v2 default, all four signals denied at 0.12s
+  [1/3] No choice   ✗ TikTok Pixel fired before the choice; Meta Pixel held back
+     0.00s  load   https://c08.consent.test/
+     0.12s  gtag   consent default  all four denied
+     0.30s  script googletagmanager.com/gtm.js?id=GTM-••••XK2
+     0.41s  banner Complianz shown
+     0.61s  script connect.facebook.net/en_US/fbevents.js
+     0.70s  script analytics.tiktok.com/i18n/pixel/events.js
+     0.91s  hit    TikTok Pixel Pageview (held)
+     0.93s  cookie _ttp (TikTok Pixel)
+     9.40s  page   /shop/ (link 1 of 1)
+    12.90s  reload https://c08.consent.test/
+  [2/3] Accept      Google Analytics 4, Google Ads, Meta Pixel, TikTok Pixel fired; update granted at 2.0s; kept on 1 more page
+     0.00s  load   https://c08.consent.test/
+     0.12s  gtag   consent default  all four denied
+     0.30s  script googletagmanager.com/gtm.js?id=GTM-••••XK2
+     0.41s  banner Complianz shown
+     2.01s  click  "Accept" (.cmplz-accept)
+     2.03s  gtag   consent update   all four granted
+     2.30s  hit    Google Analytics 4 page_view gcs=G111 gcd=13r3r3r3r5 (held)
+     2.32s  cookie _ga (Google Analytics 4)
+     2.34s  hit    Google Ads gcs=G111 gcd=13r3r3r3r5 (held)
+     2.38s  hit    Meta Pixel PageView (held)
+     2.40s  cookie _fbp (Meta Pixel)
+     2.42s  hit    TikTok Pixel Pageview (held)
+     9.40s  page   /shop/ (link 1 of 1)
+     9.70s  hit    Google Analytics 4 page_view gcs=G111 gcd=13r3r3r3r5 (held)
+     9.74s  hit    Google Ads gcs=G111 gcd=13r3r3r3r5 (held)
+     9.78s  hit    Meta Pixel PageView (held)
+     9.82s  hit    TikTok Pixel Pageview (held)
+    12.90s  reload https://c08.consent.test/
+    13.20s  hit    Google Analytics 4 page_view gcs=G111 gcd=13r3r3r3r5 (held)
+    13.24s  hit    Google Ads gcs=G111 gcd=13r3r3r3r5 (held)
+    13.28s  hit    Meta Pixel PageView (held)
+    13.32s  hit    TikTok Pixel Pageview (held)
+  [3/3] Reject      ✗ TikTok Pixel fired before the choice; update denied at 2.0s; kept on 1 more page
+     0.00s  load   https://c08.consent.test/
+     0.12s  gtag   consent default  all four denied
+     0.30s  script googletagmanager.com/gtm.js?id=GTM-••••XK2
+     0.41s  banner Complianz shown
+     0.91s  hit    TikTok Pixel Pageview (held)
+     1.98s  click  "Deny" (.cmplz-deny)
+     2.00s  gtag   consent update   all four denied
+     9.40s  page   /shop/ (link 1 of 1)
+    12.90s  reload https://c08.consent.test/
+
+Broke - 2 broke, 1 new, 0 changed, 0 fixed - 3 runs, 4 trackers
+  BROKE   TikTok Pixel now fires before the choice            / (No choice, Reject)
+          (key: consent/before-choice|/|none|tiktok-pixel)
+          (key: consent/before-choice|/|reject|tiktok-pixel)
+  NEW     TikTok Pixel fires after Accept                     /
+          (key: tracker|/|accept|tiktok-pixel)
+
+Evidence, not legal advice.

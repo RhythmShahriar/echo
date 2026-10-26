@@ -1,0 +1,67 @@
+{
+  "schema": "rhythm-echo/v1",
+  "kind": "consent-catalog",
+  "tool": "rhythm-echo",
+  "version": "dev",
+  "complete": true,
+  "summary": {
+    "broke": 0,
+    "new": 0,
+    "changed": 0,
+    "fixed": 0,
+    "errors": 0,
+    "warnings": 0,
+    "notices": 0,
+    "actions": 0,
+    "messages": 0,
+    "failed_actions": 0
+  },
+  "verdict": "ok",
+  "data": {
+    "trackers": [
+      {
+        "ID": "ga4",
+        "Name": "Google Analytics 4",
+        "Vendor": "",
+        "Category": "analytics",
+        "Need": "needed",
+        "Matches": "/g/collect (any host with tid=G-), region*.google-analytics.com",
+        "Fix": "",
+        "Docs": "",
+        "Sources": null
+      },
+      {
+        "ID": "plausible",
+        "Name": "Plausible",
+        "Vendor": "",
+        "Category": "analytics",
+        "Need": "exempt",
+        "Matches": "plausible.io/api/event (cookieless)",
+        "Fix": "",
+        "Docs": "",
+        "Sources": null
+      },
+      {
+        "ID": "stripe",
+        "Name": "Stripe.js",
+        "Vendor": "",
+        "Category": "necessary",
+        "Need": "no",
+        "Matches": "js.stripe.com, m.stripe.network",
+        "Fix": "",
+        "Docs": "",
+        "Sources": null
+      }
+    ],
+    "catalog": {
+      "version": "1.2.0",
+      "sha256": "fake",
+      "count": 2
+    },
+    "rules": {
+      "version": "1.2.0",
+      "sha256": "fake",
+      "count": 1
+    }
+  }
+}

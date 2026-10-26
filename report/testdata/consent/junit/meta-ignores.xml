@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites name="rhythm-echo consent" tests="3" failures="2" skipped="0" time="21.230">
+  <testsuite name="/" tests="3" failures="2" skipped="0" time="42.300" timestamp="2026-10-26T09:20:41Z">
+    <properties>
+      <property name="consent.json.sha256" value="e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"></property>
+    </properties>
+    <testcase name="/ · No choice" classname="rhythm-echo.consent" time="14.100">
+      <failure message="consent/before-choice: Meta Pixel fired before the visitor chose" type="error">3 hits (PageView on /, /shop/, /); cookie _fbp written&#xA;fix: Load the tracker only after the visitor accepts: let the consent banner block its script, or start it with consent denied and grant it on Accept.</failure>
+    </testcase>
+    <testcase name="/ · Accept" classname="rhythm-echo.consent" time="14.100">
+      <system-out>Google Analytics 4, Google Ads, Meta Pixel fired; update granted at 2.0s; kept on 1 more page</system-out>
+    </testcase>
+    <testcase name="/ · Reject" classname="rhythm-echo.consent" time="14.100">
+      <failure message="consent/after-reject: Meta Pixel fired after Reject" type="error">3 hits (PageView on /, /shop/, /); cookie _fbp written&#xA;fix: Make Reject stop the tracker: block its script while consent is denied and keep it blocked on every page after the choice.</failure>
+    </testcase>
+  </testsuite>
+</testsuites>

@@ -1,0 +1,48 @@
+{
+  "schema": "rhythm-echo/v1",
+  "kind": "consent-verify",
+  "tool": "rhythm-echo",
+  "version": "1.2.0",
+  "complete": true,
+  "summary": {
+    "broke": 0,
+    "new": 0,
+    "changed": 0,
+    "fixed": 0,
+    "errors": 1,
+    "warnings": 0,
+    "notices": 0,
+    "actions": 0,
+    "messages": 0,
+    "failed_actions": 0
+  },
+  "verdict": "findings",
+  "data": {
+    "folder": ".echo/consent/2026-10-26T09-20-41-c4d5e6",
+    "files": [
+      {
+        "path": "consent.json",
+        "ok": true,
+        "want": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee0123b855",
+        "got": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee0123b855"
+      },
+      {
+        "path": "report.html",
+        "ok": false,
+        "want": "555555555555555555555555555555555555555555555555555555550123b855",
+        "got": "999999999999999999999999999999999999999999999999999999990123b855"
+      },
+      {
+        "path": "evidence/page-1/reject-banner.png",
+        "ok": true,
+        "want": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa0123b855",
+        "got": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa0123b855"
+      }
+    ],
+    "signature": {
+      "present": true,
+      "ok": true,
+      "key": "team.pub"
+    }
+  }
+}
