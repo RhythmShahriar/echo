@@ -6,6 +6,7 @@ package report
 import (
 	"errors"
 	"io"
+	"time"
 
 	"github.com/RhythmShahriar/echo/consent"
 )
@@ -16,14 +17,15 @@ var errConsentNotBuilt = errors.New("report: consent writer not built yet")
 
 // ConsentTextOptions shape the terminal output of the consent commands.
 type ConsentTextOptions struct {
-	Plain      bool   // --plain: no glyphs, FAIL and ok words
-	Color      bool   // color on (a terminal, no --no-color, no NO_COLOR)
-	Quiet      bool   // -q: the verdict line and issues only
-	Verbose    bool   // -v: the timeline of every run and the issue keys
-	Width      int    // terminal width; 0 is 80
-	FailOn     string // --fail-on, for the verdict line
-	FirstRun   bool   // the first consent run on this machine: say where the evidence is
-	ReportPath string // the HTML report, for the "full report:" line; "" when none
+	Plain      bool          // --plain: no glyphs, FAIL and ok words
+	Color      bool          // color on (a terminal, no --no-color, no NO_COLOR)
+	Quiet      bool          // -q: the verdict line and issues only
+	Verbose    bool          // -v: the timeline of every run and the issue keys
+	Width      int           // terminal width; 0 is 80
+	FailOn     string        // --fail-on, for the verdict line
+	FirstRun   bool          // the first consent run on this machine: say where the evidence is
+	ReportPath string        // the HTML report, for the "full report:" line; "" when none
+	BannerWait time.Duration // --banner-wait, for "none found within"; 0 is the 10s default
 }
 
 // ConsentMarkdownOptions shape the Markdown summary (--md, the Action
@@ -93,27 +95,9 @@ func WriteConsentJUnit(w io.Writer, r *consent.Result, consentSHA256 string) err
 	return errConsentNotBuilt
 }
 
-// WriteConsentJSON writes a consent check in a ConsentEnvelope, its
-// verdict for failOn.
-func WriteConsentJSON(w io.Writer, r *consent.Result, failOn string) error {
-	return errConsentNotBuilt
-}
-
 // WriteConsentCatalog writes consent cmps (kind "cmps") or consent
 // trackers (kind "trackers"), as a table or as a consent-catalog
 // envelope.
 func WriteConsentCatalog(w io.Writer, cmps []consent.CMPRuleInfo, trackers []consent.TrackerInfo, kind string, asJSON bool, o ConsentTextOptions) error {
-	return errConsentNotBuilt
-}
-
-// WriteConsentDetect writes what consent detect found, as lines or as a
-// consent-detect envelope.
-func WriteConsentDetect(w io.Writer, d *consent.DetectResult, asJSON bool, o ConsentTextOptions) error {
-	return errConsentNotBuilt
-}
-
-// WriteConsentVerify writes what consent verify found, as lines or as a
-// consent-verify envelope.
-func WriteConsentVerify(w io.Writer, v *ConsentVerify, asJSON bool, o ConsentTextOptions) error {
 	return errConsentNotBuilt
 }

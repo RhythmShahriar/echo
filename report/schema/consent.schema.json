@@ -1,4 +1,1629 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "type": "object"
+  "$id": "https://github.com/RhythmShahriar/echo/report/schema/consent.schema.json",
+  "title": "rhythm-echo/v1 consent",
+  "description": "What `consent --json` writes; data is also consent.json. Generated from the Go types (report/consent_schema_test.go). New optional fields may be added without a new schema name.",
+  "type": "object",
+  "required": [
+    "schema",
+    "kind",
+    "tool",
+    "version",
+    "complete",
+    "summary",
+    "verdict",
+    "data"
+  ],
+  "properties": {
+    "complete": {
+      "type": "boolean"
+    },
+    "data": {
+      "$ref": "#/$defs/result"
+    },
+    "kind": {
+      "const": "consent"
+    },
+    "schema": {
+      "const": "rhythm-echo/v1"
+    },
+    "summary": {
+      "properties": {
+        "after_reject": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "before_choice": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "broke": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "changed": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "errors": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "failed_runs": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "fixed": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "held": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "inconclusive_runs": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "new": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "notices": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "pages": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "runs": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "trackers": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "warnings": {
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "broke",
+        "new",
+        "changed",
+        "fixed",
+        "errors",
+        "warnings",
+        "notices",
+        "pages",
+        "runs",
+        "failed_runs",
+        "inconclusive_runs",
+        "trackers",
+        "before_choice",
+        "after_reject",
+        "held"
+      ],
+      "type": "object"
+    },
+    "tool": {
+      "const": "rhythm-echo"
+    },
+    "verdict": {
+      "enum": [
+        "ok",
+        "findings",
+        "error"
+      ]
+    },
+    "version": {
+      "type": "string"
+    }
+  },
+  "$defs": {
+    "box": {
+      "properties": {
+        "H": {
+          "type": "number"
+        },
+        "W": {
+          "type": "number"
+        },
+        "X": {
+          "type": "number"
+        },
+        "Y": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "X",
+        "Y",
+        "W",
+        "H"
+      ],
+      "type": "object"
+    },
+    "change": {
+      "properties": {
+        "accepted": {
+          "type": "boolean"
+        },
+        "after": {
+          "type": "string"
+        },
+        "before": {
+          "type": "string"
+        },
+        "class": {
+          "enum": [
+            "broke",
+            "new",
+            "changed",
+            "fixed"
+          ],
+          "type": "string"
+        },
+        "key": {
+          "type": "string"
+        },
+        "page": {
+          "type": "string"
+        },
+        "run": {
+          "enum": [
+            "none",
+            "accept",
+            "reject",
+            "gpc",
+            "withdraw"
+          ],
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "class",
+        "key",
+        "page",
+        "run",
+        "title"
+      ],
+      "type": "object"
+    },
+    "choice": {
+      "properties": {
+        "api_worked": {
+          "type": "boolean"
+        },
+        "at_ms": {
+          "type": "integer"
+        },
+        "box": {
+          "$ref": "#/$defs/box"
+        },
+        "clicks": {
+          "type": "integer"
+        },
+        "fallback": {
+          "type": "boolean"
+        },
+        "how": {
+          "type": "string"
+        },
+        "layer": {
+          "type": "integer"
+        },
+        "selector": {
+          "type": "string"
+        },
+        "state": {
+          "$ref": "#/$defs/cmpState"
+        },
+        "text": {
+          "type": "string"
+        },
+        "verified": {
+          "type": "boolean"
+        },
+        "verified_by": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "how",
+        "selector",
+        "text",
+        "layer",
+        "clicks",
+        "at_ms",
+        "verified",
+        "verified_by",
+        "fallback"
+      ],
+      "type": "object"
+    },
+    "choiceOrNull": {
+      "properties": {
+        "api_worked": {
+          "type": "boolean"
+        },
+        "at_ms": {
+          "type": "integer"
+        },
+        "box": {
+          "$ref": "#/$defs/box"
+        },
+        "clicks": {
+          "type": "integer"
+        },
+        "fallback": {
+          "type": "boolean"
+        },
+        "how": {
+          "type": "string"
+        },
+        "layer": {
+          "type": "integer"
+        },
+        "selector": {
+          "type": "string"
+        },
+        "state": {
+          "$ref": "#/$defs/cmpState"
+        },
+        "text": {
+          "type": "string"
+        },
+        "verified": {
+          "type": "boolean"
+        },
+        "verified_by": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "how",
+        "selector",
+        "text",
+        "layer",
+        "clicks",
+        "at_ms",
+        "verified",
+        "verified_by",
+        "fallback"
+      ],
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "cmpInfo": {
+      "properties": {
+        "banner_at_ms": {
+          "type": "integer"
+        },
+        "detected_by": {
+          "type": "string"
+        },
+        "found": {
+          "type": "boolean"
+        },
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "present": {
+          "type": "boolean"
+        },
+        "reject_layer": {
+          "type": "integer"
+        },
+        "tcf": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "found",
+        "present",
+        "detected_by",
+        "banner_at_ms",
+        "tcf",
+        "reject_layer"
+      ],
+      "type": "object"
+    },
+    "cmpState": {
+      "properties": {
+        "categories": {
+          "additionalProperties": {
+            "type": "boolean"
+          },
+          "type": "object"
+        },
+        "cmp": {
+          "type": "string"
+        },
+        "decided": {
+          "type": "boolean"
+        },
+        "source": {
+          "type": "string"
+        },
+        "tcf": {
+          "$ref": "#/$defs/tcf"
+        }
+      },
+      "required": [
+        "cmp",
+        "source",
+        "decided"
+      ],
+      "type": "object"
+    },
+    "comparisonOrNull": {
+      "properties": {
+        "against": {
+          "type": "string"
+        },
+        "base_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "base_id": {
+          "type": "string"
+        },
+        "changes": {
+          "items": {
+            "$ref": "#/$defs/change"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "against",
+        "base_id",
+        "base_at",
+        "changes"
+      ],
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "consentModeOrNull": {
+      "properties": {
+        "default": {
+          "additionalProperties": {
+            "enum": [
+              "granted",
+              "denied",
+              "unset",
+              "unknown"
+            ],
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "default_at_ms": {
+          "type": "integer"
+        },
+        "default_before_first_hit": {
+          "type": "boolean"
+        },
+        "first_google_hit_ms": {
+          "type": "integer"
+        },
+        "present": {
+          "type": "boolean"
+        },
+        "region": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "v2": {
+          "type": "boolean"
+        },
+        "wait_for_update_ms": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "present",
+        "v2",
+        "default_at_ms",
+        "first_google_hit_ms",
+        "default_before_first_hit"
+      ],
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "cookie": {
+      "properties": {
+        "at_ms": {
+          "type": "integer"
+        },
+        "blocked": {
+          "type": "string"
+        },
+        "category": {
+          "enum": [
+            "analytics",
+            "advertising",
+            "session-replay",
+            "social",
+            "embed",
+            "functional",
+            "necessary"
+          ],
+          "type": "string"
+        },
+        "domain": {
+          "type": "string"
+        },
+        "expires": {
+          "type": "integer"
+        },
+        "http_only": {
+          "type": "boolean"
+        },
+        "length": {
+          "type": "integer"
+        },
+        "name": {
+          "type": "string"
+        },
+        "need": {
+          "enum": [
+            "needed",
+            "exempt",
+            "no"
+          ],
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "phase": {
+          "enum": [
+            "before",
+            "after-accept",
+            "after-reject",
+            "gpc",
+            "after-withdraw"
+          ],
+          "type": "string"
+        },
+        "same_site": {
+          "type": "string"
+        },
+        "secure": {
+          "type": "boolean"
+        },
+        "set_by": {
+          "type": "string"
+        },
+        "tracker": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "domain",
+        "path",
+        "length",
+        "phase",
+        "at_ms"
+      ],
+      "type": "object"
+    },
+    "dataInfo": {
+      "properties": {
+        "count": {
+          "type": "integer"
+        },
+        "sha256": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "version",
+        "sha256",
+        "count"
+      ],
+      "type": "object"
+    },
+    "echoMessage": {
+      "properties": {
+        "at_ms": {
+          "type": "integer"
+        },
+        "event": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "phase": {
+          "enum": [
+            "before",
+            "after-accept",
+            "after-reject",
+            "gpc",
+            "after-withdraw"
+          ],
+          "type": "string"
+        },
+        "provider": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "provider",
+        "event",
+        "at_ms",
+        "phase"
+      ],
+      "type": "object"
+    },
+    "evidence": {
+      "properties": {
+        "files": {
+          "items": {
+            "$ref": "#/$defs/evidenceFile"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "folder": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "folder",
+        "files"
+      ],
+      "type": "object"
+    },
+    "evidenceFile": {
+      "properties": {
+        "bytes": {
+          "type": "integer"
+        },
+        "path": {
+          "type": "string"
+        },
+        "sha256": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "bytes",
+        "sha256"
+      ],
+      "type": "object"
+    },
+    "gcd": {
+      "properties": {
+        "ad_personalization": {
+          "$ref": "#/$defs/gcdSignal"
+        },
+        "ad_storage": {
+          "$ref": "#/$defs/gcdSignal"
+        },
+        "ad_user_data": {
+          "$ref": "#/$defs/gcdSignal"
+        },
+        "analytics_storage": {
+          "$ref": "#/$defs/gcdSignal"
+        },
+        "extra": {
+          "type": "string"
+        },
+        "known": {
+          "type": "boolean"
+        },
+        "note": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "known",
+        "ad_storage",
+        "analytics_storage",
+        "ad_user_data",
+        "ad_personalization"
+      ],
+      "type": "object"
+    },
+    "gcdSignal": {
+      "properties": {
+        "default": {
+          "enum": [
+            "granted",
+            "denied",
+            "unset",
+            "unknown"
+          ],
+          "type": "string"
+        },
+        "known": {
+          "type": "boolean"
+        },
+        "letter": {
+          "type": "string"
+        },
+        "update": {
+          "enum": [
+            "granted",
+            "denied",
+            "unset",
+            "unknown"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "letter",
+        "default",
+        "update",
+        "known"
+      ],
+      "type": "object"
+    },
+    "gcs": {
+      "properties": {
+        "ad_storage": {
+          "enum": [
+            "granted",
+            "denied",
+            "unset",
+            "unknown"
+          ],
+          "type": "string"
+        },
+        "analytics_storage": {
+          "enum": [
+            "granted",
+            "denied",
+            "unset",
+            "unknown"
+          ],
+          "type": "string"
+        },
+        "known": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "known",
+        "ad_storage",
+        "analytics_storage"
+      ],
+      "type": "object"
+    },
+    "googleConsent": {
+      "properties": {
+        "dma": {
+          "type": "string"
+        },
+        "gcd": {
+          "type": "string"
+        },
+        "gcd_decoded": {
+          "$ref": "#/$defs/gcd"
+        },
+        "gcd_unofficial": {
+          "type": "boolean"
+        },
+        "gcs": {
+          "type": "string"
+        },
+        "gcs_decoded": {
+          "$ref": "#/$defs/gcs"
+        },
+        "npa": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "gpp": {
+      "properties": {
+        "sale_opt_out": {
+          "enum": [
+            "granted",
+            "denied",
+            "unset",
+            "unknown"
+          ],
+          "type": "string"
+        },
+        "sections": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "sharing_opt_out": {
+          "enum": [
+            "granted",
+            "denied",
+            "unset",
+            "unknown"
+          ],
+          "type": "string"
+        },
+        "valid": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "sections",
+        "valid"
+      ],
+      "type": "object"
+    },
+    "hitRef": {
+      "properties": {
+        "at_ms": {
+          "type": "integer"
+        },
+        "category": {
+          "enum": [
+            "analytics",
+            "advertising",
+            "session-replay",
+            "social",
+            "embed",
+            "functional",
+            "necessary"
+          ],
+          "type": "string"
+        },
+        "consent": {
+          "$ref": "#/$defs/googleConsent"
+        },
+        "cookieless": {
+          "type": "boolean"
+        },
+        "events": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "first_party": {
+          "type": "boolean"
+        },
+        "held": {
+          "type": "boolean"
+        },
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "beacon",
+            "script",
+            "frame"
+          ],
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "need": {
+          "enum": [
+            "needed",
+            "exempt",
+            "no"
+          ],
+          "type": "string"
+        },
+        "params": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "phase": {
+          "enum": [
+            "before",
+            "after-accept",
+            "after-reject",
+            "gpc",
+            "after-withdraw"
+          ],
+          "type": "string"
+        },
+        "seq": {
+          "type": "integer"
+        },
+        "tracker": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        },
+        "visit": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "seq",
+        "at_ms",
+        "phase",
+        "visit",
+        "url",
+        "held",
+        "tracker",
+        "name",
+        "category",
+        "need",
+        "kind"
+      ],
+      "type": "object"
+    },
+    "ignore": {
+      "properties": {
+        "check": {
+          "type": "string"
+        },
+        "page": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "run": {
+          "enum": [
+            "none",
+            "accept",
+            "reject",
+            "gpc",
+            "withdraw"
+          ],
+          "type": "string"
+        },
+        "tracker": {
+          "type": "string"
+        },
+        "until": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "check",
+        "reason",
+        "until"
+      ],
+      "type": "object"
+    },
+    "inconclusive": {
+      "properties": {
+        "detail": {
+          "type": "string"
+        },
+        "page": {
+          "type": "string"
+        },
+        "reason": {
+          "enum": [
+            "",
+            "no_banner",
+            "cmp_not_found",
+            "no_button",
+            "click_missed",
+            "state_unchanged",
+            "navigation_failed",
+            "timeout",
+            "limit",
+            "canceled"
+          ],
+          "type": "string"
+        },
+        "run": {
+          "enum": [
+            "none",
+            "accept",
+            "reject",
+            "gpc",
+            "withdraw"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "page",
+        "run",
+        "reason",
+        "detail"
+      ],
+      "type": "object"
+    },
+    "issue": {
+      "properties": {
+        "check": {
+          "type": "string"
+        },
+        "detail": {
+          "type": "string"
+        },
+        "evidence": {
+          "items": {
+            "type": "integer"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "fix": {
+          "type": "string"
+        },
+        "ignored": {
+          "$ref": "#/$defs/ignore"
+        },
+        "key": {
+          "type": "string"
+        },
+        "level": {
+          "enum": [
+            "error",
+            "warning",
+            "notice"
+          ],
+          "type": "string"
+        },
+        "page": {
+          "type": "string"
+        },
+        "policy": {
+          "enum": [
+            "advanced",
+            "basic",
+            "strict"
+          ],
+          "type": "string"
+        },
+        "run": {
+          "enum": [
+            "none",
+            "accept",
+            "reject",
+            "gpc",
+            "withdraw"
+          ],
+          "type": "string"
+        },
+        "site": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "tracker": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "check",
+        "level",
+        "key",
+        "page",
+        "run",
+        "policy",
+        "title",
+        "detail",
+        "fix",
+        "evidence"
+      ],
+      "type": "object"
+    },
+    "network": {
+      "properties": {
+        "browser_internal": {
+          "type": "integer"
+        },
+        "held": {
+          "type": "integer"
+        },
+        "refused": {
+          "type": "integer"
+        },
+        "requests": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "requests",
+        "held",
+        "refused",
+        "browser_internal"
+      ],
+      "type": "object"
+    },
+    "page": {
+      "properties": {
+        "cmp": {
+          "$ref": "#/$defs/cmpInfo"
+        },
+        "consent_mode": {
+          "$ref": "#/$defs/consentModeOrNull"
+        },
+        "final_url": {
+          "type": "string"
+        },
+        "needs_no_consent": {
+          "type": "boolean"
+        },
+        "redirects": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "runs": {
+          "items": {
+            "$ref": "#/$defs/run"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "site": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "site",
+        "url",
+        "final_url",
+        "redirects",
+        "cmp",
+        "consent_mode",
+        "needs_no_consent",
+        "runs"
+      ],
+      "type": "object"
+    },
+    "result": {
+      "properties": {
+        "browser": {
+          "type": "string"
+        },
+        "catalog": {
+          "$ref": "#/$defs/dataInfo"
+        },
+        "cmp_rules": {
+          "$ref": "#/$defs/dataInfo"
+        },
+        "comparison": {
+          "$ref": "#/$defs/comparisonOrNull"
+        },
+        "duration_ms": {
+          "type": "integer"
+        },
+        "echo": {
+          "type": "string"
+        },
+        "evidence": {
+          "$ref": "#/$defs/evidence"
+        },
+        "geo": {
+          "type": "string"
+        },
+        "held": {
+          "type": "boolean"
+        },
+        "id": {
+          "type": "string"
+        },
+        "inconclusive": {
+          "items": {
+            "$ref": "#/$defs/inconclusive"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "issues": {
+          "items": {
+            "$ref": "#/$defs/issue"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "locale": {
+          "type": "string"
+        },
+        "mapped": {
+          "type": "boolean"
+        },
+        "network": {
+          "$ref": "#/$defs/network"
+        },
+        "notes": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "os": {
+          "type": "string"
+        },
+        "pages": {
+          "items": {
+            "$ref": "#/$defs/page"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "policy": {
+          "enum": [
+            "advanced",
+            "basic",
+            "strict"
+          ],
+          "type": "string"
+        },
+        "sandbox": {
+          "type": "boolean"
+        },
+        "started": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "timezone": {
+          "type": "string"
+        },
+        "tls_verified": {
+          "type": "boolean"
+        },
+        "user_agent": {
+          "type": "string"
+        },
+        "viewport": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "started",
+        "duration_ms",
+        "echo",
+        "browser",
+        "user_agent",
+        "os",
+        "sandbox",
+        "tls_verified",
+        "held",
+        "mapped",
+        "policy",
+        "geo",
+        "locale",
+        "timezone",
+        "viewport",
+        "catalog",
+        "cmp_rules",
+        "network",
+        "pages",
+        "issues",
+        "inconclusive",
+        "comparison",
+        "evidence",
+        "notes"
+      ],
+      "type": "object"
+    },
+    "run": {
+      "properties": {
+        "attempts": {
+          "type": "integer"
+        },
+        "choice": {
+          "$ref": "#/$defs/choiceOrNull"
+        },
+        "cookies": {
+          "items": {
+            "$ref": "#/$defs/cookie"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "detail": {
+          "type": "string"
+        },
+        "dropped": {
+          "type": "integer"
+        },
+        "duration_ms": {
+          "type": "integer"
+        },
+        "events_file": {
+          "type": "string"
+        },
+        "final_state": {
+          "$ref": "#/$defs/cmpState"
+        },
+        "har_file": {
+          "type": "string"
+        },
+        "hits": {
+          "items": {
+            "$ref": "#/$defs/hitRef"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "reason": {
+          "enum": [
+            "",
+            "no_banner",
+            "cmp_not_found",
+            "no_button",
+            "click_missed",
+            "state_unchanged",
+            "navigation_failed",
+            "timeout",
+            "limit",
+            "canceled"
+          ],
+          "type": "string"
+        },
+        "run": {
+          "enum": [
+            "none",
+            "accept",
+            "reject",
+            "gpc",
+            "withdraw"
+          ],
+          "type": "string"
+        },
+        "screenshots": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "scripts": {
+          "items": {
+            "$ref": "#/$defs/script"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "server": {
+          "items": {
+            "$ref": "#/$defs/echoMessage"
+          },
+          "type": "array"
+        },
+        "signals": {
+          "items": {
+            "$ref": "#/$defs/signal"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "status": {
+          "enum": [
+            "ok",
+            "no-banner",
+            "no-button",
+            "click-failed",
+            "load-failed",
+            "timeout",
+            "navigated-away",
+            "limit-reached",
+            "canceled"
+          ],
+          "type": "string"
+        },
+        "storage": {
+          "items": {
+            "$ref": "#/$defs/storageKey"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "truncated": {
+          "type": "boolean"
+        },
+        "visits": {
+          "items": {
+            "$ref": "#/$defs/visit"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "withdraw": {
+          "$ref": "#/$defs/choice"
+        }
+      },
+      "required": [
+        "run",
+        "status",
+        "reason",
+        "attempts",
+        "duration_ms",
+        "choice",
+        "visits",
+        "hits",
+        "cookies",
+        "storage",
+        "scripts",
+        "signals",
+        "screenshots",
+        "events_file",
+        "truncated",
+        "dropped"
+      ],
+      "type": "object"
+    },
+    "script": {
+      "properties": {
+        "at_ms": {
+          "type": "integer"
+        },
+        "phase": {
+          "enum": [
+            "before",
+            "after-accept",
+            "after-reject",
+            "gpc",
+            "after-withdraw"
+          ],
+          "type": "string"
+        },
+        "seq": {
+          "type": "integer"
+        },
+        "tracker": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "tracker",
+        "url",
+        "at_ms",
+        "phase",
+        "seq"
+      ],
+      "type": "object"
+    },
+    "signal": {
+      "properties": {
+        "at_ms": {
+          "type": "integer"
+        },
+        "command": {
+          "type": "string"
+        },
+        "gpp": {
+          "$ref": "#/$defs/gpp"
+        },
+        "raw": {
+          "type": "string"
+        },
+        "region": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "source": {
+          "type": "string"
+        },
+        "state": {
+          "additionalProperties": {
+            "enum": [
+              "granted",
+              "denied",
+              "unset",
+              "unknown"
+            ],
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "tcf": {
+          "$ref": "#/$defs/tcf"
+        },
+        "wait_for_update_ms": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "source",
+        "command",
+        "at_ms"
+      ],
+      "type": "object"
+    },
+    "storageKey": {
+      "properties": {
+        "area": {
+          "type": "string"
+        },
+        "at_ms": {
+          "type": "integer"
+        },
+        "category": {
+          "enum": [
+            "analytics",
+            "advertising",
+            "session-replay",
+            "social",
+            "embed",
+            "functional",
+            "necessary"
+          ],
+          "type": "string"
+        },
+        "key": {
+          "type": "string"
+        },
+        "length": {
+          "type": "integer"
+        },
+        "need": {
+          "enum": [
+            "needed",
+            "exempt",
+            "no"
+          ],
+          "type": "string"
+        },
+        "origin": {
+          "type": "string"
+        },
+        "phase": {
+          "enum": [
+            "before",
+            "after-accept",
+            "after-reject",
+            "gpc",
+            "after-withdraw"
+          ],
+          "type": "string"
+        },
+        "tracker": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "area",
+        "origin",
+        "key",
+        "length",
+        "phase",
+        "at_ms"
+      ],
+      "type": "object"
+    },
+    "tcf": {
+      "properties": {
+        "cmp_id": {
+          "type": "integer"
+        },
+        "purposes_consent": {
+          "items": {
+            "type": "integer"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "purposes_li": {
+          "items": {
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "valid": {
+          "type": "boolean"
+        },
+        "vendors_consent": {
+          "type": "integer"
+        },
+        "version": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "version",
+        "cmp_id",
+        "purposes_consent",
+        "vendors_consent",
+        "valid"
+      ],
+      "type": "object"
+    },
+    "visit": {
+      "properties": {
+        "at_ms": {
+          "type": "integer"
+        },
+        "banner": {
+          "type": "boolean"
+        },
+        "step": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "url",
+        "step",
+        "at_ms",
+        "banner"
+      ],
+      "type": "object"
+    }
+  }
 }

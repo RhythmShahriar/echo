@@ -1,0 +1,5 @@
+ok  consent.json                       sha256 eeeeeeee...b855
+ok  report.html                        sha256 55555555...b855
+ok  evidence/page-1/reject-banner.png  sha256 aaaaaaaa...b855
+Signature: good (ed25519, key team.pub)
+Verified: 3 files match, signed by team.pub.
