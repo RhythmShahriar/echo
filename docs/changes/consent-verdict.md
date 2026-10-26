@@ -18,9 +18,9 @@ result. Exact texts are in backticks.
   - `consent/before-choice`: `<Name> fired before the visitor chose`
   - `consent/after-reject`: `<Name> fired after Reject` (a hit whose known gcs grants ad_storage or analytics_storage is left to `consent/reject-granted`)
   - `consent/after-withdraw`: `<Name> fired after consent was withdrawn`
-  - `consent/embed`: `<Name> loaded before the visitor chose`, or `<Name> loaded after Reject` after Reject or the withdraw Reject
+  - `consent/embed`: `<Name> loaded before the visitor chose`, or `<Name> loaded after Reject` after Reject or the withdraw Reject; an embed after the withdraw itself is `consent/after-withdraw` like any tracker
   - `consent/script-before` (strict only, Google Tag Manager included): `<Name> script loaded before the visitor chose (strict policy)`, or `<Name> script loaded after Reject (strict policy)`
-  - `consent/cookieless-ping` (advanced only; basic and strict count the pings as hits): `<Name> sent <n> cookieless pings before the choice (allowed under --consent-mode advanced)`, with `after Reject` in place of `before the choice` after Reject; `1 cookieless ping` for one
+  - `consent/cookieless-ping` (advanced only; basic and strict count the pings as hits): `<Name> sent <n> cookieless pings before the choice (allowed under --consent-mode advanced)`, with `after Reject` in place of `before the choice` after Reject and `after consent was withdrawn` after the withdraw; `1 cookieless ping` for one
   - `consent/gpc-ignored` (advertising hits and cookies in the gpc run): `<Name> fired with Global Privacy Control on`
   - `consent/meta-no-consent-api` (once per page, in the first run with a Meta Pixel error and no fbq consent call before its first hit): `Meta Pixel never received fbq('consent', ...)`
 - Details:

@@ -160,7 +160,7 @@ func (j *judge) trackerHits(run *consent.Run, gs *groups) {
 				continue
 			}
 			check = consent.CheckGPCIgnored
-		case h.Category == consent.CatEmbed:
+		case h.Category == consent.CatEmbed && b != inAfterWithdraw:
 			check = consent.CheckEmbed
 		case h.Cookieless && j.policy == consent.PolicyAdvanced:
 			check = consent.CheckCookielessPing
@@ -190,7 +190,7 @@ func (j *judge) trackerStored(run *consent.Run, gs *groups) {
 				return ""
 			}
 			return consent.CheckGPCIgnored
-		case cat == consent.CatEmbed:
+		case cat == consent.CatEmbed && b != inAfterWithdraw:
 			return consent.CheckEmbed
 		case b == inBefore:
 			return consent.CheckBeforeChoice
@@ -274,8 +274,11 @@ func (j *judge) addGroup(pg *consent.Page, run *consent.Run, g *group) {
 		}
 	case consent.CheckCookielessPing:
 		when := "before the choice"
-		if after {
+		switch g.b {
+		case inAfterReject:
 			when = "after Reject"
+		case inAfterWithdraw:
+			when = "after consent was withdrawn"
 		}
 		title = fmt.Sprintf("%s sent %s %s (allowed under --consent-mode advanced)", name, plural(len(g.hits), "cookieless ping"), when)
 		detail = cookielessDetail(g)
