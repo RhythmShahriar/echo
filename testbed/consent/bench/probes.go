@@ -169,7 +169,7 @@ func cmpAbsent(ctx context.Context, p *ProbeEnv, broken bool) ([]Step, error) {
 func interruptProbe(ctx context.Context, p *ProbeEnv, broken bool) ([]Step, error) {
 	return withSite(p, func(site *localSite) ([]Step, error) {
 		// A short folder of the system's, not one under the work
-		// folder: Chrome puts its SingletonSocket there, and a Unix
+		// folder: Chrome puts its SingletonSocket there; a Unix
 		// socket path over about 107 bytes makes Chrome fail to start.
 		tmp, err := os.MkdirTemp("", "echo-e05-")
 		if err != nil {
