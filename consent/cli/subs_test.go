@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/RhythmShahriar/echo/consent"
 	"github.com/RhythmShahriar/echo/consent/consenttest"
@@ -359,3 +360,22 @@ func TestPruneDefault(t *testing.T) {
 }
 
 func twoDigits(i int) string { return string(rune('0'+i/10)) + string(rune('0'+i%10)) }
+
+// The banner wait the check used reaches the text writers, so "none
+// found within" names it.
+func TestBannerWaitReachesTheView(t *testing.T) {
+	inDir(t, "")
+	runner := &consenttest.FakeRunner{Detected: detected(false), Result: consenttest.GoldenResult("clean")}
+	s := consenttest.Fakes()
+	s.Runner = runner
+	consenttest.Use(t, s)
+	got := fakeWriters(t)
+	runMain(t, "detect", "--banner-wait", "20s", "https://shop.test/")
+	if len(got.detect) != 1 || got.detect[0].BannerWait != 20*time.Second {
+		t.Errorf("detect: %+v", got.detect)
+	}
+	runMain(t, "--banner-wait", "25s", "https://shop.test/")
+	if len(got.text) != 1 || got.text[0].BannerWait != 25*time.Second {
+		t.Errorf("check: %+v", got.text)
+	}
+}

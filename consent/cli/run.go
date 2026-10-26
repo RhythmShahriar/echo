@@ -202,6 +202,9 @@ func (c *cmd) runCheck(ctx context.Context, pos []string) int {
 	}
 	opts := c.textOptions(view)
 	opts.FailOn, opts.FirstRun, opts.ReportPath = st.failOn, firstRun, shown(filepath.Join(dir, reportHTML))
+	// "none found within" names the wait the check used (the first
+	// plan's: a --sites site may set its own).
+	opts.BannerWait = st.plans[0].BannerWait
 	if err := writers.text(view, r, opts); err != nil {
 		fmt.Fprintln(env.Stderr, "rhythm echo: printing the result:", err)
 	}

@@ -92,7 +92,9 @@ func (c *cmd) detect(pos []string) int {
 		}
 		d.Screenshot = shown(shot)
 	}
-	if err := writers.detect(env.Stdout, d, c.o.json, c.textOptions(env.Stdout)); err != nil {
+	opts := c.textOptions(env.Stdout)
+	opts.BannerWait = p.BannerWait
+	if err := writers.detect(env.Stdout, d, c.o.json, opts); err != nil {
 		fmt.Fprintln(env.Stderr, "rhythm echo: printing the result:", err)
 	}
 	return detectExit(d)

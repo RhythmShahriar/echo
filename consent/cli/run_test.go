@@ -41,8 +41,9 @@ func TestMain(m *testing.M) {
 
 // written is what the stand-in writers were given, by format.
 type written struct {
-	json []*consent.Result
-	text []report.ConsentTextOptions
+	json   []*consent.Result
+	text   []report.ConsentTextOptions
+	detect []report.ConsentTextOptions
 }
 
 // fakeWriters swaps the report writers for stand-ins that print what
@@ -96,7 +97,8 @@ func fakeWriters(t *testing.T) *written {
 		_, err := fmt.Fprintf(w, "signature present=%v ok=%v key=%s\n", v.Signature.Present, v.Signature.OK, v.Signature.Key)
 		return err
 	}
-	writers.detect = func(w io.Writer, d *consent.DetectResult, asJSON bool, _ report.ConsentTextOptions) error {
+	writers.detect = func(w io.Writer, d *consent.DetectResult, asJSON bool, o report.ConsentTextOptions) error {
+		got.detect = append(got.detect, o)
 		if asJSON {
 			return json.NewEncoder(w).Encode(map[string]any{"kind": "consent-detect", "data": d})
 		}
