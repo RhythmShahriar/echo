@@ -254,7 +254,7 @@ func TestMapOnlyRefuses(t *testing.T) {
 // TestMappedHostNeverDialed: a host --map-host covers is answered in
 // the tab; a request for it that reaches the guard (one Fetch never
 // paused) is refused by CONNECT and by plain HTTP, with or without
-// --map-only, and never reaches the real listener. The same loopback
+// --map-only; it never reaches the real listener. The same loopback
 // listener by an unmapped name still goes through.
 func TestMappedHostNeverDialed(t *testing.T) {
 	srv, hits := counter(t)
