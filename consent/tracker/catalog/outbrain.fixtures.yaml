@@ -1,0 +1,16 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+hits:
+  match:
+    - https://tr.outbrain.com/unifiedPixel?marketerId=00abc&obApiVersion=1.1&name=PAGE_VIEW
+    - {url: "https://traffic.outbrain.com/network/trackpxl?advid=1234&action=view", type: image}
+  no_match:
+    - https://shop.test/unifiedPixel?marketerId=00abc
+    - https://amplify.outbrain.com/cp/obtp.js
+scripts:
+  match:
+    - https://amplify.outbrain.com/cp/obtp.js
+cookies:
+  match: [{name: obuid, domain: .outbrain.com}]
+  no_match: [obuid, {name: obuid, domain: shop.test}]

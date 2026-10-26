@@ -1,0 +1,31 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+# LinkedIn Insight Tag. bcookie, lidc and the sync history cookies are
+# set on linkedin.com; li_fat_id is first-party (the click ID).
+id: linkedin
+name: LinkedIn Insight Tag
+vendor: LinkedIn
+category: advertising
+consent: needed
+hits:
+  - hosts: [px.ads.linkedin.com]
+    paths: ["/collect*", /wa/**]
+    methods: [GET, POST]
+scripts:
+  - hosts: [snap.licdn.com]
+    paths: [/li.lms-analytics/insight.min.js, /li.lms-analytics/insight.beta.min.js]
+cookies:
+  - {name: li_sugr, domain: linkedin.com}
+  - {name: bcookie, domain: linkedin.com}
+  - {name: lidc, domain: linkedin.com}
+  - {name: UserMatchHistory, domain: linkedin.com}
+  - {name: AnalyticsSyncHistory, domain: linkedin.com}
+  - li_fat_id
+params:
+  id: [pid]
+fix: Load the LinkedIn Insight Tag only after the banner reports marketing consent
+docs: https://www.linkedin.com/help/lms/answer/a418880
+sources:
+  - https://www.linkedin.com/help/lms/answer/a418880
+  - https://www.linkedin.com/legal/l/cookie-table

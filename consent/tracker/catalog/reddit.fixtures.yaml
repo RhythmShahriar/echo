@@ -1,0 +1,16 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+hits:
+  match:
+    - {url: "https://alb.reddit.com/rp.gif?ts=1&id=t2_testbed&event=PageVisit", type: image}
+    - https://alb.reddit.com/rp.gif?id=t2_testbed&event=Purchase
+  no_match:
+    - https://shop.test/rp.gif?id=t2_testbed
+    - https://www.redditstatic.com/ads/pixel.js
+scripts:
+  match:
+    - https://www.redditstatic.com/ads/pixel.js
+cookies:
+  match: [_rdt_uuid]
+  no_match: [rdt_uuid, _rdt_banner]

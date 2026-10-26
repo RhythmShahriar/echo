@@ -1,0 +1,16 @@
+Echo tracker catalog (consent/tracker/catalog)
+
+The catalog is MIT licensed like the rest of Echo. Its host, path and
+cookie patterns are written from each vendor's own documentation, cited
+in the sources: list of every file. No data from DuckDuckGo Tracker
+Radar, Disconnect or Ghostery is used.
+
+Some cookie names were cross-checked with the Open Cookie Database:
+
+  Open Cookie Database
+  Copyright Jack Kwakman and contributors
+  Licensed under the Apache License, Version 2.0
+  https://github.com/jkwakman/Open-Cookie-Database
+  https://www.apache.org/licenses/LICENSE-2.0
+
+The entries that cite it in sources: are taboola, snap and outbrain.

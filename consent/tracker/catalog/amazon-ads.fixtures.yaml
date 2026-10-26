@@ -1,0 +1,16 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+hits:
+  match:
+    - {url: "https://s.amazon-adsystem.com/iu3?pid=abcd-1234&event=PageView", type: image}
+    - https://s.amazon-adsystem.com/ecm3?ex=amazon.com&id=x
+  no_match:
+    - https://shop.test/iu3?pid=abcd-1234
+    - https://c.amazon-adsystem.com/aax2/apstag.js
+scripts:
+  match:
+    - https://c.amazon-adsystem.com/aax2/apstag.js
+cookies:
+  match: [{name: ad-id, domain: .amazon-adsystem.com}, {name: ad-privacy, domain: amazon-adsystem.com}]
+  no_match: [ad-id, {name: ad-privacy, domain: shop.test}]

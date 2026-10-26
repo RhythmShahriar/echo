@@ -1,0 +1,18 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+hits:
+  match:
+    - https://px.ads.linkedin.com/collect/?pid=123456&fmt=gif&v=2
+    - https://px.ads.linkedin.com/collect?v=2&fmt=js&pid=123456&time=1
+    - POST https://px.ads.linkedin.com/wa/
+  no_match:
+    - https://shop.test/collect
+    - https://snap.licdn.com/li.lms-analytics/insight.min.js
+scripts:
+  match:
+    - https://snap.licdn.com/li.lms-analytics/insight.min.js
+cookies:
+  match: [li_fat_id, {name: li_sugr, domain: .linkedin.com}, {name: bcookie, domain: .linkedin.com}, {name: lidc, domain: .linkedin.com},
+    {name: UserMatchHistory, domain: .linkedin.com}, {name: AnalyticsSyncHistory, domain: .linkedin.com}]
+  no_match: [bcookie, {name: lidc, domain: shop.test}, li_fat]

@@ -1,0 +1,17 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+hits:
+  match:
+    - {url: "https://track.hubspot.com/__ptq.gif?k=1&a=1234567&v=1.1&r=https%3A%2F%2Fshop.test%2F", type: image}
+    - https://track.hubspot.com/__ptq.gif?a=1234567&k=14
+  no_match:
+    - https://shop.test/__ptq.gif?a=1234567
+    - https://js.hs-scripts.com/1234567.js
+scripts:
+  match:
+    - https://js.hs-scripts.com/1234567.js
+    - https://js.hs-analytics.net/analytics/1730000000000/1234567.js
+cookies:
+  match: [__hstc, hubspotutk, __hssc, __hssrc]
+  no_match: [hstc, hubspot_banner]

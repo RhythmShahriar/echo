@@ -1,0 +1,17 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+hits:
+  match:
+    - {method: POST, url: "https://analytics.tiktok.com/api/v2/pixel", body: '{"event":"Pageview","context":{"pixel":{"code":"TESTBED"}}}'}
+    - POST https://analytics.tiktok.com/api/v2/pixel/act
+    - https://analytics.tiktok.com/api/v2/pixel/track/?event=ViewContent
+  no_match:
+    - https://shop.test/api/v2/pixel
+    - https://analytics.tiktok.com/i18n/pixel/events.js?sdkid=TESTBED
+scripts:
+  match:
+    - https://analytics.tiktok.com/i18n/pixel/events.js?sdkid=TESTBED&lib=ttq
+cookies:
+  match: [_ttp, _tt_enable_cookie, ttcsid, ttcsid_TESTBED]
+  no_match: [ttp, _ttpx_banner]

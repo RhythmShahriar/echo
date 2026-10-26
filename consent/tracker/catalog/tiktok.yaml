@@ -1,0 +1,29 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+# TikTok Pixel. Events are POSTed as JSON to /api/v2/pixel and the paths
+# below it (/api/v2/pixel/act, /api/v2/pixel/track).
+id: tiktok
+name: TikTok Pixel
+vendor: TikTok
+category: advertising
+consent: needed
+hits:
+  - hosts: [analytics.tiktok.com]
+    paths: [/api/v2/pixel, /api/v2/pixel/**]
+scripts:
+  - hosts: [analytics.tiktok.com]
+    paths: [/i18n/pixel/events.js, /i18n/pixel/sdk.js, /i18n/pixel/static/**]
+cookies:
+  - _ttp
+  - _tt_enable_cookie
+  - "ttcsid*"
+params:
+  event: [event]
+  id: [sdkid, pixel_code]
+fix: Load the TikTok Pixel only after the banner reports marketing consent, or call ttq.holdConsent() first and ttq.grantConsent() on consent
+docs: https://ads.tiktok.com/help/article/tiktok-pixel
+sources:
+  - https://ads.tiktok.com/help/article/tiktok-pixel
+  - https://ads.tiktok.com/help/article/using-cookies-with-tiktok-pixel
+  - https://business-api.tiktok.com/portal/docs?id=1739583652957185

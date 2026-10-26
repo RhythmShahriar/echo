@@ -29,8 +29,26 @@ Each entry with its consent need, what `consent trackers` shows under Matches an
 | `google-remarketing` | Google Ads remarketing | advertising | needed | `www.google.com/pagead/1p-user-list/*` | Set a Consent Mode default (all four signals denied) before the Google tag, or let the banner block remarketing until consent |
 | `google-tag-manager` | Google Tag Manager | analytics | needed | `www.googletagmanager.com/gtm.js, www.googletagmanager.com/gtag/js, www.googletagmanager.com/gtag/destination and 2 more` | Under strict policy load Google Tag Manager only after consent |
 | `universal-analytics` | Universal Analytics | analytics | needed | `www.google-analytics.com/collect, www.google-analytics.com/r/collect, www.google-analytics.com/j/collect and 9 more` | Remove Universal Analytics (Google no longer processes its data) or let the banner block it until consent |
+| `amazon-ads` | Amazon Ads | advertising | needed | `s.amazon-adsystem.com/iu3*, s.amazon-adsystem.com/ecm3*, c.amazon-adsystem.com` | Load Amazon Ads tags only after the banner reports marketing consent |
+| `criteo` | Criteo | advertising | needed | `sslwidget.criteo.com, dis.criteo.com, gum.criteo.com and 2 more` | Load the Criteo OneTag only after the banner reports marketing consent |
+| `hubspot` | HubSpot | analytics | needed | `track.hubspot.com/__ptq.gif, js.hs-scripts.com, js.hs-analytics.net and 2 more` | Turn on HubSpot's cookie consent banner or let your banner block the HubSpot tracking code until consent |
+| `klaviyo` | Klaviyo | advertising | needed | `a.klaviyo.com/api/track*, a.klaviyo.com/client/events*, static.klaviyo.com/onsite/js/**` | Load Klaviyo's onsite script only after the banner reports marketing consent |
+| `linkedin` | LinkedIn Insight Tag | advertising | needed | `px.ads.linkedin.com/collect*, px.ads.linkedin.com/wa/**, snap.licdn.com/li.lms-analytics/insight.min.js and 1 more` | Load the LinkedIn Insight Tag only after the banner reports marketing consent |
+| `meta-pixel` | Meta Pixel | advertising | needed | `www.facebook.com/tr, facebook.com/tr, any host /tr and 3 more` | Meta Pixel doesn't read Google Consent Mode. Call fbq('consent', 'revoke') before fbq('init'), then fbq('consent', 'grant') when the banner reports marketing consent, or let the banner block the pixel script. |
+| `microsoft-uet` | Microsoft UET (Bing Ads) | advertising | needed | `bat.bing.com/action/*, bat.bing.com/bat.js, bat.bing.com/p/action/*.js` | Set uetq.push('consent', 'default', {ad_storage: 'denied'}) before the UET tag, or let the banner block it until consent |
+| `outbrain` | Outbrain Pixel | advertising | needed | `tr.outbrain.com/unifiedPixel*, traffic.outbrain.com/network/trackpxl, amplify.outbrain.com/cp/obtp.js` | Load the Outbrain Pixel only after the banner reports marketing consent |
+| `pinterest` | Pinterest Tag | advertising | needed | `ct.pinterest.com/v3/*, ct.pinterest.com/user/*, s.pinimg.com/ct/core.js and 1 more` | Load the Pinterest Tag only after the banner reports marketing consent |
+| `quora` | Quora Pixel | advertising | needed | `q.quora.com/_/ad/**, a.quora.com/qevents.js` | Load the Quora Pixel only after the banner reports marketing consent |
+| `reddit` | Reddit Pixel | advertising | needed | `alb.reddit.com/rp.gif, www.redditstatic.com/ads/pixel.js` | Load the Reddit Pixel only after the banner reports marketing consent |
+| `snap` | Snap Pixel | advertising | needed | `tr.snapchat.com/p, tr.snapchat.com/cm/*, sc-static.net/scevent.min.js and 1 more` | Load the Snap Pixel only after the banner reports marketing consent |
+| `taboola` | Taboola Pixel | advertising | needed | `trc.taboola.com, cdn.taboola.com` | Load the Taboola Pixel only after the banner reports marketing consent |
+| `tiktok` | TikTok Pixel | advertising | needed | `analytics.tiktok.com/api/v2/pixel, analytics.tiktok.com/api/v2/pixel/**, analytics.tiktok.com/i18n/pixel/events.js and 2 more` | Load the TikTok Pixel only after the banner reports marketing consent, or call ttq.holdConsent() first and ttq.grantConsent() on consent |
+| `x-pixel` | X (Twitter) Pixel | advertising | needed | `analytics.twitter.com/i/adsct, t.co/i/adsct, static.ads-twitter.com/uwt.js and 1 more` | Load the X Pixel only after the banner reports marketing consent |
 
 Notes users may notice:
 
 - GA4 is also recognised on the site's own host (server-side tagging) when the request is `/g/collect` or `/g/s/collect` with `v=2` and a `tid=G-...`, or any `/<x>/collect` with `v=2`, `tid=G-...` and `cid` (renamed loaders).
 - Google Tag Manager is script only: `www.googletagmanager.com/gtm.js`, `/gtag/js` and `/gtag/destination`, plus `/gtm.js?id=GTM-...` or `/gtag/js?id=G-...` on any host.
+- Meta Pixel `/tr` on any host counts when it has both `id` and `ev`.
+- Cookies with generic names only count on the vendor's domain: `IDE`, `test_cookie`, `DSID` (doubleclick.net), `MUID` (bing.com), `CLID` (clarity.ms), `fr` (facebook.com), LinkedIn's `bcookie`, `lidc`, `li_sugr`, `UserMatchHistory`, `AnalyticsSyncHistory` (linkedin.com), `personalization_id` (twitter.com, x.com), `t_gid`, `t_pt_gid` (taboola.com), `obuid` (outbrain.com), `ad-id`, `ad-privacy` (amazon-adsystem.com).
+- `consent/tracker/NOTICE` credits the Open Cookie Database (Apache-2.0) for the cookie names of taboola, snap and outbrain.

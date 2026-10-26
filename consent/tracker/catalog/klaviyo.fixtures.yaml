@@ -1,0 +1,17 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+hits:
+  match:
+    - POST https://a.klaviyo.com/client/events/?company_id=AbC123
+    - https://a.klaviyo.com/api/track?data=e30%3D
+  no_match:
+    - https://shop.test/client/events/?company_id=AbC123
+    - https://static.klaviyo.com/onsite/js/klaviyo.js?company_id=AbC123
+scripts:
+  match:
+    - https://static.klaviyo.com/onsite/js/klaviyo.js?company_id=AbC123
+    - https://static.klaviyo.com/onsite/js/runtime.abc123.js
+cookies:
+  match: [__kla_id]
+  no_match: [kla_id, __kla_banner]

@@ -1,0 +1,40 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+# Meta Pixel (fbevents.js): an image GET, a form POST or sendBeacon to
+# /tr. Through the Conversions API Gateway or a server-side container
+# the same /tr request goes to the site's own host; id and ev together
+# prove it there. Advanced matching fields (ud[em], em, ph...) are never
+# kept, only their names.
+id: meta-pixel
+name: Meta Pixel
+vendor: Meta
+category: advertising
+consent: needed
+any_host: true
+hits:
+  - hosts: [www.facebook.com, facebook.com]
+    paths: [/tr]
+    methods: [GET, POST]
+    params_any: [id, ev]
+  - paths: [/tr]
+    methods: [GET, POST]
+    params_all: [id, ev]
+scripts:
+  - hosts: [connect.facebook.net]
+    paths: ["/*/fbevents.js", "/signals/config/*", "/signals/plugins/*"]
+cookies:
+  - _fbp
+  - _fbc
+  - {name: fr, domain: facebook.com}
+params:
+  event: [ev]
+  id: [id]
+  personal: ["ud[em]", "ud[ph]", "ud[fn]", "ud[ln]", "ud[external_id]", em, ph, fn, ln, external_id]
+fix: Meta Pixel doesn't read Google Consent Mode. Call fbq('consent', 'revoke') before fbq('init'), then fbq('consent', 'grant') when the banner reports marketing consent, or let the banner block the pixel script.
+docs: https://developers.facebook.com/docs/meta-pixel/implementation/gdpr
+sources:
+  - https://developers.facebook.com/docs/meta-pixel/get-started
+  - https://developers.facebook.com/docs/meta-pixel/implementation/gdpr
+  - https://developers.facebook.com/docs/meta-pixel/advanced/advanced-matching
+  - https://www.facebook.com/privacy/policies/cookies/

@@ -1,0 +1,16 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+hits:
+  match:
+    - https://trc.taboola.com/1234567/log/3/unip?en=page_view&tim=1
+    - POST https://trc.taboola.com/1234567/log/3/unip?en=make_purchase
+  no_match:
+    - https://shop.test/1234567/log/3/unip?en=page_view
+    - https://cdn.taboola.com/libtrc/unip/1234567/tfa.js
+scripts:
+  match:
+    - https://cdn.taboola.com/libtrc/unip/1234567/tfa.js
+cookies:
+  match: [{name: t_gid, domain: .taboola.com}, {name: t_pt_gid, domain: taboola.com}, taboola_session_id]
+  no_match: [t_gid, taboola_session]
