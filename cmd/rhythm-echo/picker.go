@@ -152,7 +152,9 @@ func pickArgs(action, stack, site string, open bool) []string {
 			args = append(args, strings.TrimSpace(site))
 		}
 	case "consent":
-		args = append(args, strings.TrimSpace(site))
+		// "--" keeps a typed page such as --send-hits or detect from
+		// being read as a flag or a subcommand.
+		args = append(args, "--", strings.TrimSpace(site))
 	case "compare", "snapshot", "run", "report":
 		if open {
 			args = append(args, "--open")

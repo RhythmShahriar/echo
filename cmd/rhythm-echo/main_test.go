@@ -521,7 +521,9 @@ func TestPicker(t *testing.T) {
 		{"compare", "", "", true, "compare --open"},
 		{"snapshot", "", "", false, "snapshot"},
 		{"up", "", "", true, "up"},
-		{"consent", "", " https://staging.shop.test ", true, "consent https://staging.shop.test"},
+		{"consent", "", " https://staging.shop.test ", true, "consent -- https://staging.shop.test"},
+		{"consent", "", "--send-hits", false, "consent -- --send-hits"},
+		{"consent", "", "detect", false, "consent -- detect"},
 	} {
 		if got := strings.Join(pickArgs(tc.action, tc.stack, tc.site, tc.open), " "); got != tc.want {
 			t.Errorf("pickArgs(%s) = %q, want %q", tc.action, got, tc.want)
