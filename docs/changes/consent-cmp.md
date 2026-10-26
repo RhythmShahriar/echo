@@ -50,3 +50,42 @@ texts, for the release notes and the docs team.
   run-clock time of the look that saw the banner.
 - When every look failed (the page kept navigating), Detect returns the
   last script error instead of "no banner".
+
+## C3 Clicking and verification
+
+- Before a click the control must be visible, sized, enabled, the
+  top-most element at its centre, inside the banner container (a step
+  after the first, or a second-layer step, may be anywhere on the page)
+  and a `button`, `[role=button]`, `input[type=button|submit]` or an `a`
+  whose `href` stays on the site. Echo waits up to `--banner-wait` for
+  that, then the run is `no_button`.
+- A Reject first tries the first layer. When it has no Reject after 1 s
+  (or at `--banner-wait`), Echo opens the settings, waits for Save,
+  switches off every enabled switch that is on, saves and records
+  `layer: 2`; `selector` is then `<opener> >> <save>`, e.g.
+  `#onetrust-pc-btn-handler >> #onetrust-pc-sdk .save-preference-btn-handler`.
+- After a click Echo waits up to `--settle` for the stored state to
+  match the choice and the banner to be gone. A click with no effect is
+  retried, at most 3 clicks in all (`clicks` in the JSON).
+- Reasons: `no_button` (never clickable), `click_missed` (no change
+  after 3 clicks, or the control was covered each time),
+  `state_unchanged` (the banner went or the state moved while the stored
+  choice isn't the one clicked: hiding is never a Reject),
+  `navigation_failed` (the click left the site).
+- `verified_by` is `cookie:<name>` (or the state reader's source),
+  `api`, `tcf` or `banner`. A category the CMP doesn't list counts as
+  not granted.
+- `--click api` calls the rule's fixed function (`how: api`,
+  `selector` is the call, e.g. `OneTrust.RejectAll()`, `clicks: 0`,
+  `layer: 0`). A rule with no API gives `no_button`; a call that throws
+  gives `click_missed`.
+- `--click button,api`: no button gives the API choice with
+  `fallback: true`. A Reject button that was `click_missed` or
+  `state_unchanged` keeps its reason and sets `api_worked` to whether
+  the API reject verified.
+- `--accept-selector` and `--reject-selector` replace the rule's
+  controls (no second layer). On a banner no rule knows, the choice is
+  verified by the clicked control being gone (`verified_by: banner`).
+- Without the state reader linked, Choose fails with
+  `consent: state reader not linked into this build`.
+- A run kind other than accept or reject: `consent: a <kind> run makes no choice on the banner; want accept or reject`.

@@ -48,8 +48,8 @@ function find(loc) {
   try { return root.querySelector(loc.css); } catch (e) { return null; }
 }
 
-// visible: sized, not display:none, visibility hidden or (with its
-// ancestors) transparent, and inside the page or scrollable into it.
+// visible: sized, not display:none or visibility hidden, not (with its
+// ancestors) transparent and inside the page or scrollable into it.
 function visible(el) {
   if (!el || !el.isConnected) return false;
   const win = (el.ownerDocument && el.ownerDocument.defaultView) || window;

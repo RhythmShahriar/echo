@@ -9,18 +9,22 @@ import (
 	"testing"
 	"time"
 
+	"github.com/RhythmShahriar/echo/consent"
 	"github.com/RhythmShahriar/echo/consent/consenttest"
 )
 
 // fakePage is a page as the CMP scripts see it, answering a FakeTab:
-// the globals and what the scan finds per rule. Timers change
+// the globals, what the scan finds per rule, the controls the probe
+// reports by locator key and the toggles of the settings. Timers change
 // it as the fake clock moves (a banner injected after 4 s).
 type fakePage struct {
-	tab     *consenttest.FakeTab
-	globals map[string]bool
-	rules   map[string]scanRuleResult
-	scripts []string
-	timers  []fakeTimer
+	tab      *consenttest.FakeTab
+	globals  map[string]bool
+	rules    map[string]scanRuleResult
+	scripts  []string
+	controls map[string]probeResult
+	toggles  []toggle
+	timers   []fakeTimer
 }
 
 type fakeTimer struct {
@@ -30,9 +34,10 @@ type fakeTimer struct {
 
 func newFakePage() *fakePage {
 	pg := &fakePage{
-		tab:     &consenttest.FakeTab{Isolated: map[string]consenttest.Answer{}, Main: map[string]consenttest.Answer{}},
-		globals: map[string]bool{},
-		rules:   map[string]scanRuleResult{},
+		tab:      &consenttest.FakeTab{Isolated: map[string]consenttest.Answer{}, Main: map[string]consenttest.Answer{}},
+		globals:  map[string]bool{},
+		rules:    map[string]scanRuleResult{},
+		controls: map[string]probeResult{},
 	}
 	pg.sync()
 	return pg
@@ -50,6 +55,8 @@ func answer(v any) consenttest.Answer {
 func (pg *fakePage) sync() {
 	pg.tab.Main["cmp-globals"] = answer(pg.globals)
 	pg.tab.Isolated["cmp-scan"] = answer(scanResult{Rules: pg.rules, Scripts: pg.scripts})
+	pg.tab.Isolated["cmp-probe"] = answer(pg.controls)
+	pg.tab.Isolated["cmp-toggles"] = answer(pg.toggles)
 }
 
 // banner shows or hides rule id's banner, matching sel.
@@ -60,6 +67,18 @@ func (pg *fakePage) banner(id string, visible bool, sel ...string) {
 		r.Matched = sel
 	}
 	pg.rules[id] = r
+	pg.sync()
+}
+
+// show makes a control clickable with its text.
+func (pg *fakePage) show(key, text string) {
+	pg.controls[key] = probeResult{Found: true, Visible: true, Kind: true, Inside: true, Top: true, Text: text, Box: consent.Box{X: 10, Y: 20, W: 80, H: 30}}
+	pg.sync()
+}
+
+// hide removes a control from the page.
+func (pg *fakePage) hide(key string) {
+	delete(pg.controls, key)
 	pg.sync()
 }
 
