@@ -6,13 +6,17 @@
 package browse
 
 import (
+	"net"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/go-rod/rod/lib/proto"
 
 	"github.com/RhythmShahriar/echo/consent"
 	"github.com/RhythmShahriar/echo/consent/consenttest"
+	"github.com/RhythmShahriar/echo/internal/testenv"
 )
 
 // TestMapSetCookie: a Set-Cookie from a mapped address lands as a
@@ -128,5 +132,58 @@ func TestMapHTTPS(t *testing.T) {
 	}
 	if !ok || st.hits("www.googletagmanager.com", "/gtag/js") != 1 {
 		t.Error("the https script wasn't answered from the mapped address")
+	}
+}
+
+// TestMappedHostNeverReal: a mapped host's requests are answered from
+// its mapped address or refused, never sent to its real address, even
+// those outside the tab's frames: a service worker's script and its own
+// fetch. "localhost" stands in for a production host mapped to staging
+// over https; a listener on its real port counts every connection and
+// must see none. The target is 127.0.0.1, so its guard allows loopback
+// for anything unmapped.
+func TestMappedHostNeverReal(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = ln.Close() })
+	var realConns atomic.Int64
+	go func() {
+		for {
+			c, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			realConns.Add(1)
+			_ = c.Close()
+		}
+	}()
+	_, realPort, _ := net.SplitHostPort(ln.Addr().String())
+	st := newSite(t)
+	st.page("127.0.0.1/", `<!doctype html><title>t</title>`)
+	st.page("localhost/", `<!doctype html><title>m</title><script>
+navigator.serviceWorker.register("/sw.js").then(() => { window.swDone = true; }, e => { window.swDone = true; window.swErr = String(e); });
+</script>`)
+	st.page("localhost/sw.js", `self.addEventListener("install", e => { e.waitUntil(fetch("/from-sw").catch(() => {})); self.skipWaiting(); });`)
+	st.page("localhost/from-sw", "ok")
+	p := consenttest.NewPlan(t, st.srv.URL+"/")
+	p.MapHosts = map[string]string{"localhost": st.addr()}
+	g := newRig(t, p)
+	run := g.openRun(st.srv.URL+"/", consent.RunNone)
+	g.load(run.s, st.srv.URL+"/")
+	g.load(run.s, "https://localhost:"+realPort+"/")
+	g.waitFor(run.s, `window.swDone === true`)
+	time.Sleep(testenv.Timeout(time.Second))
+	run.Close()
+	if n := realConns.Load(); n != 0 {
+		t.Errorf("the mapped host's real address was reached %d times", n)
+	}
+	if st.hits("localhost", "/") != 1 {
+		t.Errorf("the mapped page wasn't answered from the mapped address: %d", st.hits("localhost", "/"))
+	}
+	// Negative: the target's own loopback address, unmapped, is reached.
+	if st.hits("127.0.0.1", "/") < 1 {
+		t.Error("the unmapped loopback target wasn't loaded")
 	}
 }

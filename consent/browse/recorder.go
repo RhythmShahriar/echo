@@ -727,11 +727,22 @@ func (r *recorder) paused(t *target, e *proto.FetchRequestPaused) {
 		// a second time.
 		r.counts.internal.Add(1)
 		r.markFrameless(e.NetworkID)
-		if egress.IsBrowserService(u.Hostname()) {
+		// A mapped host is answered from its mapped address here too
+		// (a service worker's script fetch is frameless) and --map-only
+		// fails an unmapped one, so neither goes on to the guard and
+		// the real network.
+		mapped, mapAddr := r.mapper.lookup(u.Hostname())
+		switch {
+		case egress.IsBrowserService(u.Hostname()):
 			_ = proto.FetchFailRequest{RequestID: e.RequestID, ErrorReason: proto.NetworkErrorReasonBlockedByClient}.Call(ans)
-			return
+		case mapped:
+			body, _ := r.body(ans, e)
+			r.fetchMapped(ans, e, u, body.bytes(), mapAddr)
+		case r.plan.MapOnly:
+			_ = proto.FetchFailRequest{RequestID: e.RequestID, ErrorReason: proto.NetworkErrorReasonBlockedByClient}.Call(ans)
+		default:
+			_ = proto.FetchContinueRequest{RequestID: e.RequestID}.Call(ans)
 		}
-		_ = proto.FetchContinueRequest{RequestID: e.RequestID}.Call(ans)
 		return
 	}
 	if limited {
