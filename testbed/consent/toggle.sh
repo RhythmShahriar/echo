@@ -35,11 +35,13 @@ fi
 
 case "$1" in
 all) targets=$(ids) ;;
-*) targets=$1 ;;
+*)
+	# -F: the id is a literal name, never a pattern (".*" must not
+	# match). Checked before $targets is split, so no glob runs on it.
+	ids | grep -qxF -- "$1" || { echo "$0: unknown scenario $1 (see sites/)" >&2; exit 2; }
+	targets=$1
+	;;
 esac
-for id in $targets; do
-	ids | grep -qx "$id" || { echo "$0: unknown scenario $id (see sites/)" >&2; exit 2; }
-done
 
 for id in $targets; do
 	case "$2" in

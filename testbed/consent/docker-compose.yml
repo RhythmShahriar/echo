@@ -14,7 +14,8 @@
 #   tags    the stand-in tag hosts and the tracker sink (same server)
 #   wp, db  WordPress 6.8 with Complianz and CookieYes pinned from
 #           wordpress.org (wp/plugins.lock), for the Docker variants
-#   echo    rhythm-echo up, for c18's --echo
+#   echo    rhythm-echo up, for c18's --echo (profile echo: make up
+#           starts it; shop starts without it and c18 then can't pass)
 #   runner  Chrome for Testing and the rhythm-echo built from this
 #           checkout (runtime/); the benchmark runs it with docker
 #           compose exec
@@ -39,8 +40,13 @@ x-sealed-client: &sealed-client
     sealed: {}
   dns: [10.254.250.53]
 
+# Every alpine container runs this one image, pinned by digest like the
+# others: a moved tag can't change what the benchmark ran on.
+x-alpine: &alpine
+  image: alpine:3.22@sha256:2e0b81d60597f449baa56dc25d355367869d2dca4cd57e866f1e2b52af3eb55f
+
 x-go-server: &go-server
-  image: alpine:3.22
+  <<: *alpine
   networks: [sealed]
   user: "${TESTBED_UID:-1000}:${TESTBED_GID:-1000}"
   volumes:
@@ -78,10 +84,16 @@ services:
       retries: 30
 
   dns:
-    image: alpine:3.22
+    <<: *alpine
     networks:
       sealed:
         ipv4_address: 10.254.250.53
+    # Not root and no capabilities: port 53 is opened to every user of
+    # this container's own network namespace instead.
+    user: "${TESTBED_UID:-1000}:${TESTBED_GID:-1000}"
+    cap_drop: [ALL]
+    sysctls:
+      net.ipv4.ip_unprivileged_port_start: 53
     volumes:
       - ./runtime/linux:/runtime:ro
     command: ["/runtime/dns", "-listen", "0.0.0.0:53", "-answer", "10.254.250.10"]
@@ -96,7 +108,7 @@ services:
         if wget -q -O /tmp/echo-ca.pem http://echo:8026/ca.pem; then set -- -echo-proxy http://echo:8026 -echo-ca /tmp/echo-ca.pem; fi;
         exec /runtime/consent-testbed -root /testbed -listen 0.0.0.0:8080 -admin 0.0.0.0:8081 -internal shop:8081 "$$@"
     depends_on:
-      echo: {condition: service_healthy}
+      echo: {condition: service_healthy, required: false}
 
   tags:
     <<: *go-server
@@ -142,7 +154,8 @@ services:
       - ./wp/seed.sh:/seed.sh:ro
 
   echo:
-    image: alpine:3.22
+    <<: *alpine
+    profiles: [echo]
     networks: [sealed]
     user: "${TESTBED_UID:-1000}:${TESTBED_GID:-1000}"
     environment:
@@ -162,11 +175,12 @@ services:
     build:
       context: ./runner
     image: echo-consent-testbed-runner:156.0.8078.47
-    # A non-root user keeps Chrome's sandbox on; Docker's default seccomp
-    # profile refuses the namespaces the sandbox makes, so it is lifted
-    # for this container, which has no network route anywhere.
+    # A non-root user keeps Chrome's sandbox on. Docker's default seccomp
+    # profile refuses the namespaces the sandbox makes, so the runner gets
+    # that profile (moby/profiles, Apache-2.0) plus one rule allowing
+    # clone, setns and unshare: everything else stays filtered.
     user: "${TESTBED_UID:-1000}:${TESTBED_GID:-1000}"
-    security_opt: ["seccomp=unconfined"]
+    security_opt: ["seccomp=./runner/seccomp-chrome.json"]
     shm_size: 1gb
     environment:
       HOME: /tmp/home
@@ -184,8 +198,7 @@ services:
   # (the same anchor) on a small image, so the seal is checked without
   # building Chrome. It never starts with make up.
   sealcheck:
-    <<: *sealed-client
-    image: alpine:3.22
+    <<: [*sealed-client, *alpine]
     profiles: [test]
     command: ["sleep", "infinity"]
 

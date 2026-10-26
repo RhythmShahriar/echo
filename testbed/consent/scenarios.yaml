@@ -142,7 +142,7 @@ scenarios:
     needs: go
     toggle: no Consent Mode default, so GA4 sends to metrics.c12.shop.test at once
     expect:
-      - {check: consent/before-choice, tracker: ga4, level: error}
+      - {check: consent/before-choice, tracker: ga4, level: error, first_party: true}
   - id: c13
     name: sendBeacon on pagehide after Reject
     area: trackers
@@ -460,7 +460,7 @@ environment:
     good:
       - {step: check, exit: 0, complete: true, says: ["chrome left: 0", "profile files left: 0"]}
     broken:
-      - {step: check, exit: 130, complete: false, says: ["chrome left: 0", "profile files left: 0"]}
+      - {step: check, exit: 130, complete: false, says: ["reject run seen before the interrupt: true", "chrome left: 0", "profile files left: 0"]}
   - id: e06
     name: Every CPU busy
     probe: cpu-busy

@@ -129,9 +129,9 @@ func (s Scenario) Good() bool { return strings.HasPrefix(s.ID, "g") }
 // WantSinkZero reports whether the sink must count no hit for s.
 func (s Scenario) WantSinkZero() bool { return s.SinkZero == nil || *s.SinkZero }
 
-// Match names a finding: an issue (check, tracker, level, title, run), a
-// comparison change (class, check, tracker, title) or a run outcome
-// (run, status, reason). Empty fields match anything.
+// Match names a finding: an issue (check, tracker, level, title, run,
+// first_party), a comparison change (class, check, tracker, title) or a
+// run outcome (run, status, reason). Empty fields match anything.
 type Match struct {
 	Check   string `yaml:"check" json:"check,omitempty"`
 	Tracker string `yaml:"tracker" json:"tracker,omitempty"`
@@ -141,6 +141,9 @@ type Match struct {
 	Run     string `yaml:"run" json:"run,omitempty"`
 	Status  string `yaml:"status" json:"status,omitempty"`
 	Reason  string `yaml:"reason" json:"reason,omitempty"`
+	// FirstParty, set, asks that a hit behind the issue was (or wasn't)
+	// recognized on the site's own host: server-side tagging (c12).
+	FirstParty *bool `yaml:"first_party" json:"first_party,omitempty"`
 }
 
 // IsRun reports whether m is about a run's outcome rather than a finding.
@@ -162,6 +165,9 @@ func (m Match) String() string {
 	add("run", m.Run)
 	add("status", m.Status)
 	add("reason", m.Reason)
+	if m.FirstParty != nil {
+		add("first_party", fmt.Sprint(*m.FirstParty))
+	}
 	if m.Title != "" {
 		parts = append(parts, fmt.Sprintf("title~%q", m.Title))
 	}

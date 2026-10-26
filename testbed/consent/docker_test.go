@@ -27,7 +27,7 @@ func docker(ctx context.Context, args ...string) (string, error) {
 
 // composeArgs runs docker compose on this testbed.
 func composeArgs(args ...string) []string {
-	return append([]string{"compose", "-f", "docker-compose.yml", "--profile", "test"}, args...)
+	return append([]string{"compose", "-f", "docker-compose.yml", "--profile", "test", "--profile", "echo"}, args...)
 }
 
 // needDocker skips without a Docker daemon.

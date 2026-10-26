@@ -366,8 +366,29 @@ func TestPrintMapListsEveryTagHost(t *testing.T) {
 
 func TestCAPIOnlyThroughALoopbackProxy(t *testing.T) {
 	for _, bad := range []string{"https://127.0.0.1:8026", "http://proxy.example.com:8026", "http://10.0.0.5:8026", "ftp://127.0.0.1"} {
-		if _, err := newCAPISender(bad, ""); err == nil {
-			t.Errorf("%s accepted", bad)
+		for _, services := range []bool{false, true} {
+			if _, err := newCAPISender(bad, "", services); err == nil {
+				t.Errorf("%s accepted (services=%v)", bad, services)
+			}
+		}
+	}
+	for _, good := range []string{"http://127.0.0.1:8026", "http://[::1]:8026", "http://localhost:8026"} {
+		if _, err := newCAPISender(good, "", false); err != nil {
+			t.Errorf("%s: %v", good, err)
+		}
+	}
+	// A bare name is a Compose service only in Docker mode; in Go mode a
+	// DNS search domain could send it off the machine.
+	if _, err := newCAPISender("http://echo:8026", "", false); err == nil {
+		t.Error("a single-label name accepted in Go mode")
+	}
+	if _, err := newCAPISender("http://echo:8026", "", true); err != nil {
+		t.Errorf("a Compose service name in Docker mode: %v", err)
+	}
+	for admin, want := range map[string]bool{"shop:8081": true, DefaultAdmin: false, "localhost:8081": false, "": false} {
+		_, err := New(Options{Root: testRoot(t), Static: testStatic, Admin: admin, EchoProxy: "http://echo:8026"})
+		if (err == nil) != want {
+			t.Errorf("admin %q: proxy echo accepted=%v, want %v (%v)", admin, err == nil, want, err)
 		}
 	}
 	got := make(chan *http.Request, 4)

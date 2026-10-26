@@ -5,6 +5,7 @@ package consenttestbed
 
 import (
 	"bufio"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -37,6 +38,13 @@ type compose struct {
 		Ports    []string  `yaml:"ports"`
 		Command  []string  `yaml:"command"`
 		User     string    `yaml:"user"`
+		Build    yaml.Node `yaml:"build"`
+		Profiles []string  `yaml:"profiles"`
+		CapDrop  []string  `yaml:"cap_drop"`
+		Security []string  `yaml:"security_opt"`
+		Depends  map[string]struct {
+			Required *bool `yaml:"required"`
+		} `yaml:"depends_on"`
 	} `yaml:"services"`
 }
 
@@ -123,6 +131,82 @@ func TestComposeIsSealed(t *testing.T) {
 	}
 	if u := c.Services["runner"].User; !strings.Contains(u, "TESTBED_UID") {
 		t.Errorf("runner user %q: Chrome's sandbox needs a non-root user", u)
+	}
+}
+
+// TestComposeHardening: every image pulled is pinned by digest, the
+// resolver runs without root or capabilities, Chrome's sandbox runs
+// under a seccomp profile (never unconfined) and the shop starts without
+// the optional echo service.
+func TestComposeHardening(t *testing.T) {
+	c := loadCompose(t)
+	digest := regexp.MustCompile(`^[a-z0-9./-]+:[\w.-]+@sha256:[0-9a-f]{64}$`)
+	for name, s := range c.Services {
+		if s.Build.Kind == 0 && !digest.MatchString(s.Image) {
+			t.Errorf("%s image %q isn't pinned by digest", name, s.Image)
+		}
+		for _, o := range s.Security {
+			if strings.Contains(o, "unconfined") {
+				t.Errorf("%s runs with %s", name, o)
+			}
+		}
+	}
+	dns := c.Services["dns"]
+	if !strings.Contains(dns.User, "TESTBED_UID") || !slices.Equal(dns.CapDrop, []string{"ALL"}) {
+		t.Errorf("dns runs as %q dropping %v; want the testbed user and no capabilities", dns.User, dns.CapDrop)
+	}
+	runner := c.Services["runner"]
+	if !slices.Contains(runner.Security, "seccomp=./runner/seccomp-chrome.json") {
+		t.Errorf("runner security_opt %v; want the Chrome seccomp profile", runner.Security)
+	}
+	if !slices.Equal(c.Services["echo"].Profiles, []string{"echo"}) {
+		t.Errorf("echo profiles %v; want [echo] so the testbed runs without it", c.Services["echo"].Profiles)
+	}
+	if d, ok := c.Services["shop"].Depends["echo"]; !ok || d.Required == nil || *d.Required {
+		t.Error("shop must depend on echo with required: false")
+	}
+}
+
+// TestSeccompProfile: the runner's profile is Docker's default (deny by
+// default) with one extra rule, which allows only the namespace calls
+// Chrome's sandbox needs.
+func TestSeccompProfile(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("runner", "seccomp-chrome.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var p struct {
+		DefaultAction string `json:"defaultAction"`
+		Syscalls      []struct {
+			Names    []string `json:"names"`
+			Action   string   `json:"action"`
+			Includes struct {
+				Caps []string `json:"caps"`
+			} `json:"includes"`
+			Args []json.RawMessage `json:"args"`
+		} `json:"syscalls"`
+	}
+	if err := json.Unmarshal(data, &p); err != nil {
+		t.Fatal(err)
+	}
+	if p.DefaultAction != "SCMP_ACT_ERRNO" {
+		t.Errorf("defaultAction %q; want SCMP_ACT_ERRNO", p.DefaultAction)
+	}
+	var open []string
+	for _, s := range p.Syscalls {
+		if s.Action == "SCMP_ACT_ALLOW" && len(s.Includes.Caps) == 0 && len(s.Args) == 0 {
+			open = append(open, s.Names...)
+		}
+	}
+	for _, name := range []string{"clone", "setns", "unshare"} {
+		if !slices.Contains(open, name) {
+			t.Errorf("%s isn't allowed: Chrome's sandbox can't start", name)
+		}
+	}
+	for _, name := range []string{"mount", "bpf", "kexec_load", "init_module", "reboot"} {
+		if slices.Contains(open, name) {
+			t.Errorf("%s is allowed for everyone", name)
+		}
 	}
 }
 
