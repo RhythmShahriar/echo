@@ -1,0 +1,191 @@
+rhythm echo consent: check cookie consent with no choice, Accept and Reject
+
+Does Reject really reject? Echo clicks your cookie banner three ways and shows
+every tracker that fired before the choice or after Reject, with Consent Mode
+decoded from the wire.
+
+Usage:
+  rhythm echo consent [<url>...] [flags]
+
+What to check:
+      --runs <list>          none, accept, reject, gpc, withdraw (default
+                             none,accept,reject); +gpc or +withdraw adds to the
+                             default
+      --pages <n>            after the choice, visit this many more same-site
+                             pages (default 1; 0 only reloads; at most 10)
+      --settle <d>           how long the network must be quiet after each step
+                             (default 3s, at most 30s)
+      --banner-wait <d>      how long to wait for a banner (default 10s, at most
+                             60s)
+      --timeout <d>          longest time for one run (default 90s, at most 10m)
+      --retries <n>          run an inconclusive run again in a fresh browser
+                             (default 1; 0 to 3)
+      --cmp <name>           auto (default) or the banner to expect: cookiebot,
+                             onetrust, cookieyes, complianz, usercentrics,
+                             borlabs, didomi, iubenda, generic (rhythm echo
+                             consent cmps lists them)
+      --accept-selector <sel>
+                             the Accept button, overriding the rule; a >> b
+                             clicks a then b, host::shadow button enters a
+                             shadow root
+      --reject-selector <sel>
+                             the Reject button, same syntax, e.g. "#settings >>
+                             #reject-all"
+      --click <how>          button (default), api or button,api (the API when
+                             no button is found)
+      --consent-mode <policy>
+                             advanced (default: cookieless pings are a notice),
+                             basic (they count as hits) or strict (tracker
+                             scripts count too)
+      --exempt <tracker>     a tracker allowed before consent, by catalog id
+                             (repeatable)
+      --geo <cc>             look like a visitor from this country, e.g. de:
+                             language and time zone, never the IP address
+      --locale <tag>         browser locale and Accept-Language, e.g. de-DE
+                             (default the machine's)
+      --timezone <tz>        IANA time zone, e.g. Europe/Berlin (default the
+                             machine's)
+      --viewport <v>         desktop (default, 1366x900) or mobile (390x844,
+                             touch)
+      --echo[=<url>]         also ask Echo (RHYTHM_ECHO_URL, else
+                             http://127.0.0.1:8025) what the site sent
+                             server-side during each run
+      --send-hits            send tracker hits for real instead of holding them
+                             in the browser; refused on a production: host
+      --sites <file>         check every site in a Soundcheck-style sites.yaml
+      --parallel <n>         browser runs at once (default 3; 1 to 8)
+      --map-host <host=addr> answer host (or *.example.test) from addr instead
+                             of the network, e.g. *.shop.test=127.0.0.1:18950
+                             (repeatable)
+      --map-only             refuse every host --map-host doesn't cover
+
+Compare:
+      --save <name>          also keep this result as the baseline <name>
+      --against <name|path|last>
+                             compare with a baseline, a consent.json, a result
+                             folder or the previous result (last)
+      --accept <key>         take this change (its key from -v) as intended
+                             (repeatable)
+
+Requests and browser:
+  -H, --header <h>           extra header for same-site requests, "Name: value";
+                             the value may be @file or env:NAME (repeatable)
+      --cookie <c>           a cookie for the site, name=value; the value may be
+                             @file or env:NAME (repeatable)
+  -A, --user-agent <ua>      the User-Agent (default the browser's own, without
+                             Headless, plus rhythm-echo-consent/<version>)
+      --proxy <url>          send the browser's traffic on through this proxy,
+                             e.g. one in the EU
+  -k, --insecure             don't verify TLS; only for loopback or private
+                             sites
+      --insecure-public      with -k, allow it for a public site too
+      --follow-host          keep going when the start page redirects to another
+                             host
+      --browser <path>       the Chrome or Chromium to use
+      --no-download          never download Chrome for Testing
+      --no-sandbox           run Chrome without its sandbox (needed as root;
+                             also RHYTHM_ECHO_NO_SANDBOX=1); only for sites you
+                             trust
+      --show-browser         show the browser window (one run at a time)
+
+Output:
+      --json --md --junit --html
+                             the report on stdout, one format at a time
+  -o, --output <file>        also write a report to a file, its format from
+                             .json .md .xml or .html (repeatable)
+      --har                  keep one masked HAR per run in the evidence folder
+      --no-screenshots       take no screenshots
+      --show-ids             keep tracking and client IDs unmasked (not with
+                             Markdown or JUnit)
+      --sign-key <file>      sign consent.json with this ed25519 private key
+                             (mode 0600)
+      --open                 open the HTML report when done
+  -q, --quiet                only the verdict and what failed
+      --plain                no color or glyphs (screen readers, logs)
+      --no-color             no color
+  -v, --verbose              add every run's timeline and the change keys
+      --live                 print each tracker hit on stderr as it happens
+      --fail-on <level>      exit 1 at or above error (the default), warning or
+                             notice; with --against broke (the default), new or
+                             changed; none: never
+
+Settings:
+      --config <file>        settings (default the nearest .echo/config.yaml;
+                             optional)
+      --store <dir>          where results are kept (default the config's
+                             folder, else ./.echo)
+
+Subcommands (rhythm echo consent <subcommand> --help lists each one's flags):
+  detect <url>               find the banner and the buttons to click; no
+                             verdict
+  report [<id>|latest]       show a saved consent result again
+  verify <folder|file> [--key <file>]
+                             check an evidence folder's hashes and signature
+  cmps [--json]              the consent banners Echo knows how to click
+  trackers [--json]          the trackers Echo recognizes
+  prune [--keep <n>]         delete old consent results, keeping the newest n
+                             (default 20) and every baseline
+
+Exit codes:
+  0    every run made and confirmed its choice (or the page needed none) and no
+       issue is at or above --fail-on
+  1    an issue at or above --fail-on (with --against: a change at or above it);
+       wins over 3
+  2    usage error: wrong flags, a bad URL, an unknown consent: key or check
+       ID, a literal header value in the config, a missing baseline,
+       --send-hits on a production: host, --show-ids with Markdown or JUnit,
+       an invalid selector
+  3    couldn't check: no Chrome, the site didn't answer, a TLS error without
+       -k, a bot wall, a redirect loop, a run that couldn't make its choice
+       and nothing at or above --fail-on, a report that couldn't be written
+  130  interrupted: finished runs are kept and the result is complete: false
+
+Examples:
+  rhythm echo consent https://staging.shop.test
+  rhythm echo consent --runs +gpc --geo de https://shop.example
+  rhythm echo consent --against baseline --fail-on broke
+
+What a pass means. In these runs, from this machine, with this browser and these
+settings, no tracker on Echo's list sent a request or set a cookie before the
+visitor chose or after Reject. It does not mean the site complies with the GDPR,
+ePrivacy, CCPA/CPRA or any other law. Evidence, not legal advice.
+
+One visitor, one place. Banners differ by country, language and device.
+Geo-targeted banners may not show to a CI runner in the US; Echo can set the
+browser's language and time zone (`--geo`) but not its IP address. Run it from
+the region that matters, or through a proxy there.
+
+Blind spots. Trackers that are not on the list; server-side tagging on your own
+domain when its requests don't look like GA4 or Meta; fingerprinting without
+network requests; tags that wait longer than the settle time or need more
+interaction than a scroll and one more page; sites that hide tags from automated
+browsers.
+
+Consent Mode advanced. Google says its tags in advanced mode "send measurements
+without cookies" while consent is denied. Whether that is acceptable before
+consent is disputed. Echo reports these pings as `consent/cookieless-ping` under
+the default policy `advanced`; `--consent-mode basic` or `strict` counts them as
+hits.
+
+gcd is unofficial. Google doesn't document the `gcd` parameter. Echo shows the
+raw value next to a reading based on community documentation and treats letters
+it doesn't know as unknown.
+
+Pseudonymised, not anonymised. Masked or hashed identifiers in reports can still
+be personal data. Treat reports like logs.
+
+What leaves the machine. Requests to the site and to the scripts it loads (which
+shows this machine's IP address to those servers). No tracking hits unless
+`--send-hits`. Nothing goes to Rhythm. The update check contacts GitHub
+(`RHYTHM_OFFLINE=1` turns it off).
+
+Banners Echo can't handle are reported as "couldn't check" (exit 3), never as a
+pass. Tested CMPs and the dates their fixtures were captured are in the
+benchmark.
+
+A signature proves who made the evidence file and that it hasn't changed. It
+doesn't prove the site behaves the same for every visitor, region or day.
+Keyless signing in the Action writes the repository and workflow name to the
+public Rekor log.
+
+rhythm echo help lists every command.

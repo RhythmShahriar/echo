@@ -618,7 +618,7 @@ var commands = []cmdSpec{
 			{"mta-sts-fetch", ""}, {"resolver", ""}, {"fail-on", failOnIssues}}, reportFlags)},
 	{name: "headers", use: "headers <file.eml | ->", about: "check a real received email's authentication",
 		flags: flags([]flagUse{{"check", ""}, {"hops", ""}, {"resolver", ""}, {"mta-sts-fetch", ""}, {"fail-on", failOnIssues}}, reportFlags)},
-	{name: "consent", use: "consent [<url>...] [flags]", about: "check cookie consent: no choice, Accept and Reject in a real browser", own: true},
+	{name: "consent", use: "consent [<url>...] [flags]", about: "check cookie consent with no choice, Accept and Reject", own: true},
 	{name: "providers", use: "providers", about: "list the services Echo recognizes, by channel",
 		flags: flags([]flagUse{{"json", "the list as JSON: slug, name, channel and hosts"}}, terminalFlags)},
 	{name: "checks", use: "checks [--test]", about: "list the checks, the config's own rules too (--test: try the rules' fixtures)",

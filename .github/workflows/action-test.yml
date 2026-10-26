@@ -264,3 +264,96 @@ jobs:
           grep -F '**▲ NEW (1)**' <<< "$body"
           if grep -F customer@example.com <<< "$body"; then echo "::error::the comment shows a recipient"; exit 1; fi
           gh api -X DELETE "repos/$GITHUB_REPOSITORY/issues/comments/$FIRST"
+
+  # mode consent needs Echo 1.2.0 or later: until that release is out
+  # the consent job is skipped with a notice.
+  consent-release:
+    runs-on: ubuntu-latest
+    outputs:
+      ready: ${{ steps.release.outputs.ready }}
+    steps:
+      - id: release
+        run: |
+          url=$(curl -fsSI -o /dev/null -w '%{redirect_url}' https://github.com/RhythmShahriar/echo/releases/latest)
+          tag=${url##*/tag/}
+          if [ "$(printf '%s\n' v1.2.0 "$tag" | sort -V | head -n 1)" = v1.2.0 ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::The latest Echo release ($tag) has no consent checks; the consent job runs from 1.2.0 on."
+          fi
+
+  # mode consent against a local page that sets consent up right and one
+  # whose stand-in pixel fires before the choice. Nothing leaves the
+  # runner: the pages load no other host and Echo holds the pixel's hits
+  # in the browser, so the pixel counts none. A site that spells a shell
+  # command stays text.
+  consent:
+    needs: consent-release
+    if: needs.consent-release.outputs.ready == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - name: Start the consent site
+        run: |
+          go build -o "$RUNNER_TEMP/consentsite" ./integrations/action/testdata/consentsite
+          "$RUNNER_TEMP/consentsite" > "$RUNNER_TEMP/consentsite.log" 2>&1 &
+          for _ in $(seq 1 50); do
+            curl -fsS http://127.0.0.1:18990/hits >/dev/null 2>&1 && exit 0
+            sleep 0.2
+          done
+          cat "$RUNNER_TEMP/consentsite.log"
+          echo "::error::the consent site didn't start"
+          exit 1
+      - uses: ./
+        id: good
+        with:
+          mode: consent
+          site: http://127.0.0.1:18990/good/
+      - uses: ./
+        id: broken
+        continue-on-error: true
+        with:
+          mode: consent
+          site: http://127.0.0.1:18990/broken/
+      - name: The broken page fails with a hit before the choice
+        env:
+          OUTCOME: ${{ steps.broken.outcome }}
+          CODE: ${{ steps.broken.outputs.exit-code }}
+          BEFORE: ${{ steps.broken.outputs.before-choice }}
+        run: |
+          echo "outcome $OUTCOME, exit-code $CODE, before-choice $BEFORE"
+          test "$OUTCOME" = failure && test "$CODE" = 1 && test "${BEFORE:-0}" -ge 1
+      - name: The summaries are written
+        env:
+          GOOD: ${{ steps.good.outputs.summary }}
+          BROKEN: ${{ steps.broken.outputs.summary }}
+        run: |
+          cat "$BROKEN"
+          test -s "$GOOD" && test -s "$BROKEN"
+          grep -F '♪ Echo consent' "$GOOD"
+          grep -F '♪ Echo consent' "$BROKEN"
+      - name: No hit reached the pixel
+        run: |
+          n=$(curl -fsS http://127.0.0.1:18990/hits)
+          test "$n" = 0 || { echo "::error::$n hits reached the stand-in pixel; Echo should hold them"; exit 1; }
+      - uses: ./
+        continue-on-error: true
+        with:
+          mode: consent
+          site: http://127.0.0.1:18990/$(touch /tmp/pwned)
+      - uses: ./
+        continue-on-error: true
+        with:
+          mode: consent
+          site: http://127.0.0.1:18990/`touch /tmp/pwned`
+      - name: No site ran a shell command
+        if: always()
+        run: |
+          if [ -e /tmp/pwned ]; then echo "::error::a site ran a shell command"; exit 1; fi

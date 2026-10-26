@@ -504,11 +504,11 @@ func TestPicker(t *testing.T) {
 		}
 		return v
 	}
-	if got := strings.Join(values(pickState{}), " "); got != "up install doctor init" {
+	if got := strings.Join(values(pickState{}), " "); got != "up install doctor consent init" {
 		t.Errorf("fresh folder: %s", got)
 	}
 	ps := pickState{running: true, hasConfig: true, hasActions: true, snapshot: `"before", 2 hours ago`, hasResult: true}
-	if got := strings.Join(values(ps), " "); got != "watch compare snapshot run report install doctor" {
+	if got := strings.Join(values(ps), " "); got != "watch compare snapshot run report install doctor consent" {
 		t.Errorf("set up: %s", got)
 	}
 	for _, tc := range []struct {
@@ -521,6 +521,9 @@ func TestPicker(t *testing.T) {
 		{"compare", "", "", true, "compare --open"},
 		{"snapshot", "", "", false, "snapshot"},
 		{"up", "", "", true, "up"},
+		{"consent", "", " https://staging.shop.test ", true, "consent -- https://staging.shop.test"},
+		{"consent", "", "--send-hits", false, "consent -- --send-hits"},
+		{"consent", "", "detect", false, "consent -- detect"},
 	} {
 		if got := strings.Join(pickArgs(tc.action, tc.stack, tc.site, tc.open), " "); got != tc.want {
 			t.Errorf("pickArgs(%s) = %q, want %q", tc.action, got, tc.want)
@@ -1273,7 +1276,9 @@ func TestPlantedConfigIsNotUsed(t *testing.T) {
 }
 
 // fixtureServer serves h on 127.0.0.1:port, a port in the range these
-// tests keep for their own servers.
+// tests keep for their own servers, or a free one for port 0 (for a
+// test that reaches it only through its URL, so a busy machine running
+// the suite twice at once can't collide on it).
 func fixtureServer(t *testing.T, port int, h http.Handler) *httptest.Server {
 	t.Helper()
 	ln, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", port))
@@ -1504,7 +1509,7 @@ func TestDoctorNodeCanary(t *testing.T) {
 		t.Skip("no node")
 	}
 	inbox := catcher.NewInbox(10)
-	echo := fixtureServer(t, 20466, catcher.NewServer(inbox, catcher.Config{Version: "test"}))
+	echo := fixtureServer(t, 0, catcher.NewServer(inbox, catcher.Config{Version: "test"}))
 	dir := t.TempDir()
 	t.Chdir(dir)
 	writeConfig(t, "smtp: \"off\"\n")

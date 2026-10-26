@@ -219,6 +219,47 @@
       },
       "name": "check_domain",
       "title": "Check a sending domain"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": true,
+        "readOnlyHint": false
+      },
+      "description": "Loads a page in a real browser as a new visitor with no choice, then Accept, then Reject on its cookie banner. It reports every tracker that fired before the choice or after Reject, with Consent Mode decoded. Tracking hits are held in the browser, never sent. Returns the consent JSON report: issues and inconclusive runs. Only for sites you own or are authorised to test.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "consent_mode": {
+            "description": "How Google Consent Mode pings count (default advanced: cookieless pings are a notice).",
+            "enum": [
+              "advanced",
+              "basic",
+              "strict"
+            ],
+            "type": "string"
+          },
+          "geo": {
+            "description": "Look like a visitor from this country, a two-letter code like de: language and time zone, never the IP address.",
+            "type": "string"
+          },
+          "runs": {
+            "description": "Which runs: none, accept, reject, gpc, withdraw, comma-separated (default none,accept,reject); +gpc adds to the default.",
+            "type": "string"
+          },
+          "url": {
+            "description": "The page to check, like https://staging.shop.test/ (https:// is assumed; a path is read against site: in .echo/config.yaml).",
+            "type": "string"
+          }
+        },
+        "required": [
+          "url"
+        ],
+        "type": "object"
+      },
+      "name": "check_consent",
+      "title": "Check cookie consent"
     }
   ]
 }

@@ -842,10 +842,13 @@ const initUsage = `rhythm echo init: write .echo/config.yaml with an action for 
 
 Usage:
   rhythm echo init [--stack s] [--force]
+  rhythm echo init --consent [--force]
 
 Flags:
       --stack <s>            wordpress, laravel, next, node or php (default: from this
                              folder's files)
+      --consent              add a commented consent: block to .echo/config.yaml, or
+                             write a config with only that block
       --force                replace an existing .echo/config.yaml
 
 Exit codes: 0 ok, 2 usage error or the config exists, 3 couldn't write it.
@@ -858,6 +861,7 @@ func cmdInit(args []string, stdout, stderr io.Writer) int {
 	fs.SetOutput(io.Discard)
 	force := fs.Bool("force", false, "")
 	stackFlag := fs.String("stack", "", "")
+	withConsent := fs.Bool("consent", false, "")
 	if err := fs.Parse(args); err != nil || fs.NArg() > 0 {
 		if errors.Is(err, flag.ErrHelp) {
 			fmt.Fprint(stdout, initUsage)
@@ -869,6 +873,13 @@ func cmdInit(args []string, stdout, stderr io.Writer) int {
 			fmt.Fprintf(stderr, "rhythm echo: init takes no arguments, got %q; rhythm echo help init lists its flags\n", fs.Arg(0))
 		}
 		return exitUsage
+	}
+	if *withConsent {
+		if *stackFlag != "" {
+			fmt.Fprintln(stderr, "rhythm echo: --consent writes only the consent: block; leave out --stack")
+			return exitUsage
+		}
+		return cmdInitConsent(*force, stdout, stderr)
 	}
 	stack := detectStack(".")
 	if *stackFlag != "" {

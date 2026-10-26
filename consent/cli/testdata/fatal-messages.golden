@@ -1,0 +1,15 @@
+no-browser: rhythm echo: no Chrome or Chromium found; install Chrome, pass --browser /path/to/chrome, or allow the one-time Chrome for Testing download
+sandbox-root: rhythm echo: Chrome won't start without its sandbox as root; run as another user, or pass --no-sandbox (only for sites you trust)
+unreachable: rhythm echo: https://staging.shop.test/ didn't answer: dial tcp 127.0.0.1:443: connection refused. Is the site running? A local site with a self-signed certificate needs -k
+unreachable: rhythm echo: https://staging.shop.test/ didn't answer: dial tcp: lookup staging.shop.test: no such host. Is the site running? A local site with a self-signed certificate needs -k
+http-status: rhythm echo: https://staging.shop.test/ answered 401 Unauthorized; pass the login with -H "Authorization: env:RHYTHM_ECHO_STAGING_AUTH" or consent: headers:
+http-status: rhythm echo: https://staging.shop.test/ answered 503 Service Unavailable; check that the site serves its pages, then run the check again
+bot-wall: rhythm echo: https://shop.example.com/ showed a bot check (Cloudflare) instead of the page; allow this machine in the firewall for the check, or check staging
+bot-wall: rhythm echo: https://shop.example.com/ showed a bot check instead of the page; allow this machine in the firewall for the check, or check staging
+redirect-host: rhythm echo: https://shop.test/ redirects to https://shop.example.com/; check that one, or pass --follow-host
+tls: rhythm echo: https://shop.example/ uses a certificate this machine doesn't trust (x509: certificate signed by unknown authority); pass -k for a local or private site
+no-browser-image: rhythm echo: this image has no browser; run rhythm echo consent on the host, or pass --browser
+redirect-loop: rhythm echo: https://shop.test/ redirects in a loop or through more than 10 hops; check the site's redirects
+write: rhythm echo: couldn't write .echo/consent/x/events/page-1-none.ndjson: no space left on device
+something-new: rhythm echo: consent: something-new: https://shop.test/: what happened
+no-browser in the image: rhythm echo: this image has no browser; run rhythm echo consent on the host, or pass --browser

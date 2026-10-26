@@ -23,6 +23,7 @@
   <a href="#seal-a-site">Seal a site</a> ·
   <a href="#check-a-change">Check a change</a> ·
   <a href="#what-it-catches">What it catches</a> ·
+  <a href="#cookie-consent-checks">Cookie consent</a> ·
   <a href="https://github.com/RhythmShahriar/rhythm/wiki/Echo">Docs</a> ·
   <a href="https://github.com/RhythmShahriar/rhythm/wiki/Echo-Benchmark">Benchmark</a>
 </p>
@@ -62,7 +63,7 @@ Start Echo, then connect the site. Nothing the site sends leaves the machine; Ec
 ```sh
 rhythm echo up                                   # API :8025 (live view), SMTP :1025
 rhythm echo install wordpress /var/www/staging   # or: laravel, next, node, generic
-rhythm echo doctor                               # canaries through every layer
+rhythm echo doctor                               # canaries through every layer plus Chrome
 rhythm echo watch                                # see each message as it's sent
 ```
 
@@ -115,6 +116,7 @@ rhythm echo compare --open                       # what changed, in a report
 |---|---|
 | Check the contact form still emails the office | `rhythm soundcheck compare staging.shop.test --echo` |
 | Replay a Stripe payment and see the order email | `rhythm echo replay payment_intent.succeeded --to /?wc-api=wc_stripe` |
+| Check that the cookie banner's Reject really rejects | `rhythm echo consent https://staging.shop.test` |
 | Check SPF, DKIM and DMARC for the sender you use | `rhythm echo check shop.com --from-mail received.eml` |
 | Fail CI when a message stops being sent | `rhythm echo compare` (exits 1 on BROKE by default; `--fail-on new` is stricter) |
 | Compare in CI with a baseline from another job | `rhythm echo snapshot --export base.tgz` there, `rhythm echo compare --against base.tgz` here |
@@ -162,6 +164,98 @@ SPF (including the 10-lookup limit), DKIM keys, DMARC policy and alignment for t
 
 54 services are recognized out of the box, from SendGrid, Mailgun, Postmark, Resend, SES and the Gmail and Microsoft Graph APIs to Twilio, Vonage, WhatsApp Cloud, Slack, Teams, GA4, Segment, Meta, FCM, APNs, Stripe, HubSpot, Klaviyo and Zapier (`rhythm echo providers` lists them). Anything else is captured as a generic webhook.
 
+## Cookie consent checks
+
+**Does Reject really reject?** Echo clicks your cookie banner three ways and shows every tracker that fired before the choice or after Reject, with Consent Mode decoded from the wire.
+
+`rhythm echo consent <url>` loads the page in a real browser (the Chrome you have, or Chrome for Testing downloaded once) as three new visitors, each in a fresh profile and each followed by a scroll, one more page and a reload:
+
+- **No choice:** the visitor ignores the banner. Nothing that needs consent should fire.
+- **Accept:** Echo clicks Accept and checks the banner's own stored state says so. Trackers may fire now.
+- **Reject:** Echo clicks Reject (on the first layer, or in the settings) and checks the stored state. Nothing that needs consent should fire, on this page or the next. Hiding a banner is never a Reject.
+
+Hits are held in the browser: checking production adds nothing to anyone's analytics.
+
+<!-- consent first run: the PRD 9.1 text until the integration build prints the real output; replace it then. -->
+```
+$ rhythm echo consent https://staging.shop.test
+Note: use Echo on sites you own or are authorised to test. Consent checks load the site like
+one new visitor: they never log in or submit forms and every tracking hit is recorded and
+stopped in the browser. Results stay on this machine with IDs masked. This notice is shown once.
+Downloading Chrome for Testing 156.0.8078.47 (172 MB) once, into ~/.cache/rhythm/soundcheck/browser ...
+
+rhythm echo 1.2.0 - consent check of https://staging.shop.test/
+
+Browser: Chrome for Testing 156.0.8078.47 (downloaded)
+Hits held: tracking hits are recorded and stopped in the browser. Nothing reached Google, Meta or any other tracker.
+
+https://staging.shop.test/
+  Banner: Cookiebot, found after 0.8s, Reject on the banner
+  Consent Mode: v2 default, all four signals denied at 0.18s, before the first Google hit
+  [1/3] No choice   GA4: 2 cookieless pings (gcs G100); no tracker cookies
+  [2/3] Accept      GA4, Google Ads, Meta Pixel fired; update granted at 2.3s; kept on 1 more page
+  [3/3] Reject      nothing fired; update denied at 2.1s; kept on 1 more page
+
+All clear - 0 errors, 0 warnings, 1 notice - 3 runs, 3 trackers, policy advanced
+  notice  consent/cookieless-ping  GA4 sent 2 cookieless pings before the choice (allowed under --consent-mode advanced)
+
+Evidence, not legal advice.
+full report: .echo/consent/2026-10-26T09-14-03-a1b2c3/report.html
+Tip: --save baseline keeps this as the baseline for the next check.
+```
+
+Every result is an evidence folder in `.echo/consent/`: `consent.json`, screenshots, every event of every run, a manifest with the SHA-256 of each file and `report.html`. `rhythm echo consent verify <folder>` checks that nothing in it changed since.
+
+| You want to… | Run |
+|---|---|
+| Add Global Privacy Control and a withdrawal | `rhythm echo consent --runs +gpc,+withdraw https://shop.example` |
+| Look like a visitor from Germany | `rhythm echo consent --geo de https://shop.example` (language and time zone, never the IP address) |
+| Judge Google's cookieless pings as hits | `--consent-mode basic` or `--consent-mode strict` |
+| See which buttons Echo would click, without a verdict | `rhythm echo consent detect https://shop.example` |
+| Click a banner Echo doesn't know | `--accept-selector '#yes' --reject-selector '#no'` |
+| Fail CI only when something got worse | `--save baseline` once, then `--against baseline --fail-on broke` |
+| Check many sites | `--sites sites.yaml`, the same file Soundcheck fleet reads |
+| Sign the evidence | `--sign-key team.key`, then `rhythm echo consent verify <folder> --key team.pub` |
+| Read the result in a script | `--json`: the `rhythm-echo/v1` envelope with `kind: consent` |
+
+Echo knows Cookiebot, Complianz, CookieYes, OneTrust, Usercentrics, Didomi, iubenda and Borlabs Cookie. Other banners are found by their cookie words and buttons in 30 languages (`rhythm echo consent cmps` lists the rules). Trackers come from an MIT catalogue with fixtures: GA4, Google Ads, Meta Pixel, TikTok, Microsoft Clarity, LinkedIn, Hotjar and more (`rhythm echo consent trackers`).
+
+In CI:
+
+```yaml
+- uses: RhythmShahriar/echo@v1.2.0
+  with:
+    mode: consent
+    site: https://staging.shop.test/ https://staging.shop.test/shop/
+    fail-on: error
+    pr-comment: true
+```
+
+The job summary and the pull request comment show tracker names, counts, check titles and page paths, never query strings, cookie values or IDs. `upload: true` keeps the evidence folder as the `echo-consent` artifact; `sign: true` signs `consent.json` with keyless cosign.
+
+### Honest limits
+
+
+> **What a pass means.** In these runs, from this machine, with this browser and these settings, no tracker on Echo's list sent a request or set a cookie before the visitor chose or after Reject. It does not mean the site complies with the GDPR, ePrivacy, CCPA/CPRA or any other law. Evidence, not legal advice.
+>
+> **One visitor, one place.** Banners differ by country, language and device. Geo-targeted banners may not show to a CI runner in the US; Echo can set the browser's language and time zone (`--geo`) but not its IP address. Run it from the region that matters, or through a proxy there.
+>
+> **Blind spots.** Trackers that are not on the list; server-side tagging on your own domain when its requests don't look like GA4 or Meta; fingerprinting without network requests; tags that wait longer than the settle time or need more interaction than a scroll and one more page; sites that hide tags from automated browsers.
+>
+> **Consent Mode advanced.** Google says its tags in advanced mode "send measurements without cookies" while consent is denied. Whether that is acceptable before consent is disputed. Echo reports these pings as `consent/cookieless-ping` under the default policy `advanced`; `--consent-mode basic` or `strict` counts them as hits.
+>
+> **gcd is unofficial.** Google doesn't document the `gcd` parameter. Echo shows the raw value next to a reading based on community documentation and treats letters it doesn't know as unknown.
+>
+> **Pseudonymised, not anonymised.** Masked or hashed identifiers in reports can still be personal data. Treat reports like logs.
+>
+> **What leaves the machine.** Requests to the site and to the scripts it loads (which shows this machine's IP address to those servers). No tracking hits unless `--send-hits`. Nothing goes to Rhythm. The update check contacts GitHub (`RHYTHM_OFFLINE=1` turns it off).
+>
+> **Banners Echo can't handle** are reported as "couldn't check" (exit 3), never as a pass. Tested CMPs and the dates their fixtures were captured are in the benchmark.
+>
+> **A signature** proves who made the evidence file and that it hasn't changed. It doesn't prove the site behaves the same for every visitor, region or day. Keyless signing in the Action writes the repository and workflow name to the public Rekor log.
+
+More in the wiki: [Echo-Consent](https://github.com/RhythmShahriar/rhythm/wiki/Echo-Consent), [checks](https://github.com/RhythmShahriar/rhythm/wiki/Echo-Consent-Checks), [Consent Mode](https://github.com/RhythmShahriar/rhythm/wiki/Echo-Consent-Mode), [banners (CMPs)](https://github.com/RhythmShahriar/rhythm/wiki/Echo-Consent-CMPs), [CI](https://github.com/RhythmShahriar/rhythm/wiki/Echo-Consent-CI) and [evidence](https://github.com/RhythmShahriar/rhythm/wiki/Echo-Consent-Evidence).
+
 ## Why Echo
 
 - **Compares, not just catches.** Mail catchers show you an inbox. Echo tells you what changed in what your site sends, ranked, after every update.
@@ -178,7 +272,7 @@ SPF (including the 10-lookup limit), DKIM keys, DMARC policy and alignment for t
     fail-on: broke
 ```
 
-Or start Echo for Soundcheck: `mode: up`, then `rhythm soundcheck compare … --echo`. More in the [CI guide](https://github.com/RhythmShahriar/rhythm/wiki/Echo-CI).
+Or start Echo for Soundcheck: `mode: up`, then `rhythm soundcheck compare … --echo`. `mode: consent` checks a cookie banner ([above](#cookie-consent-checks)). More in the [CI guide](https://github.com/RhythmShahriar/rhythm/wiki/Echo-CI).
 
 ## Docs
 

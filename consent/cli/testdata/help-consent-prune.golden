@@ -1,0 +1,18 @@
+rhythm echo consent prune: delete old consent results, keeping the newest n
+(default 20) and every baseline
+
+Usage:
+  rhythm echo consent prune [--keep <n>]
+
+Flags:
+  -q, --quiet                only the verdict and what failed
+      --config <file>        settings (default the nearest .echo/config.yaml;
+                             optional)
+      --store <dir>          where results are kept (default the config's
+                             folder, else ./.echo)
+      --keep <n>             how many consent results to keep (default 20);
+                             baselines always stay
+
+Exit codes: 0 ok, 2 usage error, 3 couldn't run.
+rhythm echo consent --help lists the consent check's flags.
+rhythm echo help lists every command.

@@ -1,0 +1,17 @@
+rhythm echo consent verify: check an evidence folder's hashes and signature
+
+Usage:
+  rhythm echo consent verify <folder|file> [--key <file>]
+
+Flags:
+      --json                 write JSON to stdout
+  -q, --quiet                only the verdict and what failed
+      --plain                no color or glyphs (screen readers, logs)
+      --no-color             no color
+      --key <file>           the ed25519 public key (PEM) to check
+                             consent.json.sig with
+
+Exit codes: 0 every file and the signature match, 1 a hash or the signature
+doesn't match, 2 usage error, 3 a file is missing or unreadable.
+rhythm echo consent --help lists the consent check's flags.
+rhythm echo help lists every command.

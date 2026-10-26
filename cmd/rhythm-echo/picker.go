@@ -28,6 +28,7 @@ type pickState struct {
 	hasActions bool   // and lists actions
 	snapshot   string // the latest snapshot, described; "" when none
 	hasResult  bool   // a run or snapshot to report
+	site       string // the config's site:, offered as the page to check for consent
 }
 
 func loadPickState() pickState {
@@ -36,6 +37,9 @@ func loadPickState() pickState {
 	ps.hasConfig = path != ""
 	cfg, err := loadConfig(path)
 	ps.hasActions = err == nil && len(cfg.Actions) > 0
+	if err == nil {
+		ps.site = cfg.Site
+	}
 	st := store.Store{Root: storeRoot("", path)}
 	if dir, err := st.Snapshot(""); err == nil {
 		if r, err := store.LoadRun(dir); err == nil {
@@ -73,6 +77,7 @@ func pickOptions(ps pickState) []huh.Option[string] {
 	}
 	add("Connect a site (WordPress, Laravel, Next.js, Node, anything)", "install")
 	add("Check that every capture layer works (doctor)", "doctor")
+	add("Check cookie consent on a page (no choice, Accept, Reject)", "consent")
 	if !ps.hasConfig {
 		add("Write .echo/config.yaml to add actions (init)", "init")
 	}
@@ -85,6 +90,7 @@ func pick(stdin io.Reader, stdout, stderr io.Writer) int {
 	opts := pickOptions(ps)
 	action := opts[0].Value
 	stack, site := "wordpress", "."
+	page := ps.site
 	open := true
 	form := huh.NewForm(
 		huh.NewGroup(huh.NewSelect[string]().Title("What should Echo do?").Options(opts...).Value(&action)),
@@ -106,6 +112,17 @@ func pick(stdin io.Reader, stdout, stderr io.Writer) int {
 				return nil
 			}),
 		).WithHideFunc(func() bool { return action != "install" || (stack != "wordpress" && stack != "next") }),
+		huh.NewGroup(huh.NewInput().
+			Title("Which page?").
+			Description("A URL, e.g. https://staging.shop.test. Only sites you own or are authorised to test.").
+			Value(&page).
+			Validate(func(s string) error {
+				if strings.TrimSpace(s) == "" {
+					return errors.New("enter the page's URL, e.g. https://staging.shop.test")
+				}
+				return nil
+			}),
+		).WithHideFunc(func() bool { return action != "consent" }),
 		huh.NewGroup(huh.NewConfirm().Title("Open the HTML report when done?").Value(&open)).
 			WithHideFunc(func() bool {
 				return action != "compare" && action != "snapshot" && action != "run" && action != "report"
@@ -118,10 +135,14 @@ func pick(stdin io.Reader, stdout, stderr io.Writer) int {
 		fmt.Fprintln(stderr, "rhythm echo:", err)
 		return exitError
 	}
+	if action == "consent" {
+		site = page
+	}
 	return run(pickArgs(action, stack, site, open), stdin, stdout, stderr)
 }
 
-// pickArgs is the command line the picker's answers stand for.
+// pickArgs is the command line the picker's answers stand for; site is
+// the folder for install and the page for consent.
 func pickArgs(action, stack, site string, open bool) []string {
 	args := []string{action}
 	switch action {
@@ -130,6 +151,10 @@ func pickArgs(action, stack, site string, open bool) []string {
 		if stack == "wordpress" || stack == "next" {
 			args = append(args, strings.TrimSpace(site))
 		}
+	case "consent":
+		// "--" keeps a typed page such as --send-hits or detect from
+		// being read as a flag or a subcommand.
+		args = append(args, "--", strings.TrimSpace(site))
 	case "compare", "snapshot", "run", "report":
 		if open {
 			args = append(args, "--open")

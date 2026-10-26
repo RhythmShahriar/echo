@@ -16,13 +16,16 @@ import (
 	"time"
 )
 
-// Ports for the Action's Echo and the fixture shop it checks, inside the
-// range the CI fixture's own test leaves free.
+// Ports for the Action's Echo, its SMTP sink, the fixture shop and an
+// address where nothing listens. They are fixed, from the block this
+// suite owns (consentsite_test.go takes 35100 and 35101). Ports picked
+// by listening on :0 and closing again were flaky: the kernel could
+// hand one to another process before Echo bound it.
 const (
-	listen   = "127.0.0.1:20513"
-	smtp     = "127.0.0.1:20514"
-	shopPort = "20515"
-	deadEcho = "http://127.0.0.1:20519"
+	listen   = "127.0.0.1:35110"
+	smtp     = "127.0.0.1:35111"
+	shopPort = "35112"
+	deadEcho = "http://127.0.0.1:35119"
 )
 
 // shop is a monorepo layout: the CI fixture in sites/shop, served by
@@ -79,7 +82,7 @@ func shop(t *testing.T) *runner {
 			_ = c.Close()
 			break
 		}
-		if i == 100 {
+		if i == 600 { // 30s: a loaded machine can be slow to start php -S
 			t.Fatal("php -S didn't start")
 		}
 		time.Sleep(50 * time.Millisecond)
@@ -98,8 +101,9 @@ func stopEcho(r *runner) {
 			_ = p.Signal(syscall.SIGTERM)
 		}
 	}
-	// Wait until the API port is free for the next test.
-	for range 50 {
+	// Wait until the API port is free for the next test (up to 15s on
+	// a loaded machine).
+	for range 150 {
 		c, err := net.DialTimeout("tcp", listen, 100*time.Millisecond)
 		if err != nil {
 			return
@@ -237,7 +241,7 @@ func TestActionCouldntRun(t *testing.T) {
 		{"bad flag", in("mode", "run", "args", "--no-such-flag"), "2", []string{"(exit 2).**", "no-such-flag"}},
 		{"open quote in args", in("mode", "run", "args", "--action 'Contact"), "2", []string{"(exit 2).**", "rhythm echo: args: a quote isn't closed"}},
 		{"missing config", in("mode", "run", "config", "missing.yaml"), "2", []string{"Echo stopped as it started (exit 2)", "missing.yaml"}},
-		{"bad mode", in("mode", "later"), "2", []string{`mode must be snapshot, compare, run, up or stop, not "later"`}},
+		{"bad mode", in("mode", "later"), "2", []string{`mode must be snapshot, compare, run, up, stop or consent, not "later"`}},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

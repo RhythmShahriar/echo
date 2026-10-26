@@ -1,0 +1,56 @@
+$ consent 
+rhythm echo: consent needs a page: rhythm echo consent https://staging.shop.test, or list pages under consent: urls in .echo/config.yaml
+$ consent ftp://shop.test
+rhythm echo: consent "ftp://shop.test": want an http or https URL
+$ consent --runs decline https://shop.test/
+rhythm echo: --runs "decline": want none, accept, reject, gpc or withdraw (+gpc adds one); did you mean reject?
+$ consent --runs +gpc,nope https://shop.test/
+rhythm echo: --runs "nope": want none, accept, reject, gpc or withdraw (+gpc adds one); did you mean none?
+$ consent --fail-on high https://shop.test/
+rhythm echo: --fail-on "high": want none, error, warning or notice (or broke, new, changed when comparing)
+$ consent --consent-mode loose https://shop.test/
+rhythm echo: --consent-mode "loose": want advanced, basic or strict
+$ consent --click mouse https://shop.test/
+rhythm echo: --click "mouse": want button, api or button,api
+$ consent --cmp cookiebott https://shop.test/
+rhythm echo: --cmp "cookiebott": want auto or one of cookiebot, onetrust, cookieyes, complianz, usercentrics, borlabs, didomi, iubenda, generic; did you mean cookiebot?
+$ consent --cmp quantcast https://shop.test/
+rhythm echo: --cmp "quantcast": want auto or one of cookiebot, onetrust, cookieyes, complianz, usercentrics, borlabs, didomi, iubenda, generic
+$ consent --geo deu https://shop.test/
+rhythm echo: --geo "deu": want a two-letter country code (ISO 3166-1 alpha-2), e.g. de
+$ consent --locale german! https://shop.test/
+rhythm echo: --locale "german!": want a language tag like de-DE or en-US
+$ consent --timezone Berlin time https://shop.test/
+rhythm echo: --timezone "Berlin time": want an IANA time zone like Europe/Berlin or UTC
+$ consent --viewport tablet https://shop.test/
+rhythm echo: --viewport "tablet": want desktop or mobile
+$ consent --accept-selector a >> >> b https://shop.test/
+rhythm echo: --accept-selector: selector "a >> >> b": step 2 is empty
+$ consent --reject-selector  https://shop.test/
+rhythm echo: --reject-selector: selector is empty
+$ consent --pages 11 https://shop.test/
+rhythm echo: --pages 11: want 0 to 10
+$ consent --pages -1 https://shop.test/
+rhythm echo: --pages -1: want 0 to 10
+$ consent --settle 45s https://shop.test/
+rhythm echo: --settle 45s: want at most 30s
+$ consent --settle -1s https://shop.test/
+rhythm echo: --settle -1s: want 0 to 30s
+$ consent --banner-wait 2m https://shop.test/
+rhythm echo: --banner-wait 2m: want at most 60s
+$ consent --banner-wait -1s https://shop.test/
+rhythm echo: --banner-wait -1s: want 0 to 60s
+$ consent --timeout 11m https://shop.test/
+rhythm echo: --timeout 11m: want at most 10m
+$ consent --timeout 0s https://shop.test/
+rhythm echo: --timeout 0s: want more than 0 and at most 10m
+$ consent --retries 5 https://shop.test/
+rhythm echo: --retries 5: want 0 to 3
+$ consent --parallel 9 https://shop.test/
+rhythm echo: --parallel 9: want 1 to 8
+$ consent --parallel 0 https://shop.test/
+rhythm echo: --parallel 0: want 1 to 8
+$ consent --json --junit https://shop.test/
+rhythm echo: pick one output format, not --json and --junit
+$ consent -o report.pdf https://shop.test/
+rhythm echo: can't tell the format of report.pdf; add --json, --md, --junit or --html

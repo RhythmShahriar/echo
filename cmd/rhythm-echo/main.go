@@ -68,9 +68,13 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		}
 		usage(stdout)
 		return exitOK
-	case "-v", "--version", "version":
+	case "-v", "--version":
 		fmt.Fprintln(stdout, "rhythm-echo", version)
 		return exitOK
+	case "version":
+		return cmdVersion(args[1:], stdout, stderr)
+	case completeCommand:
+		return cmdComplete(args[1:], stdout)
 	}
 	c, ok := lookup(args[0])
 	if !ok {
@@ -210,10 +214,15 @@ Usage:
                                          send one caught email to a client through the relay
   rhythm echo check <domain>             SPF, DKIM, DMARC and MX for the domain you send from
   rhythm echo headers <file.eml | ->     check a real received email's authentication
-  rhythm echo consent [<url>...]         check cookie consent: no choice, Accept and Reject in a real browser
+  rhythm echo consent <url>...           check cookie consent with no choice, Accept and Reject
+  rhythm echo consent detect <url>       find the banner and the buttons to click; no verdict
+  rhythm echo consent report|verify|cmps|trackers|prune
+                                         a saved result again, check its evidence, what Echo knows,
+                                         delete old results (rhythm echo consent --help)
   rhythm echo init [--stack s] [--force]
                                          write .echo/config.yaml with an action for this stack
-                                         (wordpress, laravel, next, node or php; --force replaces it)
+                                         (wordpress, laravel, next, node or php; --force replaces it;
+                                         --consent adds a commented consent: block instead)
   rhythm echo providers                  list the services Echo recognizes, by channel (--json)
   rhythm echo checks [--test]            list the checks and the config's rules (--test: try their fixtures)
   rhythm echo ca [--pem | --untrust]     print the proxy's CA certificate path (--pem: the certificate;
@@ -225,7 +234,7 @@ Usage:
   rhythm echo conformance [--listen a]   a strict stand-in Echo for a connector's end-to-end test
   rhythm echo sendmail [-t] [-i] [-f from] [rcpt…]
                                          sendmail stand-in for sendmail_path; reads the message on stdin
-  rhythm echo help [command] | version   this help, one command's, or the version
+  rhythm echo help [command] | version   this help, one command's, or the version (--json)
 
 Catcher (up):
       --seal                 nothing leaves; Echo answers for every service (default)
@@ -381,8 +390,9 @@ Exit codes (as in Tuner and Soundcheck):
   1    findings: --fail-on hit, an action failed, a doctor check failed, or the site
        rejected a replay
   2    usage error: a wrong command line, or .echo/config.yaml asks for what isn't there
-  3    couldn't run: Echo not reachable, every action failed, the DNS resolver never
-       answered, a file or network error
+  3    couldn't run or couldn't check (a consent run that couldn't make its choice):
+       Echo not reachable, every action failed, the DNS resolver never answered, a
+       file or network error
   130  interrupted
   sendmail exits with sendmail's codes instead (sysexits: 64 usage, 69 Echo unreachable…)
 

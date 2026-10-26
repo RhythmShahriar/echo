@@ -1,0 +1,63 @@
+rhythm echo consent detect: find the banner and the buttons to click; no verdict
+
+Usage:
+  rhythm echo consent detect <url> [flags]
+
+Flags:
+      --banner-wait <d>      how long to wait for a banner (default 10s, at most
+                             60s)
+      --cmp <name>           auto (default) or the banner to expect: cookiebot,
+                             onetrust, cookieyes, complianz, usercentrics,
+                             borlabs, didomi, iubenda, generic (rhythm echo
+                             consent cmps lists them)
+      --accept-selector <sel>
+                             the Accept button, overriding the rule; a >> b
+                             clicks a then b, host::shadow button enters a
+                             shadow root
+      --reject-selector <sel>
+                             the Reject button, same syntax, e.g. "#settings >>
+                             #reject-all"
+      --geo <cc>             look like a visitor from this country, e.g. de:
+                             language and time zone, never the IP address
+      --locale <tag>         browser locale and Accept-Language, e.g. de-DE
+                             (default the machine's)
+      --timezone <tz>        IANA time zone, e.g. Europe/Berlin (default the
+                             machine's)
+      --viewport <v>         desktop (default, 1366x900) or mobile (390x844,
+                             touch)
+      --map-host <host=addr> answer host (or *.example.test) from addr instead
+                             of the network, e.g. *.shop.test=127.0.0.1:18950
+                             (repeatable)
+      --map-only             refuse every host --map-host doesn't cover
+  -H, --header <h>           extra header for same-site requests, "Name: value";
+                             the value may be @file or env:NAME (repeatable)
+      --cookie <c>           a cookie for the site, name=value; the value may be
+                             @file or env:NAME (repeatable)
+  -A, --user-agent <ua>      the User-Agent (default the browser's own, without
+                             Headless, plus rhythm-echo-consent/<version>)
+      --proxy <url>          send the browser's traffic on through this proxy,
+                             e.g. one in the EU
+  -k, --insecure             don't verify TLS; only for loopback or private
+                             sites
+      --insecure-public      with -k, allow it for a public site too
+      --follow-host          keep going when the start page redirects to another
+                             host
+      --browser <path>       the Chrome or Chromium to use
+      --no-download          never download Chrome for Testing
+      --no-sandbox           run Chrome without its sandbox (needed as root;
+                             also RHYTHM_ECHO_NO_SANDBOX=1); only for sites you
+                             trust
+      --show-browser         show the browser window (one run at a time)
+      --json                 write JSON to stdout
+  -q, --quiet                only the verdict and what failed
+      --plain                no color or glyphs (screen readers, logs)
+      --no-color             no color
+      --config <file>        settings (default the nearest .echo/config.yaml;
+                             optional)
+      --store <dir>          where results are kept (default the config's
+                             folder, else ./.echo)
+
+Exit codes: 0 a banner and both buttons found, 1 a banner but a button missing,
+2 usage error, 3 no banner or couldn't run, 130 interrupted.
+rhythm echo consent --help lists the consent check's flags.
+rhythm echo help lists every command.
