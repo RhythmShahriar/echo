@@ -216,9 +216,13 @@ func TestEvalResultCap(t *testing.T) {
 	if raw, err := tab.EvalMain(t.Context(), "1 + 1 // a trailing comment"); err != nil || string(raw) != "2" {
 		t.Errorf("trailing comment: %s %v", raw, err)
 	}
-	// A page that replaces JSON.stringify can't pass off a non-string.
-	if _, err := tab.EvalMain(t.Context(), `(JSON.stringify = () => 5, 1)`); err == nil {
-		t.Error("a patched JSON.stringify was trusted")
+	// A page that replaces JSON.stringify can skip the measuring but
+	// can't change the answer or slip a large one past Echo.
+	if raw, err := tab.EvalMain(t.Context(), `(JSON.stringify = () => '"forged"', 1)`); err != nil || string(raw) != "1" {
+		t.Errorf("patched JSON.stringify: %s %v", raw, err)
+	}
+	if _, err := tab.EvalMain(t.Context(), `"x".repeat(300 * 1024)`); !errors.Is(err, errResultTooLarge) {
+		t.Errorf("patched JSON.stringify, 300 KiB: %v", err)
 	}
 }
 

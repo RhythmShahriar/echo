@@ -146,15 +146,24 @@ func cappedJS(expr string) string {
 		"return __s === undefined ? \"null\" : __s;\n})()"
 }
 
-// cappedResult is the JSON a cappedJS script returned. The Go side
-// checks the size and the JSON again: in the main world the page can
-// replace JSON.stringify.
+// mainJS wraps a main-world expression so the page measures its JSON
+// and refuses one larger than maxEvalResult before it is sent. Unlike
+// cappedJS it returns the value itself for CDP to serialize: the page
+// can replace JSON.stringify in its own world, so that answer could be
+// forged, while a patched one can only skip the measuring (Echo checks
+// the size again).
+func mainJS(expr string) string {
+	return "(async () => {\nconst __r = await (\n" + expr + "\n);\n" +
+		"let __n = 0;\ntry { const __s = JSON.stringify(__r === undefined ? null : __r); __n = typeof __s === \"string\" ? __s.length : 0; } catch (e) {}\n" +
+		"if (__n > " + fmt.Sprint(maxEvalResult) + ") throw new Error(\"result too large\");\n" +
+		"return __r;\n})()"
+}
+
+// cappedResult is the JSON string a cappedJS script returned, checked
+// again for size and syntax.
 func cappedResult(res *proto.RuntimeEvaluateResult) (json.RawMessage, error) {
 	if res.Result == nil {
 		return json.RawMessage("null"), nil
-	}
-	if res.Result.Type != proto.RuntimeRemoteObjectTypeString {
-		return nil, errors.New("script returned something that isn't JSON")
 	}
 	str := res.Result.Value.Str()
 	if len(str) > maxEvalResult {

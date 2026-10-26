@@ -38,12 +38,16 @@ func TestIsolatedJS(t *testing.T) {
 	}
 }
 
-// cappedJS awaits the expression and measures its JSON in the page; a
-// trailing line comment can't swallow the rest of the wrapper.
+// cappedJS and mainJS await the expression and measure its JSON in the
+// page; a trailing line comment can't swallow the rest of the wrapper.
 func TestCappedJS(t *testing.T) {
 	js := cappedJS("1 + 1 // note")
 	if !strings.Contains(js, "await (\n1 + 1 // note\n);") || !strings.Contains(js, "__s.length > 262144") {
 		t.Errorf("%s", js)
+	}
+	main := mainJS("1 + 1 // note")
+	if !strings.Contains(main, "await (\n1 + 1 // note\n);") || !strings.Contains(main, "__n > 262144") || !strings.Contains(main, "return __r;") {
+		t.Errorf("%s", main)
 	}
 }
 
