@@ -161,9 +161,11 @@ func (c *cmd) runCheck(ctx context.Context, pos []string) int {
 			break
 		}
 		if err != nil {
-			if len(results) == 0 {
-				_ = os.RemoveAll(dir) //nolint:gosec // the empty folder this check made
-			}
+			// A fatal error stops the whole check before consent.json
+			// is written, so the folder (with what earlier --sites
+			// sites left in it) would be a result without a result
+			// file: verify and report would only trip over it.
+			_ = os.RemoveAll(dir) //nolint:gosec // the folder this check made
 			var fe *consent.FatalError
 			if errors.As(err, &fe) {
 				fmt.Fprintln(env.Stderr, "rhythm echo:", fatalMessage(fe))

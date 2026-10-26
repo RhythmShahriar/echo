@@ -318,6 +318,9 @@ func TestTipsOnce(t *testing.T) {
 // TestFatalMessages pins every message a stopped check prints (PRD
 // 10.2 messages 9 to 16): exit 3 and no result folder left behind.
 func TestFatalMessages(t *testing.T) {
+	// CI keeps the first-run notice out, which would otherwise lead the
+	// first message when this test runs on its own.
+	t.Setenv("CI", "true")
 	cases := []*consent.FatalError{
 		{Code: consent.FatalNoBrowser},
 		{Code: consent.FatalSandboxRoot},
@@ -671,5 +674,50 @@ func TestOpenAndUpdate(t *testing.T) {
 	}
 	if updated {
 		t.Error("the update check ran for a buffer, not a terminal")
+	}
+}
+
+// secondFails finishes the first plan as filesRunner does and stops
+// the check on the next one with Err.
+type secondFails struct {
+	filesRunner
+	calls int
+	err   error
+}
+
+func (s *secondFails) Run(ctx context.Context, p *consent.Plan) (*consent.Result, error) {
+	if s.calls++; s.calls > 1 {
+		return nil, s.err
+	}
+	return s.filesRunner.Run(ctx, p)
+}
+
+// A check that stops on a fatal error after an earlier --sites site
+// finished leaves no result folder behind: there is no consent.json
+// for it, so report and verify would only trip over it. A single site
+// that finishes keeps its folder.
+func TestFatalAfterFirstSite(t *testing.T) {
+	inDir(t, "")
+	putFile(t, "sites.yaml", "sites:\n  - {name: a, url: https://a.test}\n  - {name: b, url: https://b.test}\n")
+	s := consenttest.Fakes()
+	runner := &secondFails{filesRunner: filesRunner{consenttest.FakeRunner{Result: consenttest.GoldenResult("clean")}},
+		err: &consent.FatalError{Code: consent.FatalNoBrowser}}
+	s.Runner = runner
+	consenttest.Use(t, s)
+	fakeWriters(t)
+	if code, _, errOut := runMain(t, "--sites", "sites.yaml"); code != exitUnavailable || errOut == "" {
+		t.Errorf("exit %d %q", code, errOut)
+	}
+	if entries, _ := os.ReadDir(filepath.Join(".echo", "consent")); len(entries) != 0 {
+		t.Errorf("left %d folders", len(entries))
+	}
+	// One site, no error: the folder stays with its consent.json.
+	runner.calls = 0
+	putFile(t, "one.yaml", "sites:\n  - {name: a, url: https://a.test}\n")
+	if code, _, errOut := runMain(t, "--sites", "one.yaml"); code != exitOK {
+		t.Fatalf("one site: exit %d %s", code, errOut)
+	}
+	if _, err := os.Stat(filepath.Join(resultDir(t), "consent.json")); err != nil {
+		t.Error(err)
 	}
 }
