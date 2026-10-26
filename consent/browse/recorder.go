@@ -134,6 +134,10 @@ type recorder struct {
 	choiceWait bool
 	nRequests  int
 	limitHit   bool
+	hookN      int // hook records read
+	hookBytes  int
+
+	clicks chan int64 // pointerdown times from hooks.js, newest last
 
 	limit    chan struct{} // closed when Limits.Requests is reached
 	counts   struct{ requests, held, refused, internal atomic.Int64 }
@@ -162,7 +166,7 @@ func newRecorder(ctx context.Context, h *hub, p *consent.Plan, site *url.URL, ki
 		mapper: newMapper(p.MapHosts), ctx: ctx,
 		ready: make(chan struct{}), inbox: make(chan *rod.Message, 16384), stop: make(chan struct{}), loopD: make(chan struct{}),
 		sem: make(chan struct{}, maxHandlers), targets: map[proto.TargetSessionID]*target{}, frames: map[proto.PageFrameID]string{},
-		reqs: map[proto.NetworkRequestID]*pending{}, limit: make(chan struct{}),
+		reqs: map[proto.NetworkRequestID]*pending{}, limit: make(chan struct{}), clicks: make(chan int64, 16),
 		events: make(chan consent.Event, ch), wake: make(chan struct{}, 1), writerD: make(chan struct{})}
 	if p.Live != nil {
 		live := p.Live
@@ -189,6 +193,15 @@ func (r *recorder) limits() consent.Limits {
 	}
 	if l.BodyBytes <= 0 {
 		l.BodyBytes = d.BodyBytes
+	}
+	if l.HookRecords <= 0 {
+		l.HookRecords = d.HookRecords
+	}
+	if l.HookBytes <= 0 {
+		l.HookBytes = d.HookBytes
+	}
+	if l.Screenshots <= 0 {
+		l.Screenshots = d.Screenshots
 	}
 	return l
 }
@@ -324,6 +337,9 @@ func (r *recorder) setup(t *target) error {
 		if err := (proto.PageEnable{}).Call(t.s); err != nil {
 			return err
 		}
+		if err := r.installHooks(t); err != nil {
+			return err
+		}
 	}
 	// A worker may refuse auto-attach; its own children are then only
 	// seen through the page.
@@ -437,6 +453,11 @@ func (r *recorder) handle(msg *rod.Message) {
 		if msg.Load(&e) {
 			r.emit(consent.Event{Kind: consent.EvDialog, AtMS: r.now(), Note: consent.SafeText(e.Message, 200)})
 			go func() { _ = proto.PageHandleJavaScriptDialog{Accept: false}.Call(t.s) }()
+		}
+	case "Runtime.bindingCalled":
+		var e proto.RuntimeBindingCalled
+		if msg.Load(&e) && e.Name == bindingName {
+			r.hook(e.Payload)
 		}
 	case "Page.fileChooserOpened":
 		var e proto.PageFileChooserOpened
