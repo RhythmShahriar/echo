@@ -411,3 +411,57 @@ func TestPruneSkipsHiddenEntries(t *testing.T) {
 		t.Error("Prune removed an unpack in progress")
 	}
 }
+
+// TestBrowserNeverDownloadsUnpinned: the download path only fetches a
+// version and archive cft_pins.go names, checks the archive against its
+// pinned hash and never falls back to rod's own download of the latest
+// Chromium.
+func TestBrowserNeverDownloadsUnpinned(t *testing.T) {
+	good := fakeArchive(t, "linux64", nil)
+	hits := serve(t, "153.0.1.2", "linux64", good)
+	// No pin for this platform: nothing is fetched.
+	rel := Release{Version: "153.0.1.2", Archives: map[string]Archive{"mac-arm64": {SHA256: sum(good), Size: int64(len(good))}}}
+	if _, err := install(t.Context(), rel, "linux64", t.TempDir(), nil); err == nil || !strings.Contains(err.Error(), "no pinned Chrome for Testing") {
+		t.Errorf("unpinned platform: %v", err)
+	}
+	// A pin whose hash isn't the archive's: fetched, refused, nothing kept.
+	rel = Release{Version: "153.0.1.2", Archives: map[string]Archive{"linux64": {SHA256: strings.Repeat("0", 64), Size: int64(len(good))}}}
+	dir := t.TempDir()
+	if _, err := install(t.Context(), rel, "linux64", dir, nil); err == nil {
+		t.Error("installed an archive whose hash isn't pinned")
+	}
+	if entries, _ := os.ReadDir(dir); len(entries) != 0 {
+		t.Errorf("left %d entries behind", len(entries))
+	}
+	if *hits != 1 {
+		t.Errorf("%d downloads; want only the one with a pin for this platform", *hits)
+	}
+	// Find marks each failure as no browser, so the check says what to do.
+	oldPin, oldLook := pinned, lookPath
+	t.Cleanup(func() { pinned, lookPath = oldPin, oldLook })
+	cache := t.TempDir()
+	t.Setenv("XDG_CACHE_HOME", cache)
+	t.Setenv("HOME", cache)
+	t.Setenv("LocalAppData", cache)
+	pinned = Release{}
+	lookPath = func() (string, bool) { return "", false }
+	if _, _, err := Find(Options{}); !errors.Is(err, ErrNoBrowser) {
+		t.Errorf("no pins: %v", err)
+	}
+	// rod's launcher downloads a browser when it is given none; every
+	// start here names the binary Find chose.
+	for _, f := range []string{"browser.go", "process_linux.go", "process_darwin.go", "process_windows.go", "process_other.go"} {
+		src, err := os.ReadFile(f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, bad := range []string{"NewBrowser(", "MustLaunch(", "launcher.New().Launch("} {
+			if strings.Contains(string(src), bad) {
+				t.Errorf("%s calls %s, which may download a browser", f, bad)
+			}
+		}
+		if strings.Contains(string(src), ".Launch()") && !strings.Contains(string(src), "l.Bin(bin)") {
+			t.Errorf("%s launches without naming the binary", f)
+		}
+	}
+}
