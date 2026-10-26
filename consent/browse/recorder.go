@@ -4,6 +4,7 @@
 package browse
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -753,13 +754,10 @@ func (r *recorder) paused(t *target, e *proto.FetchRequestPaused) {
 		Worker: worker,
 	}
 	body, partial := r.body(ans, e)
-	window := body
-	if lim := r.limits().BodyBytes; len(window) > lim {
-		window, partial = window[:lim], true
-	}
-	if len(body) > 0 {
-		sum := sha256.Sum256(body)
-		req.BodyBytes, req.BodySHA256 = len(body), hex.EncodeToString(sum[:])
+	window := body.window(r.limits().BodyBytes)
+	if n := body.size(); n > 0 {
+		req.BodyBytes, req.BodySHA256 = n, body.sum()
+		partial = partial || len(window) < n
 	}
 	req.BodyPartial = partial
 	r.counts.requests.Add(1)
@@ -776,7 +774,7 @@ func (r *recorder) paused(t *target, e *proto.FetchRequestPaused) {
 		r.fulfillHeld(ans, e, req)
 	case mapped:
 		req.Mapped = true
-		req.Status, mappedCookies = r.fetchMapped(ans, e, u, body, mapAddr)
+		req.Status, mappedCookies = r.fetchMapped(ans, e, u, body.bytes(), mapAddr)
 	case r.plan.MapOnly:
 		req.Refused = egress.ReasonNotMapped
 		r.counts.refused.Add(1)
@@ -844,17 +842,17 @@ func (r *recorder) markFrameless(id proto.NetworkRequestID) {
 // body reads a request's body: Fetch's postData or its entries, else
 // Network.getRequestPostData when Chrome left a body out. partial is set
 // when the body exists but couldn't be read.
-func (r *recorder) body(s cdp, e *proto.FetchRequestPaused) ([]byte, bool) {
+func (r *recorder) body(s cdp, e *proto.FetchRequestPaused) (reqBody, bool) {
 	req := e.Request
 	if len(req.PostDataEntries) > 0 {
-		var b []byte
+		parts := make(reqBody, 0, len(req.PostDataEntries))
 		for _, en := range req.PostDataEntries {
-			b = append(b, en.Bytes...)
+			parts = append(parts, en.Bytes)
 		}
-		return b, false
+		return parts, false
 	}
 	if req.PostData != "" {
-		return []byte(req.PostData), false
+		return reqBody{[]byte(req.PostData)}, false
 	}
 	if !req.HasPostData {
 		return nil, false
@@ -866,7 +864,55 @@ func (r *recorder) body(s cdp, e *proto.FetchRequestPaused) ([]byte, bool) {
 	if err != nil || res == nil {
 		return nil, true
 	}
-	return []byte(res.PostData), false
+	return reqBody{[]byte(res.PostData)}, false
+}
+
+// reqBody is a request body as Fetch's entries hold it. It is kept in
+// parts so a large upload is hashed and windowed without a second whole
+// copy; only a mapped request, which must send it on, joins it.
+type reqBody [][]byte
+
+// size is the body's length in bytes.
+func (b reqBody) size() int {
+	n := 0
+	for _, p := range b {
+		n += len(p)
+	}
+	return n
+}
+
+// sum is the hex SHA-256 of the whole body, hashed part by part.
+func (b reqBody) sum() string {
+	h := sha256.New()
+	for _, p := range b {
+		_, _ = h.Write(p)
+	}
+	return hex.EncodeToString(h.Sum(nil))
+}
+
+// window is the body's first lim bytes, what classification reads. A
+// body of one part is sliced, never copied.
+func (b reqBody) window(lim int) []byte {
+	lim = max(lim, 0)
+	if len(b) == 1 {
+		return b[0][:min(len(b[0]), lim)]
+	}
+	var out []byte
+	for _, p := range b {
+		if len(out) >= lim {
+			break
+		}
+		out = append(out, p[:min(len(p), lim-len(out))]...)
+	}
+	return out
+}
+
+// bytes joins the whole body.
+func (b reqBody) bytes() []byte {
+	if len(b) == 1 {
+		return b[0]
+	}
+	return bytes.Join(b, nil)
 }
 
 // fulfillHeld answers a held hit in the browser: 204 with no body, or
