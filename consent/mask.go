@@ -59,8 +59,8 @@ const maxNesting = 3
 // A login in the URL (user:pass@) is masked whole. Text that isn't a URL
 // is masked as text.
 //
-// Text over 64 KiB is cut first, at the last '&', '/' or space before
-// the limit when there is one, and ends in "…". Masking is linear but
+// Text over 64 KiB is cut first (at the last '&', '/' or space before
+// the limit when there is one) and ends in "…". Masking is linear but
 // slow enough on hostile megabytes to matter; no URL a check keeps is
 // that long (the recorder cuts at 8 KiB).
 func MaskURL(raw string, showIDs bool) string {

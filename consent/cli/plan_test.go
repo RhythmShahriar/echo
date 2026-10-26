@@ -349,7 +349,7 @@ func TestSitesFile(t *testing.T) {
 		t.Errorf("brew: %+v", brew)
 	}
 	// Neighboring sites that would run the same way share one plan;
-	// a site with its own args, and anything after it, doesn't join.
+	// neither a site with its own args nor anything after it joins.
 	putFile(t, "join.yaml", `
 - {name: a, url: a.test}
 - {name: b, url: b.test, consent: {urls: [/, /shop/]}}
