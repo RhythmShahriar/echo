@@ -902,3 +902,65 @@ func TestDetectScreenshot(t *testing.T) {
 		t.Error("detect result isn't JSON")
 	}
 }
+
+// TestRunFilesNDJSONAndHAR: each run streams its events to its NDJSON
+// file, one line per event in memory; with --har it writes a HAR of
+// every request with no login, cookie value, token or body in it.
+func TestRunFilesNDJSONAndHAR(t *testing.T) {
+	token := fakeToken()
+	st := shopSite(t, `<script>document.cookie = "sid=`+token+`; path=/";
+fetch("/api?debug=1", {method: "POST", headers: {"X-Api-Key": "`+token+`"}, body: "secret-body-`+token+`"});</script>`)
+	st.page("shop.test/api", `{"ok":true}`, "Set-Cookie", "srv="+token+"; Path=/")
+	p := shopPlan(t, st, consent.RunNone, consent.RunReject)
+	p.HAR = true
+	p.Headers = map[string]string{"Authorization": "Bearer " + token}
+	res, err := runCheck(t, p, &pageCMP{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, r := range res.Pages[0].Runs {
+		if r.EventsFile != "events/page-1-"+string(r.Kind)+".ndjson" || r.HARFile != "har/page-1-"+string(r.Kind)+".har" {
+			t.Fatalf("%s: files %q %q", r.Kind, r.EventsFile, r.HARFile)
+		}
+		lines := readNDJSON(t, filepath.Join(p.Dir, r.EventsFile))
+		if len(lines) != len(r.Events) || len(lines) == 0 {
+			t.Errorf("%s: %d lines for %d events", r.Kind, len(lines), len(r.Events))
+		}
+		for i := range lines {
+			if lines[i].Seq != r.Events[i].Seq || lines[i].Phase != r.Events[i].Phase || lines[i].Kind != r.Events[i].Kind {
+				t.Errorf("%s: line %d is %+v; the run has %+v", r.Kind, i, lines[i], r.Events[i])
+				break
+			}
+		}
+		b, err := os.ReadFile(filepath.Join(p.Dir, r.HARFile))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var har harFile
+		if err := json.Unmarshal(b, &har); err != nil {
+			t.Fatal(err)
+		}
+		requests := 0
+		for _, e := range r.Events {
+			if e.Kind == consent.EvRequest {
+				requests++
+			}
+		}
+		if len(har.Log.Entries) != requests || har.Log.Creator.Name != "rhythm-echo" {
+			t.Errorf("%s: %d HAR entries for %d requests", r.Kind, len(har.Log.Entries), requests)
+		}
+		if strings.Contains(string(b), token) || strings.Contains(string(b), "secret-body") {
+			t.Errorf("%s: the HAR holds the token or a body", r.Kind)
+		}
+		var api *harEntry
+		for i := range har.Log.Entries {
+			if strings.Contains(har.Log.Entries[i].Request.URL, "/api") {
+				api = &har.Log.Entries[i]
+			}
+		}
+		if api == nil || api.Request.Method != "POST" || api.Response.Status != 200 || len(api.Request.Headers) == 0 ||
+			!slices.ContainsFunc(api.Response.Headers, func(h harPair) bool { return strings.EqualFold(h.Name, "set-cookie") && h.Value == "srv" }) {
+			t.Errorf("%s: api entry %+v", r.Kind, api)
+		}
+	}
+}

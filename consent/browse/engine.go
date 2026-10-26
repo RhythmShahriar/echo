@@ -156,17 +156,35 @@ type Recording struct {
 	Held      int  // hits answered in the browser
 	Refused   int  // requests refused before they left (--map-only)
 	Internal  int  // requests without a page frame: browser traffic
+	// Start is the wall time of the run's first navigation, where the
+	// run clock (AtMS) starts.
+	Start time.Time
+
+	har map[*consent.Request]*harExtra // with --har
 }
 
 // Open opens a run of kind for target. wait bounds how long Chrome may
 // take to open and set up the tab.
 func (e *Engine) Open(ctx context.Context, t consent.Target, kind consent.RunKind, wait time.Duration) (*Run, error) {
+	return e.open(ctx, t, kind, wait, runExtras{})
+}
+
+// runExtras are what a check adds to a run beyond the plan: where its
+// events stream and the X-Echo-Run value its same-site requests carry.
+type runExtras struct {
+	sinks   []func(consent.Event)
+	echoRun string
+}
+
+// open is Open with the check's extras.
+func (e *Engine) open(ctx context.Context, t consent.Target, kind consent.RunKind, wait time.Duration, x runExtras) (*Run, error) {
 	g, err := e.guard(t)
 	if err != nil {
 		return nil, err
 	}
 	env := newEmulation(e.plan, kind, e.ua, e.b.Version)
-	s, err := e.h.openSession(ctx, sessionOptions{Plan: e.plan, Target: t, Kind: kind, Guard: g, Env: env, Timeout: wait})
+	s, err := e.h.openSession(ctx, sessionOptions{Plan: e.plan, Target: t, Kind: kind, Guard: g, Env: env, Timeout: wait,
+		Sinks: x.sinks, EchoRun: x.echoRun})
 	if err != nil {
 		return nil, err
 	}

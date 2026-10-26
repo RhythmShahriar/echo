@@ -74,7 +74,13 @@ func (Runner) Run(ctx context.Context, p *consent.Plan) (*consent.Result, error)
 	if err := ctx.Err(); err != nil {
 		return res, err
 	}
-	return res, pageErr
+	if pageErr != nil {
+		return res, pageErr
+	}
+	if c.writeErr != nil {
+		return res, c.writeErr
+	}
+	return res, nil
 }
 
 // check is one consent command's state shared by its runs.
@@ -87,6 +93,17 @@ type check struct {
 	notes    []string
 	requests int
 	held     int
+	writeErr *consent.FatalError // the first evidence file that couldn't be written
+}
+
+// failedWrite keeps the first evidence file error: the check goes on,
+// then ends with it, as its evidence is incomplete.
+func (c *check) failedWrite(rel string, err error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.writeErr == nil {
+		c.writeErr = &consent.FatalError{Code: consent.FatalWrite, URL: rel, Detail: consent.MaskURL(err.Error(), false), Err: err}
+	}
 }
 
 func newCheck(e *Engine, p *consent.Plan, stages consent.Stages) *check {
@@ -225,8 +242,21 @@ func (c *check) attempt(ctx context.Context, page, k int) slot {
 	defer stop()
 
 	a := &attempt{c: c, e: c.e, plan: p, target: t, page: page + 1, kind: kind, out: &out}
-	run, err := c.e.Open(actx, t, kind, openWait)
+	var x runExtras
+	var events *eventFile
+	if p.Dir != "" {
+		var err error
+		if events, err = openEventFile(p.Dir, page+1, kind); err != nil {
+			c.failedWrite(eventsPath(page+1, kind), err)
+		} else {
+			x.sinks = append(x.sinks, events.write)
+		}
+	}
+	run, err := c.e.open(actx, t, kind, openWait, x)
 	if err != nil {
+		if events != nil {
+			c.saveEvents(&out, events, nil)
+		}
 		a.ended(ctx, actx, err)
 		out.DurationMS = time.Since(started).Milliseconds()
 		return slot{run: out, done: true}
@@ -243,6 +273,16 @@ func (c *check) attempt(ctx context.Context, page, k int) slot {
 	rec := run.Close()
 	c.count(rec)
 	fill(&out, rec)
+	if events != nil {
+		c.saveEvents(&out, events, rec.Events)
+	}
+	if p.HAR && p.Dir != "" {
+		if rel, err := writeHAR(p.Dir, page+1, kind, rec, p.Version, p.ShowIDs); err != nil {
+			c.failedWrite(harPath(page+1, kind), err)
+		} else {
+			out.HARFile = rel
+		}
+	}
 	if fatal == nil {
 		a.ended(ctx, actx, err)
 	}
@@ -256,6 +296,15 @@ func (c *check) attempt(ctx context.Context, page, k int) slot {
 	}
 	out.DurationMS = time.Since(started).Milliseconds()
 	return slot{run: out, info: a.info, fatal: fatal, done: true}
+}
+
+// saveEvents closes a run's events file and names it in the run.
+func (c *check) saveEvents(out *consent.Run, f *eventFile, final []consent.Event) {
+	if err := f.close(final); err != nil {
+		c.failedWrite(f.rel, err)
+		return
+	}
+	out.EventsFile = f.rel
 }
 
 // newRun is an empty run of kind, its lists empty rather than null.

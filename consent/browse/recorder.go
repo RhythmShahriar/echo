@@ -76,6 +76,7 @@ type pending struct {
 	workerOrigin string
 	frameless    bool // no frame and no worker: browser traffic
 	recorded     bool
+	har          *harExtra // with --har
 }
 
 // heldGIF is a transparent 1x1 GIF, 43 bytes: what a held image request
@@ -145,6 +146,7 @@ type recorder struct {
 	blocked      map[string]bool                                       // blocked cookies already recorded
 	cookies      map[string]uint64                                     // last snapshot's cookies (fingerprints, never values)
 	storage      map[string]int                                        // last snapshot's storage keys and value lengths
+	har          map[*consent.Request]*harExtra                        // with --har: each recorded request's HAR data
 	lastSnapshot int64
 
 	activity atomic.Int64 // unix ns of the last request that started or ended, for settle
@@ -172,6 +174,7 @@ type recorder struct {
 	seq      int64
 	out      []consent.Event
 	sinks    []func(consent.Event)
+	echoRun  string // X-Echo-Run for same-site requests (--echo)
 	finished bool
 }
 
@@ -190,6 +193,7 @@ func newRecorder(ctx context.Context, h *hub, p *consent.Plan, site *url.URL, ki
 		reqs: map[proto.NetworkRequestID]*pending{}, limit: make(chan struct{}), clicks: make(chan int64, 16),
 		worlds: map[proto.PageFrameID]proto.RuntimeExecutionContextID{}, hosts: map[proto.NetworkRequestID]string{},
 		setCookies: map[string]setCookieNote{}, blocked: map[string]bool{}, cookies: map[string]uint64{}, storage: map[string]int{},
+		har:    map[*consent.Request]*harExtra{},
 		events: make(chan consent.Event, ch), wake: make(chan struct{}, 1), writerD: make(chan struct{})}
 	r.halt, r.haltStop = context.WithCancel(context.WithoutCancel(ctx))
 	if p.Live != nil {
@@ -445,6 +449,7 @@ func (r *recorder) handle(msg *rod.Message) {
 		var e proto.NetworkResponseReceived
 		if msg.Load(&e) && e.Response != nil {
 			r.docResponse(e.RequestID, e.Response)
+			r.harResponse(e.RequestID, e.Response)
 			r.completed(e.RequestID, e.Response.Status, header(e.Response.Headers, "X-Rhythm-Echo-Refused"))
 		}
 	case "Network.responseReceivedExtraInfo":
@@ -465,6 +470,7 @@ func (r *recorder) handle(msg *rod.Message) {
 	case "Network.loadingFinished":
 		var e proto.NetworkLoadingFinished
 		if msg.Load(&e) {
+			r.harFinished(&e)
 			r.completed(e.RequestID, -1, "")
 		}
 	case "Page.frameNavigated":
@@ -548,6 +554,7 @@ func (r *recorder) willBeSent(t *target, e *proto.NetworkRequestWillBeSent) {
 	if e.RedirectResponse != nil && p != nil && p.paused {
 		// The same id carries the next hop: record this one as it ended.
 		p.req.Status = e.RedirectResponse.Status
+		p.har.fillResponse(e.RedirectResponse)
 		r.recordLocked(p)
 		delete(r.reqs, e.RequestID)
 		p = nil
@@ -643,6 +650,7 @@ func (r *recorder) recordLocked(p *pending) {
 		return // browser traffic: counted, never classified or recorded
 	}
 	r.fillLocked(p)
+	r.noteHarLocked(p)
 	r.emit(consent.Event{Kind: consent.EvRequest, AtMS: r.requestAtLocked(p), Request: p.req, Hit: p.hit})
 }
 
@@ -751,6 +759,7 @@ func (r *recorder) paused(t *target, e *proto.FetchRequestPaused) {
 	mapped, mapAddr := r.mapper.lookup(req.Host)
 
 	answered := true
+	var mappedCookies []string
 	switch {
 	case hold:
 		req.Held = true
@@ -758,7 +767,7 @@ func (r *recorder) paused(t *target, e *proto.FetchRequestPaused) {
 		r.fulfillHeld(ans, e, req)
 	case mapped:
 		req.Mapped = true
-		req.Status = r.fetchMapped(ans, e, u, body, mapAddr)
+		req.Status, mappedCookies = r.fetchMapped(ans, e, u, body, mapAddr)
 	case r.plan.MapOnly:
 		req.Refused = egress.ReasonNotMapped
 		r.counts.refused.Add(1)
@@ -771,7 +780,7 @@ func (r *recorder) paused(t *target, e *proto.FetchRequestPaused) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if e.NetworkID == "" {
-		p := &pending{req: req, hit: hit, paused: true, answered: true, pausedAt: pausedAt}
+		p := &pending{req: req, hit: hit, paused: true, answered: true, pausedAt: pausedAt, har: r.newHarExtra(e, mappedCookies)}
 		r.recordLocked(p)
 		return
 	}
@@ -784,6 +793,7 @@ func (r *recorder) paused(t *target, e *proto.FetchRequestPaused) {
 		r.reqs[e.NetworkID] = p
 	}
 	p.req, p.hit, p.paused, p.answered, p.pausedAt = req, hit, true, answered, pausedAt
+	p.har = r.newHarExtra(e, mappedCookies)
 	p.worker = p.worker || worker
 	if p.will {
 		r.finishPendingLocked(p)
@@ -1126,6 +1136,19 @@ func (r *recorder) atWallLocked(wall float64) int64 {
 	return int64(math.Floor((wall - base) * 1000))
 }
 
+// startLocked is the wall time the run clock starts at: the first
+// navigation, else when the run asked for it; zero before either.
+func (r *recorder) startLocked() time.Time {
+	base := r.base
+	if base == 0 {
+		base = r.fallback
+	}
+	if base == 0 {
+		return time.Time{}
+	}
+	return time.UnixMicro(int64(math.Round(base * 1e6)))
+}
+
 // atPage is a page time (performance.timeOrigin + performance.now(),
 // ms) on the run clock.
 func (r *recorder) atPage(ms float64) int64 {
@@ -1201,6 +1224,7 @@ func (r *recorder) recordLockedFinal(p *pending) {
 	}
 	p.recorded = true
 	r.fillLocked(p)
+	r.noteHarLocked(p)
 	select {
 	case r.events <- consent.Event{Kind: consent.EvRequest, AtMS: r.requestAtLocked(p), Request: p.req, Hit: p.hit}:
 	default:
@@ -1214,7 +1238,7 @@ func (r *recorder) result() *Recording {
 	defer r.mu.Unlock()
 	return &Recording{Events: r.out, Dropped: int(r.dropped.Load()), Truncated: r.trunc.Load(), Limit: r.limitHit,
 		Requests: int(r.counts.requests.Load()), Held: int(r.counts.held.Load()), Refused: int(r.counts.refused.Load()),
-		Internal: int(r.counts.internal.Load())}
+		Internal: int(r.counts.internal.Load()), Start: r.startLocked(), har: r.har}
 }
 
 // signals returns the consent signals recorded so far, in order.

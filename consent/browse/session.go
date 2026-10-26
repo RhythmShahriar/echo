@@ -234,6 +234,8 @@ type sessionOptions struct {
 	Guard   *egress.Proxy
 	Env     *emulation
 	Timeout time.Duration // how long Chrome may take to open the tab
+	Sinks   []func(consent.Event)
+	EchoRun string // X-Echo-Run for same-site requests (--echo)
 }
 
 // openSession opens a fresh incognito context whose traffic goes
@@ -246,6 +248,10 @@ func (h *hub) openSession(ctx context.Context, o sessionOptions) (*session, erro
 		return nil, fmt.Errorf("consent: opening a browser context: %w", err)
 	}
 	rec := newRecorder(ctx, h, o.Plan, o.Target.URL, o.Kind, bctx.BrowserContextID, o.Env, o.Guard)
+	// Set before the context is routed to the recorder, so no event or
+	// request can come first.
+	rec.sinks = append(rec.sinks, o.Sinks...)
+	rec.echoRun = o.EchoRun
 	h.register(bctx.BrowserContextID, rec)
 	s := &session{h: h, ctx: bctx, rec: rec}
 	fail := func(err error) (*session, error) {

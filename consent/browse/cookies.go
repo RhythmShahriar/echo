@@ -176,7 +176,9 @@ func (r *recorder) extraInfo(e *proto.NetworkResponseReceivedExtraInfo) {
 		r.blockedCookie(b, host, at)
 	}
 	var lines []string
-	for _, line := range setCookieLines(e.Headers) {
+	all := setCookieLines(e.Headers)
+	r.harSetCookies(e.RequestID, all)
+	for _, line := range all {
 		if !blocked[line] {
 			lines = append(lines, line)
 		}

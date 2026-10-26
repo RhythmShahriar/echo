@@ -111,8 +111,8 @@ var hopHeaders = []string{"Connection", "Keep-Alive", "Proxy-Connection", "Trans
 // method, path, query, headers and body (Host stays the original) and
 // answers Chrome with what came back, Set-Cookie included, so cookies
 // land as they would from the real host. It returns the status, 0 when
-// the mapped server couldn't be reached.
-func (r *recorder) fetchMapped(s cdp, e *proto.FetchRequestPaused, u *url.URL, body []byte, base *url.URL) int {
+// the mapped server couldn't be reached, with the Set-Cookie lines.
+func (r *recorder) fetchMapped(s cdp, e *proto.FetchRequestPaused, u *url.URL, body []byte, base *url.URL) (int, []string) {
 	target := strings.TrimSuffix(base.String(), "/") + u.EscapedPath()
 	if u.RawQuery != "" {
 		target += "?" + u.RawQuery
@@ -122,7 +122,7 @@ func (r *recorder) fetchMapped(s cdp, e *proto.FetchRequestPaused, u *url.URL, b
 	req, err := http.NewRequestWithContext(ctx, e.Request.Method, target, bytes.NewReader(body))
 	if err != nil {
 		_ = proto.FetchFailRequest{RequestID: e.RequestID, ErrorReason: proto.NetworkErrorReasonFailed}.Call(s)
-		return 0
+		return 0, nil
 	}
 	for name, v := range e.Request.Headers {
 		if strings.EqualFold(name, "Host") || slices.ContainsFunc(hopHeaders, func(h string) bool { return strings.EqualFold(h, name) }) {
@@ -137,18 +137,19 @@ func (r *recorder) fetchMapped(s cdp, e *proto.FetchRequestPaused, u *url.URL, b
 	resp, err := r.mapper.client.Do(req)
 	if err != nil {
 		_ = proto.FetchFailRequest{RequestID: e.RequestID, ErrorReason: proto.NetworkErrorReasonConnectionRefused}.Call(s)
-		return 0
+		return 0, nil
 	}
 	defer func() { _ = resp.Body.Close() }()
 	data, err := io.ReadAll(io.LimitReader(resp.Body, maxMapped+1))
 	if err != nil && !errors.Is(err, io.EOF) {
 		_ = proto.FetchFailRequest{RequestID: e.RequestID, ErrorReason: proto.NetworkErrorReasonFailed}.Call(s)
-		return 0
+		return 0, nil
 	}
 	if len(data) > maxMapped {
 		data = data[:maxMapped]
 	}
-	if lines := resp.Header.Values("Set-Cookie"); len(lines) > 0 {
+	lines := resp.Header.Values("Set-Cookie")
+	if len(lines) > 0 {
 		// Chrome reports no raw headers for a response Echo answered, so
 		// the attribution notes them here.
 		r.noteSetCookies(u.Hostname(), lines, r.now())
@@ -164,5 +165,5 @@ func (r *recorder) fetchMapped(s cdp, e *proto.FetchRequestPaused, u *url.URL, b
 	}
 	_ = proto.FetchFulfillRequest{RequestID: e.RequestID, ResponseCode: resp.StatusCode, ResponseHeaders: headers, Body: data,
 		ResponsePhrase: strings.TrimSpace(strings.TrimPrefix(resp.Status, strconv.Itoa(resp.StatusCode)))}.Call(s)
-	return resp.StatusCode
+	return resp.StatusCode, lines
 }
