@@ -50,12 +50,22 @@ texts, for the release notes and the docs team.
   run-clock time of the look that saw the banner.
 - When every look failed (the page kept navigating), Detect returns the
   last script error instead of "no banner".
+- Before a look returns the generic rule, the named-rule scan runs once
+  more; the generic scan also reports which named rule's selector or
+  banner is visible inside its container (or around it). A named banner
+  shown by then, or a container holding a named rule's markup, is that
+  rule (`detected_by` its own selector and global), never `generic`. So
+  a CMP banner drawn between the two scans of one look is judged by the
+  CMP's stored state, not by the banner staying gone.
 
 ## C3 Clicking and verification
 
 - Before a click the control must be visible, sized, enabled, the
-  top-most element at its centre, inside the banner container (a step
-  after the first, or a second-layer step, may be anywhere on the page)
+  top-most element at its centre, inside the banner container (a
+  second-layer Save inside the rule's settings dialog,
+  `reject.second_layer.dialog`, when the rule names one; a step after the
+  first of a chain or the Save of a rule without a dialog may be
+  anywhere on the page)
   and a `button`, `[role=button]`, `input[type=button|submit]` or an `a`
   whose `href` stays on the site. Echo waits up to `--banner-wait` for
   that, then the run is `no_button`.
@@ -74,7 +84,9 @@ texts, for the release notes and the docs team.
   `navigation_failed` (the click left the site).
 - `verified_by` is `cookie:<name>` (or the state reader's source),
   `api`, `tcf` or `banner`. A category the CMP doesn't list counts as
-  not granted.
+  not granted. A state the reader marks decided with no categories
+  at all never verifies a choice that names categories: such a Reject
+  gives `state_unchanged`.
 - `--click api` calls the rule's fixed function (`how: api`,
   `selector` is the call, e.g. `OneTrust.RejectAll()`, `clicks: 0`,
   `layer: 0`). A rule with no API gives `no_button`; a call that throws
@@ -326,9 +338,14 @@ texts, for the release notes and the docs team.
   equals `found`.
 - Ignored: an element with a newsletter, subscribe, login, password,
   cart, checkout, shipping, delivery, age (over 18, älter als 18...),
-  chat, returns or coupon word and no cookie noun (a consent word alone
-  isn't enough there). Interpretation of the lane text: a real banner
-  that names cookies stays a banner even when it mentions a cart.
+  chat, returns or coupon word. When it also has a cookie noun it is a
+  banner only when one of its clickable controls opens or saves
+  settings, or accepts or rejects with a cookie or consent word in its
+  own text ("Accept cookies"). So a newsletter or an age gate that
+  mentions cookies ("We use cookies to remember this offer", buttons
+  "Accept offer" and "No thanks") is never a banner, while a real banner
+  that mentions a basket or a return visit and has a "Cookie settings"
+  button stays one.
 - Button text: NFKC, lower case, combining marks dropped (so accents and
   Greek tonos don't matter; an addition to the lane's NFKC), zero-width
   and other format characters removed, other non-letters read as
@@ -356,7 +373,7 @@ texts, for the release notes and the docs team.
   click and still gone for `--settle` after Echo reloads the page; a
   banner that comes back gives `state_unchanged`. The generic rule
   reloads the page once inside Choose.
-- Fixtures: `consent/cmp/testdata/generic/` (10 positive pages, 7
+- Fixtures: `consent/cmp/testdata/generic/` (12 positive pages, 9
   negative pages, 30 generated language pages) with `expect.yaml`. All
   pass Detect, Find and Choose in headless Chrome and in the FakeTab
   tests; on the negative pages nothing is found and `--cmp generic`
@@ -430,3 +447,20 @@ texts, for the release notes and the docs team.
   rule count (9) and the hash; `Result.CMPRules` (`cmp_rules` in the
   JSON) carries the same. `consent/cmp/testdata/cmps.golden.json` holds
   the current rows and hash.
+
+## Review fixes (round 3)
+
+- Rule format: `reject.second_layer.dialog` (one selector or a list,
+  optional) names the settings dialog the second-layer Save must be
+  inside. Set for OneTrust (`#onetrust-pc-sdk`), Cookiebot
+  (`#CybotCookiebotDialog`), CookieYes (`.cky-preference-center`), Didomi
+  (`#didomi-popup`) and iubenda (`#iubenda-iframe`). Complianz, Borlabs
+  and Usercentrics name none yet, so their Save is still probed anywhere
+  on the page. A Save outside the named dialog is never clicked; when it
+  is the only one, the Reject gives `no_button`.
+- The rules hash changed again (`cmps.golden.json` sha256
+  `92bb49a871e89194617e353f9c75856e59124f1b91d9576275a343cf3a9b407a`);
+  `rhythm-echo consent cmps` prints it.
+- Fixture text: the CookieYes and Didomi replica pages no longer carry
+  a comma before "and" in their banner text (the selectors are
+  unchanged).
