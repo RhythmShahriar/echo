@@ -60,9 +60,9 @@ const maxNesting = 3
 // is masked as text.
 //
 // Text over 64 KiB is cut first, at the last '&', '/' or space before
-// the limit when there is one, and ends in "…": masking is linear but
-// slow enough on hostile megabytes to matter, and no URL a check keeps
-// is that long (the recorder cuts at 8 KiB).
+// the limit when there is one, and ends in "…". Masking is linear but
+// slow enough on hostile megabytes to matter; no URL a check keeps is
+// that long (the recorder cuts at 8 KiB).
 func MaskURL(raw string, showIDs bool) string {
 	if len(raw) > maxMaskInput {
 		cut := raw[:maxMaskInput]

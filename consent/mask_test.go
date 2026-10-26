@@ -42,7 +42,7 @@ func TestMaskURL(t *testing.T) {
 // the site's own token, encoded once or twice: none of its forms may be
 // left.
 // Text over 64 KiB is cut before it is masked: what is kept is still
-// masked, nothing past the cut comes back, and short text is untouched.
+// masked and nothing past the cut comes back; short text is untouched.
 func TestMaskURLCap(t *testing.T) {
 	mail := "a" + "@" + "shop.test"
 	long := "https://x.test/?em=" + mail + "&" + strings.Repeat("q=v&", 20<<10) + "secret=" + strings.Repeat("z", 10)

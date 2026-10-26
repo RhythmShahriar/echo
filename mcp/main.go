@@ -35,7 +35,7 @@ compare, check_domain, check_consent. Results are masked. Start Echo first
 (rhythm echo up); the action tools use the nearest .echo/config.yaml (in the
 folder the agent starts in or above it) and run in the folder that holds it.
 check_consent needs no running Echo: it checks a page's cookie consent in a
-browser, with tracking hits held, and keeps its result under .echo/consent.
+browser with tracking hits held and keeps its result under .echo/consent.
 
 Flags:
       --url <url>      where Echo runs (default from the config, or RHYTHM_ECHO_URL)
