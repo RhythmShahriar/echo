@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"log"
 	"mime"
 	"net"
 	"net/http"
@@ -110,7 +111,9 @@ func (s *Server) Serve(l net.Listener) error {
 	if s.opts.CA != nil {
 		cfg = s.opts.CA.TLSConfig()
 	}
-	srv := &http.Server{Handler: s.Handler(), ReadHeaderTimeout: 10 * time.Second}
+	// Handshakes Chrome abandons (its own background requests, a test's
+	// self-signed check) are expected; they'd only be noise in the log.
+	srv := &http.Server{Handler: s.Handler(), ReadHeaderTimeout: 10 * time.Second, ErrorLog: log.New(io.Discard, "", 0)}
 	return srv.Serve(newSniffListener(l, cfg))
 }
 
@@ -168,7 +171,7 @@ func (s *Server) Handler() http.Handler {
 		case isTag:
 			s.serveTag(w, r, host)
 		default:
-			s.sink.countUnmapped(host)
+			s.sink.countUnmapped(r, host)
 			s.logf("unmapped host %s%s", host, r.URL.Path)
 			http.Error(w, "not a consent testbed host: "+host, http.StatusMisdirectedRequest)
 		}

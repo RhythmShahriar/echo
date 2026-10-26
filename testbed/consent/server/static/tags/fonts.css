@@ -1,0 +1,3 @@
+/* Stand-in for a Google Fonts stylesheet in the Echo consent testbed:
+   a functional request that needs no consent. It loads no font. */
+body { font-family: system-ui, sans-serif; }

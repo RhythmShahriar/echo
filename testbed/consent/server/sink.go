@@ -52,7 +52,8 @@ type Count struct {
 	// fixture, which Echo's egress guard must refuse.
 	Internal int `json:"internal"`
 	// Unmapped counts requests for host names the server doesn't serve,
-	// by host: a fixture that names a host it shouldn't.
+	// by host: a fixture that names a host it shouldn't. Requests no
+	// scenario sent (Chrome's own) are under scenario "unknown".
 	Unmapped map[string]int `json:"unmapped"`
 }
 
@@ -63,7 +64,7 @@ type sink struct {
 	recorded  map[string][]Hit
 	forbidden map[string]int
 	internal  map[string]int
-	unmapped  map[string]int
+	unmapped  map[string]map[string]int // scenario -> host -> count
 }
 
 func newSink() *sink {
@@ -79,7 +80,7 @@ func (s *sink) reset() {
 	s.recorded = map[string][]Hit{}
 	s.forbidden = map[string]int{}
 	s.internal = map[string]int{}
-	s.unmapped = map[string]int{}
+	s.unmapped = map[string]map[string]int{}
 }
 
 // hit records a tracker hit from r to host.
@@ -110,10 +111,14 @@ func (s *sink) countInternal(scenario string) {
 	s.mu.Unlock()
 }
 
-func (s *sink) countUnmapped(host string) {
+func (s *sink) countUnmapped(r *http.Request, host string) {
+	scenario := scenarioOf(r, "")
 	s.mu.Lock()
-	s.unmapped[host]++
-	s.mu.Unlock()
+	defer s.mu.Unlock()
+	if s.unmapped[scenario] == nil {
+		s.unmapped[scenario] = map[string]int{}
+	}
+	s.unmapped[scenario][host]++
 }
 
 // count adds up scenario's hits, or every scenario's when it is "".
@@ -140,8 +145,13 @@ func (s *sink) count(scenario string) Count {
 			c.Internal += n
 		}
 	}
-	for h, n := range s.unmapped {
-		c.Unmapped[h] = n
+	for sc, by := range s.unmapped {
+		if scenario != "" && sc != scenario {
+			continue
+		}
+		for h, n := range by {
+			c.Unmapped[h] += n
+		}
 	}
 	return c
 }

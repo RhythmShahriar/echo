@@ -100,6 +100,10 @@ func TestRoutingByHost(t *testing.T) {
 	if got := s.Count("").Unmapped; got["www.example.com"] != 1 || got["nope.shop.test"] != 1 {
 		t.Errorf("unmapped = %v", got)
 	}
+	get(t, h, "GET", "cdn.example.net", "/x.js", nil, map[string]string{"Referer": "https://t01.shop.test/"})
+	if got := s.Count("t01").Unmapped; len(got) != 1 || got["cdn.example.net"] != 1 {
+		t.Errorf("t01 unmapped = %v", got)
+	}
 	w := get(t, h, "GET", "www.youtube.com", "/embed/tbvideo1", nil, nil)
 	if c := w.Header().Values("Set-Cookie"); len(c) != 2 || !strings.HasPrefix(c[0], "VISITOR_INFO1_LIVE=") || !strings.Contains(c[0], "SameSite=None") {
 		t.Errorf("youtube embed cookies = %q", c)

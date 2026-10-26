@@ -1,0 +1,83 @@
+{{define "head"}}
+{{if or (eq .Path "/denied/") (eq .Path "/advanced/") (eq .Path "/gtm/")}}
+<script>
+window.dataLayer = window.dataLayer || [];
+function gtag(){dataLayer.push(arguments);}
+gtag('consent', 'default', {ad_storage: 'denied', analytics_storage: 'denied', ad_user_data: 'denied', ad_personalization: 'denied'});
+</script>
+{{end}}
+{{if eq .Path "/region/"}}
+<script>
+window.dataLayer = window.dataLayer || [];
+function gtag(){dataLayer.push(arguments);}
+gtag('consent', 'default', {ad_storage: 'granted', analytics_storage: 'granted', ad_user_data: 'granted', ad_personalization: 'granted'});
+gtag('consent', 'default', {ad_storage: 'denied', analytics_storage: 'denied', ad_user_data: 'denied', ad_personalization: 'denied', region: ['DE', 'FR']});
+gtag('consent', 'default', {ad_storage: 'granted', analytics_storage: 'granted', region: ['US']});
+</script>
+{{end}}
+{{if eq .Path "/wait/"}}
+<script>
+window.dataLayer = window.dataLayer || [];
+function gtag(){dataLayer.push(arguments);}
+window.__tb_t0 = Date.now();
+gtag('consent', 'default', {ad_storage: 'granted', analytics_storage: 'granted', ad_user_data: 'granted', ad_personalization: 'granted', wait_for_update: 1500});
+</script>
+{{end}}
+{{if or (eq .Path "/denied/") (eq .Path "/nocm/") (eq .Path "/region/") (eq .Path "/wait/")}}
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-TESTBED001"></script>
+<script>
+window.dataLayer = window.dataLayer || [];
+function gtag(){dataLayer.push(arguments);}
+gtag('js', new Date());
+gtag('config', 'G-TESTBED001');
+gtag('config', 'AW-100000001');
+</script>
+{{end}}
+{{if eq .Path "/advanced/"}}
+<script async data-mode="advanced" src="https://www.googletagmanager.com/gtag/js?id=G-TESTBED001"></script>
+<script>gtag('js', new Date()); gtag('config', 'G-TESTBED001');</script>
+{{end}}
+{{if eq .Path "/gtm/"}}
+<script>window.__tb_gtm = {ga4: 'G-TESTBED001', ads: 'AW-100000001'};
+(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],j=d.createElement(s);j.async=true;j.src='https://www.googletagmanager.com/gtm.js?id='+i;f.parentNode.insertBefore(j,f);})(window,document,'script','dataLayer','GTM-TESTBED1');</script>
+{{end}}
+{{if eq .Path "/meta-before/"}}
+<script>
+!function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,document,'script','https://connect.facebook.net/en_US/fbevents.js');
+fbq('consent', 'revoke');
+fbq('init', '100000000000001', {em: 'tbhashedemail'});
+fbq('track', 'PageView');
+</script>
+{{end}}
+{{if eq .Path "/meta-after/"}}
+<script>
+!function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,document,'script','https://connect.facebook.net/en_US/fbevents.js');
+fbq('init', '100000000000001');
+fbq('consent', 'revoke');
+fbq('track', 'PageView');
+</script>
+{{end}}
+{{if eq .Path "/worker/"}}
+<script>window.dataLayer = window.dataLayer || [];</script>
+<script src="/~partytown/loader.js"></script>
+{{end}}
+{{if eq .Path "/others/"}}
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto">
+<script src="https://www.google.com/recaptcha/api.js" async></script>
+<script>!function(w){var t=w.ttq=w.ttq||[];['page','track','holdConsent','grantConsent','revokeConsent'].forEach(function(m){t[m]=function(){t.push([m].concat([].slice.call(arguments)))}});t.load=function(id){t._id=id;var s=document.createElement('script');s.async=true;s.src='https://analytics.tiktok.com/i18n/pixel/events.js?sdkid='+id+'&lib=ttq';document.head.appendChild(s)};}(window);ttq.load('TESTBEDTT0001');ttq.page();</script>
+<script>window._linkedin_partner_id = '1000001';</script>
+<script async data-scroll src="https://snap.licdn.com/li.lms-analytics/insight.min.js"></script>
+<script>window.uetq = window.uetq || []; window.uetq.push('consent', 'default', {ad_storage: 'granted'});</script>
+<script async data-ti="100000001" src="https://bat.bing.com/bat.js"></script>
+<script>(function(c,l,a,r,i,t,y){c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);})(window,document,"clarity","script","tbclarity1");</script>
+<script>(function(h,o,t,j,a,r){h.hj=h.hj||function(){(h.hj.q=h.hj.q||[]).push(arguments)};h._hjSettings={hjid:1000001,hjsv:6};a=o.getElementsByTagName('head')[0];r=o.createElement('script');r.async=1;r.src=t+h._hjSettings.hjid+j+h._hjSettings.hjsv;a.appendChild(r);})(window,document,'https://static.hotjar.com/c/hotjar-','.js?sv=');</script>
+<script defer data-domain="tagtest.shop.test" src="https://plausible.io/js/script.js"></script>
+{{end}}
+{{end}}
+{{define "body"}}<h1>{{.Path}}</h1>
+{{if eq .Path "/others/"}}
+<iframe id="yt" width="320" height="180" src="https://www.youtube.com/embed/tbvideo1"></iframe>
+<iframe id="ytnc" width="320" height="180" src="https://www.youtube-nocookie.com/embed/tbvideo1"></iframe>
+<div style="height:3000px">tall</div>
+{{end}}
+{{end}}
