@@ -1,0 +1,21 @@
+consent/before-choice          error    consent                                                a consent-required tracker hit, tracker cookie or tracker storage key in the before phase of any run, or anywhere in the none run
+consent/after-reject           error    consent                                                the same after the Reject click, on the page, a later page or the reload
+consent/after-withdraw         error    consent                                                the same after the withdraw Reject (run withdraw)
+consent/reject-granted         error    consent                                                after Reject, a Consent Mode update with ad_storage or analytics_storage granted, or a Google hit with gcs G101, G110 or G111
+consent/reject-not-kept        error    consent                                                after Reject, the banner shows again on a later page or the reload, or the CMP's stored state is gone
+consent/reject-broken          error    consent                                                with --click button,api: the Reject button was found and clicked, the choice wasn't confirmed after retries and the CMP's API reject worked: visitors can't reject
+consent/no-default             error    consent                                                Google hits were sent and no Consent Mode default was seen at any time (hooks) and the hits carry no gcs
+consent/server-side            error    consent                                                with --echo: Echo caught a Meta Conversions API or GA4 Measurement Protocol event tagged with the reject or withdraw run (after the click)
+consent/script-before          error    consent                                                a tracker script loaded before the choice or after Reject, Google Tag Manager included
+consent/default-late           warning  consent                                                a Consent Mode default exists but came after the first Google hit
+consent/v2-signals             warning  consent                                                the default lacks ad_user_data or ad_personalization, or gcd shows those two unset (l)
+consent/accept-not-granted     warning  consent                                                after Accept, no update granted any signal and Google hits still say denied (the site loses measurement it was allowed)
+consent/no-first-layer-reject  warning  consent                                                Reject is not on the banner's first layer (Echo had to open settings)
+consent/no-banner              warning  consent                                                consent-required trackers fired or set cookies but no banner showed
+consent/gpc-ignored            warning  consent                                                in the gpc run, advertising trackers fired or set cookies
+consent/tcf-mismatch           warning  consent                                                a TCF CMP's TC string grants any purpose after Reject, or grants none after Accept
+consent/embed                  warning  consent                                                an embed (YouTube on youtube.com, Vimeo without dnt=1, Google Maps) loaded or set cookies before the choice or after Reject
+consent/cookieless-ping        notice   consent                                                under advanced: Google cookieless pings before the choice or after Reject
+consent/meta-no-consent-api    notice   consent                                                Meta Pixel fired before the choice or after Reject and no fbq('consent', ...) was seen
+consent/click-fallback         notice   consent                                                the button couldn't be found and the CMP's API made the choice, so the button itself wasn't tested
+consent/ignore-expired         notice   consent                                                an ignore: entry passed its until date and no longer hides its issue

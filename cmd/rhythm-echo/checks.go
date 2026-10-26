@@ -5,9 +5,13 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"slices"
 
+	"gopkg.in/yaml.v3"
+
 	"github.com/RhythmShahriar/echo/check"
+	"github.com/RhythmShahriar/echo/config"
 	"github.com/RhythmShahriar/echo/consent"
 	"github.com/RhythmShahriar/echo/model"
 	"github.com/RhythmShahriar/echo/runner"
@@ -27,7 +31,11 @@ func cmdChecks(s *session) int {
 		if err != nil {
 			return s.fail(err)
 		}
-		if !ok {
+		consentOK, err := consentFixtures(s.stdout, s.stderr, s.cfg)
+		if err != nil {
+			return s.fail(err)
+		}
+		if !ok || !consentOK {
 			return exitFindings
 		}
 		return exitOK
@@ -43,6 +51,39 @@ func cmdChecks(s *session) int {
 		return exitFindings
 	}
 	return exitOK
+}
+
+// fixtureReporter is the optional method of the consent tracker
+// catalog that tries the config's own trackers on their fixtures: one
+// line per fixture in the format of the rules' table; ok when all
+// pass.
+type fixtureReporter interface {
+	FixtureReport(yaml []byte) (lines []string, ok bool)
+}
+
+// consentFixtures tries the fixtures of the config's consent trackers
+// (consent: trackers:) and prints their lines; ok is false when one
+// fails. A config without them prints nothing.
+func consentFixtures(stdout, stderr io.Writer, cfg config.Config) (ok bool, err error) {
+	if cfg.Consent == nil || cfg.Consent.Trackers.Kind == 0 || len(cfg.Consent.Trackers.Content) == 0 {
+		return true, nil
+	}
+	data, err := yaml.Marshal(&cfg.Consent.Trackers)
+	if err != nil {
+		return false, err
+	}
+	fr, can := consent.Linked().Classifier.(fixtureReporter)
+	if !can {
+		fmt.Fprintln(stderr, "rhythm echo: consent: trackers: this build can't try their fixtures")
+		return true, nil
+	}
+	lines, ok := fr.FixtureReport(data)
+	for _, l := range lines {
+		if _, err := fmt.Fprintln(stdout, l); err != nil {
+			return false, err
+		}
+	}
+	return ok, nil
 }
 
 // consentRules lists the consent checks for the checks table. They look

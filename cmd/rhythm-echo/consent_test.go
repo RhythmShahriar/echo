@@ -27,7 +27,7 @@ func TestConsentWired(t *testing.T) {
 			t.Errorf("%v: %d %q", args, code, out)
 		}
 	}
-	if code, out, _ := runCLI(t, "help"); code != exitOK || !strings.Contains(out, "rhythm echo consent [<url>...]") {
+	if code, out, _ := runCLI(t, "help"); code != exitOK || !strings.Contains(out, "rhythm echo consent <url>...") {
 		t.Errorf("help doesn't list consent: %d", code)
 	}
 }

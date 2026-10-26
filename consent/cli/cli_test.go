@@ -337,3 +337,35 @@ func TestUsageMessages(t *testing.T) {
 	}
 	golden(t, "usage-messages", b.String())
 }
+
+func TestComplete(t *testing.T) {
+	for _, tc := range []struct {
+		words []string
+		want  string
+	}{
+		{[]string{"--ru"}, "--runs"},
+		{[]string{"d"}, "detect"},
+		{[]string{""}, "cmps detect prune report trackers verify"},
+		{[]string{"--json", "c"}, "cmps"},
+		{[]string{"https://shop.test", "d"}, ""},
+		{[]string{"--runs", ""}, ""},
+		{[]string{"detect", "--ru"}, ""},
+		{[]string{"detect", "--ge"}, "--geo"},
+		{[]string{"verify", "--k"}, "--key"},
+		{[]string{"prune", "--k"}, "--keep"},
+		{[]string{"-"}, ""},
+		{[]string{"-k", "--insecure-p"}, "--insecure-public"},
+		{nil, "cmps detect prune report trackers verify"},
+	} {
+		got := strings.Join(Complete(tc.words), " ")
+		if tc.want == "" && tc.words != nil && len(tc.words) == 1 && tc.words[0] == "-" {
+			if !strings.Contains(got, "--runs") || !strings.Contains(got, "-H") || !strings.Contains(got, "--help") || strings.Contains(got, "--keep") {
+				t.Errorf("Complete(-) = %q", got)
+			}
+			continue
+		}
+		if got != tc.want {
+			t.Errorf("Complete(%q) = %q, want %q", tc.words, got, tc.want)
+		}
+	}
+}

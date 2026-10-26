@@ -504,11 +504,11 @@ func TestPicker(t *testing.T) {
 		}
 		return v
 	}
-	if got := strings.Join(values(pickState{}), " "); got != "up install doctor init" {
+	if got := strings.Join(values(pickState{}), " "); got != "up install doctor consent init" {
 		t.Errorf("fresh folder: %s", got)
 	}
 	ps := pickState{running: true, hasConfig: true, hasActions: true, snapshot: `"before", 2 hours ago`, hasResult: true}
-	if got := strings.Join(values(ps), " "); got != "watch compare snapshot run report install doctor" {
+	if got := strings.Join(values(ps), " "); got != "watch compare snapshot run report install doctor consent" {
 		t.Errorf("set up: %s", got)
 	}
 	for _, tc := range []struct {
@@ -521,6 +521,7 @@ func TestPicker(t *testing.T) {
 		{"compare", "", "", true, "compare --open"},
 		{"snapshot", "", "", false, "snapshot"},
 		{"up", "", "", true, "up"},
+		{"consent", "", " https://staging.shop.test ", true, "consent https://staging.shop.test"},
 	} {
 		if got := strings.Join(pickArgs(tc.action, tc.stack, tc.site, tc.open), " "); got != tc.want {
 			t.Errorf("pickArgs(%s) = %q, want %q", tc.action, got, tc.want)

@@ -60,6 +60,7 @@ func cmdDoctor(s *session) int {
 			d.fail("Echo", err.Error())
 		}
 		d.stopped = true
+		d.chrome()
 		return d.end()
 	}
 	d.pass("Echo", fmt.Sprintf("%s mode at %s, %d providers recognized", h.Mode, s.echo.URL, len(h.Providers)))
@@ -128,6 +129,7 @@ func cmdDoctor(s *session) int {
 		}
 	}
 	_, _ = s.echo.Clear(context.WithoutCancel(s.ctx), client.Filter{Run: d.run})
+	d.chrome()
 	return d.end()
 }
 
@@ -530,7 +532,9 @@ func (s *session) doctorLine(r doctorResult, label, detail string) {
 		return
 	}
 	mark := lipgloss.NewStyle().Foreground(lipgloss.Color(r.color)).Bold(true).Render(r.glyph)
-	fmt.Fprintf(s.stdout, "  %s %s %s\n", mark, lipgloss.NewStyle().Bold(true).Width(13).Render(label), detail)
+	// A label longer than the column gets its own width rather than
+	// wrapping inside it.
+	fmt.Fprintf(s.stdout, "  %s %s %s\n", mark, lipgloss.NewStyle().Bold(true).Width(max(13, lipgloss.Width(label))).Render(label), detail)
 }
 
 func (s *session) doctorEnd(ok, fails int) int {

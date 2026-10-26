@@ -141,3 +141,27 @@ docs team writes the wiki from this file and real command output.
   - `rhythm echo: consent report <id>: <file> isn't a consent result: <error>`
 - `rhythm echo consent cmps [--json]` and `rhythm echo consent trackers [--json] [--config <file>]` print the CMP rules and the tracker catalog through `report.WriteConsentCatalog` (table, or the `consent-catalog` envelope). `trackers` loads the config's own trackers (`consent: trackers:`) into the catalog first; a broken one is the check's usage error `rhythm echo: consent: trackers: <error>` (exit 2). An argument: `rhythm echo: consent cmps takes no arguments` (and the same for trackers; exit 2).
 - `rhythm echo consent prune [--keep <n>]` deletes the result folders in `<store>/consent` beyond the newest n (default 20; `--keep 0` deletes them all) and prints `Removed <k> consent results, kept <n>.` (nothing with `-q`); exit 0. Only folders named like a result (`YYYY-MM-DDTHH-MM-SS-<6 hex>`) are touched: never `baselines/`, `detect/`, links or anything else. `rhythm echo: --keep -1: want 0 or more`; `rhythm echo: consent prune takes no arguments; --keep <n> says how many results stay` (exit 2).
+
+## L7 Echo-wide integration: checks, doctor, picker, help, version --json, __complete
+
+- `rhythm echo checks` lists the 21 consent checks under the built-in rules with the channel `consent` (golden `cmd/rhythm-echo/testdata/checks-consent.golden`).
+- `rhythm echo checks --test` also tries the fixtures of the config's own consent trackers (`consent: trackers:`) through the tracker catalog's `FixtureReport`, printing its lines after the rules' table; a failing fixture exits 1. A config without consent trackers prints nothing more. A build whose catalog can't try them says `rhythm echo: consent: trackers: this build can't try their fixtures` (stderr) and doesn't fail.
+- `rhythm echo doctor` ends with one line about the browser (never a failure, never a download; also when Echo isn't running; in `--json` it is a check named `Chrome for consent checks`):
+  - `ok    Chrome for consent checks: found (Chrome 153 at /usr/bin/google-chrome)` (version from `<chrome> --version`; `found (<path>)` when it doesn't say, as on Windows)
+  - `ok    Chrome for consent checks: found (Chrome for Testing 156 at <path>)` (the downloaded one)
+  - `note  Chrome for consent checks: will download Chrome for Testing 156`
+  - `note  Chrome for consent checks: missing (--no-download)` (no Chrome and `RHYTHM_OFFLINE` or `CI` set)
+  - `note  Chrome for consent checks: missing (no Chrome for Testing build for this system; install Chrome or Chromium)`
+  - The `ok` line doesn't count in `N checks passed`: that tally stays the capture layers'. In the styled view a label longer than the column gets its own width.
+- The picker (`rhythm echo` on a terminal) always offers `Check cookie consent on a page (no choice, Accept, Reject)`, after `Check that every capture layer works (doctor)`. It asks `Which page?` (description `A URL, e.g. https://staging.shop.test. Only sites you own or are authorised to test.`; empty: `enter the page's URL, e.g. https://staging.shop.test`), prefilled from `site:`, then runs `rhythm echo consent <url>` with the defaults.
+- Top-level help (`rhythm echo help`): the consent line is now three:
+  ```
+    rhythm echo consent <url>...           check cookie consent: no choice, Accept and Reject in a real browser
+    rhythm echo consent detect <url>       find the banner and the buttons Echo would click; no verdict
+    rhythm echo consent report|verify|cmps|trackers|prune
+                                           a saved result again, check its evidence, what Echo knows,
+                                           delete old results (rhythm echo consent --help)
+  ```
+  `rhythm echo help [command] | version   this help, one command's, or the version (--json)`. Exit 3 reads `3    couldn't run or couldn't check (a consent run that couldn't make its choice):` followed by Echo's existing causes.
+- `rhythm echo version --json` (also `rhythm-echo version --json`) prints the kit's `rhythm-version/v1` document with the keys kit `cli.Main` prints: `{"schema": "rhythm-version/v1", "name": "rhythm-echo", "version": "<v>", "commit": "<7 hex>", "kit_version": "v0.8.0"}`. `commit` comes from `-X main.commit=` when set, else the build's VCS stamp, else `""`. `rhythm echo version` alone is unchanged (`rhythm-echo <v>`); another argument: `rhythm echo: version takes only --json, got "--yaml"` (exit 2). `-v` and `--version` are unchanged.
+- New hidden command `rhythm-echo __complete <words...>` (kit `cli.CompleteCommand`): prints what may come next, one per line, from Echo's command table (command names, `help`, `version`), each command's flags (the shared flag table; the help text of `install`, `init`, `ca`, `mcp`, `hub`, `schedule`, `conformance`, `sendmail`), the stacks after `install`; for `consent` its subcommands and each subcommand's own flags (`consent --ru` gives `--runs`, `consent d` gives `detect`, `consent verify --k` gives `--key`). Nothing after a flag that takes a value, so the shell offers files. It runs no command and reads no file. With `version --json`, `rhythm completion` covers Echo.
