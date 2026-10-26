@@ -5,6 +5,7 @@ package compare
 
 import (
 	"fmt"
+	"math"
 	"strings"
 	"testing"
 	"time"
@@ -42,10 +43,17 @@ func BenchmarkFieldDiff10k(b *testing.B) {
 // 20 ms; the bound leaves room for a slow CI machine.
 func TestFieldDiffIsLinear(t *testing.T) {
 	before, after := bigPayloads(10000)
-	start := time.Now()
-	cs, _ := content(before, after, covered{})
-	if took := time.Since(start); took > 150*time.Millisecond && !raceEnabled {
-		t.Errorf("field diff of 10,000 keys took %s, want well under 50 ms", took)
+	// The best of three: one slow round on a busy machine (other suites
+	// running beside this one) isn't a quadratic diff.
+	var cs []model.Change
+	took := time.Duration(math.MaxInt64)
+	for range 3 {
+		start := time.Now()
+		cs, _ = content(before, after, covered{})
+		took = min(took, time.Since(start))
+	}
+	if took > 150*time.Millisecond && !raceEnabled {
+		t.Errorf("field diff of 10,000 keys took %s at best, want well under 50 ms", took)
 	}
 	got := titles(cs)
 	if !strings.Contains(got, "payload lost fields") || !strings.Contains(got, "payload has new fields") {
