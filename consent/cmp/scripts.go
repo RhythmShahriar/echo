@@ -4,7 +4,10 @@
 package cmp
 
 import (
+	"context"
 	"embed"
+	"encoding/json"
+	"fmt"
 	"strings"
 
 	"github.com/RhythmShahriar/echo/consent"
@@ -22,6 +25,25 @@ var jsFS embed.FS
 var (
 	scanJS = buildScript("scan")
 )
+
+// maxAnswer is the most a CMP script may answer. The Tab caps every
+// result at this size too; checking here keeps the driver safe with any
+// Tab. The scripts stop lists at 200 entries and texts at 200
+// characters, so a real answer is a few KiB.
+const maxAnswer = 256 << 10
+
+// isolated runs one of the scripts above in an isolated world and
+// refuses an answer over maxAnswer.
+func isolated(ctx context.Context, t consent.Tab, js string, args ...any) (json.RawMessage, error) {
+	raw, err := t.EvalIsolated(ctx, js, args...)
+	if err != nil {
+		return nil, err
+	}
+	if len(raw) > maxAnswer {
+		return nil, fmt.Errorf("consent: a CMP script answered %d bytes; the cap is %d", len(raw), maxAnswer)
+	}
+	return raw, nil
+}
 
 // buildScript joins lib.js and js/<name>.js into one function
 // expression named cmp-<name>.

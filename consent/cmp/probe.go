@@ -64,7 +64,7 @@ type toggle struct {
 // evalJSON runs an isolated-world script with in and decodes its answer
 // into out. A null answer leaves out as it is.
 func evalJSON(ctx context.Context, t consent.Tab, js string, in, out any) error {
-	raw, err := t.EvalIsolated(ctx, js, in)
+	raw, err := isolated(ctx, t, js, in)
 	if err != nil {
 		return err
 	}

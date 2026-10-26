@@ -80,7 +80,7 @@ function scanDoc(doc, frame, out) {
   }
   for (const el of found) {
     const t = norm(String(el.innerText || el.textContent || "").slice(0, 20000));
-    const cookie = anyIn(t, W.cookie);
+    const cookie = anyIn(t, W.cookie_words);
     const consent = anyIn(t, W.consent);
     if (!cookie && !consent) continue;
     const buttons = [];
@@ -117,6 +117,8 @@ for (const f of Array.from(document.querySelectorAll("iframe, frame")).slice(0, 
   if (!doc || !visible(f)) continue;
   let src = "";
   try { src = String(f.src || ""); } catch (e) { src = ""; }
-  if (src) scanDoc(doc, src, out);
+  // The frame's address is matched as a substring, so its first MAX
+  // characters still name it.
+  if (src) scanDoc(doc, src.slice(0, MAX), out);
 }
 return { containers: out.slice(0, 20) };

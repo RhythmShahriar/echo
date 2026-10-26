@@ -23,7 +23,7 @@ import (
 	"github.com/RhythmShahriar/echo/consent/consenttest"
 )
 
-var update = flag.Bool("update", false, "rewrite the generated generic language pages and their expect.yaml rows")
+var update = flag.Bool("update", false, "rewrite the generated generic language pages, their expect.yaml rows and cmps.golden.json")
 
 func TestGenericWords(t *testing.T) {
 	lx, err := loadWords(genericWordsYAML)

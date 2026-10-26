@@ -80,7 +80,7 @@ type lexicon struct {
 
 // genericWords are the word lists the generic script matches in the page.
 type genericWords struct {
-	Cookie  []string `json:"cookie"`
+	Cookie  []string `json:"cookie_words"` // not "cookie": the scripts never touch a .cookie member
 	Consent []string `json:"consent"`
 	Ignore  []string `json:"ignore"`
 	Policy  []string `json:"policy"`
@@ -306,7 +306,7 @@ func genericScan(ctx context.Context, t consent.Tab) ([]genContainer, error) {
 		Words genericWords `json:"words"`
 	}{words.scan}
 	var top genResult
-	raw, err := t.EvalIsolated(ctx, genericJS, in)
+	raw, err := isolated(ctx, t, genericJS, in)
 	if err != nil {
 		return nil, err
 	}
@@ -328,7 +328,7 @@ func genericScan(ctx context.Context, t consent.Tab) ([]genContainer, error) {
 			continue
 		}
 		var res genResult
-		raw, err := t.EvalIsolated(ctx, genericJS, in, f)
+		raw, err := isolated(ctx, t, genericJS, in, f)
 		if err != nil || len(raw) == 0 || json.Unmarshal(raw, &res) != nil {
 			continue
 		}
@@ -337,10 +337,60 @@ func genericScan(ctx context.Context, t consent.Tab) ([]genContainer, error) {
 			out = append(out, c)
 		}
 	}
-	if len(out) > 40 {
-		out = out[:40]
+	return clampContainers(out), nil
+}
+
+// The most of a generic scan Go keeps, whatever the script answered:
+// the script stops at 20 containers of 50 controls and builds paths of
+// at most maxPath bytes.
+const (
+	maxContainers = 40
+	maxButtons    = 50
+	maxPath       = 1024
+)
+
+// cutRunes keeps the first n runes of s. Unlike consent.SafeText it
+// escapes nothing: the text is still to be classified; it is made safe
+// to print where it is printed.
+func cutRunes(s string, n int) string {
+	for i := range s {
+		if n == 0 {
+			return s[:i]
+		}
+		n--
 	}
-	return out, nil
+	return s
+}
+
+// clampContainers keeps at most maxContainers containers of at most
+// maxButtons controls each, with their texts cut to 200 runes. A container or control
+// without a usable path is dropped: a path cut short would name another
+// element.
+func clampContainers(list []genContainer) []genContainer {
+	out := make([]genContainer, 0, min(len(list), maxContainers))
+	for _, c := range list {
+		if len(out) == maxContainers {
+			break
+		}
+		if c.Path == "" || len(c.Path) > maxPath {
+			continue
+		}
+		c.Text = cutRunes(c.Text, 200)
+		btns := make([]genButton, 0, min(len(c.Buttons), maxButtons))
+		for _, b := range c.Buttons {
+			if len(btns) == maxButtons {
+				break
+			}
+			if b.Path == "" || len(b.Path) > maxPath {
+				continue
+			}
+			b.Text = cutRunes(b.Text, 200)
+			btns = append(btns, b)
+		}
+		c.Buttons = btns
+		out = append(out, c)
+	}
+	return out
 }
 
 // genericBanner is the first container that is a banner with a choice;

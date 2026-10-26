@@ -405,3 +405,28 @@ texts, for the release notes and the docs team.
   `otgeo=<cc>` (lower case) for the start URL; any other CMP, or a
   country that isn't two letters, gives none. The note the browse lane
   adds reads `OneTrust geolocation override otgeo=de (unverified)`.
+
+## C10 Hardening and the cmps listing
+
+- Every isolated-world script is a file in `consent/cmp/js/` compiled
+  in and read as data by `TestJSIsReadOnly`: a small tokenizer drops
+  comments, strings and regular expressions and fails on a network call
+  (`fetch`, `XMLHttpRequest`, `sendBeacon`, `WebSocket`...), cookie or
+  storage access (`.cookie`, `localStorage`, `sessionStorage`,
+  `indexedDB`), DOM changes (`.remove(`, `innerHTML`, `style`,
+  `classList`, `setAttribute`, `appendChild`...), synthetic events
+  (`click`, `dispatchEvent`), code from strings (`eval`, `Function`,
+  timers), any write to a property and any template literal. The
+  main-world globals check passes the same test.
+- Caps: a script's answer over 256 KiB is refused by the driver as well
+  as the Tab, with
+  `consent: a CMP script answered <n> bytes; the cap is 262144`. The
+  scripts stop lists at 200 entries and texts at 200 characters; the
+  generic scan at 20 containers of 50 controls, a frame address at 200
+  characters. An element path (the generic rule's `selector`) over
+  1024 characters is dropped instead of cut; an id over 64 characters
+  is never used in one. Such a control reads as not there.
+- `consent cmps` data: `Info()` gives the rules version (`1.2.0`), the
+  rule count (9) and the hash; `Result.CMPRules` (`cmp_rules` in the
+  JSON) carries the same. `consent/cmp/testdata/cmps.golden.json` holds
+  the current rows and hash.

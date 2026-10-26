@@ -102,7 +102,7 @@ func (d *driver) poll(ctx context.Context, t consent.Tab, rules []*rule, in scan
 	if err != nil {
 		return consent.CMPInfo{}, err
 	}
-	if len(raw) > 0 && string(raw) != "null" {
+	if len(raw) > 0 && len(raw) <= maxAnswer && string(raw) != "null" {
 		// A page can't change what the script returns, only whether its
 		// own globals exist; an unreadable answer reads as none.
 		_ = json.Unmarshal(raw, &globals)
@@ -173,7 +173,7 @@ func (d *driver) poll(ctx context.Context, t consent.Tab, rules []*rule, in scan
 // a frame that is gone by then is skipped.
 func scanFrames(ctx context.Context, t consent.Tab, in scanInput) ([]scanResult, error) {
 	var top scanResult
-	raw, err := t.EvalIsolated(ctx, scanJS, in)
+	raw, err := isolated(ctx, t, scanJS, in)
 	if err != nil {
 		return nil, err
 	}
@@ -195,7 +195,7 @@ func scanFrames(ctx context.Context, t consent.Tab, in scanInput) ([]scanResult,
 			continue
 		}
 		var res scanResult
-		raw, err := t.EvalIsolated(ctx, scanJS, in, f)
+		raw, err := isolated(ctx, t, scanJS, in, f)
 		if err != nil || len(raw) == 0 || json.Unmarshal(raw, &res) != nil {
 			continue
 		}

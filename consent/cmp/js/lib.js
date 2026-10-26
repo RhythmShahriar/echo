@@ -167,11 +167,16 @@ function box(el) {
 }
 
 // cssPath is a selector for el from root: its id when unique, else
-// tag:nth-of-type steps from the nearest unique id or the root.
+// tag:nth-of-type steps from the nearest unique id or the root. It is
+// "" when it would be over PATH_MAX characters: a path cut short names
+// another element, so the caller drops it. An id over 64 characters is
+// not used.
+const PATH_MAX = 1024;
+
 function cssPath(el, root) {
   const parts = [];
   for (let n = el, i = 0; n && n.nodeType === 1 && i < 32; n = n.parentElement, i++) {
-    if (n.id && root.querySelectorAll("#" + CSS.escape(n.id)).length === 1) {
+    if (n.id && n.id.length <= 64 && root.querySelectorAll("#" + CSS.escape(n.id)).length === 1) {
       parts.unshift("#" + CSS.escape(n.id));
       break;
     }
@@ -182,5 +187,6 @@ function cssPath(el, root) {
     parts.unshift(n.tagName.toLowerCase() + ":nth-of-type(" + k + ")");
     if (n.parentNode === root) break;
   }
-  return parts.join(" > ");
+  const path = parts.join(" > ");
+  return path.length > PATH_MAX ? "" : path;
 }

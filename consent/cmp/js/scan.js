@@ -5,13 +5,14 @@
 // banner container is visible and which known script URLs the page
 // loaded (resource timing and script elements). Page text is never
 // read, so a page that only names a CMP never matches.
-const out = { rules: {}, scripts: [] };
+const rules = {};
+const scripts = [];
 for (const r of (input.rules || []).slice(0, MAX)) {
   const matched = [];
   for (const s of (r.selectors || []).slice(0, MAX)) {
     if (find(s.loc)) matched.push(s.key);
   }
-  out.rules[r.id] = { matched: matched, banner: (r.banners || []).slice(0, MAX).some(shown) };
+  rules[r.id] = { matched: matched, banner: (r.banners || []).slice(0, MAX).some(shown) };
 }
 const subs = (input.scripts || []).slice(0, MAX);
 if (subs.length) {
@@ -23,7 +24,7 @@ if (subs.length) {
     if (s.src) urls.push(String(s.src));
   }
   for (const sub of subs) {
-    if (urls.some((u) => u.includes(sub))) out.scripts.push(sub);
+    if (urls.some((u) => u.includes(sub))) scripts.push(sub);
   }
 }
-return out;
+return { rules: rules, scripts: scripts };

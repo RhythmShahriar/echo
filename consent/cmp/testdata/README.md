@@ -83,3 +83,10 @@ rest; `TestReplicaMarkup` checks `sees` against the page markup. The
 testbed serves these folders as they are and runs
 `rhythm-echo consent detect --json` on every row in Chrome, checking
 `found`, `present`, `detected_by`, the layers and the late timing.
+
+## cmps.golden.json
+
+What `consent cmps` shows, as data: the rule pack's version, count and
+hash (`Info()`) and every rule's row (`Rules()`). Any rule change shows
+in it; after checking the diff, rewrite it with
+`go test ./consent/cmp -run TestRulesListingGolden -update`.
