@@ -250,16 +250,19 @@ func TestConsentMasksEverywhere(t *testing.T) {
 				}
 				dir := t.TempDir()
 				target := "https://" + id + server.SiteSuffix + "/?token=" + url.QueryEscape(token) + "&email=buyer%40shop.test"
-				args := slices.Concat([]string{"consent", target, "--fail-on", "none", "-v", "--har",
-					"-o", "result.json", "-o", "report.md", "-o", "report.xml", "-o", "report.html",
+				// A format flag that an -o of its format uses writes no
+				// stdout of its own, so the --json case has no -o .json.
+				jsonOut := []string{"-o", "result.json"}
+				if c.json {
+					jsonOut = []string{"--json"}
+				}
+				args := slices.Concat([]string{"consent", target, "--fail-on", "none", "-v", "--har"}, jsonOut, []string{
+					"-o", "report.md", "-o", "report.xml", "-o", "report.html",
 					"-H", "Authorization: env:RHYTHM_ECHO_TB_AUTH", "-H", "X-Api-Token: env:RHYTHM_ECHO_TB_BEARER",
 					"--cookie", "env:RHYTHM_ECHO_TB_COOKIE"}, server.MapArgs(b.addr))
-				if c.json {
-					args = append(args, "--json")
-				}
 				env := echoEnv("RHYTHM_ECHO_TB_AUTH=Basic "+basic, "RHYTHM_ECHO_TB_BEARER=Bearer "+bearer, "RHYTHM_ECHO_TB_COOKIE=tb_session="+cookie)
 				stdout, stderr, _ := runEcho(t, bin, dir, env, 4*time.Minute, args...)
-				if _, err := os.Stat(filepath.Join(dir, "result.json")); err != nil {
+				if _, err := os.Stat(filepath.Join(dir, "report.html")); err != nil {
 					t.Fatalf("no report: %v\n%s", err, stderr)
 				}
 				if c.json && !strings.HasPrefix(strings.TrimSpace(stdout), "{") {
