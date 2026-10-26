@@ -71,6 +71,14 @@ func Stamp(t time.Time) string { return t.Format("2006-01-02T15-04-05") }
 // Runs holds recent runs and comparisons, one folder each.
 const Runs = "runs"
 
+// Consent holds consent check results, one evidence folder each
+// (consent/<name>-<6 hex>, as Runs).
+const Consent = "consent"
+
+// ConsentBaselines holds the consent results kept with --save, one
+// folder per name (consent/baselines/<name>).
+const ConsentBaselines = "consent/baselines"
+
 // dirMode is the mode of every folder the store makes: its files hold
 // captured messages (recipients, bodies), so only the owner may list
 // them, as only the owner may read the files (0600).
@@ -87,10 +95,10 @@ func mkdirParent(dir string) error {
 }
 
 // NewDir creates a folder for kind and returns it. For Runs it's
-// runs/<name>-<6 random hex digits>, made with a plain mkdir that retries
-// on a clash, so runs started in the same second (Stamp has one-second
-// resolution) or by two processes at once each get their own folder and
-// none is ever deleted. For Incoming it's the in-progress folder of the
+// runs/<name>-<6 random hex digits> (Consent the same under consent/),
+// made with a plain mkdir that retries on a clash, so runs started in
+// the same second (Stamp has one-second resolution) or by two processes
+// at once each get their own folder and none is ever deleted. For Incoming it's the in-progress folder of the
 // snapshot name, replaced when a failed snapshot left one behind. Any
 // other kind gets kind/name, which must not exist yet.
 func (s Store) NewDir(kind, name string) (string, error) {
@@ -108,8 +116,8 @@ func (s Store) NewDir(kind, name string) (string, error) {
 			return "", err
 		}
 		return dir, os.Mkdir(dir, dirMode)
-	case Runs:
-		parent := filepath.Join(s.Root, Runs)
+	case Runs, Consent:
+		parent := filepath.Join(s.Root, kind)
 		if err := mkdirParent(filepath.Join(parent, "x")); err != nil {
 			return "", err
 		}
