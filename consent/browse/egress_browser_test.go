@@ -16,84 +16,136 @@ import (
 
 	"github.com/go-rod/rod/lib/proto"
 
+	"github.com/RhythmShahriar/echo/consent"
 	"github.com/RhythmShahriar/echo/consent/browse/egress"
 	"github.com/RhythmShahriar/echo/consent/consenttest"
-	"github.com/RhythmShahriar/echo/internal/browser"
+	"github.com/RhythmShahriar/echo/internal/testenv"
 )
 
-// A loopback target's context reaches its own server through its guard;
-// a page outside every run's context reaches only the refuse-all
-// listener, which counts it as browser traffic and lets nothing out.
-func TestContextProxyAndRefuseAll(t *testing.T) {
-	needChrome(t)
-	var hits atomic.Int64
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/favicon.ico" {
-			http.NotFound(w, r)
-			return
-		}
-		hits.Add(1)
-		w.Header().Set("Content-Type", "text/html")
-		_, _ = io.WriteString(w, `<title>ok</title><img src="http://169.254.169.254/latest/meta-data/">`)
+// internalServer is a 127.0.0.1 server a public page must never reach;
+// it counts every request.
+func internalServer(t *testing.T) (*httptest.Server, *atomic.Int64) {
+	t.Helper()
+	n := new(atomic.Int64)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		n.Add(1)
+		_, _ = io.WriteString(w, "internal")
 	}))
-	defer srv.Close()
-	internal, err := egress.StartRefuseAll(nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = internal.Close() }()
-	guard, err := egress.Start(egress.Options{Target: "127.0.0.1"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = guard.Close() }()
-	p := consenttest.NewPlan(t)
-	p.Browser.NoDownload = true
-	b, err := Launch(t.Context(), p, internal.Addr())
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer b.Close()
+	t.Cleanup(srv.Close)
+	return srv, n
+}
 
-	sess, err := b.SessionWithProxy(guard.URL(), bypassLoopback)
-	if err != nil {
-		t.Fatal(err)
+// TestConsentEgressGuard: a public-looking page (answered through
+// --map-host) asks for a loopback server, the metadata address and a
+// private address by image, fetch and iframe. Every one is refused at
+// the guard, the loopback server is never reached and the run records
+// the refusals as private addresses.
+func TestConsentEgressGuard(t *testing.T) {
+	internal, hits := internalServer(t)
+	in := strings.TrimPrefix(internal.URL, "http://")
+	st := newSite(t)
+	st.page("shop.test/", `<!doctype html><title>shop</title>
+<img src="http://`+in+`/img">
+<img src="http://169.254.169.254/latest/meta-data/">
+<img src="http://10.0.0.5/img">
+<script>
+fetch("http://`+in+`/fetch", {mode: "no-cors"}).catch(() => {});
+fetch("http://169.254.169.254/fetch", {mode: "no-cors"}).catch(() => {});
+fetch("https://10.0.0.5/fetch", {mode: "no-cors"}).catch(() => {});
+</script>
+<iframe src="http://`+in+`/frame"></iframe>
+<iframe src="http://169.254.169.254/frame"></iframe>`)
+	p := consenttest.NewPlan(t, "http://shop.test/")
+	p.MapHosts = map[string]string{"shop.test": st.addr()}
+	g := newRig(t, p)
+	s := g.open("http://shop.test/", consent.RunNone)
+	g.load(s, "http://shop.test/")
+	time.Sleep(testenv.Timeout(time.Second))
+	rec := s.close()
+	if hits.Load() != 0 {
+		t.Errorf("the loopback server was reached %d times", hits.Load())
 	}
-	defer func() { _ = sess.Close() }()
-	tab, err := browser.NewTab(sess)
-	if err != nil {
-		t.Fatal(err)
+	refused := map[string]int{}
+	for _, e := range requestEvents(rec) {
+		if e.Request.Host == "shop.test" {
+			continue
+		}
+		if e.Request.Refused != egress.ReasonPrivate {
+			t.Errorf("%s %s: refused %q", e.Request.Type, e.Request.URL, e.Request.Refused)
+		}
+		refused[e.Request.Host]++
 	}
-	if err := tab.Timeout(20 * time.Second).Navigate(srv.URL + "/"); err != nil {
-		t.Fatal(err)
+	for _, h := range []string{"127.0.0.1", "169.254.169.254", "10.0.0.5"} {
+		if refused[h] < 2 {
+			t.Errorf("%s: %d refused requests recorded; want the image, fetch and frame ones (%v)", h, refused[h], refused)
+		}
 	}
-	_ = tab.Timeout(20 * time.Second).WaitLoad()
-	if hits.Load() != 1 {
-		t.Errorf("the target was reached %d times; want 1", hits.Load())
+	if st := g.guards[0].Stats(); st.Refused < 6 {
+		t.Errorf("guard stats %+v", st)
 	}
-	deadline := time.Now().Add(10 * time.Second)
-	for guard.Reason("169.254.169.254", "80") == "" && time.Now().Before(deadline) {
-		time.Sleep(50 * time.Millisecond)
-	}
-	if got := guard.Reason("169.254.169.254", "80"); got != egress.ReasonPrivate {
-		t.Errorf("metadata image: reason %q, stats %+v", got, guard.Stats())
-	}
+}
 
-	// The default context has no proxy of its own: the browser-wide
-	// listener answers and nothing reaches the server.
-	before := internal.Stats().BrowserInternal
-	page, err := b.Page(proto.TargetCreateTarget{URL: "about:blank"})
+// TestLoopbackTargetAllowed: a 127.0.0.1 target loads its own loopback
+// assets through its guard, never the metadata address.
+func TestLoopbackTargetAllowedInBrowser(t *testing.T) {
+	st := newSite(t)
+	st.page("127.0.0.1/", `<!doctype html><title>local</title><script src="/app.js"></script>
+<img src="http://169.254.169.254/latest/meta-data/">`)
+	st.page("127.0.0.1/app.js", `window.appRan = true;`)
+	g := newRig(t, consenttest.NewPlan(t, st.srv.URL+"/"))
+	s := g.open(st.srv.URL+"/", consent.RunNone)
+	g.load(s, st.srv.URL+"/")
+	g.waitFor(s, `window.appRan === true`)
+	rec := s.close()
+	if st.hits("127.0.0.1", "/app.js") != 1 {
+		t.Errorf("app.js reached the server %d times", st.hits("127.0.0.1", "/app.js"))
+	}
+	var meta *consent.Request
+	for _, e := range requestEvents(rec) {
+		if e.Request.Host == "169.254.169.254" {
+			meta = e.Request
+		}
+	}
+	if meta == nil || meta.Refused != egress.ReasonPrivate {
+		t.Errorf("metadata request: %+v", meta)
+	}
+}
+
+// TestConsentBrowserTrafficExcluded: traffic outside every run's context
+// (Chrome's own) reaches only the refuse-all listener, is counted as
+// browser traffic and never shows up in a run.
+func TestConsentBrowserTrafficExcluded(t *testing.T) {
+	internal, hits := internalServer(t)
+	st := newSite(t)
+	st.page("127.0.0.1/", `<!doctype html><title>run</title>`)
+	g := newRig(t, consenttest.NewPlan(t, st.srv.URL+"/"))
+	s := g.open(st.srv.URL+"/", consent.RunNone)
+	g.load(s, st.srv.URL+"/")
+
+	before := g.internal.Stats().BrowserInternal
+	// A page in the default context stands in for Chrome's own requests:
+	// no run owns it, so only the browser-wide proxy setting applies.
+	page, err := g.b.Page(proto.TargetCreateTarget{URL: "about:blank"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	_ = page.Timeout(20 * time.Second).Navigate(srv.URL + "/outside")
-	if hits.Load() != 1 {
-		t.Errorf("a page outside every context reached the server: %d hits", hits.Load())
+	_ = page.Timeout(testenv.Timeout(20 * time.Second)).Navigate(internal.URL + "/chrome-service")
+	_ = page.Timeout(testenv.Timeout(20 * time.Second)).Navigate("http://update.googleapis.com/service/update2")
+	rec := s.close()
+	if hits.Load() != 0 {
+		t.Errorf("traffic outside the runs reached a server %d times", hits.Load())
 	}
-	if internal.Stats().BrowserInternal <= before {
-		t.Errorf("refuse-all counted nothing: %+v", internal.Stats())
+	if got := g.internal.Stats().BrowserInternal - before; got < 2 {
+		t.Errorf("refuse-all counted %d requests; want 2", got)
 	}
-	if !strings.HasPrefix(guard.URL(), "http://127.0.0.1:") {
-		t.Errorf("guard at %s", guard.URL())
+	for _, e := range requestEvents(rec) {
+		if strings.Contains(e.Request.URL, "chrome-service") || e.Request.Host == "update.googleapis.com" {
+			t.Errorf("browser traffic in the run: %+v", e.Request)
+		}
+	}
+	for _, gd := range g.guards {
+		if gd.Stats().BrowserInternal != 0 {
+			t.Errorf("a run's guard saw browser traffic: %+v", gd.Stats())
+		}
 	}
 }
