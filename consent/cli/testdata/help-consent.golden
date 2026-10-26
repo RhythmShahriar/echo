@@ -1,4 +1,4 @@
-rhythm echo consent: check cookie consent: no choice, Accept and Reject in a real browser
+rhythm echo consent: check cookie consent with no choice, Accept and Reject
 
 Does Reject really reject? Echo clicks your cookie banner three ways and shows
 every tracker that fired before the choice or after Reject, with Consent Mode
@@ -116,8 +116,8 @@ Settings:
                              folder, else ./.echo)
 
 Subcommands (rhythm echo consent <subcommand> --help lists each one's flags):
-  detect <url>               find the banner and the buttons Echo would click;
-                             no verdict
+  detect <url>               find the banner and the buttons to click; no
+                             verdict
   report [<id>|latest]       show a saved consent result again
   verify <folder|file> [--key <file>]
                              check an evidence folder's hashes and signature

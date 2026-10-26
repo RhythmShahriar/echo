@@ -1,4 +1,5 @@
-rhythm echo consent prune: delete old consent results, keeping the newest n (default 20) and every baseline
+rhythm echo consent prune: delete old consent results, keeping the newest n
+(default 20) and every baseline
 
 Usage:
   rhythm echo consent prune [--keep <n>]

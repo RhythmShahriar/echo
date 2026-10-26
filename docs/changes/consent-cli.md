@@ -156,8 +156,8 @@ docs team writes the wiki from this file and real command output.
 - The picker (`rhythm echo` on a terminal) always offers `Check cookie consent on a page (no choice, Accept, Reject)`, after `Check that every capture layer works (doctor)`. It asks `Which page?` (description `A URL, e.g. https://staging.shop.test. Only sites you own or are authorised to test.`; empty: `enter the page's URL, e.g. https://staging.shop.test`), prefilled from `site:`, then runs `rhythm echo consent <url>` with the defaults.
 - Top-level help (`rhythm echo help`): the consent line is now three:
   ```
-    rhythm echo consent <url>...           check cookie consent: no choice, Accept and Reject in a real browser
-    rhythm echo consent detect <url>       find the banner and the buttons Echo would click; no verdict
+    rhythm echo consent <url>...           check cookie consent with no choice, Accept and Reject
+    rhythm echo consent detect <url>       find the banner and the buttons to click; no verdict
     rhythm echo consent report|verify|cmps|trackers|prune
                                            a saved result again, check its evidence, what Echo knows,
                                            delete old results (rhythm echo consent --help)

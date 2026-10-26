@@ -22,8 +22,8 @@ const oneLine = "Does Reject really reject? Echo clicks your cookie banner three
 
 // subHelp is what each subcommand does and how it is called.
 var subHelp = map[sub]struct{ use, about string }{
-	subCheck:    {"consent [<url>...] [flags]", "check cookie consent: no choice, Accept and Reject in a real browser"},
-	subDetect:   {"consent detect <url> [flags]", "find the banner and the buttons Echo would click; no verdict"},
+	subCheck:    {"consent [<url>...] [flags]", "check cookie consent with no choice, Accept and Reject"},
+	subDetect:   {"consent detect <url> [flags]", "find the banner and the buttons to click; no verdict"},
 	subReport:   {"consent report [<id>|latest] [flags]", "show a saved consent result again"},
 	subVerify:   {"consent verify <folder|file> [--key <file>]", "check an evidence folder's hashes and signature"},
 	subCmps:     {"consent cmps [--json]", "the consent banners Echo knows how to click"},
@@ -60,7 +60,8 @@ func usage(s sub) string {
 	var b strings.Builder
 	h := subHelp[s]
 	about := strings.ReplaceAll(h.about, "\n", " ")
-	fmt.Fprintf(&b, "rhythm echo %s: %s\n\n", s.command(), about)
+	// The title wraps at 80 columns like the rest; consent's own fits.
+	fmt.Fprintf(&b, "%s\n\n", wrap(fmt.Sprintf("rhythm echo %s: %s", s.command(), about), 80))
 	if s == subCheck {
 		b.WriteString(oneLine + "\n\n")
 	}

@@ -1,4 +1,4 @@
-rhythm echo consent detect: find the banner and the buttons Echo would click; no verdict
+rhythm echo consent detect: find the banner and the buttons to click; no verdict
 
 Usage:
   rhythm echo consent detect <url> [flags]

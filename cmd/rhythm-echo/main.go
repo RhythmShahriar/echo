@@ -214,8 +214,8 @@ Usage:
                                          send one caught email to a client through the relay
   rhythm echo check <domain>             SPF, DKIM, DMARC and MX for the domain you send from
   rhythm echo headers <file.eml | ->     check a real received email's authentication
-  rhythm echo consent <url>...           check cookie consent: no choice, Accept and Reject in a real browser
-  rhythm echo consent detect <url>       find the banner and the buttons Echo would click; no verdict
+  rhythm echo consent <url>...           check cookie consent with no choice, Accept and Reject
+  rhythm echo consent detect <url>       find the banner and the buttons to click; no verdict
   rhythm echo consent report|verify|cmps|trackers|prune
                                          a saved result again, check its evidence, what Echo knows,
                                          delete old results (rhythm echo consent --help)
