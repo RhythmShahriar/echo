@@ -1,7 +1,7 @@
 <!doctype html>
 <!-- Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
      SPDX-License-Identifier: MIT -->
-<!-- Replica of a CookieYes page for Echo's CMP tests (the older Cookie Law Info bar, detection only), written
+<!-- Replica of a CookieYes page for Echo's CMP tests (the older Cookie Law Info bar of a returning visitor, detection only), written
      fresh from CookieYes's public API documentation and the banner template of
      the GPL WordPress plugin (cookie-law-info 3.5.7); none of CookieYes's code.
      Source: https://www.cookieyes.com/documentation/retrieving-consent-data-using-api-getckyconsent/
@@ -10,7 +10,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Shop with CookieYes: the older Cookie Law Info bar, detection only</title>
+<title>Shop with CookieYes: the older Cookie Law Info bar of a returning visitor, detection only</title>
 <style>
   body { font: 16px/1.5 sans-serif; margin: 0; padding: 24px; }
   .cky-hide { display: none; }
@@ -28,7 +28,7 @@
 <body>
 <h1>Corner Shop</h1>
 <p>Hand-made goods, shipped from a small workshop.</p>
-<div id="cookie-law-info-bar" data-nosnippet="true" style="position: fixed; left: 0; right: 0; bottom: 0; background: #fff; border-top: 1px solid #ccc; padding: 12px 24px; z-index: 9999;">
+<div id="cookie-law-info-bar" data-nosnippet="true" style="display: none; position: fixed; left: 0; right: 0; bottom: 0; background: #fff; border-top: 1px solid #ccc; padding: 12px 24px; z-index: 9999;">
   <span>This website uses cookies to improve your experience.
   <a role="button" id="wt-cli-reject-btn" class="wt-cli-element medium cli-plugin-button cli-plugin-main-button cookie_action_close_header_reject cli_action_button" data-cli_action="reject">Reject</a>
   <a role="button" id="wt-cli-accept-all-btn" class="wt-cli-element medium cli-plugin-button wt-cli-accept-all-btn cookie_action_close_header cli_action_button" data-cli_action="accept_all">Accept All</a></span>

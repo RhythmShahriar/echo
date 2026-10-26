@@ -23,8 +23,9 @@ Every named rule has these pages, plus at most one special case:
 Special cases: `cookiebot/details-tab.html` (Reject through the Details
 tab, styled switches pre-ticked), `onetrust/preference-centre.html`
 (the preference center with styled switches, two pre-ticked) and
-`cookieyes/cookie-law-info.html` (the older Cookie Law Info bar:
-present, not found, since it keeps its choice in other cookies).
+`cookieyes/cookie-law-info.html` (the older Cookie Law Info bar of a
+returning visitor: present, not found; shown, the generic rule finds
+it).
 `usercentrics/closed-shadow.html` (the banner in a closed shadow root:
 found, no button, the API under `--click button,api`) and
 `borlabs/version-3.html` (the Borlabs Cookie 3 markup),

@@ -161,8 +161,9 @@ texts, for the release notes and the docs team.
   preference center modal outside the banner). Verified from the
   `cookieyes-consent` cookie: Reject needs `analytics` and
   `advertisement` off; Accept needs a decided state (`action:yes`)
-  only. A Cookie Law Info bar is reported present, not found: it keeps
-  its choice in other cookies the rule can't verify.
+  only. A Cookie Law Info bar alone makes CookieYes present, never
+  found: it keeps its choice in other cookies the rule can't verify.
+  Shown, that bar is found by the generic rule (C8) instead.
 - Complianz: detected by `#cmplz-cookiebanner-container`,
   `.cmplz-cookiebanner`, `window.complianz`, `window.cmplz_set_cookie`
   or a `complianz-gdpr/cookiebanner/js/complianz` script (the script is
