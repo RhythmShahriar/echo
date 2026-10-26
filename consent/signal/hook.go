@@ -51,8 +51,9 @@ var consentKeys = []string{"ad_storage", "analytics_storage", "ad_user_data", "a
 var setKeys = map[string]bool{"ads_data_redaction": true, "url_passthrough": true}
 
 // Hook parses one hooks.js record (consent.HookRecord JSON) into a
-// Signal: a Consent Mode default, update or set from gtag or dataLayer.
-// It returns nil, nil for any other record (a dataLayer event push such as
+// Signal: a Consent Mode default, update or set from gtag or dataLayer,
+// a Meta Pixel consent or init call or a Microsoft UET consent call. It
+// returns nil, nil for any other record (a dataLayer event push such as
 // {event: "consent"} is not Consent Mode). Signal.AtMS is left 0 for the
 // caller. Raw is the masked record, at most consent.MaxHookRecord bytes.
 func (Decoder) Hook(record []byte) (*consent.Signal, error) {
@@ -73,6 +74,10 @@ func (Decoder) Hook(record []byte) (*consent.Signal, error) {
 	switch h.Src {
 	case "gtag", "datalayer":
 		s = consentMode(h.Src, unwrap(h.Args))
+	case "fbq":
+		s, raw = meta(h.Args, raw)
+	case "uetq":
+		s = uet(h.Args)
 	}
 	if s == nil {
 		return nil, nil
