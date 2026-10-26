@@ -142,8 +142,30 @@ func load(fsys fs.FS, dir string) (*Catalog, error) {
 	var (
 		errs    []error
 		entries []*entry
+		deny    *denyList
 	)
+	// The deny list loads first: no entry may claim a name in it.
+	denyFile := path.Join(dir, notTrackersFile+".yaml")
+	denyFix := path.Join(dir, notTrackersFile+".fixtures.yaml")
+	if b, ok := data[denyFile]; ok {
+		fb, ok := data[denyFix]
+		if !ok {
+			return nil, fmt.Errorf("%s: no fixtures: add %s", denyFile, path.Base(denyFix))
+		}
+		if deny, err = loadDeny(denyFile, b, denyFix, fb); err != nil {
+			return nil, err
+		}
+	}
 	for _, f := range files {
+		if f == denyFile || f == denyFix {
+			continue
+		}
+		if strings.HasPrefix(path.Base(f), "_") {
+			// Only the deny list starts with "_"; anything else is a
+			// typo that would otherwise load as an entry.
+			errs = append(errs, fmt.Errorf("%s: only %s.yaml may start with _", f, notTrackersFile))
+			continue
+		}
 		if strings.HasSuffix(f, ".fixtures.yaml") {
 			if _, ok := data[strings.TrimSuffix(f, ".fixtures.yaml")+".yaml"]; !ok {
 				errs = append(errs, fmt.Errorf("%s: fixtures without a catalog file", f))
@@ -168,6 +190,10 @@ func load(fsys fs.FS, dir string) (*Catalog, error) {
 	}
 	c, err := newCatalog(entries)
 	if err != nil {
+		return nil, err
+	}
+	c.deny = deny
+	if err := c.checkDeny(); err != nil {
 		return nil, err
 	}
 	c.info = consent.DataInfo{Version: consent.DataVersion, SHA256: hashFiles(files, data), Count: len(entries)}

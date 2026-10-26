@@ -109,3 +109,10 @@ Notes users may notice:
 - A `dl` or `dr` page URL over 2048 bytes is left out of `params` rather than cut and masked.
 - Every value a hit keeps is at most 1024 bytes (event names 100 characters, other parameters 256, `dl` and `dr` 1024, Consent Mode values 64).
 - Plausible on any host needs a JSON object body whose `n` and `u` are JSON strings; any other body (a number or null for `n` or `u`, an array, a cut or malformed object, a form body) is not Plausible.
+
+## Cookies that are never trackers (T8)
+
+- A deny list, `consent/tracker/catalog/_not_trackers.yaml`, loads before the entries. A cookie or storage name on it is never reported as a tracker, even when an entry's pattern would fit it. It lists consent manager cookies (`CookieConsent`, `OptanonConsent`, `OptanonAlertBoxClosed`, `cookieyes-consent`, `cmplz_*`, `borlabs-cookie`, `euconsent-v2`, `didomi_token`, `_iub_cs-*`, `uc_*`, `CookieScriptConsent`, `cookielawinfo-*`), session and platform cookies (`PHPSESSID`, `JSESSIONID`, `laravel_session`, `XSRF-TOKEN`, `wordpress_*`, `wp-settings-*`, `wordpress_test_cookie`, `woocommerce_*`, `wp_woocommerce_session_*`) and Cloudflare's `__cf_bm`, `cf_clearance` and `__cfruid`; for storage `uc_*`, `didomi_token`, `euconsent-v2`, `_iub_cs-*` and `CookieScriptConsent`.
+- A cookie no entry claims is not a tracker (`nil`); the report lists it under other cookies by name and length only. A tracker cookie's need (`needed`, `exempt`, `no`) comes from its entry.
+- The catalog hash now covers `_not_trackers.yaml` and its fixtures too; the entry count stays 47.
+- New catalog errors: `catalog/x.yaml:9: cookies: "PHPSESSID" is listed in _not_trackers.yaml as never a tracker`, `catalog/_not_trackers.fixtures.yaml:3: cookies.no_match "_shpx" is classified as shop-pixel`, `catalog/_not_trackers.fixtures.yaml:2: cookies.match "_shop" is no tracker: the deny list reaches too far`, `catalog/_not_trackers.yaml:1: cookies: "PHPSESSID": the deny list holds names only, never a domain`, `catalog/_other.yaml: only _not_trackers.yaml may start with _`.

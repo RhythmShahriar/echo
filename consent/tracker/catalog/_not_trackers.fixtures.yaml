@@ -1,0 +1,46 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+cookies:
+  # Still trackers: the deny list doesn't reach these.
+  match: [_ga, _ga_TESTBED001, _fbp, _hjSessionUser_123, _pk_id.1.abcd, "mp_abc_mixpanel", _clck, _uetsid, __hstc, ajs_anonymous_id]
+  no_match:
+    - CookieConsent
+    - OptanonConsent
+    - OptanonAlertBoxClosed
+    - cookieyes-consent
+    - cmplz_marketing
+    - cmplz_statistics
+    - cmplz_consented_services
+    - borlabs-cookie
+    - euconsent-v2
+    - didomi_token
+    - _iub_cs-12345678
+    - uc_settings
+    - uc_user_interaction
+    - CookieScriptConsent
+    - cookielawinfo-checkbox-analytics
+    - cookielawinfo-checkbox-advertisement
+    - PHPSESSID
+    - JSESSIONID
+    - laravel_session
+    - XSRF-TOKEN
+    - wordpress_logged_in_0123456789abcdef
+    - wordpress_sec_0123456789abcdef
+    - wp-settings-1
+    - wp-settings-time-1
+    - wordpress_test_cookie
+    - woocommerce_cart_hash
+    - woocommerce_items_in_cart
+    - wp_woocommerce_session_0123456789abcdef
+    - __cf_bm
+    - cf_clearance
+    - __cfruid
+    # Lookalikes of tracker names that no entry claims.
+    - ga_banner_closed
+    - _gallery
+    - fbp_banner
+    - my_shop_pref
+storage:
+  match: [mp_abc_mixpanel, ajs_user_id, _hjid]
+  no_match: [uc_settings, uc_user_interaction, didomi_token, euconsent-v2, _iub_cs-12345678, CookieScriptConsent, cart_items]

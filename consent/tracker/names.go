@@ -100,9 +100,10 @@ func (p *namePat) onDomain(domain string) bool {
 
 // Cookie classifies a cookie by its name (and, for names as generic as
 // IDE, its domain). The cookie is not changed; nil means it isn't a
-// tracker cookie.
+// tracker cookie. A name on the deny list (_not_trackers.yaml) is never
+// a tracker, whatever pattern an entry has.
 func (c *Catalog) Cookie(k *consent.Cookie) *consent.Hit {
-	if k == nil {
+	if k == nil || c.deny != nil && c.deny.cookies.find(k.Name, "") != nil {
 		return nil
 	}
 	return nameHit(c.cookies.find(k.Name, k.Domain))
@@ -111,7 +112,7 @@ func (c *Catalog) Cookie(k *consent.Cookie) *consent.Hit {
 // Storage classifies a localStorage, sessionStorage or IndexedDB name
 // as Cookie does a cookie.
 func (c *Catalog) Storage(k *consent.StorageKey) *consent.Hit {
-	if k == nil {
+	if k == nil || c.deny != nil && c.deny.storage.find(k.Key, "") != nil {
 		return nil
 	}
 	return nameHit(c.storage.find(k.Key, ""))

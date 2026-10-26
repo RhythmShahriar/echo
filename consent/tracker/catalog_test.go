@@ -71,12 +71,15 @@ func TestLoadAll(t *testing.T) {
 	files, _ := fs.Glob(catalogFS, "catalog/*.yaml")
 	entries := 0
 	for _, f := range files {
-		if !strings.HasSuffix(f, ".fixtures.yaml") {
+		if !strings.HasSuffix(f, ".fixtures.yaml") && !strings.HasPrefix(path.Base(f), "_") {
 			entries++
 		}
 	}
 	if len(c.entries) != entries || entries == 0 {
 		t.Fatalf("loaded %d entries from %d catalog files", len(c.entries), entries)
+	}
+	if c.deny == nil {
+		t.Fatal("the deny list didn't load")
 	}
 	if consent.Linked().Classifier != consent.Classifier(builtin) {
 		t.Fatal("the built-in catalog isn't the registered Classifier")

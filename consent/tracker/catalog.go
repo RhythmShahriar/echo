@@ -53,6 +53,9 @@ import (
 // keys are errors naming the file and line, so a typo can't switch a
 // rule off without anyone noticing.
 
+// The pattern names the files, so _not_trackers.yaml is embedded too
+// (a directory pattern would skip names starting with _).
+//
 //go:embed catalog/*.yaml
 var catalogFS embed.FS
 
@@ -66,6 +69,7 @@ type Catalog struct {
 	tiers   [3][]*rule
 	cookies names
 	storage names
+	deny    *denyList // names that are never trackers; nil in tests
 	info    consent.DataInfo
 }
 
