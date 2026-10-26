@@ -31,6 +31,7 @@ reject:
   second_layer:            # open the settings, switch toggles off, save
     open: ["#CybotCookiebotDialogBodyLevelButtonCustomize"]
     toggles_off: "input.CybotCookiebotDialogBodyLevelButton:not([disabled])"
+    press_off: []          # buttons that switch a purpose off once pressed (Didomi's Disagree)
     save: ["#CybotCookiebotDialogBodyLevelButtonLevelOptinAllowallSelection"]
 reopen:
   selectors: ["#CybotCookiebotDialogBodyButtonDetails"]
@@ -47,6 +48,7 @@ verify:                    # where the stored choice is read
   state_js: ""             # defaults to api.state
   accepted: {statistics: true, marketing: true}
   rejected: {statistics: false, marketing: false}
+  tcf: false               # true: read euconsent-v2 when the CMP's own state is undecided
 geo_override:              # only when the vendor documents a test parameter
   param: otgeo
   value_from: country
@@ -63,6 +65,11 @@ visible one is the banner. When several elements match a selector the
 first visible one counts. A banner behind a closed shadow root counts
 as shown when hit tests land on its host; its buttons can't be reached,
 so only the rule's `api` can choose there (`--click button,api`).
+
+`press_off` buttons are pressed when `aria-pressed` isn't `true`.
+With `verify.tcf` a choice kept only in the TC string is verified from
+it: Accept needs purpose 1 consented, Reject no purpose consented
+(`verified_by: tcf`).
 
 The loader refuses, with the file and line:
 

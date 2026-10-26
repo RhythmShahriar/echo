@@ -245,3 +245,60 @@ texts, for the release notes and the docs team.
   All rows pass Detect, Find and Choose in headless Chrome and in the
   FakeTab tests; on the closed root `--click button` gives `no_button`
   in a few ms and `--click button,api` a verified API choice.
+
+## C7 Didomi and iubenda rules
+
+- `consent cmps` rows:
+  - `didomi  #didomi-host, window.Didomi  button, api  first layer or settings, api  didomi_token cookie`
+  - `iubenda  #iubenda-cs-banner, window._iub  button, api  first layer or settings, api  _iub_cs-* cookies`
+  (PRD 6.4 shows Didomi's REJECT as `first layer or learn more, api`,
+  iubenda's as `first layer, api` and its STATE FROM as
+  `_iub_cs-* cookie`; the listing's own words are used.)
+- Rule format: `reject.second_layer.press_off` (one selector or a
+  list): buttons that switch a purpose off once pressed; each one whose
+  `aria-pressed` isn't `true` is clicked once. `verify.tcf: true`: when
+  the CMP's own state is undecided, the TC string (`euconsent-v2`) is
+  read; Accept needs purpose 1 consented, Reject no purpose consented;
+  `verified_by` is then `tcf`.
+- A stored value the state reader can't read (it returns an undecided
+  state with an error) now counts as a choice not verified
+  (`state_unchanged` or `click_missed`), not a failed run.
+- Didomi: detected by `#didomi-host`, `#didomi-notice`, `window.Didomi`,
+  `window.didomiOnReady` or an `sdk.privacy-center.org` script. Accept
+  `#didomi-notice-agree-button`; Reject `#didomi-notice-disagree-button`,
+  else Learn More (`#didomi-notice-learn-more-button`), every purpose's
+  Disagree pressed (`.didomi-consent-popup-categories button[data-choice=disagree]`
+  or `.didomi-components-radio__option--disagree`) and Save
+  (`.didomi-consent-popup-actions button[aria-label*=Save]`). API:
+  `Didomi.setUserAgreeToAll()`, `Didomi.setUserDisagreeToAll()`,
+  `Didomi.preferences.show()`, state
+  `JSON.stringify(Didomi.getCurrentUserStatus())`. Verified from
+  `didomi_token` (purpose IDs: Accept needs `cookies`, Reject `cookies`
+  and `create_ads_profile` off), else from `euconsent-v2`. `tcf` is
+  true when the page defines `__tcfapi`.
+- iubenda: detected by `#iubenda-cs-banner`, `window._iub` or a
+  `cdn.iubenda.com` or `cs.iubenda.com` script. Accept
+  `.iubenda-cs-accept-btn`; Reject `.iubenda-cs-reject-btn`, else
+  Customize (`.iubenda-cs-customize-btn`), every
+  `#iubenda-iframe .purposes-item-input` off and
+  `#iubenda-iframe .iubenda-cs-save-btn`. API:
+  `_iub.cs.api.acceptAll()`, `_iub.cs.api.rejectAll()`,
+  `_iub.cs.api.openPreferences()`, state
+  `JSON.stringify(_iub.cs.api.getPreferences ? _iub.cs.api.getPreferences() : null)`.
+  Verified from the `_iub_cs-<id>` cookie: Reject needs purposes 4
+  (measurement) and 5 (marketing) off; Accept a decided state.
+- Checked against the vendors' documentation: Didomi's Web SDK
+  reference has the four calls (it names `shouldUserStatusBeCollected`,
+  not the `shouldConsentBeCollected` some guides use); iubenda's
+  advanced guide lists `acceptAll`, `rejectAll`, `openPreferences` and
+  `getPreferences` (the testbed lane hadn't found them; they are
+  there) and the `iubenda-cs-preferences-link` reopen class. Neither
+  documents its element IDs and classes; they are the ones the served
+  banners carry. iubenda's preferences panel selectors follow the
+  testbed lane's replica and are unverified on a live site.
+- Reopen data: Didomi and iubenda through the API, iubenda also
+  `.iubenda-cs-preferences-link`.
+- Replica pages for both (seven standard pages, plus `didomi/tcf.html`
+  and `iubenda/floating.html`). All rows pass Detect, Find and Choose
+  (button and `--click api`) in headless Chrome (the TCF page verified
+  by its TC string) as well as in the FakeTab tests.

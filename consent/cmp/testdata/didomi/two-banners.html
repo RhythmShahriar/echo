@@ -1,0 +1,70 @@
+<!doctype html>
+<!-- Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+     SPDX-License-Identifier: MIT -->
+<!-- Replica of a Didomi page for Echo's CMP tests (the notice and a newsletter offer), written
+     fresh from Didomi's public Web SDK reference and cookies page and the
+     markup its notice carries on public pages; none of Didomi's code.
+     Source: https://developers.didomi.io/cmp/web-sdk/reference/api
+     Captured 2026-10-26. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Shop with Didomi: the notice and a newsletter offer</title>
+<style>
+  body { font: 16px/1.5 sans-serif; margin: 0; padding: 24px; }
+  #didomi-notice { position: fixed; left: 0; right: 0; bottom: 0; z-index: 2147483640; background: #fff;
+    border-top: 2px solid #05687b; padding: 16px 24px; box-shadow: 0 -4px 16px rgba(0,0,0,.2); }
+  #didomi-popup { display: none; position: fixed; top: 10%; left: 20%; right: 20%; z-index: 2147483641; background: #fff; border: 1px solid #333; padding: 16px; }
+  .didomi-components-button, .didomi-components-radio__option { margin: 4px 8px 4px 0; padding: 8px 16px; font-size: 15px; }
+  .didomi-components-radio__option[aria-pressed=true] { background: #05687b; color: #fff; }
+  .didomi-consent-popup-data-processing { padding: 4px 0; }
+  .newsletter { position: fixed; top: 24px; right: 24px; z-index: 1000; width: 280px; background: #ffe; border: 1px solid #aa8; padding: 16px; }
+</style>
+</head>
+<body>
+<h1>Corner Shop</h1>
+<p>Hand-made goods, shipped from a small workshop.</p>
+<div class="newsletter" role="dialog" aria-label="Newsletter">
+  <p>Get 10% off your first order.</p>
+  <button id="newsletter-accept">Accept offer</button>
+  <button class="newsletter-close">No thanks</button>
+</div>
+<template id="replica-banner">
+<div id="didomi-host" class="didomi-host" data-nosnippet="true" aria-hidden="false">
+  <div id="didomi-notice" class="didomi-regular-notice didomi-notice-banner bottom" role="region" aria-label="didomi-notice">
+    <div id="didomi-notice-title"><b>We care about your privacy</b></div>
+    <div class="didomi-notice-text">We and our partners store and/or access information on a device, such as cookies, and process personal data. <a href="/privacy">Privacy policy</a></div>
+    <div id="buttons" class="didomi-buttons">
+      <button id="didomi-notice-learn-more-button" class="didomi-components-button didomi-button didomi-learn-more-button" aria-label="Learn More: Configure your consent preferences">Learn More</button>
+      <button id="didomi-notice-disagree-button" class="didomi-components-button didomi-button didomi-dismiss-button didomi-components-button--color didomi-button-highlight" aria-label="Disagree and close: Disagree to our data processing and close">Disagree and close</button>
+      <button id="didomi-notice-agree-button" class="didomi-components-button didomi-button didomi-components-button--color didomi-button-highlight highlight-button" aria-label="Agree and close: Agree to our data processing and close">Agree and close</button>
+    </div>
+  </div>
+  <div id="didomi-popup" class="didomi-popup-container" role="dialog" aria-label="Your consent preferences">
+    <div class="didomi-consent-popup-preferences didomi-consent-popup-preferences-purposes">
+      <div class="didomi-consent-popup-categories">
+      <div class="didomi-consent-popup-data-processing" data-purpose="cookies"><span class="didomi-consent-popup-data-processing__name">Store and/or access information on a device</span>
+        <button class="didomi-components-radio__option didomi-components-radio__option--disagree" data-choice="disagree" aria-pressed="false">Disagree</button>
+        <button class="didomi-components-radio__option didomi-components-radio__option--agree" data-choice="agree" aria-pressed="false">Agree</button></div>
+      <div class="didomi-consent-popup-data-processing" data-purpose="select_basic_ads"><span class="didomi-consent-popup-data-processing__name">Use limited data to select advertising</span>
+        <button class="didomi-components-radio__option didomi-components-radio__option--disagree" data-choice="disagree" aria-pressed="false">Disagree</button>
+        <button class="didomi-components-radio__option didomi-components-radio__option--agree" data-choice="agree" aria-pressed="false">Agree</button></div>
+      <div class="didomi-consent-popup-data-processing" data-purpose="create_ads_profile"><span class="didomi-consent-popup-data-processing__name">Create profiles for personalised advertising</span>
+        <button class="didomi-components-radio__option didomi-components-radio__option--disagree" data-choice="disagree" aria-pressed="false">Disagree</button>
+        <button class="didomi-components-radio__option didomi-components-radio__option--agree" data-choice="agree" aria-pressed="false">Agree</button></div>
+      <div class="didomi-consent-popup-data-processing" data-purpose="measure_content_performance"><span class="didomi-consent-popup-data-processing__name">Measure content performance</span>
+        <button class="didomi-components-radio__option didomi-components-radio__option--disagree" data-choice="disagree" aria-pressed="false">Disagree</button>
+        <button class="didomi-components-radio__option didomi-components-radio__option--agree" data-choice="agree" aria-pressed="false">Agree</button></div>
+      </div>
+      <div class="didomi-consent-popup-actions didomi-consent-popup-footer">
+        <button class="didomi-components-button didomi-button" aria-label="Save: Save my choices">Save</button>
+      </div>
+    </div>
+  </div>
+</div>
+</template>
+<script>window.didomiConfig = {}; window.didomiOnReady = window.didomiOnReady || [];</script>
+<script id="spcloader" src="sdk.privacy-center.org/loader.js" data-show="now"></script>
+</body>
+</html>

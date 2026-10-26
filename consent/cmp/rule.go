@@ -39,6 +39,7 @@ type ruleFile struct {
 		SecondLayer *struct {
 			Open       []string  `yaml:"open"`
 			TogglesOff oneOrMany `yaml:"toggles_off"`
+			PressOff   oneOrMany `yaml:"press_off"`
 			Save       []string  `yaml:"save"`
 		} `yaml:"second_layer"`
 	} `yaml:"reject"`
@@ -59,6 +60,7 @@ type ruleFile struct {
 		StateJS  string          `yaml:"state_js"`
 		Accepted map[string]bool `yaml:"accepted"`
 		Rejected map[string]bool `yaml:"rejected"`
+		TCF      bool            `yaml:"tcf"`
 	} `yaml:"verify"`
 	GeoOverride *struct {
 		Param     string `yaml:"param"`
@@ -102,6 +104,7 @@ type chain struct {
 type secondLayer struct {
 	Open    []chain
 	Toggles []consent.Locator // switched off when on
+	Press   []consent.Locator // buttons that switch a purpose off, pressed when not yet
 	Save    []chain
 }
 
@@ -136,6 +139,7 @@ type rule struct {
 	Verify     consent.VerifySpec
 	Accepted   map[string]bool
 	Rejected   map[string]bool
+	TCF        bool // the TC string (euconsent-v2) verifies when the CMP's own state is unread
 	Geo        *geoOverride
 	Sources    []string
 	Fixtures   []string
@@ -396,6 +400,7 @@ func (c *checker) rule(f *ruleFile) *rule {
 			c.fail("reject.second_layer.save", "missing")
 		}
 		r.Second.Toggles = c.locators("reject.second_layer.toggles_off", s.TogglesOff)
+		r.Second.Press = c.locators("reject.second_layer.press_off", s.PressOff)
 	}
 	if f.ID != genericID {
 		if len(r.Accept) == 0 && f.API.Accept == "" {
@@ -446,7 +451,7 @@ func (c *checker) rule(f *ruleFile) *rule {
 		c.fail("verify", "want cookies, storage or state_js for parser %s", v.Parser)
 	}
 	r.Verify = consent.VerifySpec{Parser: v.Parser, Cookies: v.Cookies, Storage: v.Storage, StateJS: stateJS}
-	r.Accepted, r.Rejected = v.Accepted, v.Rejected
+	r.Accepted, r.Rejected, r.TCF = v.Accepted, v.Rejected, v.TCF
 
 	if g := f.GeoOverride; g != nil {
 		if !paramName.MatchString(g.Param) {

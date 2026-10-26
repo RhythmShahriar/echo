@@ -255,11 +255,32 @@ func (d *driver) State(ctx context.Context, t consent.Tab, info consent.CMPInfo)
 	return readState(ctx, t, r)
 }
 
+// The TC string every TCF CMP stores and the source the state reader
+// gives it.
+const (
+	tcfCookie = "euconsent-v2"
+	tcfSource = "tcf"
+)
+
 // readState asks the linked state reader for the rule's stored choice.
+// A stored value it can't read comes back as an undecided state with an
+// error: that is a choice not verified, not a failed run. A TCF rule
+// whose own state is undecided is read again from the TC string.
 func readState(ctx context.Context, t consent.Tab, r *rule) (*consent.CMPState, error) {
 	sr := consent.Linked().State
 	if sr == nil {
 		return nil, consent.Need(consent.StageState)
 	}
-	return sr.Read(ctx, t, r.Verify)
+	st, err := sr.Read(ctx, t, r.Verify)
+	if err != nil && (st == nil || ctx.Err() != nil) {
+		return nil, err
+	}
+	if !r.TCF || (st != nil && st.Decided) {
+		return st, nil
+	}
+	tc, terr := sr.Read(ctx, t, consent.VerifySpec{Parser: "tcf", Cookies: []string{tcfCookie}})
+	if terr == nil && tc != nil && tc.Decided {
+		return tc, nil
+	}
+	return st, nil
 }

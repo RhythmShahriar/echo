@@ -87,6 +87,9 @@ func TestReplicaDetect(t *testing.T) {
 			if info.Found != row.Found || info.Present != row.Present || info.DetectedBy != row.DetectedBy {
 				t.Errorf("%s: found %v present %v by %q; want %v %v %q", name, info.Found, info.Present, info.DetectedBy, row.Found, row.Present, row.DetectedBy)
 			}
+			if info.TCF != row.TCF {
+				t.Errorf("%s: tcf %v; want %v", name, info.TCF, row.TCF)
+			}
 			if row.Present && info.ID != r.ID {
 				t.Errorf("%s: detected %q", name, info.ID)
 			}
@@ -118,7 +121,28 @@ type replicaState struct {
 	row   expectPage
 }
 
+// tcfOnly is a state reader for a CMP that keeps the choice in the TC
+// string alone: its own parser reads nothing.
+type tcfOnly struct{ fs *consenttest.FakeState }
+
+func (s tcfOnly) Read(ctx context.Context, t consent.Tab, v consent.VerifySpec) (*consent.CMPState, error) {
+	st, err := s.fs.Read(ctx, t, v)
+	if v.Parser != "tcf" {
+		return nil, err
+	}
+	return st, err
+}
+
 func (s *replicaState) store(cats map[string]bool) {
+	if s.row.Stores == "tcf" {
+		tc := &consent.TCF{Version: 2, Valid: true}
+		if maps.Equal(cats, s.r.Accepted) {
+			tc.PurposesConsent = []int{1, 2, 3, 4, 7, 9, 10}
+		}
+		s.fs.State = &consent.CMPState{CMP: "tcf", Source: "tcf", Decided: true, TCF: tc}
+		s.pg.banner(s.r.ID, false)
+		return
+	}
 	var src string
 	if len(s.r.Verify.Cookies) > 0 {
 		src = "cookie:" + s.r.Verify.Cookies[0]
@@ -178,7 +202,11 @@ func TestReplicaChoose(t *testing.T) {
 				name := fmt.Sprintf("%s/%s %s", r.ID, row.Page, k)
 				pg := replicaPage(d, r, row)
 				fs := &consenttest.FakeState{}
-				consenttest.Use(t, consent.Stages{State: fs})
+				var reader consent.StateReader = fs
+				if row.Stores == "tcf" {
+					reader = tcfOnly{fs}
+				}
+				consenttest.Use(t, consent.Stages{State: reader})
 				p := consenttest.NewPlan(t)
 				info, err := d.Detect(context.Background(), pg.tab, p, p.BannerWait)
 				if err != nil || !info.Found {
@@ -203,6 +231,9 @@ func TestReplicaChoose(t *testing.T) {
 				if err != nil || reason != consent.ReasonNone || !ch.Verified || ch.Layer != want {
 					t.Errorf("%s: Choose %+v, %q, %v; want verified at layer %d", name, ch, reason, err, want)
 					continue
+				}
+				if row.Stores == "tcf" && ch.VerifiedBy != "tcf" {
+					t.Errorf("%s: verified by %q; want tcf", name, ch.VerifiedBy)
 				}
 				if first := clicked(pg)[0]; !strings.HasPrefix(ch.Selector, first) || !strings.HasPrefix(found.Selector, first) {
 					t.Errorf("%s: Find said %q, Choose clicked %q first", name, found.Selector, first)

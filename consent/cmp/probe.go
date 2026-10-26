@@ -89,12 +89,15 @@ func probe(ctx context.Context, t consent.Tab, locs []consent.Locator, within []
 	return out, err
 }
 
-// toggles lists the switches l matches.
-func toggles(ctx context.Context, t consent.Tab, l consent.Locator) ([]toggle, error) {
+// toggles lists the switches l matches. With press they are buttons
+// that switch a purpose off once pressed (Didomi's Disagree), so one
+// not yet pressed counts as on.
+func toggles(ctx context.Context, t consent.Tab, l consent.Locator, press bool) ([]toggle, error) {
 	var out []toggle
 	err := evalJSON(ctx, t, togglesJS, struct {
-		Loc consent.Locator `json:"loc"`
-	}{l}, &out)
+		Loc   consent.Locator `json:"loc"`
+		Press bool            `json:"press,omitempty"`
+	}{l, press}, &out)
 	if len(out) > 200 {
 		out = out[:200]
 	}

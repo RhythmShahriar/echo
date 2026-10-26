@@ -388,6 +388,8 @@ type expectPage struct {
 	AcceptLayer   int    `yaml:"accept_layer"`
 	RejectLayer   int    `yaml:"reject_layer"`
 	Fallback      bool   `yaml:"fallback"` // no button to click: --click button,api uses the API
+	TCF           bool   `yaml:"tcf"`      // the page defines __tcfapi
+	Stores        string `yaml:"stores"`   // tcf: the choice is kept in the TC string only
 	Sees          sees   `yaml:"sees"`
 }
 

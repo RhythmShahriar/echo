@@ -27,8 +27,11 @@ tab, styled switches pre-ticked), `onetrust/preference-centre.html`
 present, not found, since it keeps its choice in other cookies).
 `usercentrics/closed-shadow.html` (the banner in a closed shadow root:
 found, no button, the API under `--click button,api`) and
-`borlabs/version-3.html` (the Borlabs Cookie 3 markup). Complianz has
-none.
+`borlabs/version-3.html` (the Borlabs Cookie 3 markup),
+`didomi/tcf.html` (a TCF setup: `__tcfapi` and the choice kept in
+`euconsent-v2` only) and `iubenda/floating.html` (the floating layout:
+Accept and "Learn more and customize", with a close button never
+clicked). Complianz has none.
 
 ## expect.yaml
 
@@ -44,6 +47,8 @@ pages:
     reject_layer: 1        # 1, or 2 when Reject is only in the settings
     fallback: false        # true: no button to click (closed shadow root);
                            # --click button,api makes the choice with the API
+    tcf: false             # the page defines __tcfapi
+    stores: tcf            # the choice is kept in the TC string only
     sees:                  # the page as the scripts see it (FakeTab tests)
       selectors: ["#CybotCookiebotDialog"]
       globals: [Cookiebot]

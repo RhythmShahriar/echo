@@ -496,3 +496,121 @@ func TestNeverHides(t *testing.T) {
 		t.Fatal("pageWrites doesn't tell writes from reads")
 	}
 }
+
+func TestChooseSecondLayerPress(t *testing.T) {
+	// Didomi's purposes: a Disagree button per purpose, pressed when the
+	// purpose is off. The toggles script reports one not pressed as on.
+	pressRule := strings.Replace(acmeRule, `    toggles_off: "#acme-prefs input.toggle:not([disabled])"`,
+		`    press_off: "#acme-prefs button.disagree"`, 1)
+	d, pg, fs, p := chooseSetup(t, map[string]string{"acme.yaml": pressRule})
+	if r := d.byID["acme"]; len(r.Second.Toggles) != 0 || len(r.Second.Press) != 1 || r.Second.Press[0].CSS != "#acme-prefs button.disagree" {
+		t.Fatalf("second layer = %+v", r.Second)
+	}
+	pg.show("#acme-settings", "Settings")
+	pg.tab.OnClick = func(tab *consenttest.FakeTab, l consent.Locator) {
+		switch l.CSS {
+		case "#acme-settings":
+			pg.show("#acme-save", "Save")
+			pg.toggles = []toggle{{Path: "#d-stats", On: true}, {Path: "#d-ads"}, {Path: "#d-needed", On: true, Disabled: true}}
+			pg.sync()
+		case "#d-stats":
+			pg.toggles[0].On = false
+			pg.sync()
+		case "#acme-save":
+			decide(pg, fs, pg.toggles[0].On)
+		}
+	}
+	ch, reason, err := d.Choose(context.Background(), pg.tab, p, acme, consent.RunReject)
+	if err != nil || reason != consent.ReasonNone || !ch.Verified || ch.Layer != 2 {
+		t.Fatalf("choice %+v, reason %q, err %v", ch, reason, err)
+	}
+	if got := clicked(pg); !slices.Equal(got, []string{"#acme-settings", "#d-stats", "#acme-save"}) {
+		t.Fatalf("clicked %v; want the opener, the one Disagree not yet pressed, save", got)
+	}
+}
+
+// tcfReader answers the rule's own parser with own and the tcf parser
+// with tc.
+type tcfReader struct {
+	own, tc *consent.CMPState
+	specs   []consent.VerifySpec
+}
+
+func (s *tcfReader) Read(_ context.Context, _ consent.Tab, v consent.VerifySpec) (*consent.CMPState, error) {
+	s.specs = append(s.specs, v)
+	if v.Parser == "tcf" {
+		return s.tc, nil
+	}
+	return s.own, nil
+}
+
+func TestChooseTCF(t *testing.T) {
+	tcfRule := strings.Replace(acmeRule, "  rejected: {statistics: false}\n", "  rejected: {statistics: false}\n  tcf: true\n", 1)
+	for _, tc := range []struct {
+		kind     consent.RunKind
+		purposes []int
+		ok       bool
+	}{
+		{consent.RunAccept, []int{1, 2, 3}, true},
+		{consent.RunAccept, []int{2}, false},
+		{consent.RunReject, nil, true},
+		{consent.RunReject, []int{1}, false},
+	} {
+		d, pg, _, p := chooseSetup(t, map[string]string{"acme.yaml": tcfRule})
+		rd := &tcfReader{}
+		consenttest.Use(t, consent.Stages{State: rd})
+		pg.show("#acme-"+string(tc.kind), "Choose")
+		pg.tab.OnClick = func(*consenttest.FakeTab, consent.Locator) {
+			rd.tc = &consent.CMPState{CMP: "tcf", Source: "tcf", Decided: true, TCF: &consent.TCF{Version: 2, Valid: true, PurposesConsent: tc.purposes}}
+			pg.banner("acme", false)
+		}
+		ch, reason, err := d.Choose(context.Background(), pg.tab, p, acme, tc.kind)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if tc.ok != (reason == consent.ReasonNone && ch.Verified && ch.VerifiedBy == "tcf") {
+			t.Errorf("%s with purposes %v: choice %+v, reason %q", tc.kind, tc.purposes, ch, reason)
+		}
+		if !tc.ok && reason != consent.ReasonStateUnchanged {
+			t.Errorf("%s with purposes %v: reason %q; want state_unchanged", tc.kind, tc.purposes, reason)
+		}
+		if !slices.ContainsFunc(rd.specs, func(v consent.VerifySpec) bool { return v.Parser == "tcf" && v.Cookies[0] == "euconsent-v2" }) {
+			t.Errorf("the TC string was never read: %+v", rd.specs)
+		}
+	}
+
+	// The CMP's own state wins when it is decided; a rule without tcf
+	// never reads the TC string.
+	d, pg, _, _ := chooseSetup(t, map[string]string{"acme.yaml": tcfRule})
+	rd := &tcfReader{own: rejected(), tc: &consent.CMPState{Source: "tcf", Decided: true, TCF: &consent.TCF{PurposesConsent: []int{1}}}}
+	consenttest.Use(t, consent.Stages{State: rd})
+	if st, err := readState(context.Background(), pg.tab, d.byID["acme"]); err != nil || st != rd.own {
+		t.Errorf("state %+v, err %v; want the CMP's own", st, err)
+	}
+	d2, _, _, _ := chooseSetup(t, nil)
+	rd2 := &tcfReader{}
+	consenttest.Use(t, consent.Stages{State: rd2})
+	if _, err := readState(context.Background(), pg.tab, d2.byID["acme"]); err != nil || len(rd2.specs) != 1 {
+		t.Errorf("a rule without tcf read %+v (err %v)", rd2.specs, err)
+	}
+}
+
+func TestChooseUnreadableState(t *testing.T) {
+	// The state reader returns an undecided state with an error for a
+	// stored value it can't read: the choice is not verified, the run
+	// goes on.
+	d, pg, fs, p := chooseSetup(t, nil)
+	pg.show("#acme-reject", "Reject all")
+	fs.State = &consent.CMPState{CMP: "acme", Source: "cookie:acme_consent"}
+	fs.Err = errors.New("consent: acme state in acme_consent unreadable")
+	pg.tab.OnClick = func(*consenttest.FakeTab, consent.Locator) { pg.banner("acme", false) }
+	ch, reason, err := d.Choose(context.Background(), pg.tab, p, acme, consent.RunReject)
+	if err != nil || reason != consent.ReasonStateUnchanged || ch.Verified {
+		t.Fatalf("choice %+v, reason %q, err %v", ch, reason, err)
+	}
+	// Without a state the error is the reader's failure and stops the run.
+	fs.State = nil
+	if _, _, err := d.Choose(context.Background(), pg.tab, p, acme, consent.RunReject); err == nil {
+		t.Fatal("a failing state reader was ignored")
+	}
+}

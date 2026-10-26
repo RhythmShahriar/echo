@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"maps"
+	"slices"
 	"strings"
 	"time"
 
@@ -300,7 +301,10 @@ func (d *driver) viaButton(ctx context.Context, t consent.Tab, p *consent.Plan, 
 	if save == nil {
 		return ch, consent.ReasonNoButton, nil
 	}
-	if err := switchOff(ctx, t, r.Second.Toggles); err != nil {
+	if err := switchOff(ctx, t, r.Second.Toggles, false); err != nil {
+		return ch, consent.ReasonNone, err
+	}
+	if err := switchOff(ctx, t, r.Second.Press, true); err != nil {
 		return ch, consent.ReasonNone, err
 	}
 	ch.Selector = consent.SafeText(tg.chain.Raw+" >> "+save.Raw, selectorWidth)
@@ -338,12 +342,12 @@ func (d *driver) clickSteps(ctx context.Context, t consent.Tab, p *consent.Plan,
 	return consent.ReasonNone, nil
 }
 
-// switchOff clicks every enabled switch of locs that is on, once. A
-// switch still on afterwards shows in the stored state the verify step
-// reads.
-func switchOff(ctx context.Context, t consent.Tab, locs []consent.Locator) error {
+// switchOff clicks every enabled switch of locs that is on, once (with
+// press, every off button not yet pressed). A switch still on afterwards
+// shows in the stored state the verify step reads.
+func switchOff(ctx context.Context, t consent.Tab, locs []consent.Locator, press bool) error {
 	for _, l := range locs {
-		list, err := toggles(ctx, t, l)
+		list, err := toggles(ctx, t, l, press)
 		if err != nil {
 			return err
 		}
@@ -439,7 +443,7 @@ func (d *driver) settle(ctx context.Context, t consent.Tab, p *consent.Plan, r *
 			return false, false, st, err
 		}
 		changed = !showing || !sameState(before, st)
-		if !showing && (r == nil || r.Verify.Parser == "banner" || matches(st, wanted(r, k))) {
+		if !showing && (r == nil || r.Verify.Parser == "banner" || satisfied(r, k, st)) {
 			if st == nil {
 				id := ""
 				if r != nil {
@@ -486,6 +490,23 @@ func wanted(r *rule, k consent.RunKind) map[string]bool {
 		return r.Accepted
 	}
 	return r.Rejected
+}
+
+// satisfied reports whether st is the choice k: a TC string read for a
+// TCF rule needs purpose 1 (store and access) consented for an Accept
+// and no purpose consented for a Reject; any other state the rule's
+// categories.
+func satisfied(r *rule, k consent.RunKind, st *consent.CMPState) bool {
+	if st != nil && st.Source == tcfSource && st.TCF != nil {
+		if !st.Decided {
+			return false
+		}
+		if k == consent.RunAccept {
+			return slices.Contains(st.TCF.PurposesConsent, 1)
+		}
+		return len(st.TCF.PurposesConsent) == 0
+	}
+	return matches(st, wanted(r, k))
 }
 
 // matches reports whether st is a decided choice with every category of
@@ -553,7 +574,7 @@ func (d *driver) viaAPI(ctx context.Context, t consent.Tab, p *consent.Plan, r *
 			return ch, consent.ReasonNone, err
 		}
 		ch.State = st
-		ok := matches(st, wanted(r, k))
+		ok := satisfied(r, k, st)
 		if r.Verify.Parser == "banner" {
 			showing, err := bannerShowing(ctx, t, r)
 			if err != nil {
