@@ -17,34 +17,16 @@ import (
 )
 
 // Ports for the Action's Echo, its SMTP sink, the fixture shop and an
-// address where nothing listens. They are free ports picked when the
-// tests start, so two checkouts running the suite at once on a busy
-// machine never collide on them.
-var (
-	listen   = "127.0.0.1:" + freePorts[0]
-	smtp     = "127.0.0.1:" + freePorts[1]
-	shopPort = freePorts[2]
-	deadEcho = "http://127.0.0.1:" + freePorts[3]
+// address where nothing listens. They are fixed, from the block this
+// suite owns (consentsite_test.go takes 35100 and 35101). Ports picked
+// by listening on :0 and closing again were flaky: the kernel could
+// hand one to another process before Echo bound it.
+const (
+	listen   = "127.0.0.1:35110"
+	smtp     = "127.0.0.1:35111"
+	shopPort = "35112"
+	deadEcho = "http://127.0.0.1:35119"
 )
-
-// freePorts are four loopback ports that were free together: each is
-// held until all are picked, so none repeats.
-var freePorts = func() []string {
-	var lns []net.Listener
-	var ports []string
-	for range 4 {
-		ln, err := net.Listen("tcp", "127.0.0.1:0")
-		if err != nil {
-			panic(err)
-		}
-		lns = append(lns, ln)
-		ports = append(ports, strconv.Itoa(ln.Addr().(*net.TCPAddr).Port))
-	}
-	for _, ln := range lns {
-		_ = ln.Close()
-	}
-	return ports
-}()
 
 // shop is a monorepo layout: the CI fixture in sites/shop, served by
 // php -S, with Echo built from this checkout on PATH in place of the
