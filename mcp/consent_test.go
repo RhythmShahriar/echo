@@ -4,7 +4,6 @@
 package mcp
 
 import (
-	"io"
 	"os"
 	"path/filepath"
 	"slices"
@@ -14,7 +13,6 @@ import (
 
 	"github.com/RhythmShahriar/echo/consent"
 	"github.com/RhythmShahriar/echo/consent/consenttest"
-	"github.com/RhythmShahriar/echo/report"
 	"github.com/RhythmShahriar/echo/store"
 )
 
@@ -34,13 +32,6 @@ func consentServer(t *testing.T) (*session, *consenttest.FakeRunner) {
 	return start(t, srv), runner
 }
 
-// writersBuilt reports whether the consent report writers are in this
-// build: the verdict lane writes them, the skeleton has stubs.
-func writersBuilt() bool {
-	r := consenttest.GoldenResult("clean")
-	return report.WriteConsentJSON(io.Discard, r, "error") == nil && report.WriteConsentHTML(io.Discard, r, report.ConsentHTMLOptions{}) == nil
-}
-
 func TestMCPCheckConsent(t *testing.T) {
 	ss, runner := consentServer(t)
 	res, text, isErr := ss.tool("check_consent", map[string]any{"url": "staging.shop.test", "runs": "+gpc", "consent_mode": "strict", "geo": "de"})
@@ -51,9 +42,6 @@ func TestMCPCheckConsent(t *testing.T) {
 	if p.Parallel != 3 || !p.Hold || p.Policy != consent.PolicyStrict || p.Geo != "de" || !slices.Contains(p.Runs, consent.RunGPC) ||
 		p.Targets[0].URL.String() != "https://staging.shop.test/" || !strings.Contains(filepath.ToSlash(p.Dir), ".echo/consent/") {
 		t.Errorf("plan: parallel %d hold %v policy %s geo %s runs %v dir %s", p.Parallel, p.Hold, p.Policy, p.Geo, p.Runs, p.Dir)
-	}
-	if !writersBuilt() {
-		t.Skip("the consent report writers aren't in this build yet")
 	}
 	if isErr || res["kind"] != "consent" {
 		t.Fatalf("result: %v\n%s", res, text)
