@@ -6,11 +6,13 @@ package browse
 import (
 	"context"
 	"errors"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/RhythmShahriar/echo/consent"
+	"github.com/go-rod/rod/lib/proto"
 )
 
 // Screenshot names keep to letters, digits and dashes, so no name can
@@ -77,5 +79,48 @@ func TestSettleUnit(t *testing.T) {
 	r.activity.Store(time.Now().UnixNano())
 	if err := s.settleAfter(ctx, 0); !errors.Is(err, context.Canceled) {
 		t.Errorf("canceled settle: %v", err)
+	}
+}
+
+// TestCookieFor: a state parser reads the cookie the page is sent, so a
+// choice written under another path, host or scheme is no choice (c07).
+func TestCookieFor(t *testing.T) {
+	ck := func(domain, path, value string, secure bool) *proto.NetworkCookie {
+		return &proto.NetworkCookie{Name: "borlabs-cookie", Domain: domain, Path: path, Value: value, Secure: secure}
+	}
+	page := func(raw string) *url.URL {
+		u, err := url.Parse(raw)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return u
+	}
+	for _, tc := range []struct {
+		name    string
+		cookies []*proto.NetworkCookie
+		url     string
+		want    string
+	}{
+		{"host cookie at /", []*proto.NetworkCookie{ck("c07.shop.test", "/", "a", false)}, "https://c07.shop.test/", "a"},
+		{"domain cookie", []*proto.NetworkCookie{ck(".shop.test", "/", "a", false)}, "https://c07.shop.test/page-2/", "a"},
+		{"domain cookie on its own host", []*proto.NetworkCookie{ck(".shop.test", "/", "a", false)}, "https://shop.test/", "a"},
+		{"path prefix at a slash", []*proto.NetworkCookie{ck("c07.shop.test", "/blog", "a", false)}, "https://c07.shop.test/blog/post/", "a"},
+		{"longest path wins", []*proto.NetworkCookie{ck("c07.shop.test", "/", "root", false), ck("c07.shop.test", "/blog/", "blog", false)}, "https://c07.shop.test/blog/x", "blog"},
+		{"secure over https", []*proto.NetworkCookie{ck("c07.shop.test", "/", "a", true)}, "https://c07.shop.test/", "a"},
+		{"other path", []*proto.NetworkCookie{ck("c07.shop.test", "/blog", "a", false)}, "https://c07.shop.test/", ""},
+		{"path is no word prefix", []*proto.NetworkCookie{ck("c07.shop.test", "/blog", "a", false)}, "https://c07.shop.test/blogger/", ""},
+		{"host cookie of a sub-domain's parent", []*proto.NetworkCookie{ck("shop.test", "/", "a", false)}, "https://c07.shop.test/", ""},
+		{"other host", []*proto.NetworkCookie{ck("tracker.test", "/", "a", false)}, "https://c07.shop.test/", ""},
+		{"lookalike host", []*proto.NetworkCookie{ck(".hop.test", "/", "a", false)}, "https://c07.shop.test/", ""},
+		{"secure over http", []*proto.NetworkCookie{ck("c07.shop.test", "/", "a", true)}, "http://c07.shop.test/", ""},
+		{"other name", []*proto.NetworkCookie{{Name: "x", Domain: "c07.shop.test", Path: "/", Value: "a"}}, "https://c07.shop.test/", ""},
+		{"nil cookie", []*proto.NetworkCookie{nil}, "https://c07.shop.test/", ""},
+	} {
+		if got := cookieFor(tc.cookies, page(tc.url), "borlabs-cookie"); got != tc.want {
+			t.Errorf("%s: cookieFor = %q, want %q", tc.name, got, tc.want)
+		}
+	}
+	if got := cookieFor([]*proto.NetworkCookie{ck("c07.shop.test", "/", "a", false)}, nil, "borlabs-cookie"); got != "" {
+		t.Errorf("no page: %q", got)
 	}
 }

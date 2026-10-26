@@ -414,28 +414,78 @@ func (t *Tab) Cookies(ctx context.Context) ([]consent.Cookie, error) {
 }
 
 // CookieValue reads one cookie's value for a state parser; it is never
-// recorded. With several cookies of that name, the one the target's host
-// would be sent wins. "" when there is none.
+// recorded. It is the cookie the top frame's page is sent, as the CMP's
+// own script reads it: the domain, path and secure flag must match that
+// page; of several the longest path wins. A choice stored under
+// another path (Path=/blog, read on /) is no choice. "" when there is
+// none.
 func (t *Tab) CookieValue(ctx context.Context, name string) (string, error) {
 	cookies, err := t.s.cookies(ctx)
 	if err != nil {
 		return "", err
 	}
-	host := strings.ToLower(t.s.rec.site.Hostname())
-	value, found := "", false
+	return cookieFor(cookies, t.topURL(), name), nil
+}
+
+// topURL is the URL of the tab's top frame now, else the target's.
+func (t *Tab) topURL() *url.URL {
+	rec := t.s.rec
+	rec.mu.Lock()
+	raw := ""
+	if rec.main != nil {
+		raw = rec.frames[proto.PageFrameID(rec.main.id)]
+	}
+	rec.mu.Unlock()
+	if u, err := url.Parse(raw); err == nil && u.Host != "" {
+		return u
+	}
+	return rec.site
+}
+
+// cookieFor is the value of the cookie called name that a request to u
+// carries (RFC 6265 5.4: domain and path match, secure only over https),
+// the longest path first. "" when none does.
+func cookieFor(cookies []*proto.NetworkCookie, u *url.URL, name string) string {
+	if u == nil {
+		return ""
+	}
+	host := strings.ToLower(u.Hostname())
+	reqPath := u.EscapedPath()
+	if reqPath == "" || reqPath[0] != '/' {
+		reqPath = "/"
+	}
+	value, best := "", -1
 	for _, c := range cookies {
-		if c == nil || c.Name != name {
+		if c == nil || c.Name != name || (c.Secure && u.Scheme != "https") {
 			continue
 		}
-		d := strings.ToLower(strings.TrimPrefix(c.Domain, "."))
-		if host == d || strings.HasSuffix(host, "."+d) {
-			return c.Value, nil
+		d := strings.ToLower(c.Domain)
+		hostOnly := !strings.HasPrefix(d, ".")
+		d = strings.TrimPrefix(d, ".")
+		if host != d && (hostOnly || !strings.HasSuffix(host, "."+d)) {
+			continue
 		}
-		if !found {
-			value, found = c.Value, true
+		if !pathMatch(reqPath, c.Path) || len(c.Path) <= best {
+			continue
 		}
+		value, best = c.Value, len(c.Path)
 	}
-	return value, nil
+	return value
+}
+
+// pathMatch is RFC 6265 5.1.4: the cookie path is the request path, or
+// a prefix of it that ends at a "/".
+func pathMatch(reqPath, cookiePath string) bool {
+	if cookiePath == "" {
+		cookiePath = "/"
+	}
+	if reqPath == cookiePath {
+		return true
+	}
+	if !strings.HasPrefix(reqPath, cookiePath) {
+		return false
+	}
+	return strings.HasSuffix(cookiePath, "/") || reqPath[len(cookiePath)] == '/'
 }
 
 // LocalStorage reads one localStorage value of the top frame for a

@@ -394,6 +394,16 @@ with the exact texts.
   `X-Echo-Run` after that and the runs go on.
 - A canceled run ends its action and asks for no messages.
 
+## Integration fixes
+
+- A CMP state read from a cookie (`source: cookie:<name>` in `final_state`
+  and a choice's `state`) is now the cookie the top frame's page is
+  sent: its domain, path and secure flag must match that page; of several
+  the longest path wins. A choice stored under another path
+  (Borlabs writing `Path=/blog`, read on `/`) or on another host is no
+  choice, so `consent/reject-not-kept` reports it (`after the reload the
+  CMP's state has no choice`) where the run used to read it as kept.
+
 ## Follow-ups for other lanes
 
 - cli: leave `Plan.Locale` and `Plan.Timezone` empty when the flags are
