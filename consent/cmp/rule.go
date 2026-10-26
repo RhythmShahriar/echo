@@ -41,6 +41,7 @@ type ruleFile struct {
 			TogglesOff oneOrMany `yaml:"toggles_off"`
 			PressOff   oneOrMany `yaml:"press_off"`
 			Save       []string  `yaml:"save"`
+			Dialog     oneOrMany `yaml:"dialog"`
 		} `yaml:"second_layer"`
 	} `yaml:"reject"`
 	Reopen struct {
@@ -106,6 +107,9 @@ type secondLayer struct {
 	Toggles []consent.Locator // switched off when on
 	Press   []consent.Locator // buttons that switch a purpose off, pressed when not yet
 	Save    []chain
+	// Dialog is the settings container the Save must be inside (any one
+	// of them); nil when the rule names none and Save is probed anywhere.
+	Dialog []consent.Locator
 }
 
 // apiCalls are the fixed calls a rule may make in the page's main world.
@@ -404,6 +408,9 @@ func (c *checker) rule(f *ruleFile) *rule {
 		}
 		r.Second.Toggles = c.locators("reject.second_layer.toggles_off", s.TogglesOff)
 		r.Second.Press = c.locators("reject.second_layer.press_off", s.PressOff)
+		if len(s.Dialog) > 0 {
+			r.Second.Dialog = c.locators("reject.second_layer.dialog", s.Dialog)
+		}
 	}
 	if f.ID != genericID {
 		if len(r.Accept) == 0 && f.API.Accept == "" {

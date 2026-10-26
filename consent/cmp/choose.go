@@ -249,13 +249,14 @@ func (d *driver) locate(ctx context.Context, t consent.Tab, p *consent.Plan, r *
 // openSettings is the Save of settings that are already open, with no
 // opener to click: a reopen that went straight to the preference center
 // (OneTrust.ToggleInfoDisplay, Didomi.preferences.show). Save sits
-// outside the banner, so it is probed anywhere on the page.
+// outside the banner, so it is probed inside the rule's settings dialog
+// or, for a rule that names none, anywhere on the page.
 func openSettings(ctx context.Context, t consent.Tab, second *secondLayer) (*target, error) {
 	var locs []consent.Locator
 	for _, c := range second.Save {
 		locs = append(locs, c.Steps[0])
 	}
-	res, err := probe(ctx, t, locs, nil)
+	res, err := probe(ctx, t, locs, second.Dialog)
 	if err != nil {
 		return nil, err
 	}
@@ -334,7 +335,9 @@ func (d *driver) viaButton(ctx context.Context, t consent.Tab, p *consent.Plan, 
 		if r.ID == genericID {
 			return d.genericSettings(ctx, t, p, r, k, tg, ch, before)
 		}
-		save, err = d.waitClickable(ctx, t, p, r.Second.Save, nil)
+		// Save must be in the settings dialog the opener showed, never a
+		// look-alike elsewhere on the page.
+		save, err = d.waitClickable(ctx, t, p, r.Second.Save, r.Second.Dialog)
 		if err != nil {
 			return ch, consent.ReasonNone, err
 		}
@@ -349,7 +352,7 @@ func (d *driver) viaButton(ctx context.Context, t consent.Tab, p *consent.Plan, 
 	if err := switchOff(ctx, t, r.Second.Press, true); err != nil {
 		return ch, consent.ReasonNone, err
 	}
-	return d.clickAndVerify(ctx, t, p, r, k, *save, nil, ch, before)
+	return d.clickAndVerify(ctx, t, p, r, k, *save, r.Second.Dialog, ch, before)
 }
 
 // clickSteps clicks each of steps once, in order, waiting for each to be
@@ -566,9 +569,14 @@ func satisfied(r *rule, k consent.RunKind, st *consent.CMPState) bool {
 
 // matches reports whether st is a decided choice with every category of
 // want as want says. A category the CMP doesn't list counts as not
-// granted: a missing group was never consented to.
+// granted: a missing group was never consented to. A state with no
+// categories at all matches no categories: a stored choice whose
+// categories couldn't be read is not a verified Reject.
 func matches(st *consent.CMPState, want map[string]bool) bool {
 	if st == nil || !st.Decided {
+		return false
+	}
+	if len(want) > 0 && len(st.Categories) == 0 {
 		return false
 	}
 	for k, v := range want {

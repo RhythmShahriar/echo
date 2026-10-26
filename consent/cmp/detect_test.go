@@ -306,3 +306,82 @@ func TestDetectOnePieceOfEachKind(t *testing.T) {
 		t.Fatalf("DetectedBy = %q", info.DetectedBy)
 	}
 }
+
+// withGeneric is acme and beta with a generic rule tried last.
+func withGeneric(t *testing.T) *driver {
+	gen := strings.NewReplacer("id: acme", "id: generic", "priority: 20", "priority: 1000", "acme-", "gen-").Replace(acmeRule)
+	return testDriver(t, map[string]string{"acme.yaml": acmeRule, "beta.yaml": betaRule, "generic.yaml": gen})
+}
+
+func TestDetectLateBannerBetweenScans(t *testing.T) {
+	// The CMP draws its banner after the named scan of a poll and before
+	// the generic scan: the generic script sees a cookie bar, yet it is
+	// acme's, so acme is what Detect returns (judged by its stored state,
+	// never by the banner staying gone).
+	d := withGeneric(t)
+	pg := newFakePage()
+	pg.drive(d)
+	pg.globals["Acme"] = true
+	pg.sync()
+	scans := 0
+	ht := &hookTab{FakeTab: pg.tab, after: func(name string, _ []any) {
+		if name != "cmp-scan" {
+			return
+		}
+		if scans++; scans == 1 {
+			pg.banner("acme", true, "#acme-banner")
+			pg.generic = []genContainer{cookieBar("Accept all", "Reject all")}
+			pg.sync()
+		}
+	}}
+	info, err := d.Detect(context.Background(), ht, consenttest.NewPlan(t), 10*time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.ID != "acme" || !info.Found || info.DetectedBy != "selector:#acme-banner and global:Acme" {
+		t.Fatalf("info = %+v; want acme, not generic", info)
+	}
+}
+
+func TestDetectGenericHoldsNamedMarkup(t *testing.T) {
+	// The generic script saw acme's markup inside its cookie bar while
+	// acme's own banner container isn't the element shown: the banner is
+	// acme's all the same.
+	d := withGeneric(t)
+	pg := newFakePage()
+	pg.drive(d)
+	bar := cookieBar("Accept all", "Reject all")
+	bar.Named = "acme"
+	pg.generic = []genContainer{bar}
+	pg.banner("acme", false, "#acme-banner")
+	var named []namedRule
+	ht := &hookTab{FakeTab: pg.tab, after: func(name string, args []any) {
+		if name != "cmp-generic" || len(args) == 0 || named != nil {
+			return
+		}
+		b, _ := json.Marshal(args[0])
+		var in struct {
+			Named []namedRule `json:"named"`
+		}
+		_ = json.Unmarshal(b, &in)
+		named = in.Named
+	}}
+	info, err := d.Detect(context.Background(), ht, consenttest.NewPlan(t), time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.ID != "acme" || !info.Found {
+		t.Fatalf("info = %+v; want acme", info)
+	}
+	if len(named) != 2 || named[0].ID == "generic" || named[1].ID == "generic" {
+		t.Fatalf("the generic script got named rules %+v; want acme and beta", named)
+	}
+
+	// A cookie bar that holds no named markup stays generic.
+	pg.generic[0].Named = ""
+	pg.sync()
+	info, err = d.Detect(context.Background(), ht, consenttest.NewPlan(t), time.Second)
+	if err != nil || info.ID != "generic" || info.DetectedBy != "generic" {
+		t.Fatalf("info = %+v, err %v; want generic", info, err)
+	}
+}

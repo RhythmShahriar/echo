@@ -155,3 +155,20 @@ func cookieBar(texts ...string) genContainer {
 	}
 	return c
 }
+
+// hookTab is a FakeTab that also runs a hook after each isolated script,
+// with the script's name and arguments: the page can change between two
+// scripts of one poll; a test can also see what a script was asked.
+type hookTab struct {
+	*consenttest.FakeTab
+	after func(name string, args []any)
+}
+
+// EvalIsolated answers as the FakeTab does, then runs the hook.
+func (h *hookTab) EvalIsolated(ctx context.Context, js string, args ...any) (json.RawMessage, error) {
+	raw, err := h.FakeTab.EvalIsolated(ctx, js, args...)
+	if h.after != nil {
+		h.after(consenttest.ScriptName(js), args)
+	}
+	return raw, err
+}

@@ -35,6 +35,7 @@ func (d *driver) Detect(ctx context.Context, t consent.Tab, p *consent.Plan, wai
 		return consent.CMPInfo{}, err
 	}
 	in := scanFor(rules)
+	named := namedFor(rules)
 	deadline := t.Now() + wait.Milliseconds()
 	var (
 		last    consent.CMPInfo
@@ -42,7 +43,7 @@ func (d *driver) Detect(ctx context.Context, t consent.Tab, p *consent.Plan, wai
 		ok      bool
 	)
 	for {
-		info, err := d.poll(ctx, t, rules, in)
+		info, err := d.poll(ctx, t, rules, in, named)
 		switch {
 		case err != nil:
 			if ctx.Err() != nil {
@@ -96,7 +97,7 @@ func scanFor(rules []*rule) scanInput {
 
 // poll looks once: the main-world globals and the scan in the top
 // document and in every cross-origin frame.
-func (d *driver) poll(ctx context.Context, t consent.Tab, rules []*rule, in scanInput) (consent.CMPInfo, error) {
+func (d *driver) poll(ctx context.Context, t consent.Tab, rules []*rule, in scanInput, named []namedRule) (consent.CMPInfo, error) {
 	globals := map[string]bool{}
 	raw, err := t.EvalMain(ctx, d.globalsJS)
 	if err != nil {
@@ -117,38 +118,27 @@ func (d *driver) poll(ctx context.Context, t consent.Tab, rules []*rule, in scan
 	for _, r := range rules {
 		if r.ID == genericID {
 			// Last in the order: no named rule shows a banner.
-			_, ok, err := genericBanner(ctx, t)
+			c, ok, err := genericBanner(ctx, t, named...)
+			if err != nil {
+				return consent.CMPInfo{}, err
+			}
+			if !ok {
+				continue
+			}
+			info, ok, err := d.ownerOf(ctx, t, rules, in, globals, c)
 			if err != nil {
 				return consent.CMPInfo{}, err
 			}
 			if ok {
-				info := r.info(sighting{}, true)
 				info.BannerAtMS = now
-				info.TCF = globals[tcfGlobal]
 				return info, nil
 			}
-			continue
+			info = r.info(sighting{}, true)
+			info.BannerAtMS = now
+			info.TCF = globals[tcfGlobal]
+			return info, nil
 		}
-		s := sighting{}
-		for _, sc := range scans {
-			res := sc.Rules[r.ID]
-			s.banner = s.banner || res.Banner
-			for _, k := range res.Matched {
-				if !slices.Contains(s.selectors, k) {
-					s.selectors = append(s.selectors, k)
-				}
-			}
-			for _, sub := range sc.Scripts {
-				if slices.Contains(r.Scripts, sub) && !slices.Contains(s.scripts, sub) {
-					s.scripts = append(s.scripts, sub)
-				}
-			}
-		}
-		for _, g := range r.Globals {
-			if globals[g] {
-				s.globals = append(s.globals, g)
-			}
-		}
+		s := see(r, scans, globals)
 		if s.banner {
 			info := r.info(s, true)
 			info.BannerAtMS = now
@@ -165,6 +155,65 @@ func (d *driver) poll(ctx context.Context, t consent.Tab, rules []*rule, in scan
 	info := present.info(presentSeen, false)
 	info.TCF = globals[tcfGlobal]
 	return info, nil
+}
+
+// see is what scans and globals show of r.
+func see(r *rule, scans []scanResult, globals map[string]bool) sighting {
+	s := sighting{}
+	for _, sc := range scans {
+		res := sc.Rules[r.ID]
+		s.banner = s.banner || res.Banner
+		for _, k := range res.Matched {
+			if !slices.Contains(s.selectors, k) {
+				s.selectors = append(s.selectors, k)
+			}
+		}
+		for _, sub := range sc.Scripts {
+			if slices.Contains(r.Scripts, sub) && !slices.Contains(s.scripts, sub) {
+				s.scripts = append(s.scripts, sub)
+			}
+		}
+	}
+	for _, g := range r.Globals {
+		if globals[g] {
+			s.globals = append(s.globals, g)
+		}
+	}
+	return s
+}
+
+// ownerOf is the named rule a generic banner c belongs to, if any. The
+// named scan and the generic scan are two scripts, so a CMP that draws
+// its banner between them is missed by the first and seen by the
+// second: taken for an unknown banner, its Reject would be judged by the
+// banner staying gone instead of the CMP's stored state. So the named
+// scan runs again; a container the generic script saw holding a
+// named rule's markup belongs to that rule even when that rule's banner
+// container isn't the element shown.
+func (d *driver) ownerOf(ctx context.Context, t consent.Tab, rules []*rule, in scanInput, globals map[string]bool, c genContainer) (consent.CMPInfo, bool, error) {
+	scans, err := scanFrames(ctx, t, in)
+	if err != nil {
+		return consent.CMPInfo{}, false, err
+	}
+	var owner *rule
+	for _, r := range rules {
+		if r.ID == genericID {
+			continue
+		}
+		if s := see(r, scans, globals); s.banner {
+			owner = r
+			break
+		}
+		if owner == nil && r.ID == c.Named {
+			owner = r
+		}
+	}
+	if owner == nil {
+		return consent.CMPInfo{}, false, nil
+	}
+	info := owner.info(see(owner, scans, globals), true)
+	info.TCF = globals[tcfGlobal]
+	return info, true, nil
 }
 
 // scanFrames runs the scan in the top document and in each cross-origin

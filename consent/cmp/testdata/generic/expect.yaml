@@ -89,6 +89,18 @@ pages:
       generic:
         cookie: true
         buttons: ["Continuer sans accepter →", "Personnaliser", "Tout accepter"]
+  - page: negated.html
+    found: true
+    present: true
+    detected_by: "generic"
+    accept_layer: 1
+    reject_layer: 1
+    accept_text: "Accepter"
+    reject_text: "Ne pas accepter"
+    sees:
+      generic:
+        cookie: true
+        buttons: ["Ne pas accepter", "Accepter"]
   - page: policy-link.html
     found: true
     present: true
@@ -179,6 +191,35 @@ pages:
         cookie: true
         ignored: true
         buttons: ["Checkout", "Continue shopping"]
+  - page: newsletter-cookies.html
+    found: false
+    present: false
+    sees:
+      generic:
+        cookie: true
+        ignored: true
+        buttons: ["Accept offer", "No thanks"]
+  - page: age-gate-cookies.html
+    found: false
+    present: false
+    sees:
+      generic:
+        cookie: true
+        ignored: true
+        buttons: ["I am over 18", "Accept", "Leave"]
+  - page: banner-ignore-word.html
+    found: true
+    present: true
+    detected_by: "generic"
+    accept_layer: 1
+    reject_layer: 1
+    accept_text: "Accept all"
+    reject_text: "Reject all"
+    sees:
+      generic:
+        cookie: true
+        ignored: true
+        buttons: ["Cookie settings", "Reject all", "Accept all"]
   - page: returns-form.html
     found: false
     present: false

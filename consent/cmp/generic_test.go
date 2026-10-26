@@ -51,6 +51,7 @@ func TestGenericWords(t *testing.T) {
 			"languages: ar: want at least three accept and three reject phrases"},
 		{"    save: [kaydet,", "    save: [reddet, kaydet,", `"reddet" is both`},
 		{"languages:\n", "languages:\n  xx: {accept: [a, b, c], reject: [d, e, f]}\n", "languages: xx isn't one of the 30"},
+		{"    accept: [tümünü kabul et,", "    accept: [never accept, tümünü kabul et,", `accept phrase "never accept" holds a negation word`},
 	} {
 		bad := strings.Replace(good, tc.from, tc.to, 1)
 		if bad == good {
@@ -160,6 +161,44 @@ func TestContinueIsNotAccept(t *testing.T) {
 	}
 }
 
+func TestNegationIsNotAccept(t *testing.T) {
+	// "Ne pas accepter" holds "accepter": read as an Accept it tied with
+	// the real one and, first in the page, was clicked by the Accept run.
+	for _, s := range []string{"Ne pas accepter", "NE PAS ACCEPTER", "Je n'accepte pas", "Nicht akzeptieren", "Ich stimme nicht zu",
+		"Do not accept", "Don't accept", "Don\u2019t accept", "Don't allow", "Do not consent", "Non accetto", "Non accettare",
+		"No aceptar", "Não aceitar", "Niet accepteren", "Acceptera inte", "Nie akceptuję", "Nu accept", "Не приемам",
+		"Δεν αποδέχομαι", "לא לקבל", "لا أقبل"} {
+		if got, _ := words.classify(s); got != classReject {
+			t.Errorf("classify(%q) = %s; want reject", s, got)
+		}
+	}
+	// No Reject phrase fits these, yet the negation keeps them from
+	// being an Accept.
+	for _, s := range []string{"Don't accept all cookies", "Never allow all", "Nicht alle akzeptieren", "Accepter, pas maintenant"} {
+		if got, _ := words.classify(s); got == classAccept {
+			t.Errorf("classify(%q) = accept", s)
+		}
+	}
+	// Negatives: an Accept without a negation word stays an Accept.
+	for _, s := range []string{"Accept all", "Accepter", "Akzeptieren", "Accetto", "Accept non-essential cookies", "Nothing to hide: accept", "Acceptera alla"} {
+		if got, _ := words.classify(s); got != classAccept {
+			t.Errorf("classify(%q) = %s; want accept", s, got)
+		}
+	}
+	for _, pair := range [][2]string{{"Ne pas accepter", "Accepter"}, {"Nicht akzeptieren", "Akzeptieren"}, {"Do not accept", "Accept"},
+		{"Don't accept", "Accept"}, {"Non accetto", "Accetto"}} {
+		list := []genContainer{cookieBar(pair[0], pair[1])}
+		acc := genericTarget(list, consent.RunAccept, false)
+		if acc == nil || acc.probe.Text != pair[1] {
+			t.Errorf("%q / %q: the Accept run targets %+v", pair[0], pair[1], acc)
+		}
+		rej := genericTarget(list, consent.RunReject, false)
+		if rej == nil || rej.probe.Text != pair[0] {
+			t.Errorf("%q / %q: the Reject run targets %+v", pair[0], pair[1], rej)
+		}
+	}
+}
+
 func TestGenericContainer(t *testing.T) {
 	bar := cookieBar("Accept all", "Reject all")
 	if !bar.banner() || !bar.choice() {
@@ -178,8 +217,30 @@ func TestGenericContainer(t *testing.T) {
 		t.Error("a login dialog that asks for consent was taken for a banner")
 	}
 	cart := genContainer{Cookie: true, Ignored: true, Buttons: cookieBar("Checkout", "Continue shopping").Buttons}
-	if !cart.banner() || cart.choice() {
-		t.Error("a cart drawer that names cookies: a banner without a choice")
+	if cart.banner() || cart.choice() {
+		t.Error("a cart drawer that names cookies was taken for a banner")
+	}
+	// A cookie noun next to the words of another pop-up: a banner only
+	// when a control is about cookies.
+	for _, tc := range []struct {
+		buttons []string
+		banner  bool
+	}{
+		{[]string{"Accept offer", "No thanks"}, false},       // a newsletter that says "we use cookies"
+		{[]string{"I am over 18", "Accept", "Leave"}, false}, // an age gate that says it sets a cookie
+		{[]string{"Accept cookies", "Reject cookies"}, true},
+		{[]string{"Accept all", "Reject all", "Cookie settings"}, true},
+		{[]string{"Accept all", "Manage preferences"}, true},
+	} {
+		c := genContainer{Cookie: true, Ignored: true, Buttons: cookieBar(tc.buttons...).Buttons}
+		if c.banner() != tc.banner || c.choice() != tc.banner {
+			t.Errorf("cookie noun and ignore word, buttons %q: banner %v; want %v", tc.buttons, c.banner(), tc.banner)
+		}
+	}
+	hidden := genContainer{Cookie: true, Ignored: true, Buttons: cookieBar("Accept cookies").Buttons}
+	hidden.Buttons[0].Visible = false
+	if hidden.banner() {
+		t.Error("a control that can't be clicked made a mixed container a banner")
 	}
 	for name, change := range map[string]func(*genButton){
 		"policy link": func(b *genButton) { b.Policy = true },

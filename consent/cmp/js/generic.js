@@ -7,8 +7,29 @@
 // For each one whose text has a cookie or consent word it reports the
 // words found and its controls with their text, so Go can rank them.
 // It also looks inside same-origin frames. Input: the normalised word
-// lists of generic_words.yaml. Nothing is clicked or changed.
+// lists of generic_words.yaml and, from Detect, the named rules'
+// selectors: a container that holds one of them visible (or sits inside
+// it) is reported with that rule's id, so a named CMP's banner is never
+// taken for an unknown one. Nothing is clicked or changed.
 const W = input.words || {};
+
+// named rules' elements, found once: [{id, el}] for each visible match.
+const NAMED = [];
+for (const r of (input.named || []).slice(0, MAX)) {
+  for (const loc of (r.locs || []).slice(0, MAX)) {
+    const el = find(loc);
+    if (el && visible(el)) NAMED.push({ id: String(r.id).slice(0, 64), el: el });
+  }
+}
+
+// namedIn is the id of the first named rule with an element inside c or
+// around it; "" when none.
+function namedIn(c) {
+  for (const n of NAMED) {
+    if (inside(n.el, c) || inside(c, n.el)) return n.id;
+  }
+  return "";
+}
 
 // norm is generic.go's normText: NFKC, lower case, combining marks and
 // format characters dropped, anything else not a letter or digit a
@@ -103,6 +124,7 @@ function scanDoc(doc, frame, out) {
       cookie: cookie,
       consent: consent,
       ignored: anyWord(t, W.ignore),
+      named: namedIn(el),
       text: cut(el.innerText || el.textContent),
       buttons: buttons,
     });

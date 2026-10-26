@@ -25,6 +25,7 @@ reject:
     open: ["#CybotCookiebotDialogBodyLevelButtonCustomize", "#CybotCookiebotDialogNavDetails"]
     toggles_off: "input.CybotCookiebotDialogBodyLevelButton:not([disabled])"
     save: ["#CybotCookiebotDialogBodyLevelButtonLevelOptinAllowallSelection"]
+    dialog: "#CybotCookiebotDialog"
 reopen:
   api: reopen
 api:

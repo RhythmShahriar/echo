@@ -38,6 +38,7 @@ type wordsFile struct {
 	Ignore       []string             `yaml:"ignore"`
 	Policy       []string             `yaml:"policy"`
 	NeverChoice  []string             `yaml:"never_choice"`
+	Negation     []string             `yaml:"negation"`
 	Languages    map[string]langWords `yaml:"languages"`
 }
 
@@ -75,6 +76,7 @@ type phrase struct {
 type lexicon struct {
 	phrases [classSave + 1][]phrase
 	never   map[string]bool
+	negate  []string     // normalised negation words, matched as whole words
 	scan    genericWords // what the page script gets
 }
 
@@ -142,6 +144,7 @@ func loadWords(data []byte) (*lexicon, error) {
 	for _, w := range normAll(f.NeverChoice) {
 		lx.never[w] = true
 	}
+	lx.negate = normAll(f.Negation)
 	for _, code := range genericLanguages {
 		if _, ok := f.Languages[code]; !ok {
 			return nil, fmt.Errorf("generic_words.yaml: languages: %s missing", code)
@@ -166,6 +169,9 @@ func loadWords(data []byte) (*lexicon, error) {
 				if prev, ok := meaning[p]; ok && prev != c {
 					return nil, fmt.Errorf("generic_words.yaml: languages: %s: %q is both %s and %s", code, p, prev, c)
 				}
+				if c == classAccept && lx.negated(" "+p+" ") {
+					return nil, fmt.Errorf("generic_words.yaml: languages: %s: accept phrase %q holds a negation word", code, p)
+				}
 				if _, ok := meaning[p]; !ok {
 					meaning[p] = c
 					lx.phrases[c] = append(lx.phrases[c], phrase{text: p, runes: utf8.RuneCountInString(p)})
@@ -179,11 +185,25 @@ func loadWords(data []byte) (*lexicon, error) {
 	return lx, nil
 }
 
+// negated reports whether padded (a normalised text with a space at
+// each end) holds a negation word as a whole word.
+func (lx *lexicon) negated(padded string) bool {
+	for _, w := range lx.negate {
+		if strings.Contains(padded, " "+w+" ") {
+			return true
+		}
+	}
+	return false
+}
+
 // classify says what a button's text means and how long the phrase
 // that decided it is (longer is more specific). The longest phrase
 // found as whole words wins; a tie between two meanings, a text that is
-// exactly a never_choice phrase (for Accept and Reject) or a text too
-// long for a label means nothing.
+// exactly a never_choice phrase (for Accept and Reject), an Accept with
+// a negation word in it or a text too long for a label means nothing.
+// The negation guard is the backstop for the negated forms the word
+// lists lack: "Ne pas accepter" holds "accepter" and an Accept run
+// must never click it.
 func (lx *lexicon) classify(text string) (btnClass, int) {
 	n := normText(text)
 	if n == "" || utf8.RuneCountInString(n) > maxButtonRunes {
@@ -210,7 +230,22 @@ func (lx *lexicon) classify(text string) (btnClass, int) {
 	if lx.never[n] && (best == classAccept || best == classReject) {
 		return classNone, 0
 	}
+	if best == classAccept && lx.negated(padded) {
+		return classNone, 0
+	}
 	return best, bestLen
+}
+
+// aboutCookies reports whether text holds a cookie noun or a consent
+// word, matched as the page script matches a container's text.
+func (lx *lexicon) aboutCookies(text string) bool {
+	n := normText(text)
+	for _, w := range slices.Concat(lx.scan.Cookie, lx.scan.Consent) {
+		if strings.Contains(n, w) {
+			return true
+		}
+	}
+	return false
 }
 
 // words is the compiled-in lexicon. TestGenericWords loads the file, so
@@ -247,11 +282,15 @@ func (b genButton) clickable() bool {
 
 // genContainer is one candidate banner.
 type genContainer struct {
-	Path    string      `json:"path"`
-	Frame   string      `json:"frame"`
-	Cookie  bool        `json:"cookie"`
-	Consent bool        `json:"consent"`
-	Ignored bool        `json:"ignored"`
+	Path    string `json:"path"`
+	Frame   string `json:"frame"`
+	Cookie  bool   `json:"cookie"`
+	Consent bool   `json:"consent"`
+	Ignored bool   `json:"ignored"`
+	// Named is the id of the named rule whose detect selector or banner
+	// is visible inside the container (or holds it), as the same scan
+	// saw it; "" when none is.
+	Named   string      `json:"named,omitempty"`
 	Text    string      `json:"text"`
 	Buttons []genButton `json:"buttons"`
 }
@@ -261,10 +300,35 @@ type genResult struct {
 }
 
 // banner reports whether c reads as a cookie banner at all: a cookie
-// noun, or a consent word without the words of a newsletter, login,
-// cart, age gate or other pop-up.
+// noun or a consent word without the words of a newsletter, login,
+// cart, age gate or other pop-up. A container with both a cookie noun
+// and such words (an age gate or a newsletter offer that mentions
+// cookies in passing) is a banner only when one of its controls is
+// about cookies: it opens or saves settings, or it accepts or rejects
+// with a cookie or consent word in its own text ("Accept cookies"). So
+// "Accept offer" in a newsletter that says "we use cookies" is never
+// clicked.
 func (c genContainer) banner() bool {
-	return c.Cookie || (c.Consent && !c.Ignored)
+	switch {
+	case !c.Ignored:
+		return c.Cookie || c.Consent
+	case !c.Cookie:
+		return false
+	}
+	for _, b := range c.Buttons {
+		if !b.clickable() {
+			continue
+		}
+		switch cl, _ := words.classify(b.Text); cl {
+		case classSettings, classSave:
+			return true
+		case classAccept, classReject:
+			if words.aboutCookies(b.Text) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // loc is a locator for a path inside c's document.
@@ -299,12 +363,34 @@ func (c genContainer) choice() bool {
 	return a || r
 }
 
+// namedRule is a named rule's selectors as the generic script gets
+// them: a container that holds one of them belongs to that rule.
+type namedRule struct {
+	ID   string            `json:"id"`
+	Locs []consent.Locator `json:"locs"`
+}
+
+// namedFor is the generic script's named input for rules: every rule but
+// the generic one, with its detect selectors and banner containers.
+func namedFor(rules []*rule) []namedRule {
+	var out []namedRule
+	for _, r := range rules {
+		if r.ID == genericID {
+			continue
+		}
+		out = append(out, namedRule{ID: r.ID, Locs: slices.Concat(r.Selectors, r.Banners)})
+	}
+	return out
+}
+
 // genericScan runs the generic script in the page and in each
-// cross-origin frame.
-func genericScan(ctx context.Context, t consent.Tab) ([]genContainer, error) {
+// cross-origin frame. named, when set, makes the script say which
+// container holds a named rule's markup.
+func genericScan(ctx context.Context, t consent.Tab, named ...namedRule) ([]genContainer, error) {
 	in := struct {
 		Words genericWords `json:"words"`
-	}{words.scan}
+		Named []namedRule  `json:"named,omitempty"`
+	}{words.scan, named}
 	var top genResult
 	raw, err := isolated(ctx, t, genericJS, in)
 	if err != nil {
@@ -376,6 +462,7 @@ func clampContainers(list []genContainer) []genContainer {
 			continue
 		}
 		c.Text = cutRunes(c.Text, 200)
+		c.Named = cutRunes(c.Named, 64)
 		btns := make([]genButton, 0, min(len(c.Buttons), maxButtons))
 		for _, b := range c.Buttons {
 			if len(btns) == maxButtons {
@@ -395,8 +482,8 @@ func clampContainers(list []genContainer) []genContainer {
 
 // genericBanner is the first container that is a banner with a choice;
 // ok false when there is none.
-func genericBanner(ctx context.Context, t consent.Tab) (genContainer, bool, error) {
-	list, err := genericScan(ctx, t)
+func genericBanner(ctx context.Context, t consent.Tab, named ...namedRule) (genContainer, bool, error) {
+	list, err := genericScan(ctx, t, named...)
 	if err != nil {
 		return genContainer{}, false, err
 	}

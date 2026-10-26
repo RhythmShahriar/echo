@@ -23,6 +23,7 @@ reject:
     open: [".iubenda-cs-customize-btn"]
     toggles_off: "#iubenda-iframe .purposes-item-input:not([disabled])"
     save: ["#iubenda-iframe .iubenda-cs-save-btn"]
+    dialog: "#iubenda-iframe"
 reopen:
   selectors: [".iubenda-cs-preferences-link"]
   api: reopen

@@ -3,7 +3,8 @@
 
 // toggles: every checkbox or switch the locator matches, whether it is
 // on and a CSS path of what a visitor clicks to change it (the control
-// itself, or its label when the control is drawn by a styled slider).
+// itself, its label or a parent that holds nothing else to click, when
+// the control is drawn by a styled slider).
 // With input.press the matches are buttons that switch a purpose off
 // when pressed: one not pressed yet counts as on.
 function clickTarget(el, root) {
@@ -15,8 +16,17 @@ function clickTarget(el, root) {
   }
   const closest = el.closest("label");
   if (visible(closest)) return closest;
-  if (visible(el.parentElement)) return el.parentElement;
+  // The parent row only when the control is all it holds: the centre
+  // of a wider row can land on a link or an info button next to it.
+  const parent = el.parentElement;
+  if (visible(parent) && !otherControl(parent, el)) return parent;
   return null;
+}
+
+function otherControl(parent, el) {
+  let list = [];
+  try { list = Array.from(parent.querySelectorAll("a, button, input, select, textarea, [role=button], [role=switch], [role=link], [tabindex]")); } catch (e) { return true; }
+  return list.some((c) => c !== el);
 }
 
 const out = [];

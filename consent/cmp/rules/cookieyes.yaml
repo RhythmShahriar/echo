@@ -25,6 +25,7 @@ reject:
     open: ["[data-cky-tag=settings-button]"]
     toggles_off: ".cky-switch input:not([disabled])"
     save: ["[data-cky-tag=detail-save-button]"]
+    dialog: ".cky-preference-center"
 reopen:
   selectors: ["[data-cky-tag=revisit-consent]"]
 api:
