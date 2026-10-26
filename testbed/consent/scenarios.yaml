@@ -192,7 +192,7 @@ scenarios:
     area: server
     cmp: complianz
     needs: go
-    args: [--echo, "{echo}"]
+    args: ["--echo={echo}"]
     toggle: the shop's server sends a Meta Conversions API event on every page, whatever the choice
     expect:
       - {check: consent/server-side, level: error}

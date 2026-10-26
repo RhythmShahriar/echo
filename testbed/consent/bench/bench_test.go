@@ -76,11 +76,28 @@ func TestStateArgs(t *testing.T) {
 	if got, _ := stateArgs(c08, true, ""); strings.Join(got, " ") != "--against good" {
 		t.Errorf("c08 broken = %q", got)
 	}
-	c18 := scenarios.Scenario{ID: "c18", Args: []string{"--echo", "{echo}"}, Runs: []string{"+gpc", "+withdraw"}}
+	c18 := scenarios.Scenario{ID: "c18", Args: []string{"--echo={echo}"}, Runs: []string{"+gpc", "+withdraw"}}
 	if _, ok := stateArgs(c18, true, ""); ok {
 		t.Error("c18 without an Echo: ok")
 	}
-	if got, ok := stateArgs(c18, true, "http://127.0.0.1:1"); !ok || strings.Join(got, " ") != "--echo http://127.0.0.1:1 --runs +gpc,+withdraw" {
+	if got, ok := stateArgs(c18, true, "http://127.0.0.1:1"); !ok || strings.Join(got, " ") != "--echo=http://127.0.0.1:1 --runs +gpc,+withdraw" {
 		t.Errorf("c18 = %q", got)
+	}
+}
+
+// TestEchoArgIsJoined: --echo's value is optional, so rhythm-echo reads
+// "--echo URL" as --echo plus a page URL. Every scenario must write
+// --echo={echo}.
+func TestEchoArgIsJoined(t *testing.T) {
+	m, err := scenarios.Load("..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, s := range m.Scenarios {
+		for i, a := range s.Args {
+			if a == "--echo" && i+1 < len(s.Args) && !strings.HasPrefix(s.Args[i+1], "-") {
+				t.Errorf("%s: --echo %s is a page URL to rhythm-echo; write --echo=%s", s.ID, s.Args[i+1], s.Args[i+1])
+			}
+		}
 	}
 }
