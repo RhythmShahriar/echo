@@ -55,11 +55,23 @@ type eventFile struct {
 }
 
 // eventMark is what the file said about an event that the end of the
-// run may still change: its phase and visit.
+// run may still change: its phase, its visit and a request's status and
+// refusal, which can come after the request was recorded.
 type eventMark struct {
-	seq   int64
-	phase consent.Phase
-	visit int
+	seq     int64
+	phase   consent.Phase
+	visit   int
+	status  int
+	refused string
+}
+
+// markOf is an event's mark.
+func markOf(e consent.Event) eventMark {
+	m := eventMark{seq: e.Seq, phase: e.Phase, visit: e.Visit}
+	if e.Request != nil {
+		m.status, m.refused = e.Request.Status, e.Request.Refused
+	}
+	return m
 }
 
 // openEventFile starts the events file of a run.
@@ -78,7 +90,7 @@ func (ef *eventFile) write(e consent.Event) {
 	if ef.err != nil {
 		return
 	}
-	ef.written = append(ef.written, eventMark{e.Seq, e.Phase, e.Visit})
+	ef.written = append(ef.written, markOf(e))
 	ef.err = writeLine(ef.w, e)
 }
 
@@ -95,8 +107,8 @@ func writeLine(w *bufio.Writer, v any) error {
 
 // close flushes and closes the file. When the run's end gave an event
 // another phase or visit than the line written (a click whose time
-// came late), the file is written again from final, so it always says
-// what the result says.
+// came late), or a request its status after it was written, the file is
+// written again from final, so it always says what the result says.
 func (ef *eventFile) close(final []consent.Event) error {
 	if ef.err == nil && !sameMarks(ef.written, final) {
 		if _, err := ef.f.Seek(0, 0); err != nil {
@@ -127,8 +139,7 @@ func sameMarks(written []eventMark, final []consent.Event) bool {
 		return false
 	}
 	for i, m := range written {
-		e := final[i]
-		if m.seq != e.Seq || m.phase != e.Phase || m.visit != e.Visit {
+		if m != markOf(final[i]) {
 			return false
 		}
 	}

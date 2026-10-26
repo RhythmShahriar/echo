@@ -218,3 +218,23 @@ func FuzzHAR(f *testing.F) {
 		}
 	})
 }
+
+// TestNDJSONLateStatus: a request whose status came after its line was
+// written is written again with it.
+func TestNDJSONLateStatus(t *testing.T) {
+	dir := t.TempDir()
+	f, err := openEventFile(dir, 1, consent.RunNone)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := consent.Request{Method: "GET", URL: "https://shop.test/old"}
+	f.write(consent.Event{Seq: 1, Kind: consent.EvRequest, Request: &req})
+	final := []consent.Event{{Seq: 1, Kind: consent.EvRequest, Request: &consent.Request{Method: "GET", URL: "https://shop.test/old", Status: 301}}}
+	if err := f.close(final); err != nil {
+		t.Fatal(err)
+	}
+	got := readNDJSON(t, filepath.Join(dir, filepath.FromSlash(f.rel)))
+	if len(got) != 1 || got[0].Request.Status != 301 {
+		t.Errorf("lines %+v", got)
+	}
+}

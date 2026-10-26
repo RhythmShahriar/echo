@@ -1064,9 +1064,16 @@ func (r *recorder) deliver(e consent.Event) {
 		e.Signal.AtMS = e.AtMS
 	}
 	r.out = append(r.out, e)
+	// A recorded request can still learn its status (a redirect hop, a
+	// late response) under r.mu; the sinks read a copy taken under it.
+	out := e
+	if e.Request != nil {
+		req := *e.Request
+		out.Request = &req
+	}
 	r.mu.Unlock()
 	for _, s := range r.sinks {
-		s(e)
+		s(out)
 	}
 }
 
