@@ -13,6 +13,10 @@
 //	make build
 //	go run -tags testbed ./testbed/consent/bench -bin bin/rhythm-echo [-mode go|docker] [-rounds 10] [-only c01,g01,e05]
 //	go run -tags testbed ./testbed/consent/bench -diff a.json b.json
+//	go run -tags testbed ./testbed/consent/bench -list
+//
+// -list prints the scenario tables of testbed/consent/README.md from
+// scenarios.yaml; TestReadmeTableMatchesManifest keeps the two in step.
 //
 // Go mode (the default) serves the scenarios itself on 127.0.0.1:23400
 // and reaches them through --map-host; Docker mode runs rhythm-echo in

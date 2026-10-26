@@ -48,6 +48,7 @@ func main() { os.Exit(cli(os.Args[1:], os.Stdout, os.Stderr)) }
 func cli(args []string, stdout, stderr io.Writer) int {
 	var o options
 	var only, skip, diff string
+	var list bool
 	fs := flag.NewFlagSet("bench", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	fs.StringVar(&o.bin, "bin", filepath.Join("bin", "rhythm-echo"), "the rhythm-echo binary to benchmark")
@@ -62,12 +63,16 @@ func cli(args []string, stdout, stderr io.Writer) int {
 	fs.DurationVar(&o.timeout, "timeout", 5*time.Minute, "time limit for each rhythm-echo command")
 	fs.StringVar(&o.listen, "listen", server.DefaultListen, "Go mode: the testbed server's address")
 	fs.IntVar(&o.probePort, "probe-port", DefaultProbePort, "the first of the local probes' ports (30 are used)")
+	fs.BoolVar(&list, "list", false, "print the scenario tables of testbed/consent/README.md from scenarios.yaml and exit")
 	fs.StringVar(&diff, "diff", "", "compare the outcomes in two results.json files (this flag and one argument) and exit 1 if they differ")
 	if err := fs.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return 0
 		}
 		return 2
+	}
+	if list {
+		return listScenarios(o.root, stdout, stderr)
 	}
 	if diff != "" {
 		if fs.NArg() != 1 {
@@ -111,6 +116,25 @@ func cli(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintln(stderr, "bench: targets missed:\n  "+strings.Join(fails, "\n  "))
 		return 1
 	}
+	return 0
+}
+
+// listScenarios prints the README's scenario tables for the manifest in
+// root (default: found from the working folder).
+func listScenarios(root string, stdout, stderr io.Writer) int {
+	if root == "" {
+		var err error
+		if root, err = testbedDir(); err != nil {
+			fmt.Fprintln(stderr, "bench:", err)
+			return 3
+		}
+	}
+	m, err := scenarios.Load(root)
+	if err != nil {
+		fmt.Fprintln(stderr, "bench:", err)
+		return 3
+	}
+	writeList(stdout, m)
 	return 0
 }
 
