@@ -901,8 +901,8 @@
       "run": "none",
       "tracker": "ga4",
       "policy": "advanced",
-      "title": "GA4 sent 2 cookieless pings before the choice (Consent Mode advanced)",
-      "detail": "g/collect?gcs=G100 at 0.62s and 9.90s; no Google cookie written",
+      "title": "Google Analytics 4 sent 2 cookieless pings before the choice (allowed under --consent-mode advanced)",
+      "detail": "region1.google-analytics.com/g/collect?gcs=G100 at 0.62s and 9.90s; no Google cookie written",
       "fix": "These are Consent Mode advanced pings without cookies; switch to basic mode if your policy counts them as tracking.",
       "evidence": [
         14,
@@ -918,6 +918,9 @@
   },
   "notes": [
     "Evidence, not legal advice.",
+    "Hits held in the browser.",
+    "Hosts mapped with --map-host.",
     "gcd decoded with an unofficial, community-documented mapping."
-  ]
+  ],
+  "complete": true
 }

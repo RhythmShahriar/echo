@@ -171,13 +171,13 @@
       "page": "/",
       "run": "accept",
       "reason": "no_banner",
-      "detail": "Cookiebot is on the page but no banner showed within 10s"
+      "detail": "Accept: no banner showed within 10s (Cookiebot's script loaded)"
     },
     {
       "page": "/",
       "run": "reject",
       "reason": "no_banner",
-      "detail": "Cookiebot is on the page but no banner showed within 10s"
+      "detail": "Reject: no banner showed within 10s (Cookiebot's script loaded)"
     }
   ],
   "comparison": null,
@@ -186,6 +186,9 @@
     "files": []
   },
   "notes": [
-    "Evidence, not legal advice."
-  ]
+    "Evidence, not legal advice.",
+    "Hits held in the browser.",
+    "Hosts mapped with --map-host."
+  ],
+  "complete": false
 }

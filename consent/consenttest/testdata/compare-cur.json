@@ -958,6 +958,10 @@
     "files": []
   },
   "notes": [
-    "Evidence, not legal advice."
-  ]
+    "Evidence, not legal advice.",
+    "Hits held in the browser.",
+    "Hosts mapped with --map-host.",
+    "gcd decoded with an unofficial, community-documented mapping."
+  ],
+  "complete": true
 }
