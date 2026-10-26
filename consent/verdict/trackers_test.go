@@ -341,6 +341,34 @@ func TestAfterWithdraw(t *testing.T) {
 	}
 }
 
+func TestAfterWithdrawEmbedAndCookieless(t *testing.T) {
+	// consent/embed covers before the choice and after Reject only: an
+	// embed after the withdraw is after-withdraw like any tracker.
+	yt := hit(7, 9100, consent.PhaseAfterWithdraw, "youtube", 1, "https://www.youtube.com/embed/abc123?rel=0")
+	yt.Kind = consent.HitFrame
+	ga := hit(8, 9200, consent.PhaseAfterWithdraw, "ga4", 1, "https://region1.google-analytics.com/g/collect?v=2&tid=G-1&gcs=G100")
+	ga.Google = &consent.GoogleConsent{GCS: "G100", GCSDecoded: &consent.GCS{Known: true, AdStorage: consent.Denied, AnalyticsStorage: consent.Denied}}
+	r := result(consent.Run{Kind: consent.RunWithdraw, Choice: &consent.Choice{Verified: true, AtMS: 2000},
+		Withdraw: &consent.Choice{Verified: true, AtMS: 5000}, Hits: []consent.HitRef{yt, ga},
+		Cookies: []consent.Cookie{{Name: "VISITOR_INFO1_LIVE", Tracker: "youtube", Category: consent.CatEmbed, Need: consent.NeedNeeded,
+			Phase: consent.PhaseAfterWithdraw, AtMS: 9150}}})
+	consenttest.Use(t, consent.Stages{Classifier: &catalog{}})
+	Evaluator{}.Evaluate(r, nil)
+	sameKeys(t, keysOf(r, v2Checks), "consent/after-withdraw|/|withdraw|youtube", "consent/cookieless-ping|/|withdraw|ga4")
+	if is := issue(t, r, "consent/after-withdraw|/|withdraw|youtube"); is.Title != "YouTube embed fired after consent was withdrawn" ||
+		is.Detail != "youtube.com/embed/abc123?rel=0 at 9.10s; cookie VISITOR_INFO1_LIVE written" {
+		t.Errorf("embed after withdraw: %+v", is)
+	}
+	if is := issue(t, r, "consent/cookieless-ping|/|withdraw|ga4"); is.Title !=
+		"Google Analytics 4 sent 1 cookieless ping after consent was withdrawn (allowed under --consent-mode advanced)" {
+		t.Errorf("cookieless after withdraw: %q", is.Title)
+	}
+	// Under basic the same ping is an after-withdraw hit.
+	r.Policy = consent.PolicyBasic
+	Evaluator{}.Evaluate(r, nil)
+	sameKeys(t, keysOf(r, v2Checks), "consent/after-withdraw|/|withdraw|youtube", "consent/after-withdraw|/|withdraw|ga4")
+}
+
 func TestEvidenceNotCapped(t *testing.T) {
 	run := consent.Run{Kind: consent.RunNone, Hits: []consent.HitRef{
 		hit(1, 100, consent.PhaseBefore, "meta-pixel", 0, "https://www.facebook.com/tr?id=1&ev=PageView")}}
