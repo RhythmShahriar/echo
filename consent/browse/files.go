@@ -339,11 +339,10 @@ func harResponseHeaders(h proto.NetworkHeaders, showIDs bool) []harPair {
 	return out
 }
 
-// maskHeader masks one header value for the HAR.
+// maskHeader masks one header value for the HAR. The whole value is
+// masked before it is cut: a secret across the cut would no longer
+// match its pattern and leave its first characters in the file.
 func maskHeader(lower, v string, showIDs bool) string {
-	if len(v) > maxHeaderValue {
-		v = v[:maxHeaderValue]
-	}
 	if urlHeaders[lower] {
 		return consent.SafeText(consent.MaskURL(v, showIDs), maxHeaderValue)
 	}
