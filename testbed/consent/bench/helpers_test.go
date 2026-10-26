@@ -88,7 +88,12 @@ func fakeEcho(mode string, args []string) int {
 		return writeFake(f.out, fakeEnvelope(true, nil), 0)
 	case "interrupt":
 		// Starts the Reject run, makes a profile under TMPDIR and waits a
-		// little for Ctrl-C; on it, cleans up and exits 130.
+		// little for Ctrl-C; on it, cleans up and exits 130. It listens
+		// before it writes the events file the probe waits for: on a
+		// loaded machine the probe's Ctrl-C can otherwise land first and
+		// kill the fake with its profile left behind.
+		sig := make(chan os.Signal, 1)
+		signal.Notify(sig, os.Interrupt)
 		tmp := os.Getenv("TMPDIR")
 		if tmp == "" {
 			tmp = os.Getenv("TEMP")
@@ -98,8 +103,6 @@ func fakeEcho(mode string, args []string) int {
 		events := filepath.Join(".echo", "consent", "r1", "events")
 		_ = os.MkdirAll(events, 0o750)
 		_ = os.WriteFile(filepath.Join(events, "page-1-reject.ndjson"), []byte("{}\n"), 0o600)
-		sig := make(chan os.Signal, 1)
-		signal.Notify(sig, os.Interrupt)
 		select {
 		case <-sig:
 			_ = os.RemoveAll(filepath.Join(tmp, "rod"))
