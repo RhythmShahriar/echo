@@ -165,13 +165,17 @@ func cmpAbsent(ctx context.Context, p *ProbeEnv, broken bool) ([]Step, error) {
 // Windows) while the Reject run is going. Echo must exit 130, keep the
 // runs that finished with complete: false and leave no Chrome and no
 // temporary profile behind. The child's temporary folder is the probe's
-// own, so every profile Chrome makes is under it.
+// own (a fresh short folder), so every profile Chrome makes is under it.
 func interruptProbe(ctx context.Context, p *ProbeEnv, broken bool) ([]Step, error) {
 	return withSite(p, func(site *localSite) ([]Step, error) {
-		tmp := filepath.Join(p.Work, "tmp")
-		if err := os.MkdirAll(tmp, 0o750); err != nil {
+		// A short folder of the system's, not one under the work
+		// folder: Chrome puts its SingletonSocket there, and a Unix
+		// socket path over about 107 bytes makes Chrome fail to start.
+		tmp, err := os.MkdirTemp("", "echo-e05-")
+		if err != nil {
 			return nil, err
 		}
+		defer func() { _ = os.RemoveAll(tmp) }()
 		env := p.env("TMPDIR="+tmp, "TMP="+tmp, "TEMP="+tmp)
 		ctx, cancel := context.WithTimeout(ctx, p.Timeout)
 		defer cancel()
@@ -596,8 +600,8 @@ func fixtureProbe(id string, extra ...string) ProbeFunc {
 }
 
 // noBannerCMP (e13): the CMP's script is on the page but its banner
-// doesn't show within --banner-wait (slow-banner broken: 15 s) and no
-// tag fires. Echo must say it couldn't check (exit 3, no_banner).
+// doesn't show within --banner-wait (slow-banner broken: Cookiebot
+// after 15 s) and no tag fires. Echo must say it couldn't check (exit 3, no_banner).
 func noBannerCMP(ctx context.Context, p *ProbeEnv, broken bool) ([]Step, error) {
 	return fixtureProbe("slow-banner")(ctx, p, broken)
 }
