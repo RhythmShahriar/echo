@@ -22,7 +22,9 @@ one bullet each with the exact text.
   ` (cut)` when it or the record was cut.
 - Consent Mode `region` entries longer than 10 characters or with
   characters other than letters, digits and `-` are dropped; at most 300
-  are kept. `wait_for_update` is clamped to 0 to 30000 ms.
+  are kept. `wait_for_update` is clamped to 0 to 30000 ms, also past the
+  float64 range (`1e400` reads as 30000); a string or other non-number
+  reads as 0.
 - `gtag('set', {ads_data_redaction: true})` (object form) is read as a
   `set` signal like `gtag('set', 'ads_data_redaction', true)`.
 - `fbq('init', id, ...)`: `Signal.Raw` is rebuilt as
@@ -76,7 +78,9 @@ one bullet each with the exact text.
   (for example `euconsent-v2` for `tcf`). A prefix name (`_iub_cs-*`)
   reads at most 10 cookies, sorted by name.
 - Category names are made safe to print, capped at 64 characters and
-  100 per state.
+  100 per state. A name the secret masker would change (an API key, a
+  token, a URL with a credential) is dropped. Past 100, the first 100
+  names in sorted order are kept, so the result is the same every run.
 - Cookiebot's `CookieConsent=-1` (no consent needed in the visitor's
   region) is decided with no categories. Spec deviation: the state type
   has no note field, so the "no consent needed" note isn't carried.
