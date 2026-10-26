@@ -721,8 +721,15 @@ func (r *recorder) paused(t *target, e *proto.FetchRequestPaused) {
 	if frameless {
 		// Chrome's own request from inside the context (no page frame,
 		// no worker of the page): never classified, so it can't be a hit.
+		// It is counted here, so one for a browser service host is
+		// failed in the browser: the guard would refuse it and count it
+		// a second time.
 		r.counts.internal.Add(1)
 		r.markFrameless(e.NetworkID)
+		if egress.IsBrowserService(u.Hostname()) {
+			_ = proto.FetchFailRequest{RequestID: e.RequestID, ErrorReason: proto.NetworkErrorReasonBlockedByClient}.Call(ans)
+			return
+		}
 		_ = proto.FetchContinueRequest{RequestID: e.RequestID}.Call(ans)
 		return
 	}

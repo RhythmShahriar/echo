@@ -113,13 +113,15 @@ func TestLoopbackTargetAllowedInBrowser(t *testing.T) {
 
 // TestConsentBrowserTrafficExcluded: traffic outside every run's context
 // (Chrome's own) reaches only the refuse-all listener, is counted as
-// browser traffic and never shows up in a run.
+// browser traffic and never shows up in a run; the frameless requests a
+// run saw in its own context are added to Network.BrowserInternal.
 func TestConsentBrowserTrafficExcluded(t *testing.T) {
 	internal, hits := internalServer(t)
 	st := newSite(t)
 	st.page("127.0.0.1/", `<!doctype html><title>run</title>`)
 	g := newRig(t, consenttest.NewPlan(t, st.srv.URL+"/"))
-	s := g.open(st.srv.URL+"/", consent.RunNone)
+	run := g.openRun(st.srv.URL+"/", consent.RunNone)
+	s := run.s
 	g.load(s, st.srv.URL+"/")
 
 	before := g.internal.Stats().BrowserInternal
@@ -131,7 +133,14 @@ func TestConsentBrowserTrafficExcluded(t *testing.T) {
 	}
 	_ = page.Timeout(testenv.Timeout(20 * time.Second)).Navigate(internal.URL + "/chrome-service")
 	_ = page.Timeout(testenv.Timeout(20 * time.Second)).Navigate("http://update.googleapis.com/service/update2")
-	rec := s.close()
+	// A frameless request inside the run's context can't be made on
+	// demand, so the run's counter stands in for the ones it saw: the
+	// engine must add them to the listeners' count.
+	run.s.rec.counts.internal.Add(3)
+	rec := run.Close()
+	if rec.Internal < 3 {
+		t.Errorf("run counted %d frameless requests; want at least 3", rec.Internal)
+	}
 	if hits.Load() != 0 {
 		t.Errorf("traffic outside the runs reached a server %d times", hits.Load())
 	}
@@ -147,5 +156,8 @@ func TestConsentBrowserTrafficExcluded(t *testing.T) {
 		if gd.Stats().BrowserInternal != 0 {
 			t.Errorf("a run's guard saw browser traffic: %+v", gd.Stats())
 		}
+	}
+	if got, want := g.e.Network().BrowserInternal, g.internal.Stats().BrowserInternal+rec.Internal; got != want {
+		t.Errorf("network browser_internal = %d; want %d (listener plus the run's frameless requests)", got, want)
 	}
 }

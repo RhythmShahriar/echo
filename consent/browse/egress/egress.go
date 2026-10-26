@@ -299,7 +299,7 @@ func (p *Proxy) check(ctx context.Context, host string) string {
 	switch {
 	case p.refuseAll:
 		return ReasonBrowser
-	case isBrowserService(host):
+	case IsBrowserService(host):
 		return ReasonBrowser
 	case metadataHosts[host]:
 		return ReasonPrivate
@@ -325,7 +325,10 @@ func (p *Proxy) check(ctx context.Context, host string) string {
 	return ""
 }
 
-func isBrowserService(host string) bool {
+// IsBrowserService reports whether host is one of BrowserServiceHosts,
+// ignoring case and a trailing dot.
+func IsBrowserService(host string) bool {
+	host = strings.TrimSuffix(strings.ToLower(host), ".")
 	for _, h := range BrowserServiceHosts {
 		if host == h {
 			return true

@@ -33,6 +33,9 @@ type Engine struct {
 	// refused counts the requests closed runs refused in the browser
 	// (--map-only): they never reach a guard, so its count misses them.
 	refused int
+	// frameless counts the frameless requests closed runs saw inside
+	// their contexts: Chrome's own traffic the listeners may never see.
+	frameless int
 }
 
 // Start launches Chrome for p with its egress listener and starts
@@ -87,7 +90,8 @@ func (e *Engine) Close() {
 // Network sums what the listeners refused: the browser-wide one counts
 // Chrome's own traffic, the guards the page traffic they refused and
 // any browser service host a page context asked for. Requests a closed
-// run refused in the browser (--map-only) are added to Refused.
+// run refused in the browser (--map-only) are added to Refused and the
+// frameless requests it saw in its context to BrowserInternal.
 func (e *Engine) Network() consent.Network {
 	st := e.internal.Stats()
 	e.mu.Lock()
@@ -95,7 +99,7 @@ func (e *Engine) Network() consent.Network {
 	for _, g := range e.guards {
 		st = st.Add(g.Stats())
 	}
-	return consent.Network{Refused: st.Refused + e.refused, BrowserInternal: st.BrowserInternal}
+	return consent.Network{Refused: st.Refused + e.refused, BrowserInternal: st.BrowserInternal + e.frameless}
 }
 
 // Mapped reports whether --map-host maps any host, so every writer can
@@ -236,6 +240,7 @@ func (r *Run) Close() *Recording {
 		r.out = r.s.close()
 		r.e.mu.Lock()
 		r.e.refused += r.out.Refused
+		r.e.frameless += r.out.Internal
 		for i, x := range r.e.runs {
 			if x == r {
 				r.e.runs = append(r.e.runs[:i], r.e.runs[i+1:]...)

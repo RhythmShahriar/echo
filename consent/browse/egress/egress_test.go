@@ -178,6 +178,21 @@ func TestBrowserServiceRefused(t *testing.T) {
 	}
 }
 
+// IsBrowserService matches the service hosts in any case, with or
+// without a trailing dot; nothing else matches.
+func TestIsBrowserService(t *testing.T) {
+	for _, h := range []string{"update.googleapis.com", "Clients2.Google.com.", "SAFEBROWSING.GOOGLEAPIS.COM"} {
+		if !IsBrowserService(h) {
+			t.Errorf("IsBrowserService(%q) = false", h)
+		}
+	}
+	for _, h := range []string{"", "googleapis.com", "www.googletagmanager.com", "update.googleapis.com.evil.test", "x.update.googleapis.com"} {
+		if IsBrowserService(h) {
+			t.Errorf("IsBrowserService(%q) = true", h)
+		}
+	}
+}
+
 // The browser-wide listener refuses everything (public or not) and
 // counts each as browser traffic.
 func TestRefuseAll(t *testing.T) {
