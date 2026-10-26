@@ -1,0 +1,24 @@
+$ consent --against baseline https://shop.test/
+rhythm echo: --against "baseline": no saved consent result by that name in .echo/consent/baselines; rhythm echo consent <url> --save baseline makes one
+$ consent --against last https://shop.test/
+rhythm echo: --against last: no consent result in .echo/consent yet; run rhythm echo consent <url> first
+$ consent --send-hits https://shop.example.com/
+rhythm echo: --send-hits on shop.example.com, which matches "shop.example.com" under production:. Echo holds tracker hits on production so your analytics stay clean; leave --send-hits off
+$ consent --show-ids --junit https://shop.test/
+rhythm echo: --show-ids keeps tracking IDs unmasked; it can't be used with Markdown or JUnit output, which are meant to be shared
+$ consent -k https://shop.example/
+rhythm echo: -k on https://shop.example/, a public site: evidence from an unverified connection proves little; add --insecure-public if you mean it
+$ consent -H Authorization: env:RHYTHM_ECHO_NOT_SET https://shop.test/
+rhythm echo: --header Authorization: env:RHYTHM_ECHO_NOT_SET is not set
+$ consent --map-host x https://shop.test/
+rhythm echo: --map-host "x": want host=address, e.g. *.shop.test=127.0.0.1:18950
+$ consent --sites two.yaml
+rhythm echo: site "a": consent: args can't set --send-hits; only the command line can
+$ consent --sites two.yaml https://shop.test/
+rhythm echo: give pages or --sites, not both
+$ consent --save a b https://shop.test/
+rhythm echo: --save: "a b" isn't a valid name: use up to 64 letters, digits, dots, dashes and underscores, starting with a letter or digit
+$ consent /shop/
+rhythm echo: consent "/shop/": a path needs site: in .echo/config.yaml; give the whole URL, e.g. https://staging.shop.test/shop/
+$ consent https://shop.test/ (a literal header in the config)
+rhythm echo: <dir>/.echo/config.yaml: line 3: consent: headers: Authorization: use ${env:RHYTHM_ECHO_NAME}, not the value itself; secrets never sit in the config

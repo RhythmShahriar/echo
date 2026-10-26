@@ -71,6 +71,10 @@ func (c *cmd) prepare(pos []string) (*setup, error) {
 	if o.showIDs && (wants(outs, fmtMD) || wants(outs, fmtJUnit)) {
 		return nil, usagef("%s", msgShowIDs)
 	}
+	if o.signKey != "" {
+		// Refused before any browser starts, rather than after the run.
+		return nil, usagef("--sign-key: signing isn't built into this version yet")
+	}
 	st := &setup{outs: outs}
 	if st.failOn, err = checkFailOn(o.failOn, o.against != ""); err != nil {
 		return nil, err
@@ -299,19 +303,4 @@ func storeRoot(flag, cfgPath string) string {
 		return filepath.Dir(cfgPath)
 	}
 	return config.Dir
-}
-
-// check runs rhythm echo consent itself.
-func (c *cmd) check(pos []string) int {
-	st, err := c.prepare(pos)
-	if err != nil {
-		return fail(c.env, err)
-	}
-	for _, n := range st.notes {
-		fmt.Fprintln(c.env.Stderr, "rhythm echo:", n)
-	}
-	for _, w := range st.warn {
-		fmt.Fprintln(c.env.Stderr, "rhythm echo:", w)
-	}
-	return c.notBuilt()
 }

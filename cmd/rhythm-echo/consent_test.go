@@ -8,16 +8,24 @@ import (
 	"testing"
 
 	"github.com/RhythmShahriar/echo/consent"
+	consentcli "github.com/RhythmShahriar/echo/consent/cli"
 )
 
-// Until the cli lane builds it, consent says so and exits 3.
-func TestConsentPlaceholder(t *testing.T) {
-	code, out, errOut := runCLI(t, "consent", "https://shop.test/")
-	if code != exitError || out != "" || errOut != "rhythm echo: consent isn't built yet\n" {
+// consent is wired to the consent CLI: its help and its usage errors,
+// none of which start a browser.
+func TestConsentWired(t *testing.T) {
+	t.Chdir(t.TempDir())
+	code, out, errOut := runCLI(t, "consent")
+	if code != exitUsage || out != "" || !strings.HasPrefix(errOut, "rhythm echo: consent needs a page: ") {
 		t.Errorf("consent: %d %q %q", code, out, errOut)
 	}
-	if code, out, _ := runCLI(t, "help", "consent"); code != exitOK || !strings.HasPrefix(out, "rhythm echo consent: ") {
-		t.Errorf("help consent: %d %q", code, out)
+	if code, _, errOut := runCLI(t, "consent", "ftp://shop.test"); code != exitUsage || errOut != "rhythm echo: consent \"ftp://shop.test\": want an http or https URL\n" {
+		t.Errorf("consent ftp://: %d %q", code, errOut)
+	}
+	for _, args := range [][]string{{"help", "consent"}, {"consent", "--help"}} {
+		if code, out, _ := runCLI(t, args...); code != exitOK || out != consentcli.Usage {
+			t.Errorf("%v: %d %q", args, code, out)
+		}
 	}
 	if code, out, _ := runCLI(t, "help"); code != exitOK || !strings.Contains(out, "rhythm echo consent [<url>...]") {
 		t.Errorf("help doesn't list consent: %d", code)

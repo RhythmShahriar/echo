@@ -1,0 +1,3 @@
+Note: use Echo on sites you own or are authorised to test. Consent checks load the site like
+one new visitor: they never log in or submit forms and every tracking hit is recorded and
+stopped in the browser. Results stay on this machine with IDs masked. This notice is shown once.

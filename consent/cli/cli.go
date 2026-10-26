@@ -37,6 +37,14 @@ type Env struct {
 	Update func(ctx context.Context) (prompt func(ctx context.Context))
 }
 
+// now is the time by e's clock.
+func (e Env) now() time.Time {
+	if e.Now != nil {
+		return e.Now()
+	}
+	return time.Now()
+}
+
 // The exit codes, the kit's shared ones (PRD 10.1).
 const (
 	exitOK          = kitcli.ExitOK

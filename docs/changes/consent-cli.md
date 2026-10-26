@@ -76,3 +76,44 @@ docs team writes the wiki from this file and real command output.
   - A site's `consent.args` may set only `--runs --pages --settle --banner-wait --timeout --retries --cmp --accept-selector --reject-selector --click --consent-mode --exempt --geo --locale --timezone --viewport --follow-host -A -H --cookie`; anything else: `site "a": consent: args can't set --send-hits; only the command line can`. `-H` and `--cookie` values there must be `env:RHYTHM_ECHO_NAME`: `site "a": consent: args: header and cookie values must be env:RHYTHM_ECHO_NAME, never a file or the value itself`. A page in args: `site "a": consent: args take flags only, not "/menu/"; list pages under consent: urls`. The file is shared, so nothing in it can read files, run programs, send hits, unmask IDs, turn off TLS checks or move results.
   - A sites file over 4 MiB: `--sites sites.yaml: the file is more than 4 MiB`.
 - More than 50 pages in one check: `rhythm echo: 63 pages is more than 50 for one check; split the sites file` (exit 2).
+
+## L4 Running a check and printing it
+
+- Before anything runs: the config, the plan, `--against` (loaded now) and `--save`'s name are checked; every stage the check needs must be linked, else `rhythm echo: consent: tracker, signal, state reader, cmp, browse, verdict not linked into this build` (only the missing ones; exit 3). Nothing is created until all of that passes.
+- The once-only notice (kit `FirstRun` key `echo-consent-notice`; never in CI, with `-q` or with `--json` on stdout), on stderr before the run:
+  ```
+  Note: use Echo on sites you own or are authorised to test. Consent checks load the site like
+  one new visitor: they never log in or submit forms and every tracking hit is recorded and
+  stopped in the browser. Results stay on this machine with IDs masked. This notice is shown once.
+  ```
+- Run warnings on stderr, once per command: `rhythm echo: Chrome is running without its sandbox (--no-sandbox); only check sites you trust` (with `--no-sandbox`, `RHYTHM_ECHO_NO_SANDBOX=1` or `SOUNDCHECK_NO_SANDBOX=1`) and PRD 10.2 message 23 `rhythm echo: --send-hits: this run sends real tracking hits to Google, Meta and the other trackers on the page`. The plain-value warnings of L3 print here too.
+- The browser layer's Chrome download line goes to stderr (`Plan.Browser.Log`).
+- The result folder is `<store>/consent/<YYYY-MM-DDTHH-MM-SS>-<6 hex>` (0700); the store is added to `.git/info/exclude` as Echo's other results are.
+- Output order: `--against` comparison, then `consent.json` (0600; it lists the SHA-256 of every file under `events/`, `evidence/` and `har/`), then `report.html` always, `report.md` with `--md`, `-o *.md` or in GitHub Actions (`GITHUB_ACTIONS=true`), `report.xml` with `--junit` or `-o *.xml`, each stating `consent.json`'s hash, then `manifest.json` (schema `rhythm-echo-consent-manifest/v1`, `{path, bytes, sha256}` of every other file, sorted), then the `-o` files and the format on stdout, then the terminal view, then `--save`, then one tip. `data.evidence.folder` is the folder relative to the working folder, with forward slashes.
+- `--json` (or any one format flag without its `-o`) puts that format alone on stdout; the terminal view then goes to stderr. Otherwise the view is on stdout.
+- `-o` files are written atomically, 0600, their folders made 0700.
+- `--live` prints one line per tracker hit on stderr as the browser records it: `hit  0.84s  before the choice  Meta Pixel  www.facebook.com/tr (held)`; after the choice the run's name stands in that place (`Accept`, `Reject`, `GPC`, `Withdraw`). Script loads, cookies and storage aren't hits and print nothing. Page text passes `consent.SafeText`.
+- `--open` opens `report.html` with the opener Echo's other commands use.
+- Tips, at most one per command, each once per machine (kit `FirstRun` keys `echo-consent-tip-reject`, `-geo`, `-save`, `-gpc`), never in CI, with `-q` or with `--json`, in this order of preference: a run that found no Reject or Accept button: `Tip: rhythm echo consent detect <url> shows the buttons Echo sees.`; a run with no banner or the `consent/no-banner` issue: `Tip: banners that show only in some countries need --geo or an EU --proxy.`; a complete check at exit 0 without `--save` or `--against`: `Tip: --save baseline keeps this as the baseline for the next check.`; advertising trackers and no gpc run: `Tip: --runs +gpc also checks Global Privacy Control.`
+- A check that stopped (exit 3; its empty result folder is removed): PRD 10.2 messages 9 to 16 after `rhythm echo: `, with masked URLs:
+  - `no Chrome or Chromium found; install Chrome, pass --browser /path/to/chrome, or allow the one-time Chrome for Testing download`; with `RHYTHM_ECHO_IMAGE=1` it is message 16 instead.
+  - `Chrome won't start without its sandbox as root; run as another user, or pass --no-sandbox (only for sites you trust)`
+  - `https://staging.shop.test/ didn't answer: dial tcp 127.0.0.1:443: connection refused. Is the site running? A local site with a self-signed certificate needs -k`
+  - `https://staging.shop.test/ answered 401 Unauthorized; pass the login with -H "Authorization: env:RHYTHM_ECHO_STAGING_AUTH" or consent: headers:` (also for 407); any other status: `https://staging.shop.test/ answered 503 Service Unavailable; check that the site serves its pages, then run the check again`
+  - `https://shop.example.com/ showed a bot check (Cloudflare) instead of the page; allow this machine in the firewall for the check, or check staging` (without a vendor: `showed a bot check instead of the page; ...`)
+  - `https://shop.test/ redirects to https://shop.example.com/; check that one, or pass --follow-host`
+  - `https://shop.example/ uses a certificate this machine doesn't trust (x509: certificate signed by unknown authority); pass -k for a local or private site`
+  - `this image has no browser; run rhythm echo consent on the host, or pass --browser`
+  - a redirect loop: `https://shop.test/ redirects in a loop or through more than 10 hops; check the site's redirects`
+  - the runner's write error: `couldn't write <file>: <error>`
+- A report that can't be written: `rhythm echo: couldn't write .echo/consent/<id>/report.html: <error>` (or the `-o` path; exit 3).
+- Exit codes: the result's own (`consent.Result.ExitCode` for `--fail-on`): 0, 1 (wins over 3), 3; `--fail-on none` with an error is 0, with an inconclusive run still 3. Ctrl-C or SIGTERM: the finished runs are judged and written (`complete: false` in the JSON report; `consent.json` gets the note `Interrupted before every run finished: this result is incomplete.`), then `rhythm echo: interrupted; the runs that finished are kept in .echo/consent/<id>` and exit 130.
+- The update prompt runs through the same kit `PromptAtExit` Echo's other commands use, only on a terminal; never under `--json`, `-q`, CI or a pipe or after an interrupt.
+- `--save <name>` copies `consent.json` to `<store>/consent/baselines/<name>/consent.json` after the reports: `Saved baseline baseline.`, or for an existing one `Saved baseline baseline (replaced the one from 2026-10-19 08:02).` (the old baseline's start, UTC). A name that can't be a folder: `rhythm echo: --save: "a b" isn't a valid name: use up to 64 letters, digits, dots, dashes and underscores, starting with a letter or digit` (exit 2, before the run). An incomplete check isn't saved: `rhythm echo: --save partial: not saved: a baseline needs a complete check and some runs couldn't be checked` (stderr; the exit code is the result's).
+- `--against <name|path|last>` is loaded before the run: `last` is the newest result folder in `<store>/consent` (never `baselines/` or `detect/`); an existing path is a `consent.json` or a result folder; otherwise a baseline's name. Errors (exit 2, no browser started): message 5 `rhythm echo: --against "baseline": no saved consent result by that name in .echo/consent/baselines; rhythm echo consent <url> --save baseline makes one`; `rhythm echo: --against last: no consent result in .echo/consent yet; run rhythm echo consent <url> first`; `rhythm echo: --against empty: no consent.json in that folder`; `rhythm echo: --against bad.json: bad.json isn't a consent result: <error>`. The comparison's `against` is the word given.
+- `--sites` plans (one per site with its own args) run one after another and make one result: every page, issue and inconclusive run, the network counts added.
+
+## Not in this build yet (the cli lane's next items)
+
+- `--sign-key` is refused before the check runs: `rhythm echo: --sign-key: signing isn't built into this version yet` (exit 2); signing and `consent verify` come with L5.
+- `consent detect`, `report`, `verify`, `cmps`, `trackers` and `prune` parse their flags and print their help; running one prints `rhythm echo: consent <subcommand> isn't built yet` (exit 3) until L6.

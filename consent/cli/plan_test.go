@@ -22,13 +22,13 @@ func inDir(t *testing.T, cfg string) string {
 	dir := t.TempDir()
 	t.Chdir(dir)
 	if cfg != "" {
-		writeFile(t, filepath.Join(".echo", "config.yaml"), cfg)
+		putFile(t, filepath.Join(".echo", "config.yaml"), cfg)
 	}
 	return dir
 }
 
-// writeFile writes a test file, making its folder.
-func writeFile(t *testing.T, path, data string) {
+// putFile writes a test file, making its folder.
+func putFile(t *testing.T, path, data string) {
 	t.Helper()
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		t.Fatal(err)
@@ -119,7 +119,7 @@ checks:
 		strings.Join(p.Exempt, ",") != "plausible,fathom" {
 		t.Errorf("flags over the config: %+v", p)
 	}
-	writeFile(t, "sites.yaml", `sites:
+	putFile(t, "sites.yaml", `sites:
   - name: brew
     url: https://brew.example
     consent:
@@ -145,7 +145,7 @@ checks:
 func TestHeaderFileAndEnv(t *testing.T) {
 	dir := inDir(t, "")
 	token := "Bearer " + "tok_" + "file1234"
-	writeFile(t, "token.txt", "  "+token+"\n")
+	putFile(t, "token.txt", "  "+token+"\n")
 	t.Setenv("RHYTHM_ECHO_STAGING_AUTH", "Basic "+"c2VjcmV0")
 	t.Setenv("RHYTHM_ECHO_SESSION", "s3ss")
 	st := mustPrepare(t, "-H", "X-Token: @token.txt", "--header", "Authorization: env:RHYTHM_ECHO_STAGING_AUTH",
@@ -158,7 +158,7 @@ func TestHeaderFileAndEnv(t *testing.T) {
 	if err == nil || err.Error() != "--header Authorization: env:RHYTHM_ECHO_MISSING is not set" {
 		t.Errorf("a missing variable: %v", err)
 	}
-	writeFile(t, "big.txt", strings.Repeat("x", 64<<10+1))
+	putFile(t, "big.txt", strings.Repeat("x", 64<<10+1))
 	if _, err := prepareArgs(t, "-H", "X: @big.txt", "https://shop.test/"); err == nil || err.Error() != "--header X: @big.txt is more than 64 KiB" {
 		t.Errorf("a big file: %v", err)
 	}
@@ -174,12 +174,12 @@ func TestHeaderFileAndEnv(t *testing.T) {
 	}
 	// consent: headers come from Echo's variables; a flag wins for the
 	// same name.
-	writeFile(t, filepath.Join(".echo", "config.yaml"), "consent:\n  headers:\n    Authorization: ${env:RHYTHM_ECHO_STAGING_AUTH}\n    X-Other: ${env:RHYTHM_ECHO_SESSION}\n")
+	putFile(t, filepath.Join(".echo", "config.yaml"), "consent:\n  headers:\n    Authorization: ${env:RHYTHM_ECHO_STAGING_AUTH}\n    X-Other: ${env:RHYTHM_ECHO_SESSION}\n")
 	p = mustPrepare(t, "-H", "X-Other: plain", "https://shop.test/").plans[0]
 	if p.Headers["Authorization"] != "Basic c2VjcmV0" || p.Headers["X-Other"] != "plain" {
 		t.Errorf("config headers: %v", p.Headers)
 	}
-	writeFile(t, filepath.Join(".echo", "config.yaml"), "consent:\n  headers:\n    Authorization: ${env:RHYTHM_ECHO_UNSET_ONE}\n")
+	putFile(t, filepath.Join(".echo", "config.yaml"), "consent:\n  headers:\n    Authorization: ${env:RHYTHM_ECHO_UNSET_ONE}\n")
 	if _, err := prepareArgs(t, "https://shop.test/"); err == nil || err.Error() != "consent: headers: Authorization: RHYTHM_ECHO_UNSET_ONE is not set" {
 		t.Errorf("an unset config header: %v", err)
 	}
@@ -312,7 +312,7 @@ func TestConfigErrorsAreUsage(t *testing.T) {
 	}
 	// With no URL the config's consent: urls are checked; a path needs
 	// site:.
-	writeFile(t, filepath.Join(".echo", "config.yaml"), "site: https://staging.shop.test\nconsent:\n  urls: [/, https://other.test/x]\n")
+	putFile(t, filepath.Join(".echo", "config.yaml"), "site: https://staging.shop.test\nconsent:\n  urls: [/, https://other.test/x]\n")
 	if p := mustPrepare(t).plans[0]; len(p.Targets) != 2 || p.Targets[0].URL.String() != "https://staging.shop.test/" {
 		t.Errorf("consent: urls: %+v", p.Targets)
 	}
@@ -322,7 +322,7 @@ func TestConfigErrorsAreUsage(t *testing.T) {
 // each site's consent.args apply to its pages only.
 func TestSitesFile(t *testing.T) {
 	inDir(t, "")
-	writeFile(t, "sites.yaml", `
+	putFile(t, "sites.yaml", `
 - name: acme-shop
   url: https://staging.acme.test
   args: ["--limit", "5"]
@@ -369,7 +369,7 @@ func TestSitesFile(t *testing.T) {
 		"- {name: a, url: a.test, consent: {args: [--runs, decline]}}":          `site "a": consent: args: --runs "decline"`,
 		"- {name: a, url: a.test, consent: {urls: ['ftp://x']}}":                `site "a": consent "ftp://x": want an http or https URL`,
 	} {
-		writeFile(t, "bad.yaml", yaml)
+		putFile(t, "bad.yaml", yaml)
 		if _, err := prepareArgs(t, "--sites", "bad.yaml"); err == nil || !strings.Contains(err.Error(), want) {
 			t.Errorf("%q:\n got %v\nwant %s", yaml, err, want)
 		}
@@ -415,9 +415,62 @@ func TestConsentPagesCap(t *testing.T) {
 	for i := range 21 {
 		b.WriteString("  - name: s" + string(rune('a'+i)) + "\n    url: https://s" + string(rune('a'+i)) + ".test\n    consent:\n      urls: [/, /a/, /b/]\n")
 	}
-	writeFile(t, "sites.yaml", b.String())
+	putFile(t, "sites.yaml", b.String())
 	code, _, errOut := runMain(t, "--sites", "sites.yaml")
 	if code != exitUsage || errOut != "rhythm echo: 63 pages is more than 50 for one check; split the sites file\n" {
 		t.Errorf("63 pages: %d %q", code, errOut)
+	}
+}
+
+// TestPlanUsageMessages pins the exit-2 messages that need a config, a
+// store or a file: PRD 10.2 messages 5, 6 and 7 among them.
+func TestPlanUsageMessages(t *testing.T) {
+	inDir(t, "production: [shop.example.com]\n")
+	useRunner(t, consenttest.GoldenResult("clean"), nil)
+	putFile(t, "two.yaml", "- {name: a, url: a.test, consent: {args: [--send-hits]}}\n")
+	cases := [][]string{
+		{"--against", "baseline", "https://shop.test/"},
+		{"--against", "last", "https://shop.test/"},
+		{"--send-hits", "https://shop.example.com/"},
+		{"--show-ids", "--junit", "https://shop.test/"},
+		{"-k", "https://shop.example/"},
+		{"-H", "Authorization: env:RHYTHM_ECHO_NOT_SET", "https://shop.test/"},
+		{"--map-host", "x", "https://shop.test/"},
+		{"--sites", "two.yaml"},
+		{"--sites", "two.yaml", "https://shop.test/"},
+		{"--save", "a b", "https://shop.test/"},
+		{"/shop/"},
+	}
+	var b strings.Builder
+	for _, args := range cases {
+		code, out, errOut := runMain(t, args...)
+		if code != exitUsage || out != "" {
+			t.Errorf("%v: exit %d, stdout %q", args, code, out)
+		}
+		b.WriteString("$ consent " + strings.Join(args, " ") + "\n" + errOut)
+	}
+	putFile(t, filepath.Join(".echo", "config.yaml"), "consent:\n  headers:\n    Authorization: Basic abc\n")
+	_, _, errOut := runMain(t, "https://shop.test/")
+	b.WriteString("$ consent https://shop.test/ (a literal header in the config)\n" + strings.Replace(filepath.ToSlash(errOut), filepath.ToSlash(mustWd(t))+"/.echo", "<dir>/.echo", 1))
+	golden(t, "plan-usage-messages", b.String())
+}
+
+// mustWd is the working folder.
+func mustWd(t *testing.T) string {
+	t.Helper()
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return wd
+}
+
+// Until signing is built, --sign-key is refused before anything runs.
+func TestSignKeyNotBuilt(t *testing.T) {
+	inDir(t, "")
+	runner, _ := useRunner(t, consenttest.GoldenResult("clean"), nil)
+	code, _, errOut := runMain(t, "--sign-key", "team.key", "https://shop.test/")
+	if code != exitUsage || errOut != "rhythm echo: --sign-key: signing isn't built into this version yet\n" || len(runner.Plans) != 0 {
+		t.Errorf("exit %d %q", code, errOut)
 	}
 }

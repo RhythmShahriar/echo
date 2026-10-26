@@ -16,6 +16,16 @@ import (
 
 var update = flag.Bool("update", false, "rewrite the golden files in testdata")
 
+// testdata is the package's testdata folder, found before a test moves
+// to a folder of its own.
+var testdata = func() string {
+	wd, err := os.Getwd()
+	if err != nil {
+		panic(err)
+	}
+	return filepath.Join(wd, "testdata")
+}()
+
 // runMain runs Main with args and returns the exit code and both
 // streams.
 func runMain(t *testing.T, args ...string) (code int, stdout, stderr string) {
@@ -30,9 +40,9 @@ func runMain(t *testing.T, args ...string) (code int, stdout, stderr string) {
 // with -update. Line ends are normalised, so a CRLF checkout passes.
 func golden(t *testing.T, name, got string) {
 	t.Helper()
-	path := filepath.Join("testdata", name+".golden")
+	path := filepath.Join(testdata, name+".golden")
 	if *update {
-		if err := os.MkdirAll("testdata", 0o750); err != nil {
+		if err := os.MkdirAll(testdata, 0o750); err != nil {
 			t.Fatal(err)
 		}
 		if err := os.WriteFile(path, []byte(got), 0o600); err != nil {
