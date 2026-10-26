@@ -55,6 +55,7 @@ type Config struct {
 	Relay           *Relay           `yaml:"relay,omitempty"`            // releasing a caught email to a real inbox, for client sign-off
 	Hub             *Reserved        `yaml:"hub,omitempty"`              // reserved for the agency hub; accepted and not read yet
 	Actions         []Action         `yaml:"actions,omitempty"`          // what snapshot and compare run, in order
+	Consent         *Consent         `yaml:"consent,omitempty"`          // what rhythm echo consent checks and how
 
 	lines positions // where each key was in the file, for error messages
 }
@@ -496,6 +497,9 @@ func (c Config) Validate() error {
 				return fmt.Errorf("%srelay: allow: %w", c.at("relay", "allow", j), err)
 			}
 		}
+	}
+	if err := c.Consent.validate(&c); err != nil {
+		return err
 	}
 	return fixtures
 }

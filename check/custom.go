@@ -65,8 +65,9 @@ func (c Custom) matcher() (func(s string) (start, end int), error) {
 }
 
 // IssuePrefixes are the families of checks that other packages report
-// as run issues: DNS, headers, the seal, expectations and the run itself.
-var IssuePrefixes = []string{"dns/", "headers/", "seal/", "expect/", "run/"}
+// as run issues: DNS, headers, the seal, expectations, the run itself
+// and the consent checks (consent.Checks).
+var IssuePrefixes = []string{"dns/", "headers/", "seal/", "expect/", "run/", "consent/"}
 
 // reserved reports an ID a custom rule can't take: one in IssuePrefixes
 // or in compare's message/ family. A `checks:` override for it would
