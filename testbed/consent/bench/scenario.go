@@ -65,8 +65,11 @@ func againstName(args []string) string {
 // stateArgs are a scenario's own flags for one state. The good state
 // of a comparison scenario saves the baseline its broken state is
 // compared with, so it drops --against (no baseline exists yet) and adds
-// --save. {echo} becomes echo; ok is false when the scenario needs an
-// Echo and none runs.
+// --save. Both states then use one store, the parent of their working
+// folders (rhythm-echo's store is .echo in the working folder, and each
+// state runs in its own), so the broken state finds the baseline. {echo}
+// becomes echo; ok is false when the scenario needs an Echo and none
+// runs.
 func stateArgs(s scenarios.Scenario, broken bool, echo string) (args []string, ok bool) {
 	base := againstName(s.Args)
 	for i := 0; i < len(s.Args); i++ {
@@ -91,11 +94,18 @@ func stateArgs(s scenarios.Scenario, broken bool, echo string) (args []string, o
 	if !broken && base != "" {
 		args = append(args, "--save", base)
 	}
+	if base != "" {
+		args = append(args, "--store", sharedStore)
+	}
 	if len(s.Runs) > 0 {
 		args = append(args, "--runs", strings.Join(s.Runs, ","))
 	}
 	return args, true
 }
+
+// sharedStore is the store both states of a comparison scenario use,
+// relative to their working folders (<id>/good and <id>/broken).
+const sharedStore = "../.echo"
 
 // job is one thing the benchmark checks: a scenario's expectations on
 // a site. Site is the host label (c01, or c01-wp for a Docker variant

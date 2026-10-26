@@ -70,10 +70,10 @@ func TestControlFlakes(t *testing.T) {
 
 func TestStateArgs(t *testing.T) {
 	c08 := scenarios.Scenario{ID: "c08", Args: []string{"--against", "good"}}
-	if got, _ := stateArgs(c08, false, ""); strings.Join(got, " ") != "--save good" {
+	if got, _ := stateArgs(c08, false, ""); strings.Join(got, " ") != "--save good --store ../.echo" {
 		t.Errorf("c08 good = %q", got)
 	}
-	if got, _ := stateArgs(c08, true, ""); strings.Join(got, " ") != "--against good" {
+	if got, _ := stateArgs(c08, true, ""); strings.Join(got, " ") != "--against good --store ../.echo" {
 		t.Errorf("c08 broken = %q", got)
 	}
 	c18 := scenarios.Scenario{ID: "c18", Args: []string{"--echo={echo}"}, Runs: []string{"+gpc", "+withdraw"}}
