@@ -111,12 +111,12 @@ type request struct {
 	// script is true when the request loads a script or a page rather
 	// than sending data: its type says so or its path names a .js file.
 	script bool
-	query  map[string]string
+	query  values
 	body   []byte
 
 	parsed bool
 	form   map[string]string // body as form lines, or top-level JSON strings
-	lines  []map[string]string
+	lines  []values
 	cut    bool // more body lines than were read
 	json   map[string]json.RawMessage
 }
@@ -162,10 +162,24 @@ func normHost(h string) string {
 	return h
 }
 
-// parseQuery reads a query string or one form line: the first value of
-// each name. It never fails; an undecodable part is kept as written.
-func parseQuery(q string) map[string]string {
-	out := map[string]string{}
+// values is a query string or one form line taken apart: every value
+// of each name, sorted. Sorting makes a repeated name order-free: a
+// rule on its value passes when any value fits while a report shows the
+// smallest, so ?v=2&v=1 and ?v=1&v=2 always classify the same.
+type values map[string][]string
+
+// first is the value a report shows for name: the smallest.
+func (v values) first(name string) (string, bool) {
+	if vs := v[name]; len(vs) > 0 {
+		return vs[0], true
+	}
+	return "", false
+}
+
+// parseQuery reads a query string or one form line. It never fails; an
+// undecodable part is kept as written.
+func parseQuery(q string) values {
+	out := values{}
 	for i, p := range strings.Split(q, "&") {
 		if i == maxPairs {
 			break
@@ -175,8 +189,13 @@ func parseQuery(q string) map[string]string {
 		}
 		k, v, _ := strings.Cut(p, "=")
 		k, v = unescape(k), unescape(v)
-		if _, seen := out[k]; !seen && k != "" {
-			out[k] = v
+		if k != "" {
+			out[k] = append(out[k], v)
+		}
+	}
+	for _, vs := range out {
+		if len(vs) > 1 {
+			slices.Sort(vs)
 		}
 	}
 	return out
@@ -237,17 +256,18 @@ func (q *request) parseBody() {
 		}
 		f := parseQuery(line)
 		q.lines = append(q.lines, f)
-		for k, v := range f {
+		for k, vs := range f {
 			if _, seen := q.form[k]; !seen {
-				q.form[k] = v
+				q.form[k] = vs[0]
 			}
 		}
 	}
 }
 
-// get returns a parameter from the query, else from the body.
+// get returns a parameter from the query, else from the body. A name
+// repeated in the query gives its smallest value.
 func (q *request) get(name string) (string, bool) {
-	if v, ok := q.query[name]; ok {
+	if v, ok := q.query.first(name); ok {
 		return v, true
 	}
 	if len(q.body) == 0 {
@@ -256,6 +276,18 @@ func (q *request) get(name string) (string, bool) {
 	q.parseBody()
 	v, ok := q.form[name]
 	return v, ok
+}
+
+// all returns every value of a parameter: each one in the query, else
+// the body's.
+func (q *request) all(name string) []string {
+	if vs, ok := q.query[name]; ok {
+		return vs
+	}
+	if v, ok := q.get(name); ok {
+		return []string{v}
+	}
+	return nil
 }
 
 // matches reports whether the rule fits the request on everything but
@@ -276,16 +308,14 @@ func (r *rule) matches(q *request) bool {
 		return false
 	}
 	for _, m := range r.match {
-		v, ok := q.get(m.name)
-		if !ok {
-			return false
-		}
-		if !strings.HasPrefix(v, masked) && !m.re.MatchString(v) {
+		if !slices.ContainsFunc(q.all(m.name), func(v string) bool {
+			return strings.HasPrefix(v, masked) || m.re.MatchString(v)
+		}) {
 			return false
 		}
 	}
 	for _, n := range r.not {
-		if v, ok := q.get(n.name); ok && v == n.value {
+		if slices.Contains(q.all(n.name), n.value) {
 			return false
 		}
 	}
@@ -459,7 +489,7 @@ func (e *entry) eventNames(q *request) (events []string, truncated bool) {
 			}
 		}
 	}
-	first(func(n string) (string, bool) { v, ok := q.query[n]; return v, ok })
+	first(q.query.first)
 	if len(q.body) > 0 {
 		q.parseBody()
 		if q.json != nil {
@@ -469,7 +499,7 @@ func (e *entry) eventNames(q *request) (events []string, truncated bool) {
 			if len(events) > limit {
 				break
 			}
-			first(func(n string) (string, bool) { v, ok := l[n]; return v, ok })
+			first(l.first)
 		}
 		// Lines past the ones read may hold events too; say so rather
 		// than report a short batch as whole.
@@ -540,17 +570,19 @@ const maxCustom = 32
 // event can be personal, so values are never kept.
 func customNames(q *request) string {
 	seen := map[string]bool{}
-	add := func(m map[string]string) {
-		for k := range m {
-			if strings.HasPrefix(k, "cd[") {
-				seen[safeText(k, maxEvent)] = true
-			}
+	add := func(k string) {
+		if strings.HasPrefix(k, "cd[") {
+			seen[safeText(k, maxEvent)] = true
 		}
 	}
-	add(q.query)
+	for k := range q.query {
+		add(k)
+	}
 	if len(q.body) > 0 {
 		q.parseBody()
-		add(q.form)
+		for k := range q.form {
+			add(k)
+		}
 	}
 	names := slices.Sorted(maps.Keys(seen))
 	if len(names) > maxCustom {

@@ -44,6 +44,48 @@ func TestHoldNeverScripts(t *testing.T) {
 	}
 }
 
+// TestRepeatedQueryName checks a repeated parameter name classifies the
+// same in any order: a rule passes when any value fits and the hit
+// reports the smallest.
+func TestRepeatedQueryName(t *testing.T) {
+	for _, c := range []struct {
+		a, b string
+		want string // tracker, "" for none
+	}{
+		{"v=2&v=1&tid=G-ABCD1234", "v=1&v=2&tid=G-ABCD1234", "ga4"},
+		{"v=1&v=3&tid=G-ABCD1234", "v=3&v=1&tid=G-ABCD1234", ""},
+		{"v=2&tid=G-ABCD1234&en=b&en=a", "en=a&v=2&en=b&tid=G-ABCD1234", "ga4"},
+	} {
+		var hits []*consent.Hit
+		for _, q := range []string{c.a, c.b} {
+			hits = append(hits, builtin.Request(get("https://metrics.shop.test/g/collect?"+q, "ping"), nil, shop))
+		}
+		if !reflect.DeepEqual(hits[0], hits[1]) {
+			t.Errorf("%s and %s differ: %+v and %+v", c.a, c.b, hits[0], hits[1])
+		}
+		got := ""
+		if hits[0] != nil {
+			got = hits[0].Tracker
+		}
+		if got != c.want {
+			t.Errorf("%s = %q, want %q", c.a, got, c.want)
+		}
+	}
+	h := builtin.Request(get("https://www.google-analytics.com/g/collect?v=2&tid=G-ABCD1234&en=b&en=a", "ping"), nil, shop)
+	if h == nil || len(h.Events) != 1 || h.Events[0] != "a" || h.Params["en"] != "a" {
+		t.Errorf("repeated en = %+v, want the smallest value a", h)
+	}
+	// A frame's not_params fails when any value is the excluded one.
+	for _, q := range []string{"dnt=0&dnt=1", "dnt=1&dnt=0"} {
+		if h := builtin.Request(get("https://player.vimeo.com/video/1?"+q, "document"), nil, shop); h != nil {
+			t.Errorf("vimeo ?%s = %+v, want nil", q, h)
+		}
+	}
+	if h := builtin.Request(get("https://player.vimeo.com/video/1?dnt=0&dnt=2", "document"), nil, shop); h == nil || h.Tracker != "vimeo" {
+		t.Errorf("vimeo without dnt=1 = %+v", h)
+	}
+}
+
 func TestNoScriptMatchesHit(t *testing.T) {
 	if err := checkOverlap(builtin.entries); err != nil {
 		t.Fatalf("built-in catalog: %v", err)
@@ -199,21 +241,16 @@ func TestAnyHostNeverAScript(t *testing.T) {
 	}
 }
 
-// distinctPairs keeps the first pair of each parameter name in q, in
-// order, as the matcher reads them.
-func distinctPairs(q string) []string {
-	seen := map[string]bool{}
+// queryPairs lists the pairs of q the matcher reads, in order.
+func queryPairs(q string) []string {
 	var out []string
 	for i, p := range strings.Split(q, "&") {
 		if i == maxPairs {
 			break
 		}
-		k, _, _ := strings.Cut(p, "=")
-		if p == "" || k == "" || seen[unescape(k)] {
-			continue
+		if p != "" {
+			out = append(out, p)
 		}
-		seen[unescape(k)] = true
-		out = append(out, p)
 	}
 	return out
 }
@@ -262,12 +299,13 @@ func FuzzTrackerMatch(f *testing.F) {
 		if took > matchBudget {
 			t.Fatalf("classifying took %v", took)
 		}
-		// Reordering distinct parameters never changes the result.
+		// Reordering the parameters, repeated names included, never
+		// changes the result.
 		base, q, ok := strings.Cut(u, "?")
 		if !ok || strings.ContainsAny(q, "#") {
 			return
 		}
-		pairs := distinctPairs(q)
+		pairs := queryPairs(q)
 		fwd := base + "?" + strings.Join(pairs, "&")
 		for i, j := 0, len(pairs)-1; i < j; i, j = i+1, j-1 {
 			pairs[i], pairs[j] = pairs[j], pairs[i]
