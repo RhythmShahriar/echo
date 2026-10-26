@@ -258,7 +258,7 @@ func TestConsentSummaryCut(t *testing.T) {
 // TestConsentShowIDsRefused: --show-ids would put unmasked IDs in a
 // shared summary, so the Action refuses it before anything runs.
 func TestConsentShowIDsRefused(t *testing.T) {
-	for _, args := range []string{"--show-ids", "--runs +gpc --show-ids=true"} {
+	for _, args := range []string{"--show-ids", "--runs +gpc --show-ids=true", "-show-ids", "-show-ids=1"} {
 		r, f := consentRunner(t, 0, filepath.Join("testdata", "consent.json"), "")
 		res := r.use(map[string]string{"mode": "consent", "site": "https://shop.test/", "args": args})
 		if res.ok || res.outputs["exit-code"] != "2" {

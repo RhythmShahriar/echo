@@ -527,8 +527,8 @@ runs:
         compared=false
         for a in ${extra[@]+"${extra[@]}"}; do
           case "$a" in
-            --show-ids|--show-ids=*) usage "Echo: --show-ids is not allowed in the Action: its output is shared" ;;
-            --against|--against=*) compared=true ;;
+            --show-ids|--show-ids=*|-show-ids|-show-ids=*) usage "Echo: --show-ids is not allowed in the Action: its output is shared" ;;
+            --against|--against=*|-against|-against=*) compared=true ;;
           esac
         done
         case "$RETENTION" in
