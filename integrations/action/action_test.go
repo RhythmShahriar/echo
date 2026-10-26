@@ -237,7 +237,7 @@ func TestActionCouldntRun(t *testing.T) {
 		{"bad flag", in("mode", "run", "args", "--no-such-flag"), "2", []string{"(exit 2).**", "no-such-flag"}},
 		{"open quote in args", in("mode", "run", "args", "--action 'Contact"), "2", []string{"(exit 2).**", "rhythm echo: args: a quote isn't closed"}},
 		{"missing config", in("mode", "run", "config", "missing.yaml"), "2", []string{"Echo stopped as it started (exit 2)", "missing.yaml"}},
-		{"bad mode", in("mode", "later"), "2", []string{`mode must be snapshot, compare, run, up or stop, not "later"`}},
+		{"bad mode", in("mode", "later"), "2", []string{`mode must be snapshot, compare, run, up, stop or consent, not "later"`}},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

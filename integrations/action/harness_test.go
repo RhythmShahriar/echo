@@ -111,11 +111,15 @@ func (r *runner) use(inputs map[string]string) result {
 	var summary, log strings.Builder
 	for _, s := range r.action.Runs.Steps {
 		ctx.failed = !res.ok
-		cond := strings.TrimSpace(s.If)
-		if cond == "" {
+		cond := strings.TrimSuffix(strings.TrimPrefix(strings.TrimSpace(s.If), "${{"), "}}")
+		// GitHub adds success() to a condition without a status function.
+		switch {
+		case strings.TrimSpace(cond) == "":
 			cond = "success()"
+		case !statusFunc.MatchString(cond):
+			cond = "success() && (" + cond + ")"
 		}
-		if !truthy(ctx.eval(t, strings.TrimSuffix(strings.TrimPrefix(cond, "${{"), "}}"))) {
+		if !truthy(ctx.eval(t, cond)) {
 			continue
 		}
 		res.ran = append(res.ran, s.Name)
@@ -235,6 +239,9 @@ type exprCtx struct {
 	temp   string
 	failed bool
 }
+
+// statusFunc finds a status function in an if: condition.
+var statusFunc = regexp.MustCompile(`\b(always|success|failure|cancelled)\(\)`) //nolint:misspell // the function GitHub names
 
 var interp = regexp.MustCompile(`\$\{\{\s*(.*?)\s*\}\}`)
 

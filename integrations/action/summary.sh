@@ -13,8 +13,11 @@
 #   summary.sh comment [--details] <report.json>  pull request comment: what broke and what is new
 #   summary.sh error <code> <stderr> <log>        why the command couldn't run, with the log's tail
 #   summary.sh mask [--keep-quotes]               mask stdin line by line (logs, errors)
+#   summary.sh consent <consent.json> [<report.md>]  mode consent: Echo's Markdown or a table
+#   summary.sh consent-outputs <consent.json>     mode consent: the Action's outputs as name=value
 #
-# <report.json> is `rhythm-echo report --json`. Needs jq.
+# <report.json> is `rhythm-echo report --json`; <consent.json> is the
+# envelope of `rhythm-echo consent -o x.json`. Needs jq.
 set -euo pipefail
 
 # mask hides who a message went to and what it said: email addresses keep
@@ -137,6 +140,77 @@ def list($head; $items): if ($items | length) > 0 then "**\($head) (\($items | l
 "<sub>Everything else is in the job summary\(if $run != "" then " of [this run](\($run))" else "" end).</sub>"
 '
 
+# consent is the summary of a consent check when Echo's own Markdown is
+# missing: tracker names, counts, check titles, page paths and why a run
+# couldn't choose. Never query strings, cookie values, IDs, details or
+# screenshots. Everything a page could have put there is escaped (md), so
+# it can't mention anyone, link anywhere or add HTML.
+# shellcheck disable=SC2016 # jq source, not shell
+consent='
+def md: tostring | mask | gsub("[\r\n\t]+"; " ")
+  | gsub("(?<c>[&<>|`\\[\\]@!*_#\\\\~:.])"; "&#\(.c | explode[0]);");
+# path keeps the path of a URL: no scheme, host, query or fragment.
+def path: tostring | sub("^[A-Za-z][A-Za-z0-9+.-]*://[^/?#]*"; "") | sub("[?#].*$"; "") | if . == "" then "/" else . end;
+def runname: {"none": "No choice", "accept": "Accept", "reject": "Reject", "gpc": "GPC", "withdraw": "Withdraw"}[.] // .;
+def uniq: reduce .[] as $x ([]; if any(.[]; . == $x) then . else . + [$x] end);
+(.summary // {}) as $s
+| (.data // {}) as $d
+| ([($d.issues // [])[] | select(.ignored == null)]) as $issues
+| ([$d.comparison.changes[]? | select(.accepted != true)]) as $changes
+| ($s.inconclusive_runs // 0) as $inc
+| (if ($s.errors // 0) + ($s.warnings // 0) + ($s.broke // 0) + ($s.new // 0) + ($s.changed // 0) > 0 then "Findings"
+   elif $inc > 0 then "Couldn\u0027t check" else "All clear" end) as $verdict
+| (["none", "accept", "reject", "gpc", "withdraw"] as $order
+   | [($d.pages // [])[].runs[]?.run] | uniq | (($order - ($order - .)) + (. - $order))) as $kinds
+| "## ♪ Echo consent\n",
+  "**\($verdict).** \(plural($s.pages // 0; "page"; "pages")), \(plural($s.runs // 0; "run"; "runs")), \(plural($s.trackers // 0; "tracker"; "trackers")), policy \(($d.policy // "advanced") | md). Hits before the choice: \($s.before_choice // 0). After Reject: \($s.after_reject // 0).\(if $inc > 0 then " Couldn\u0027t check \(plural($inc; "run"; "runs"))." else "" end)\n",
+  (if ($d.pages // []) | length > 0 then
+     "| Page | Banner | \($kinds | map(runname) | join(" | ")) |\n|---|---|\($kinds | map("---|") | join(""))",
+     (($d.pages // [])[] as $p
+      | ($p.url | path) as $path
+      | "| \($path | md) | \(if $p.cmp.found then ($p.cmp.name | md) elif $p.cmp.present then "\($p.cmp.name | md) (not shown)" else "none" end) | \(
+          [$kinds[] as $k | ([$p.runs[]? | select(.run == $k)] | first) as $r
+           | if $r == null then "" elif ($r.reason // "") != "" then "? \($r.reason | md)"
+             else ([$r.hits[]?.name] | uniq) as $names
+             | ([$issues[] | select((.level == "error" or .level == "warning") and .run == $k and (.page == $path or .page == $p.url))] | length > 0) as $bad
+             | "\(if $bad then "✗ " else "" end)\(if ($names | length) == 0 then "nothing fired" else ($names | map(md) | join(", ")) end)"
+             end] | join(" | ")) |"),
+     ""
+   else empty end),
+  (["error", "warning", "notice"][] as $l
+   | [$issues[] | select(.level == $l)] | select(length > 0)
+   | "### \({"error": "Errors", "warning": "Warnings", "notice": "Notices"}[$l]) (\(length))\n\n| Check | Page | Run | What |\n|---|---|---|---|",
+     (.[] | "| \(.check | md) | \(.page | path | md) | \(.run | runname | md) | \(.title | md) |"), ""),
+  (if ($changes | length) > 0 then
+     "### Against the baseline (\($changes | length))\n\n| Change | Page | Run | What |\n|---|---|---|---|",
+     ($changes[] | "| \(.class | ascii_upcase | md) | \(.page | path | md) | \(.run | runname | md) | \(.title | md) |"), ""
+   else empty end),
+  (if ($d.inconclusive // []) | length > 0 then
+     "### Couldn\u0027t check (\($d.inconclusive | length))\n\n| Page | Run | Why |\n|---|---|---|",
+     ($d.inconclusive[] | "| \(.page | path | md) | \(.run | runname | md) | \(.reason | md) |"), ""
+   else empty end),
+  "_Evidence, not legal advice. Hits held in the browser._\n"
+'
+
+# shellcheck disable=SC2016 # Markdown backticks, not shell
+consent_hidden='<sub>Query strings, cookie values, IDs and screenshots are hidden here. The evidence folder (upload: true) has report.html and consent.json.</sub>'
+
+# cut keeps stdin under the job summary's limit (1 MiB a step): at most
+# 900 KiB, cut at a line, with a note where it was cut.
+cut_at=$((900 * 1024))
+cut() {
+	local f
+	f=$(mktemp)
+	cat > "$f"
+	if [ "$(wc -c < "$f")" -le "$cut_at" ]; then
+		cat "$f"
+	else
+		head -c $((cut_at - 200)) "$f" | sed '$d'
+		printf '\n_The summary was cut at 900 KiB: the evidence folder (upload: true) has the whole report._\n'
+	fi
+	rm -f "$f"
+}
+
 tok=${RHYTHM_ECHO_TOKEN:-}
 run_url=""
 [ -z "${GITHUB_RUN_ID:-}" ] || run_url="${GITHUB_SERVER_URL:-https://github.com}/${GITHUB_REPOSITORY:-}/actions/runs/$GITHUB_RUN_ID"
@@ -207,8 +281,30 @@ error)
 	fi
 	echo '<sub>Recipients and subjects are hidden here. The echo-log artifact has the whole log (log: true, the default).</sub>'
 	;;
+consent)
+	[ $# -eq 2 ] || [ $# -eq 3 ] || { echo "usage: summary.sh consent <consent.json> [<report.md>]" >&2; exit 2; }
+	{
+		if [ $# -eq 3 ] && [ -s "$3" ]; then
+			# Echo's own Markdown, already escaped and masked by Echo:
+			# addresses and phone numbers are masked once more here, quoted
+			# text is kept (a fix quotes code).
+			q false true -Rr "$jqlib mask" "$3"
+		else
+			q false false -r "$jqlib $consent" "$2"
+			echo "$consent_hidden"
+		fi
+	} | cut
+	;;
+consent-outputs)
+	[ $# -eq 2 ] || { echo "usage: summary.sh consent-outputs <consent.json>" >&2; exit 2; }
+	# One name=value a line for GITHUB_OUTPUT; a newline in the folder
+	# would add an output, so such a folder is left out.
+	q false false -r '"before-choice=\(.summary.before_choice // 0)", "after-reject=\(.summary.after_reject // 0)",
+		"inconclusive=\(.summary.inconclusive_runs // 0)",
+		(.data.evidence.folder // "" | select(. != "" and (test("[\r\n]") | not)) | "folder=\(.)")' "$2"
+	;;
 *)
-	echo "usage: summary.sh report|comment|error|mask (see the top of this file)" >&2
+	echo "usage: summary.sh report|comment|error|mask|consent|consent-outputs (see the top of this file)" >&2
 	exit 2
 	;;
 esac

@@ -21,6 +21,8 @@ inputs:
       "snapshot", "compare" or "run" start Echo, run the actions in .echo/config.yaml, report and
       stop it. "up" starts Echo in the background for later steps (e.g. rhythm soundcheck --echo)
       and leaves it running; a later step with mode "stop" stops it and reports the latest run.
+      "consent" checks cookie consent in a real browser (no choice, Accept and Reject) on the
+      pages in site; it doesn't start Echo.
     required: false
     default: run
   working-directory:
@@ -29,6 +31,12 @@ inputs:
       workspace, e.g. sites/shop in a monorepo.
     required: false
     default: "."
+  site:
+    description: >
+      For mode consent: the page or pages to check, separated by spaces or new lines. Empty uses
+      consent.urls from the config, or --sites in args. Only sites you own or are authorised to test.
+    required: false
+    default: ""
   config:
     description: Config file, relative to working-directory. Default .echo/config.yaml.
     required: false
@@ -41,7 +49,8 @@ inputs:
     description: >
       Fail on changes at or above broke, new or changed (compare), or issues at or above error,
       warning or notice (run, snapshot or stop after a run). "none" never fails. Any case. Default,
-      as in the CLI: broke when comparing, error otherwise.
+      as in the CLI: broke when comparing (mode compare, or consent with --against in args), error
+      otherwise.
     required: false
     default: ""
   seal:
@@ -65,7 +74,8 @@ inputs:
   args:
     description: >
       Extra flags for the command, split like a shell would (quotes group words) but never run
-      through one, e.g. "--action 'Contact form' --verbose".
+      through one, e.g. "--action 'Contact form' --verbose", or for mode consent
+      "--runs +gpc --geo de --against baseline". --show-ids is refused in mode consent.
     required: false
     default: ""
   version:
@@ -82,8 +92,21 @@ inputs:
       on for later uses of the Action in the same job). Off by default: the
       HTML report holds every captured recipient, subject and body; anyone can download the
       artifacts of a public repository's runs. The Action warns when it is on in a public repository.
+      For mode consent: the evidence folder (screenshots of the site, consent.json, reports) as the
+      echo-consent artifact (echo-consent-2 and so on).
     required: false
     default: "false"
+  sign:
+    description: >
+      For mode consent: sign consent.json with keyless cosign (consent.json.sigstore.json in the
+      evidence folder). Needs "permissions: id-token: write" in the job. The repository and
+      workflow name become public in the Rekor transparency log.
+    required: false
+    default: "false"
+  retention-days:
+    description: For mode consent with upload, how many days GitHub keeps the echo-consent artifact (1 to 90).
+    required: false
+    default: "14"
   log:
     description: >
       Upload Echo's log as the echo-log artifact (echo-log-2 and so on for later uses in the same
@@ -124,17 +147,30 @@ outputs:
     description: >
       The command's exit code: 0 ok, 1 --fail-on hit, 2 usage error (flags or .echo/config.yaml),
       3 couldn't run, 130 interrupted.
-    value: ${{ steps.check.outputs.exit-code || steps.up.outputs.exit-code }}
+    value: ${{ steps.check.outputs.exit-code || steps.consent.outputs.exit-code || steps.up.outputs.exit-code }}
   report:
     description: >
       Path of the standalone HTML report. For mode up, where the later mode stop step writes it.
-    value: ${{ steps.check.outputs.report || steps.up.outputs.report }}
+      For mode consent, report.html in the evidence folder.
+    value: ${{ steps.check.outputs.report || steps.consent.outputs.report || steps.up.outputs.report }}
   summary:
     description: Path of a copy of the job summary the Action wrote (Markdown).
-    value: ${{ steps.check.outputs.summary || steps.up.outputs.summary }}
+    value: ${{ steps.check.outputs.summary || steps.consent.outputs.summary || steps.up.outputs.summary }}
   comment-id:
     description: ID of the pull request comment the Action posted or updated, with pr-comment.
     value: ${{ steps.comment.outputs.id }}
+  json:
+    description: For mode consent, the path of consent.json in the evidence folder.
+    value: ${{ steps.consent.outputs.json }}
+  before-choice:
+    description: For mode consent, how many tracker hits came before the visitor chose.
+    value: ${{ steps.consent.outputs.before-choice }}
+  after-reject:
+    description: For mode consent, how many tracker hits came after Reject.
+    value: ${{ steps.consent.outputs.after-reject }}
+  inconclusive:
+    description: For mode consent, how many runs couldn't make or confirm their choice.
+    value: ${{ steps.consent.outputs.inconclusive }}
 
 runs:
   using: composite
@@ -195,7 +231,7 @@ runs:
 
     - name: Start Echo
       id: up
-      if: inputs.mode != 'stop'
+      if: inputs.mode != 'stop' && inputs.mode != 'consent'
       shell: bash
       working-directory: ${{ inputs.working-directory }}
       env:
@@ -225,7 +261,7 @@ runs:
           exit "$1"
         }
         : > "$log"
-        case "$MODE" in snapshot|compare|run|up) ;; *) stop 2 "mode must be snapshot, compare, run, up or stop, not \"$MODE\"" ;; esac
+        case "$MODE" in snapshot|compare|run|up) ;; *) stop 2 "mode must be snapshot, compare, run, up, stop or consent, not \"$MODE\"" ;; esac
         case "$SEAL" in
           true|seal) flag=--seal ;;
           false|observe) flag=--observe ;;
@@ -292,7 +328,7 @@ runs:
 
     - name: Run Echo
       id: check
-      if: inputs.mode != 'up'
+      if: inputs.mode != 'up' && inputs.mode != 'consent'
       shell: bash
       working-directory: ${{ inputs.working-directory }}
       env:
@@ -390,7 +426,7 @@ runs:
           compare)  cmd=(rhythm-echo compare) ;;
           run)      cmd=(rhythm-echo run) ;;
           stop)     cmd=(rhythm-echo report) ;;
-          *) usage "mode must be snapshot, compare, run, up or stop, not \"$MODE\"" ;;
+          *) usage "mode must be snapshot, compare, run, up, stop or consent, not \"$MODE\"" ;;
         esac
         [ "$MODE" = stop ] || cmd+=(${config[@]+"${config[@]}"})
         # stderr goes to a file for the summary, then to the step log.
@@ -432,8 +468,148 @@ runs:
         echo "report=$out/echo-report.html" >> "$GITHUB_OUTPUT"
         exit 0
 
+    # mode consent: no Echo server, a browser instead. Every input reaches
+    # the script through env, never through ${{ }} inside run:, so a site
+    # or an argument can't become shell.
+    - name: Check consent
+      id: consent
+      if: inputs.mode == 'consent'
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        SITE: ${{ inputs.site }}
+        FAIL_ON: ${{ inputs.fail-on }}
+        CONFIG: ${{ inputs.config }}
+        ARGS: ${{ inputs.args }}
+        UPLOAD: ${{ inputs.upload }}
+        RETENTION: ${{ inputs.retention-days }}
+        DETAILS: ${{ inputs.summary-details }}
+        PRIVATE: ${{ github.event.repository.private }}
+        SUMMARY: ${{ github.action_path }}/integrations/action/summary.sh
+        USE: ${{ steps.use.outputs.suffix }}
+      run: |
+        # The runner starts bash with -e; this step reads exit codes itself.
+        set +e -uo pipefail
+        md="$RUNNER_TEMP/echo-summary$USE.md"
+        json="$RUNNER_TEMP/echo-consent.json"
+        report="$RUNNER_TEMP/echo-consent.md"
+        errf="$RUNNER_TEMP/echo-error.txt"
+        outf="$RUNNER_TEMP/echo-output.txt"
+        rm -f "$json" "$report" "$RUNNER_TEMP/echo-report.json"
+        : > "$errf"
+        # finish writes the summary of a check that couldn't run and exits
+        # with its code.
+        finish() {
+          echo "exit-code=$1" >> "$GITHUB_OUTPUT"
+          bash "$SUMMARY" error "$1" "$errf" /dev/null > "$md" || true
+          cat "$md" >> "$GITHUB_STEP_SUMMARY"
+          echo "summary=$md" >> "$GITHUB_OUTPUT"
+          exit "$1"
+        }
+        usage() {
+          printf 'rhythm echo: %s\n' "$1" | tee "$errf" >&2
+          echo "::error::$1"
+          finish 2
+        }
+        # split prints its argument's words one per line, like a shell
+        # would split them (quotes group words) without running one: xargs
+        # only parses quotes. $(...) and backticks stay plain text.
+        split() {
+          [ -z "$1" ] || printf '%s' "$1" | xargs -n1 printf '%s\n' 2>/dev/null
+        }
+        quote="a quote isn't closed; put words with spaces in matching ' or \" quotes"
+        extra=()
+        words=$(split "$ARGS") || usage "args: $quote"
+        [ -z "$words" ] || while IFS= read -r a; do extra+=("$a"); done <<< "$words"
+        sites=()
+        words=$(split "$SITE") || usage "site: $quote"
+        [ -z "$words" ] || while IFS= read -r a; do sites+=("$a"); done <<< "$words"
+        compared=false
+        for a in ${extra[@]+"${extra[@]}"}; do
+          case "$a" in
+            --show-ids|--show-ids=*) usage "Echo: --show-ids is not allowed in the Action: its output is shared" ;;
+            --against|--against=*) compared=true ;;
+          esac
+        done
+        case "$RETENTION" in
+          [1-9]|[1-8][0-9]|90) ;;
+          *) usage "retention-days \"$RETENTION\": want a number of days from 1 to 90" ;;
+        esac
+        level=$(printf '%s' "$FAIL_ON" | tr '[:upper:]' '[:lower:]')
+        if [ "$compared" = true ]; then
+          case "$level" in
+            "") level=broke ;;
+            none|broke|new|changed) ;;
+            *) usage "fail-on \"$FAIL_ON\": want none, broke, new or changed with --against" ;;
+          esac
+        else
+          case "$level" in
+            "") level=error ;;
+            none|error|warning|notice) ;;
+            *) usage "fail-on \"$FAIL_ON\": want none, error, warning or notice (or broke, new, changed with --against)" ;;
+          esac
+        fi
+        echo "fail-on=$level" >> "$GITHUB_OUTPUT"
+        config=()
+        [ -z "$CONFIG" ] || config=(--config "$CONFIG")
+        verbose=()
+        [ "$DETAILS" = true ] && verbose=(-v)
+        # The pages go after --, so one spelled like a flag stays a page.
+        end=()
+        [ ${#sites[@]} -eq 0 ] || end=(-- "${sites[@]}")
+        # stdout names every page and hit; the step log is as public as
+        # the summary, so it goes there only with summary-details: true.
+        rhythm-echo consent -o "$json" -o "$report" ${config[@]+"${config[@]}"} ${verbose[@]+"${verbose[@]}"} \
+          ${extra[@]+"${extra[@]}"} --fail-on "$level" --plain ${end[@]+"${end[@]}"} > "$outf" 2> "$errf"
+        code=$?
+        [ "$DETAILS" = true ] && cat "$outf"
+        cat "$errf" >&2
+        # Exit 3 with a result is a check with runs that couldn't choose:
+        # it has a summary to show. Without one it couldn't run at all.
+        if [ "$code" -ge 2 ] && { [ "$code" -ne 3 ] || [ ! -s "$json" ]; }; then
+          finish "$code"
+        fi
+        echo "exit-code=$code" >> "$GITHUB_OUTPUT"
+        if [ -s "$json" ]; then
+          bash "$SUMMARY" consent "$json" "$report" > "$md" || true
+          # before-choice, after-reject, inconclusive, folder; a count the
+          # summary leaves out reads as 0.
+          counts=$(bash "$SUMMARY" consent-outputs "$json") || counts=""
+          folder=$(printf '%s\n' "$counts" | sed -n 's/^folder=//p')
+          printf '%s\n' "$counts" | grep -E '^(before-choice|after-reject|inconclusive)=[0-9]+$' >> "$GITHUB_OUTPUT"
+          if [ -n "$folder" ]; then
+            case "$folder" in /*) ;; *) folder="$PWD/$folder" ;; esac
+            {
+              echo "folder=$folder"
+              echo "json=$folder/consent.json"
+              echo "report=$folder/report.html"
+            } >> "$GITHUB_OUTPUT"
+          fi
+        fi
+        [ -s "$md" ] || printf '## ♪ Echo consent\n\nThe report could not be written; see the step log.\n' > "$md"
+        cat "$md" >> "$GITHUB_STEP_SUMMARY"
+        [ "$DETAILS" = true ] || cat "$md"
+        echo "summary=$md" >> "$GITHUB_OUTPUT"
+        if [ "$UPLOAD" = true ] && [ "$PRIVATE" = false ]; then
+          echo "::warning::upload is on in a public repository: anyone can download the echo-consent artifact, with screenshots of the site and every page checked. Turn upload off, or keep the repository private."
+        fi
+        exit 0
+
+    - name: Sign consent.json
+      if: inputs.mode == 'consent' && inputs.sign == 'true' && steps.consent.outputs.folder != ''
+      shell: bash
+      env:
+        FOLDER: ${{ steps.consent.outputs.folder }}
+      run: |
+        set -euo pipefail
+        echo "::notice::Signing consent.json with keyless cosign: the repository and workflow name go to the public Rekor transparency log."
+        cd "$FOLDER"
+        cosign sign-blob --yes --bundle consent.json.sigstore.json consent.json
+
     - name: Stop Echo
-      if: always() && inputs.mode != 'up' && inputs.mode != 'stop'
+      # Not after consent either: an Echo an earlier mode up step started
+      # (for --echo) keeps running for the steps after this one.
+      if: always() && inputs.mode != 'up' && inputs.mode != 'stop' && inputs.mode != 'consent'
       shell: bash
       run: |
         [ -f "$RUNNER_TEMP/echo.pid" ] && kill "$(cat "$RUNNER_TEMP/echo.pid")" 2>/dev/null || true
@@ -447,6 +623,16 @@ runs:
         if-no-files-found: ignore
         # Matrix jobs share the run's artifact names: the last one wins
         # instead of failing the step.
+        overwrite: true
+
+    - name: Upload the evidence
+      if: always() && inputs.mode == 'consent' && inputs.upload == 'true' && steps.consent.outputs.folder != ''
+      uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      with:
+        name: echo-consent${{ steps.use.outputs.suffix }}
+        path: ${{ steps.consent.outputs.folder }}
+        if-no-files-found: ignore
+        retention-days: ${{ inputs.retention-days }}
         overwrite: true
 
     - name: Prepare the log
@@ -483,7 +669,9 @@ runs:
         GH_TOKEN: ${{ github.token }}
         PR: ${{ github.event.pull_request.number }}
         KEY: ${{ inputs.working-directory }}
-        CODE: ${{ steps.check.outputs.exit-code || steps.up.outputs.exit-code }}
+        CODE: ${{ steps.check.outputs.exit-code || steps.consent.outputs.exit-code || steps.up.outputs.exit-code }}
+        MODE: ${{ inputs.mode }}
+        CONSENT: ${{ steps.consent.outputs.summary }}
         DETAILS: ${{ inputs.summary-details }}
         SUMMARY: ${{ github.action_path }}/integrations/action/summary.sh
         COMMENT: ${{ github.action_path }}/integrations/action/comment.sh
@@ -491,7 +679,11 @@ runs:
         body="$RUNNER_TEMP/echo-comment.md"
         details=()
         [ "$DETAILS" = true ] && details=(--details)
-        if [ -n "$CODE" ] && [ "$CODE" -ge 2 ]; then
+        if [ "$MODE" = consent ]; then
+          # The consent summary is the comment, masked the same way.
+          [ -s "$CONSENT" ] || exit 0
+          cp "$CONSENT" "$body"
+        elif [ -n "$CODE" ] && [ "$CODE" -ge 2 ]; then
           bash "$SUMMARY" error "$CODE" "$RUNNER_TEMP/echo-error.txt" /dev/null > "$body"
         elif [ -s "$RUNNER_TEMP/echo-report.json" ]; then
           bash "$SUMMARY" comment ${details[@]+"${details[@]}"} "$RUNNER_TEMP/echo-report.json" > "$body"
@@ -507,4 +699,21 @@ runs:
         FAIL_ON: ${{ inputs.fail-on }}
       run: |
         echo "::error::Echo found changes or issues at or above --fail-on ${FAIL_ON:-its default}. See the job summary."
+        exit 1
+
+    - name: Fail on consent issues
+      # Exit 3 with a result: runs that couldn't choose (a check that
+      # couldn't run at all failed its own step).
+      if: steps.consent.outputs.exit-code == '1' || (steps.consent.outputs.exit-code == '3' && steps.consent.outputs.inconclusive != '')
+      shell: bash
+      env:
+        CODE: ${{ steps.consent.outputs.exit-code }}
+        LEVEL: ${{ steps.consent.outputs.fail-on }}
+        RUNS: ${{ steps.consent.outputs.inconclusive }}
+      run: |
+        if [ "$CODE" = 3 ]; then
+          echo "::error::Echo couldn't check consent on ${RUNS:-0} runs (see the summary)"
+          exit 3
+        fi
+        echo "::error::Echo found consent issues at or above --fail-on $LEVEL"
         exit 1

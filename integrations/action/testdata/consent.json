@@ -1,0 +1,66 @@
+{
+  "schema": "rhythm-echo/v1",
+  "kind": "consent",
+  "tool": "rhythm-echo",
+  "version": "1.2.0",
+  "complete": false,
+  "summary": {
+    "broke": 0, "new": 0, "changed": 0, "fixed": 0,
+    "errors": 2, "warnings": 0, "notices": 1,
+    "pages": 2, "runs": 6, "failed_runs": 2, "inconclusive_runs": 2,
+    "trackers": 3, "before_choice": 1, "after_reject": 2, "held": 7
+  },
+  "verdict": "findings",
+  "data": {
+    "id": "2026-10-26T09-20-41-c4d5e6",
+    "policy": "advanced",
+    "pages": [
+      {
+        "site": "",
+        "url": "https://shop.test/account/?email=jane.doe%40customer.example&session=4411",
+        "final_url": "https://shop.test/account/",
+        "cmp": {"id": "generic", "name": "<img src=x onerror=alert(1)> `ping @octocat`", "found": true, "present": true},
+        "runs": [
+          {"run": "none", "status": "ok", "reason": "", "hits": [
+            {"seq": 41, "tracker": "meta-pixel", "name": "Meta Pixel", "id": "••••5678", "url": "https://www.facebook.com/tr?id=1234565678&ev=PageView&ud%5Bem%5D=jane.doe", "held": true}
+          ], "cookies": [{"name": "_fbp", "value": "fb.1.W-1234"}]},
+          {"run": "accept", "status": "ok", "reason": "", "hits": [
+            {"seq": 50, "tracker": "ga4", "name": "GA4", "id": "••••ABCD"},
+            {"seq": 51, "tracker": "meta-pixel", "name": "Meta Pixel"},
+            {"seq": 52, "tracker": "custom", "name": "[click me](https://evil.example/) ![x](https://evil.example/x.png)"}
+          ]},
+          {"run": "reject", "status": "ok", "reason": "", "hits": [
+            {"seq": 60, "tracker": "meta-pixel", "name": "Meta Pixel"}
+          ]}
+        ]
+      },
+      {
+        "site": "",
+        "url": "https://shop.test/",
+        "cmp": {"id": "", "name": "", "found": false, "present": false},
+        "runs": [
+          {"run": "none", "status": "ok", "reason": "", "hits": []},
+          {"run": "accept", "status": "no-banner", "reason": "no_banner", "detail": "Banner text: Welcome Jane, call +1 (412) 555-0199", "hits": []},
+          {"run": "reject", "status": "no-banner", "reason": "no_banner", "hits": []}
+        ]
+      }
+    ],
+    "issues": [
+      {"check": "consent/before-choice", "level": "error", "key": "consent/before-choice|/account/|none|meta-pixel", "page": "/account/", "run": "none", "tracker": "meta-pixel", "policy": "advanced",
+       "title": "Meta Pixel fired before the visitor chose", "detail": "facebook.com/tr?id=••••5678&ev=PageView at 0.84s; cookie _fbp written; jane.doe@customer.example", "fix": "Call fbq('consent', 'revoke') before fbq('init')."},
+      {"check": "consent/after-reject", "level": "error", "key": "consent/after-reject|/account/|reject|meta-pixel", "page": "/account/", "run": "reject", "tracker": "meta-pixel", "policy": "advanced",
+       "title": "Meta Pixel fired after Reject <!-- hidden --> | # heading @team", "detail": "2 hits", "fix": "as above"},
+      {"check": "consent/cookieless-ping", "level": "notice", "key": "consent/cookieless-ping|/account/|none|ga4", "page": "/account/", "run": "none", "tracker": "ga4", "policy": "advanced",
+       "title": "GA4 sent 2 cookieless pings before the choice", "detail": "gcs=G100", "fix": ""},
+      {"check": "consent/before-choice", "level": "error", "key": "consent/before-choice|/|none|hotjar", "page": "/", "run": "none", "tracker": "hotjar", "policy": "advanced",
+       "title": "Hotjar fired before the visitor chose", "detail": "", "fix": "", "ignored": {"check": "consent/before-choice", "reason": "known", "until": "2026-12-31"}}
+    ],
+    "inconclusive": [
+      {"page": "/", "run": "accept", "reason": "no_banner", "detail": "Welcome Jane at bob@shop.example"},
+      {"page": "/", "run": "reject", "reason": "no_banner", "detail": ""}
+    ],
+    "comparison": null,
+    "evidence": {"folder": ".echo/consent/2026-10-26T09-20-41-c4d5e6", "files": []},
+    "notes": ["Evidence, not legal advice."]
+  }
+}
