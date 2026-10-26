@@ -110,6 +110,34 @@ func TestDefaultLate(t *testing.T) { // c05
 	}
 }
 
+// A later page of the run (--pages) sends the default again: the
+// page's default is the first visit's, never late because of it.
+func TestDefaultOfTheFirstVisit(t *testing.T) {
+	r := result(consent.Run{Kind: consent.RunNone,
+		Visits:  []consent.Visit{{Step: "load", AtMS: 0}, {Step: "page", AtMS: 7000}},
+		Hits:    []consent.HitRef{ga4(5, 120, consent.PhaseBefore, "G100", &g100), ga4(9, 7200, consent.PhaseBefore, "G100", &g100)},
+		Signals: []consent.Signal{defaultCmd(27, true), defaultCmd(7132, true)},
+	})
+	Evaluator{}.Evaluate(r, nil)
+	if keys := keysOf(r, v3Checks); len(keys) != 0 {
+		t.Errorf("a second page's default: %v", keys)
+	}
+	if cm := r.Pages[0].ConsentMode; cm == nil || cm.DefaultAtMS != 27 || !cm.DefaultBeforeFirstHit {
+		t.Errorf("consent mode %+v", cm)
+	}
+	// A default only on the second page is late for the first.
+	r = result(consent.Run{Kind: consent.RunNone,
+		Visits:  []consent.Visit{{Step: "load", AtMS: 0}, {Step: "page", AtMS: 7000}},
+		Hits:    []consent.HitRef{ga4(5, 120, consent.PhaseBefore, "G100", &g100)},
+		Signals: []consent.Signal{defaultCmd(7132, true)},
+	})
+	Evaluator{}.Evaluate(r, nil)
+	if cm := r.Pages[0].ConsentMode; cm == nil || cm.DefaultAtMS != 7132 {
+		t.Errorf("default on the second page only: %+v", cm)
+	}
+	sameKeys(t, keysOf(r, v3Checks), "consent/default-late|/|none|")
+}
+
 func TestV2Signals(t *testing.T) { // c06
 	r := result(consent.Run{Kind: consent.RunNone,
 		Hits:    []consent.HitRef{ga4(5, 620, consent.PhaseBefore, "G100", &g100)},

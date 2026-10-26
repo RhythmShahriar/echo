@@ -405,7 +405,7 @@ func (c *comparison) signals(cp *consent.Page, br, cr *consent.Run) {
 // defaultText writes a run's effective Consent Mode default as sorted
 // signal=value pairs, or "none".
 func defaultText(run *consent.Run, geo string) string {
-	state, _, ok := consent.EffectiveDefault(run.Signals, geo)
+	state, _, ok := pageDefault(run, geo)
 	if !ok {
 		return noValue
 	}

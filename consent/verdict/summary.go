@@ -5,6 +5,7 @@ package verdict
 
 import (
 	"maps"
+	"math"
 	"strings"
 
 	"github.com/RhythmShahriar/echo/consent"
@@ -106,7 +107,7 @@ func (j *judge) consentModeSummary(pg *consent.Page) *consent.ConsentMode {
 		return cm
 	}
 	cm.Present = hasConsentMode(run)
-	state, at, ok := consent.EffectiveDefault(run.Signals, j.geo)
+	state, at, ok := pageDefault(run, j.geo)
 	first := firstGoogleHit(run)
 	if first != nil {
 		cm.FirstGoogleHitMS = first.AtMS
@@ -122,6 +123,34 @@ func (j *judge) consentModeSummary(pg *consent.Page) *consent.ConsentMode {
 		cm.Region = append([]string(nil), s.Region...)
 	}
 	return cm
+}
+
+// pageDefault is the Consent Mode default of the run's first page load
+// that sent one, for region. Each visit (--pages, the reload after the
+// choice) is a new page that sends its own default again, which doesn't
+// replace an earlier page's: Google's "the last default wins" holds
+// within one page, so taking it across visits would put the default
+// seconds after the first Google hit.
+func pageDefault(run *consent.Run, region string) (map[string]consent.Value, int64, bool) {
+	if len(run.Visits) < 2 {
+		return consent.EffectiveDefault(run.Signals, region)
+	}
+	for i, v := range run.Visits {
+		end := int64(math.MaxInt64)
+		if i+1 < len(run.Visits) {
+			end = run.Visits[i+1].AtMS
+		}
+		var sigs []consent.Signal
+		for _, s := range run.Signals {
+			if s.AtMS >= v.AtMS && s.AtMS < end || i == 0 && s.AtMS < v.AtMS {
+				sigs = append(sigs, s)
+			}
+		}
+		if state, at, ok := consent.EffectiveDefault(sigs, region); ok {
+			return state, at, true
+		}
+	}
+	return nil, 0, false
 }
 
 // set reports whether a Consent Mode value was given at all.
