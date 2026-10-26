@@ -293,10 +293,7 @@ func (q *request) all(name string) []string {
 // matches reports whether the rule fits the request on everything but
 // the host.
 func (r *rule) matches(q *request) bool {
-	if len(r.methods) > 0 && !slices.Contains(r.methods, q.method) {
-		return false
-	}
-	if len(r.paths) > 0 && !matchPath(r.paths, q.path) {
+	if !r.endpoint(q) {
 		return false
 	}
 	for _, n := range r.all {
@@ -432,12 +429,50 @@ func (c *Catalog) Request(r *consent.Request, body []byte, site *url.URL) *conse
 // frames and documents always load (holding a tag script would make
 // nothing fire and the site falsely pass); a necessary service
 // (payments, captchas) is never interfered with.
+//
+// Hold sees no body, so a POST or PUT whose proving parameters may be
+// in it (a Meta Pixel sendBeacon to www.facebook.com/tr, a Matomo POST)
+// is held on its endpoint alone: a hits rule on the vendor's own host
+// whose method and path fit. A rule on any host still needs its
+// parameters, since only they make a first-party path a tracker's.
 func (c *Catalog) Hold(r *consent.Request) bool {
 	if r == nil || r.Type == "script" || r.Type == "document" {
 		return false
 	}
-	h := c.Request(r, nil, nil)
-	return h != nil && h.Kind == consent.HitBeacon && h.Need != consent.NeedNo
+	q, ok := newRequest(r, nil)
+	if !ok || q.script {
+		return false
+	}
+	m := c.find(q)
+	if (m == nil || m.kind != consent.HitBeacon) && (q.method == "POST" || q.method == "PUT") {
+		m = c.findEndpoint(q)
+	}
+	return m != nil && m.kind == consent.HitBeacon && m.e.info.Need != consent.NeedNo
+}
+
+// findEndpoint returns the first hits rule on a vendor host (the exact
+// and suffix tiers) whose method and path fit q, its parameters not
+// checked: the config's own entries first, then the built-in ones.
+func (c *Catalog) findEndpoint(q *request) *rule {
+	for _, tiers := range []*[3][]*rule{&c.custom, &c.tiers} {
+		for _, r := range tiers[tierExact] {
+			if r.kind == consent.HitBeacon && slices.Contains(r.exact, q.host) && r.endpoint(q) {
+				return r
+			}
+		}
+		for _, r := range tiers[tierSuffix] {
+			if r.kind == consent.HitBeacon && slices.ContainsFunc(r.suffix, func(s string) bool { return strings.HasSuffix(q.host, s) }) && r.endpoint(q) {
+				return r
+			}
+		}
+	}
+	return nil
+}
+
+// endpoint reports whether q fits the rule's methods and paths.
+func (r *rule) endpoint(q *request) bool {
+	return (len(r.methods) == 0 || slices.Contains(r.methods, q.method)) &&
+		(len(r.paths) == 0 || matchPath(r.paths, q.path))
 }
 
 // sameSite reports whether host is site's registrable domain or below

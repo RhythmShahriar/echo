@@ -130,7 +130,16 @@ func TestScriptNeverHeld(t *testing.T) {
 		for _, f := range ff.Hits.Match {
 			r := f.request()
 			// A necessary service is never held; every other hit is.
-			if held := builtin.Hold(r); f.Body == "" && held != (e.info.Need != consent.NeedNo) {
+			// Hold sees no body: a POST whose parameters are only in it
+			// is held on its vendor endpoint. On any host only the body
+			// proves the hit (a proxied Plausible), so it can't be held.
+			want := e.info.Need != consent.NeedNo
+			if q, _ := newRequest(r, f.body()); f.Body != "" && builtin.find(q).anyHost {
+				if builtin.Request(r, nil, nil) == nil {
+					want = false
+				}
+			}
+			if held := builtin.Hold(r); held != want {
 				t.Errorf("%s: hit %s held %v, need %s", e.info.ID, f.URL, held, e.info.Need)
 			}
 			r.Type = "script"

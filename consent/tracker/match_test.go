@@ -44,6 +44,51 @@ func TestHoldNeverScripts(t *testing.T) {
 	}
 }
 
+// TestHoldBodyOnlyBeacon holds a POST whose proving parameters are only
+// in the body, which Hold never sees, on its vendor endpoint alone.
+func TestHoldBodyOnlyBeacon(t *testing.T) {
+	post := func(u, typ string) *consent.Request { return &consent.Request{Method: "POST", URL: u, Type: typ} }
+	// The meta-pixel ping fixture: id and ev are only in the body.
+	ping := post("https://www.facebook.com/tr/", "ping")
+	if h := builtin.Request(ping, []byte("id=1234567890&ev=Purchase"), shop); h == nil || h.Tracker != "meta-pixel" || h.Kind != consent.HitBeacon {
+		t.Fatalf("meta-pixel ping with body = %+v", h)
+	}
+	if h := builtin.Request(ping, nil, shop); h != nil {
+		t.Fatalf("meta-pixel ping without body = %+v, want nil (its rule needs id and ev)", h)
+	}
+	for _, r := range []*consent.Request{
+		ping,
+		post("https://www.facebook.com/tr", "beacon"),
+		post("https://www.google-analytics.com/collect", "beacon"),
+		post("https://shop.matomo.cloud/matomo.php", "fetch"),
+		{Method: "put", URL: "https://in.hotjar.com/api/v2/client/sites/1/visit-data", Type: "xhr"},
+	} {
+		if !builtin.Hold(r) {
+			t.Errorf("%s %s (type %q) is not held", r.Method, r.URL, r.Type)
+		}
+	}
+	for _, r := range []*consent.Request{
+		// GET carries no body: its parameters must prove the hit.
+		get("https://www.facebook.com/tr", "image"),
+		// Another path on the vendor host.
+		post("https://www.facebook.com/login/", "fetch"),
+		// Loaded as a script or a page.
+		post("https://www.facebook.com/tr", "script"),
+		post("https://www.facebook.com/tr", "document"),
+		// On any host only the parameters prove a hit.
+		post("https://shop.test/api/event", "fetch"),
+		post("https://shop.test/matomo.php", "beacon"),
+		// A necessary service is never held.
+		post("https://api.hcaptcha.com/checkcaptcha/abc", "xhr"),
+		// Not a tracker.
+		post("https://shop.test/cart", "fetch"),
+	} {
+		if builtin.Hold(r) {
+			t.Errorf("%s %s (type %q) is held", r.Method, r.URL, r.Type)
+		}
+	}
+}
+
 // TestRepeatedQueryName checks a repeated parameter name classifies the
 // same in any order: a rule passes when any value fits and the hit
 // reports the smallest.
@@ -286,8 +331,12 @@ func FuzzTrackerMatch(f *testing.F) {
 		if !reflect.DeepEqual(a, b) {
 			t.Fatalf("two calls differ: %+v and %+v", a, b)
 		}
+		// Hold may go by the endpoint alone only where a body could
+		// carry the parameters.
 		if h := builtin.Hold(r); h && (a == nil || a.Kind != consent.HitBeacon) && body == nil {
-			t.Fatalf("held a request that isn't a beacon: %+v", a)
+			if m := strings.ToUpper(method); m != "POST" && m != "PUT" {
+				t.Fatalf("held a %s request that isn't a beacon: %+v", method, a)
+			}
 		}
 		// A busy machine stretches single calls; only a request that is
 		// over budget on every one of ten more tries is slow.
