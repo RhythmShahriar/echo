@@ -35,7 +35,7 @@ type Engine struct {
 // Start launches Chrome for p with its egress listener and starts
 // routing its events. Close it when the command ends.
 func Start(ctx context.Context, p *consent.Plan) (*Engine, error) {
-	internal, err := egress.StartRefuseAll(lineWriter(nil))
+	internal, err := egress.StartRefuseAll(nil)
 	if err != nil {
 		return nil, fmt.Errorf("consent: starting the egress guard: %w", err)
 	}
@@ -109,8 +109,10 @@ func (e *Engine) guard(t consent.Target) (*egress.Proxy, error) {
 	if ok, _ := newMapper(e.plan.MapHosts).lookup(host); ok {
 		host = ""
 	}
+	// No Log: a refusal per request would flood the browser log; the
+	// runs record each refused request instead.
 	g, err := egress.Start(egress.Options{Target: host, MapHosts: mapKeys(e.plan.MapHosts), MapOnly: e.plan.MapOnly,
-		Upstream: e.plan.Proxy, Log: lineWriter(e.plan.Browser.Log)})
+		Upstream: e.plan.Proxy})
 	if err != nil {
 		return nil, err
 	}
