@@ -114,9 +114,9 @@ func encodeTC(s tcSpec) string {
 
 func TestTCFSpecExamples(t *testing.T) {
 	tests := []struct {
-		name, tc         string
-		cmp, vendors     int
-		consent, li      []int
+		name, tc     string
+		cmp, vendors int
+		consent, li  []int
 	}{
 		// IAB TCF v2.2 GPP spec example (the TCF section of DBABM~...).
 		{"iab gpp example", "CPXxRfAPXxRfAAfKABENB-CgAAAAAAAAAAYgAAAAAAAA", 31, 0, []int{}, nil},
