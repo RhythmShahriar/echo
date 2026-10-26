@@ -369,6 +369,10 @@ func TestCMPReplicaPages(t *testing.T) {
 	srv := &http.Server{Handler: http.FileServer(http.Dir(root)), ReadHeaderTimeout: 10 * time.Second}
 	go func() { _ = srv.Serve(l) }()
 	t.Cleanup(func() { _ = srv.Close() })
+	// Four pages at a time, each its own rhythm-echo and Chrome: one
+	// after another the replicas alone took most of make test-browser's
+	// 20 minutes; more at once would crowd the late-banner timings.
+	slots := make(chan struct{}, 4)
 	for _, f := range files {
 		data, err := os.ReadFile(f) //nolint:gosec // the checkout's own fixture
 		if err != nil {
@@ -381,6 +385,9 @@ func TestCMPReplicaPages(t *testing.T) {
 		folder := filepath.Base(filepath.Dir(f))
 		for _, p := range exp.Pages {
 			t.Run(folder+"/"+p.Page, func(t *testing.T) {
+				t.Parallel()
+				slots <- struct{}{}
+				defer func() { <-slots }()
 				d := detect(t, bin, "https://"+cmpReplicaHost+"/"+folder+"/"+p.Page, mapArgs...)
 				if d.CMP.Found != p.Found || d.CMP.Present != p.Present {
 					t.Errorf("found %v present %v, want found %v present %v (detected by %q)", d.CMP.Found, d.CMP.Present, p.Found, p.Present, d.CMP.DetectedBy)
