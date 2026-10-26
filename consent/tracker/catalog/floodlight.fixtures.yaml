@@ -1,0 +1,11 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+hits:
+  match:
+    - https://ad.doubleclick.net/activity;src=1234567;type=sales;cat=order0;ord=1
+    - https://ad.doubleclick.net/ddm/activity/src=1234567;type=sales;cat=order0;ord=1
+    - https://fls.doubleclick.net/activityi;src=1234567;type=sales;cat=order0;ord=1
+  no_match:
+    - https://shop.test/activity;src=1234567
+    - https://ad.doubleclick.net/favicon.ico

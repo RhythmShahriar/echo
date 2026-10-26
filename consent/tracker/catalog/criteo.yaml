@@ -1,0 +1,25 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+# Criteo OneTag. The event, display and user-matching hosts are all
+# hits; the loader lives on static.criteo.net.
+id: criteo
+name: Criteo
+vendor: Criteo
+category: advertising
+consent: needed
+hits:
+  - hosts: [sslwidget.criteo.com, dis.criteo.com, gum.criteo.com]
+scripts:
+  - hosts: [static.criteo.net]
+    paths: [/js/ld/ld.js, /js/ld/publishertag.js]
+cookies:
+  - cto_bundle
+  - cto_bidid
+params:
+  id: [a]
+fix: Load the Criteo OneTag only after the banner reports marketing consent
+docs: https://help.criteo.com/kb/guide/en/all-criteo-onetag-events-and-parameters-vZbzbEeY86/
+sources:
+  - https://help.criteo.com/kb/guide/en/all-criteo-onetag-events-and-parameters-vZbzbEeY86/
+  - https://www.criteo.com/privacy/

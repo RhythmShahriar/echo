@@ -1,0 +1,10 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+hits:
+  match:
+    - https://www.google.com/ccm/collect?en=page_view&tid=AW-123456789&gcs=G100
+    - POST https://www.google.com/ccm/collect?en=conversion&tid=AW-123456789
+  no_match:
+    - https://shop.test/ccm/collect?en=page_view
+    - https://www.google.com/ccm/other

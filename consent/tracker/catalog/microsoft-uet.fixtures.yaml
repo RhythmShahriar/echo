@@ -1,0 +1,17 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+hits:
+  match:
+    - {url: "https://bat.bing.com/action/0?ti=12345678&Ver=2&evt=pageLoad&mid=x", type: image}
+    - POST https://bat.bing.com/action/0?ti=12345678&evt=custom&ea=purchase
+  no_match:
+    - https://shop.test/action/0?ti=12345678
+    - https://bat.bing.com/bat.js
+scripts:
+  match:
+    - https://bat.bing.com/bat.js
+    - https://bat.bing.com/p/action/12345678.js
+cookies:
+  match: [_uetsid, _uetvid, {name: MUID, domain: .bing.com}, _uetmsclkid]
+  no_match: [MUID, _uet_banner, uetsid]

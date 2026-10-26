@@ -1,0 +1,32 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+# Snap Pixel. Snap's business help names sc-static.net and
+# tr.snapchat.com; the /p and /cm endpoints are the ones the public
+# scevent.min.js script calls.
+id: snap
+name: Snap Pixel
+vendor: Snap
+category: advertising
+consent: needed
+hits:
+  - hosts: [tr.snapchat.com]
+    paths: [/p, "/cm/*"]
+    methods: [GET, POST]
+scripts:
+  - hosts: [sc-static.net]
+    paths: [/scevent.min.js, /js-sha256-v1.min.js]
+cookies:
+  - _scid
+  - _scid_r
+  - _sctr
+params:
+  event: [ev, e]
+  id: [pid]
+fix: Load the Snap Pixel only after the banner reports marketing consent
+docs: https://businesshelp.snapchat.com/s/article/pixel-website-install
+sources:
+  - https://businesshelp.snapchat.com/s/article/pixel-website-install
+  - https://businesshelp.snapchat.com/s/article/snap-pixel-about
+  # Cookie names cross-checked with the Open Cookie Database (Apache-2.0, see NOTICE).
+  - https://github.com/jkwakman/Open-Cookie-Database

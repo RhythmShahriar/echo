@@ -1,0 +1,36 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+# Universal Analytics (analytics.js, the legacy Measurement Protocol v1)
+# and the older ga.js cookies. Google stopped processing UA data in
+# 2024, yet many sites still load it and it still sends hits.
+id: universal-analytics
+name: Universal Analytics
+vendor: Google
+category: analytics
+consent: needed
+hits:
+  - hosts: [www.google-analytics.com, ssl.google-analytics.com]
+    paths: [/collect, /r/collect, /j/collect]
+    methods: [GET, POST]
+    params_match: {tid: '^UA-'}
+scripts:
+  - hosts: [www.google-analytics.com, ssl.google-analytics.com]
+    paths: [/analytics.js, /ga.js, /plugins/ua/*.js]
+cookies:
+  - _gid
+  - "_gat*"
+  # ga.js, the library before analytics.js.
+  - __utma
+  - __utmb
+  - __utmc
+  - __utmz
+  - "__utmt*"
+params:
+  event: [t]
+  id: [tid]
+fix: Remove Universal Analytics (Google no longer processes its data) or let the banner block it until consent
+docs: https://developers.google.com/analytics/devguides/collection/protocol/v1/reference
+sources:
+  - https://developers.google.com/analytics/devguides/collection/protocol/v1/reference
+  - https://developers.google.com/analytics/devguides/collection/analyticsjs/cookie-usage

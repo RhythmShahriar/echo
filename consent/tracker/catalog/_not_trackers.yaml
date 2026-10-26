@@ -1,0 +1,43 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+# Names that are never trackers, whatever pattern a catalog entry has
+# (loaded first). Consent managers, sessions, CSRF tokens and CDN bot
+# checks are set before any choice on most sites, so claiming one of
+# them would be a false alarm on every site that uses it. A name ending
+# in * stands for every name that starts with it.
+cookies:
+  # Consent managers: the stored choice itself.
+  - CookieConsent              # Cookiebot
+  - OptanonConsent             # OneTrust
+  - OptanonAlertBoxClosed      # OneTrust
+  - cookieyes-consent          # CookieYes
+  - "cmplz_*"                  # Complianz
+  - borlabs-cookie             # Borlabs Cookie
+  - euconsent-v2               # IAB TCF v2 string
+  - didomi_token               # Didomi
+  - "_iub_cs-*"                # iubenda
+  - "uc_*"                     # Usercentrics
+  - CookieScriptConsent        # Cookie-Script
+  - "cookielawinfo-*"          # CookieYes (GDPR Cookie Consent plugin)
+  # Sessions and CSRF tokens of the platforms Echo sees most.
+  - PHPSESSID
+  - JSESSIONID
+  - laravel_session
+  - XSRF-TOKEN
+  - "wordpress_*"              # wordpress_logged_in_*, wordpress_sec_*
+  - "wp-settings-*"            # wp-settings-1, wp-settings-time-1
+  - wordpress_test_cookie
+  - "woocommerce_*"            # woocommerce_cart_hash, woocommerce_items_in_cart
+  - "wp_woocommerce_session_*"
+  # Cloudflare bot management and challenges.
+  - __cf_bm
+  - cf_clearance
+  - __cfruid
+storage:
+  # Where consent managers keep the choice in localStorage.
+  - "uc_*"                     # Usercentrics (uc_settings, uc_user_interaction)
+  - didomi_token
+  - euconsent-v2
+  - "_iub_cs-*"
+  - CookieScriptConsent

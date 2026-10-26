@@ -1,0 +1,21 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+hits:
+  match:
+    - POST https://us.i.posthog.com/e/?ip=1&_=1730000000000&ver=1.180.0
+    - POST https://eu.i.posthog.com/i/v0/e/?ip=0&_=1730000000000&ver=1.180.0
+    - {method: POST, url: "https://ph.shop.test/e/?ip=1&_=1730000000000&ver=1.180.0", body: "data=e30%3D"}
+  no_match:
+    - POST https://shop.test/e/
+    - POST https://shop.test/e/?ver=2
+    - https://us-assets.i.posthog.com/static/array.js
+scripts:
+  match:
+    - https://us-assets.i.posthog.com/static/array.js
+cookies:
+  match: [ph_phc_0123456789abcdef_posthog]
+  no_match: [ph_banner, posthog]
+storage:
+  match: [ph_phc_0123456789abcdef_posthog]
+  no_match: [ph_posthogx]

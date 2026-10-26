@@ -1,0 +1,30 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+# Microsoft Advertising Universal Event Tracking (Bing UET). The tag
+# loads bat.js and then /p/action/<tag id>.js; hits go to /action/0.
+id: microsoft-uet
+name: Microsoft UET (Bing Ads)
+vendor: Microsoft
+category: advertising
+consent: needed
+hits:
+  - hosts: [bat.bing.com]
+    paths: ["/action/*"]
+scripts:
+  - hosts: [bat.bing.com]
+    paths: [/bat.js, "/p/action/*.js"]
+cookies:
+  - _uetsid
+  - _uetvid
+  - _uetmsclkid
+  - {name: MUID, domain: bing.com}
+params:
+  event: [ea, evt]
+  id: [ti]
+fix: "Set uetq.push('consent', 'default', {ad_storage: 'denied'}) before the UET tag, or let the banner block it until consent"
+docs: https://help.ads.microsoft.com/#apex/ads/en/56688/1
+sources:
+  - https://help.ads.microsoft.com/#apex/ads/en/56688/1
+  - https://help.ads.microsoft.com/#apex/ads/en/60119/1
+  - https://learn.microsoft.com/en-us/advertising/guides/universal-event-tracking

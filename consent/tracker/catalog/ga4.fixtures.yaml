@@ -1,0 +1,19 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+hits:
+  match:
+    - https://www.google-analytics.com/g/collect?v=2&tid=G-TESTBED001&en=page_view&gcs=G100
+    - {method: POST, url: "https://region1.google-analytics.com/g/collect?v=2&tid=G-TESTBED001", body: "en=page_view\nen=scroll"}
+    - https://analytics.google.com/g/collect?v=2&tid=G-TESTBED001&en=page_view
+    - https://metrics.shop.test/g/collect?v=2&tid=G-TESTBED001
+    - POST https://shop.test/x7k2/collect?v=2&tid=G-TESTBED001&cid=1234.5678
+  no_match:
+    - https://shop.test/g/collect?q=shoes
+    - https://www.googletagmanager.com/gtag/js?id=G-TESTBED001
+    - https://shop.test/api/collect
+    - https://shop.test/x7k2/collect?v=2&tid=G-TESTBED001
+    - https://shop.test/g/collect?v=1&tid=G-TESTBED001
+cookies:
+  match: [_ga, _ga_TESTBED001, FPID, FPLC, FPAU]
+  no_match: [ga_banner_closed, _gallery, _gac_shop]

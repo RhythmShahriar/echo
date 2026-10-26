@@ -1,0 +1,8 @@
+ok   shop-pixel  match    https://px.shop.example/collect?e=view
+ok   shop-pixel  no_match https://px.shop.example/pixel.js
+ok   shop-wide   match    POST https://stats.shop.example/e?u=••••%40b.example
+FAIL shop-wide   no_match https://stats.shop.example/sw.js  should not match but does
+ok   shop-wide   match    storage sw_id
+ok   shop-wide   no_match storage sw
+FAIL ga4         "ga4" is a built-in tracker; pick another id
+FAIL entry 4     id "Bad" must be lowercase letters, digits and dashes

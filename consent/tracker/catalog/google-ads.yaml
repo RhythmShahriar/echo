@@ -1,0 +1,38 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+# Google Ads conversion tracking. The conversion ID is the number in the
+# path. Google also sends 1p-conversion to country domains
+# (www.google.de and others); only www.google.com is listed here.
+id: google-ads
+name: Google Ads
+vendor: Google
+category: advertising
+consent: needed
+hits:
+  - hosts: [googleads.g.doubleclick.net]
+    paths: ["/pagead/viewthroughconversion/*", "/pagead/conversion/*"]
+  - hosts: [www.googleadservices.com]
+    paths: ["/pagead/conversion/*"]
+  - hosts: [www.google.com]
+    paths: ["/pagead/1p-conversion/*"]
+  - hosts: [td.doubleclick.net]
+scripts:
+  - hosts: [www.googleadservices.com]
+    paths: [/pagead/conversion.js, /pagead/conversion_async.js]
+cookies:
+  - _gcl_au
+  - _gcl_aw
+  - _gcl_dc
+  - _gcl_gb
+  - {name: IDE, domain: doubleclick.net}
+  - {name: test_cookie, domain: doubleclick.net}
+  - {name: DSID, domain: doubleclick.net}
+params:
+  id_path: '^/pagead/(?:viewthroughconversion|conversion|1p-conversion)/([0-9]+)'
+fix: Set a Consent Mode default (all four signals denied) before the Google tag, or let the banner block Google Ads until consent
+docs: https://developers.google.com/tag-platform/devguides/consent
+sources:
+  - https://developers.google.com/tag-platform/security/guides/csp
+  - https://developers.google.com/tag-platform/devguides/consent
+  - https://business.safety.google/adscookies/

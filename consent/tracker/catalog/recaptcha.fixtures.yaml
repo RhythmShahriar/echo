@@ -1,0 +1,23 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+hits:
+  match:
+    - {method: POST, url: "https://www.google.com/recaptcha/api2/reload?k=6LeTEST", body: "v=abc&reason=q", type: xhr}
+    - https://www.recaptcha.net/recaptcha/api2/userverify?k=6LeTEST
+  no_match:
+    - https://shop.test/recaptcha/api2/reload
+    - https://www.google.com/pagead/1p-user-list/123/
+scripts:
+  match:
+    - https://www.google.com/recaptcha/api.js?render=6LeTEST
+    - https://www.gstatic.com/recaptcha/releases/abc123/recaptcha__en.js
+  no_match:
+    - https://www.gstatic.com/charts/loader.js
+frames:
+  match:
+    - https://www.google.com/recaptcha/api2/anchor?ar=1&k=6LeTEST
+    - https://www.recaptcha.net/recaptcha/enterprise/bframe?k=6LeTEST
+cookies:
+  match: [_GRECAPTCHA]
+  no_match: [GRECAPTCHA, _grecaptcha_seen]

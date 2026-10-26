@@ -1,0 +1,26 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+# Amazon Ads tag (Amazon DSP pixels and the Amazon Ad Tag). The /iu3 and
+# /ecm3 endpoints are the ones the public tag calls; ad-id and
+# ad-privacy are set on amazon-adsystem.com.
+id: amazon-ads
+name: Amazon Ads
+vendor: Amazon
+category: advertising
+consent: needed
+hits:
+  - hosts: [s.amazon-adsystem.com]
+    paths: ["/iu3*", "/ecm3*"]
+scripts:
+  - hosts: [c.amazon-adsystem.com]
+cookies:
+  - {name: ad-id, domain: amazon-adsystem.com}
+  - {name: ad-privacy, domain: amazon-adsystem.com}
+params:
+  id: [pid]
+fix: Load Amazon Ads tags only after the banner reports marketing consent
+docs: https://advertising.amazon.com/help/GHPJ8KH7MX9TNZ3K
+sources:
+  - https://advertising.amazon.com/help/GHPJ8KH7MX9TNZ3K
+  - https://www.amazon.com/gp/help/customer/display.html?nodeId=201890250

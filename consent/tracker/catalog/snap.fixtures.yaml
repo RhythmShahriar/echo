@@ -1,0 +1,16 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+hits:
+  match:
+    - POST https://tr.snapchat.com/p
+    - https://tr.snapchat.com/cm/i?pid=TESTBED
+  no_match:
+    - https://shop.test/p
+    - https://tr.snapchat.com/robots.txt
+scripts:
+  match:
+    - https://sc-static.net/scevent.min.js
+cookies:
+  match: [_scid, _scid_r, _sctr]
+  no_match: [scid, _scroll_pos]

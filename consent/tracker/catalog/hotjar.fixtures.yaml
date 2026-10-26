@@ -1,0 +1,21 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+hits:
+  match:
+    - POST https://in.hotjar.com/api/v2/client/sites/1234567/visit-data?sv=7
+    - https://vc.hotjar.io/sessions/1234567/abc
+    - {method: PUT, url: "https://in.hotjar.com/api/v2/client/sites/1234567/recordings/content", type: xhr}
+  no_match:
+    - POST https://shop.test/api/v2/client/sites/1234567/visit-data
+    - https://static.hotjar.com/c/hotjar-1234567.js?sv=7
+scripts:
+  match:
+    - https://static.hotjar.com/c/hotjar-1234567.js?sv=7
+    - https://script.hotjar.com/modules.abc123.js
+cookies:
+  match: [_hjSessionUser_1234567, _hjSession_1234567, _hjid, _hjAbsoluteSessionInProgress, _hjIncludedInSessionSample_1234567, _hjFirstSeen, _hjTLDTest]
+  no_match: [hjSessionUser_1, _hj_banner, _hjSessionUserX]
+storage:
+  match: [_hjLocalStorageTest, _hjSessionStorageTest_1, _hjSessionUser_1234567, _hjid, hjViewportId, hjActiveViewportIds]
+  no_match: [_hjLocal]

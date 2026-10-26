@@ -1,0 +1,17 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+hits:
+  match:
+    - https://mc.yandex.ru/watch/12345678?page-url=https%3A%2F%2Fshop.test%2F
+    - POST https://mc.yandex.com/watch/12345678/1?wmode=7
+    - POST https://mc.yandex.ru/webvisor/12345678
+  no_match:
+    - https://shop.test/watch/12345678
+    - https://mc.yandex.ru/metrika/tag.js
+scripts:
+  match:
+    - https://mc.yandex.ru/metrika/tag.js
+cookies:
+  match: [_ym_uid, _ym_d, _ym_isad, _ym_visorc]
+  no_match: [ym_uid, _ymd]

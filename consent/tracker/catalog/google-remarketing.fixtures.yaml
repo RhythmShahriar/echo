@@ -1,0 +1,10 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+hits:
+  match:
+    - https://www.google.com/pagead/1p-user-list/123456789/?random=1&cv=11&fst=1
+    - POST https://www.google.com/pagead/1p-user-list/123456789/?random=2
+  no_match:
+    - https://shop.test/pagead/1p-user-list/123456789/
+    - https://www.google.com/pagead/1p-conversion/123456789/

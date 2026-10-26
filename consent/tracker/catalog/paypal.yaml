@@ -1,0 +1,19 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+# The PayPal JavaScript SDK and its smart payment buttons.
+id: paypal
+name: PayPal checkout
+vendor: PayPal
+category: necessary
+consent: "no"
+scripts:
+  - hosts: [www.paypal.com]
+    paths: [/sdk/js]
+frames:
+  - hosts: [www.paypal.com]
+    paths: [/smart/buttons, /smart/menu, /smart/card-fields]
+docs: https://developer.paypal.com/sdk/js/configuration/
+sources:
+  - https://developer.paypal.com/sdk/js/configuration/
+  - https://developer.paypal.com/sdk/js/reference/

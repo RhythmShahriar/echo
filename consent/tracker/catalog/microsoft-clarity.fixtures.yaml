@@ -1,0 +1,22 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+hits:
+  match:
+    - {method: POST, url: "https://x.clarity.ms/collect", type: fetch}
+    - POST https://k.clarity.ms/collect
+    - https://y.clarity.ms/collect
+  no_match:
+    - POST https://shop.test/collect
+    - https://www.clarity.ms/tag/abcdefghij
+scripts:
+  match:
+    - https://www.clarity.ms/tag/abcdefghij
+    - https://www.clarity.ms/s/0.7.49/clarity.js
+    - https://scripts.clarity.ms/0.7.49/clarity.js
+cookies:
+  match: [_clck, _clsk, {name: CLID, domain: www.clarity.ms}]
+  no_match: [CLID, _click_banner, clck]
+storage:
+  match: [_clck, _clsk]
+  no_match: [_clicks]

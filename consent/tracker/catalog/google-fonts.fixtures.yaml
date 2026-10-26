@@ -1,0 +1,9 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+scripts:
+  match:
+    - {url: "https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap", type: stylesheet}
+    - {url: "https://fonts.gstatic.com/s/inter/v13/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuLyfAZ9hiA.woff2", type: font}
+  no_match:
+    - https://shop.test/css2?family=Inter

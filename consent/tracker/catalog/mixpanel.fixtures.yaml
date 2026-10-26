@@ -1,0 +1,19 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+hits:
+  match:
+    - {method: POST, url: "https://api-js.mixpanel.com/track/?verbose=1&ip=1", body: "data=eyJldmVudCI6InZpZXcifQ%3D%3D"}
+    - https://api-js.mixpanel.com/engage/?data=e30%3D
+  no_match:
+    - POST https://shop.test/track/?verbose=1
+    - https://cdn.mxpnl.com/libs/mixpanel-2-latest.min.js
+scripts:
+  match:
+    - https://cdn.mxpnl.com/libs/mixpanel-2-latest.min.js
+cookies:
+  match: [mp_0123456789abcdef_mixpanel]
+  no_match: [mpx_banner, mp]
+storage:
+  match: [mp_0123456789abcdef_mixpanel]
+  no_match: [map_state]

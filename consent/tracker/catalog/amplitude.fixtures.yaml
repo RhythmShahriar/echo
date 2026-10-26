@@ -1,0 +1,20 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+hits:
+  match:
+    - {method: POST, url: "https://api2.amplitude.com/2/httpapi", body: '{"api_key":"k","events":[{"event_type":"page"}]}', type: fetch}
+    - POST https://api.eu.amplitude.com/2/httpapi
+  no_match:
+    - POST https://shop.test/2/httpapi
+    - https://cdn.amplitude.com/libs/analytics-browser-2.11.1-min.js.gz
+scripts:
+  match:
+    - https://cdn.amplitude.com/libs/analytics-browser-2.11.1-min.js.gz
+    - https://cdn.amplitude.com/script/0123456789abcdef.js
+cookies:
+  match: [AMP_0123456789, AMP_MKTG_0123456789]
+  no_match: [AMPLE, amp_banner]
+storage:
+  match: [AMP_unsent_0123456789]
+  no_match: [AMPM]

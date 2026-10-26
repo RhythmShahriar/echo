@@ -1,0 +1,16 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+hits:
+  match:
+    - {url: "https://analytics.twitter.com/i/adsct?txn_id=o1abc&p_id=Twitter&tw_sale_amount=0", type: image}
+    - https://t.co/i/adsct?txn_id=o1abc&p_id=Twitter
+  no_match:
+    - https://shop.test/i/adsct?txn_id=o1abc
+    - https://t.co/abcdef
+scripts:
+  match:
+    - https://static.ads-twitter.com/uwt.js
+cookies:
+  match: [muc_ads, {name: personalization_id, domain: .twitter.com}, {name: personalization_id, domain: .x.com}]
+  no_match: [personalization_id, muc]

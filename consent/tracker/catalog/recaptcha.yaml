@@ -1,0 +1,29 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+# Google reCAPTCHA (v2, v3 and Enterprise), also served from
+# www.recaptcha.net where www.google.com is blocked. Spam protection is
+# listed as needing no consent; www.gstatic.com/recaptcha is its code.
+id: recaptcha
+name: Google reCAPTCHA
+vendor: Google
+category: necessary
+consent: "no"
+hits:
+  - hosts: [www.google.com, www.recaptcha.net]
+    paths: ["/recaptcha/api2/*", "/recaptcha/enterprise/*"]
+scripts:
+  - hosts: [www.google.com, www.recaptcha.net]
+    paths: [/recaptcha/api.js, /recaptcha/enterprise.js]
+  - hosts: [www.gstatic.com]
+    paths: [/recaptcha/**]
+frames:
+  - hosts: [www.google.com, www.recaptcha.net]
+    paths: [/recaptcha/api2/anchor, /recaptcha/api2/bframe, /recaptcha/enterprise/anchor, /recaptcha/enterprise/bframe]
+cookies:
+  - _GRECAPTCHA
+docs: https://developers.google.com/recaptcha/docs/faq
+sources:
+  - https://developers.google.com/recaptcha/docs/display
+  - https://developers.google.com/recaptcha/docs/faq
+  - https://policies.google.com/technologies/cookies

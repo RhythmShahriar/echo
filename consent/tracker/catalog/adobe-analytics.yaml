@@ -1,0 +1,43 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+# Adobe Analytics (AppMeasurement /b/ss/<report suite>/... with AQB and
+# AQE bracketing the data, on Adobe's hosts or a first-party CNAME) and
+# the Experience Platform Web SDK (edge.adobedc.net/ee). Launch tags
+# load from assets.adobedtm.com.
+id: adobe-analytics
+name: Adobe Analytics
+vendor: Adobe
+category: analytics
+consent: needed
+any_host: true
+hits:
+  - hosts: ["*.sc.omtrdc.net", "*.2o7.net"]
+    paths: [/b/ss/**]
+    methods: [GET, POST]
+  - paths: [/b/ss/**]
+    methods: [GET, POST]
+    params_all: [AQB, AQE]
+  - hosts: [edge.adobedc.net]
+    paths: [/ee/**]
+    methods: [POST]
+scripts:
+  - hosts: [assets.adobedtm.com]
+cookies:
+  - s_cc
+  - s_sq
+  - s_ecid
+  - s_vi
+  - s_fid
+  - "AMCV_*"
+  - "AMCVS_*"
+  - "kndctr_*"
+params:
+  event: [pe, pev2]
+  id_path: '^/b/ss/([^/]+)/'
+fix: Set Adobe's defaultConsent to pending (Web SDK) or turn on Opt-In in the Experience Cloud ID service until the visitor accepts
+docs: https://experienceleague.adobe.com/en/docs/core-services/interface/data-collection/cookies/analytics
+sources:
+  - https://experienceleague.adobe.com/en/docs/core-services/interface/data-collection/cookies/analytics
+  - https://experienceleague.adobe.com/en/docs/analytics/implementation/validate/overview
+  - https://experienceleague.adobe.com/en/docs/experience-platform/web-sdk/consent/supporting-consent

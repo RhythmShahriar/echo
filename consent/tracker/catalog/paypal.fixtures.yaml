@@ -1,0 +1,11 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+scripts:
+  match:
+    - https://www.paypal.com/sdk/js?client-id=test&currency=EUR
+  no_match:
+    - https://shop.test/sdk/js
+frames:
+  match:
+    - https://www.paypal.com/smart/buttons?style.layout=vertical&sdkVersion=5.0.0

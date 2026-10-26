@@ -1,0 +1,22 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+# Floodlight (Campaign Manager 360 and Search Ads 360 activity tags).
+# The advertiser ID is src= in the path, which Floodlight separates
+# with semicolons.
+id: floodlight
+name: Google Floodlight
+vendor: Google
+category: advertising
+consent: needed
+hits:
+  - hosts: [fls.doubleclick.net]
+  - hosts: [ad.doubleclick.net]
+    paths: ["/activity*", "/ddm/activity/*"]
+params:
+  id_path: 'src=([0-9]+)'
+fix: Set a Consent Mode default (all four signals denied) before the Floodlight tag, or let the banner block it until consent
+docs: https://support.google.com/campaignmanager/answer/7554821
+sources:
+  - https://developers.google.com/tag-platform/security/guides/csp
+  - https://support.google.com/campaignmanager/answer/7554821

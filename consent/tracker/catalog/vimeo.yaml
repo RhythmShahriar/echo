@@ -1,0 +1,21 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+# Vimeo player embeds. With dnt=1 in the player URL Vimeo sets no
+# cookies and keeps no session data, so that form never counts.
+id: vimeo
+name: Vimeo embed
+vendor: Vimeo
+category: embed
+consent: needed
+frames:
+  - hosts: [player.vimeo.com]
+    paths: ["/video/*"]
+    not_params: {dnt: "1"}
+cookies:
+  - {name: vuid, domain: vimeo.com}
+fix: Add dnt=1 to the Vimeo player URL or load the player only after consent
+docs: https://help.vimeo.com/hc/en-us/articles/12426260232977-Player-parameters-overview
+sources:
+  - https://help.vimeo.com/hc/en-us/articles/12426260232977-Player-parameters-overview
+  - https://vimeo.com/cookie_policy

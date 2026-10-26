@@ -1,0 +1,35 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+# Microsoft Clarity session recording. Recordings upload to
+# <letter>.clarity.ms/collect; the tag loads from www.clarity.ms and
+# scripts.clarity.ms. CLID is set on clarity.ms.
+id: microsoft-clarity
+name: Microsoft Clarity
+vendor: Microsoft
+category: session-replay
+consent: needed
+hits:
+  - hosts: ["*.clarity.ms"]
+    paths: [/collect]
+    methods: [GET, POST]
+scripts:
+  - hosts: [www.clarity.ms]
+    paths: ["/tag/*", "/s/**"]
+  # A path, so a /collect hit on scripts.clarity.ms can't pass for the
+  # script (*.clarity.ms takes hits).
+  - hosts: [scripts.clarity.ms]
+    paths: ["/*/*.js"]
+cookies:
+  - _clck
+  - _clsk
+  - {name: CLID, domain: clarity.ms}
+storage:
+  - _clck
+  - _clsk
+fix: Load Clarity only after consent, or send it the visitor's choice with window.clarity('consentv2', ...) from the banner
+docs: https://learn.microsoft.com/en-us/clarity/setup-and-installation/cookie-consent
+sources:
+  - https://learn.microsoft.com/en-us/clarity/setup-and-installation/cookie-list
+  - https://learn.microsoft.com/en-us/clarity/setup-and-installation/cookie-consent
+  - https://learn.microsoft.com/en-us/clarity/setup-and-installation/clarity-csp

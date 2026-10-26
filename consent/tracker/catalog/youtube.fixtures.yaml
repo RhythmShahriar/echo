@@ -1,0 +1,29 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+hits:
+  match:
+    - https://www.youtube.com/api/stats/qoe?event=streamingstats&fmt=243&cpn=abc
+    - {method: POST, url: "https://www.youtube.com/youtubei/v1/log_event?alt=json", type: fetch}
+    - https://youtube.com/api/stats/watchtime?ns=yt&el=embedded
+  no_match:
+    - https://www.youtube-nocookie.com/api/stats/qoe?event=streamingstats
+    - https://www.youtube-nocookie.com/youtubei/v1/log_event?alt=json
+    - https://shop.test/api/stats/qoe
+    - https://www.youtube.com/embed/abc
+frames:
+  match:
+    - https://www.youtube.com/embed/abc
+    - https://youtube.com/embed/abc?autoplay=0&rel=0
+  no_match:
+    - https://www.youtube-nocookie.com/embed/abc
+    - https://shop.test/embed/abc
+scripts:
+  match:
+    - https://www.youtube.com/iframe_api
+    - https://www.youtube.com/s/player/a1b2c3d4/player_ias.vflset/en_US/base.js
+  no_match:
+    - https://www.youtube-nocookie.com/s/player/a1b2c3d4/player_ias.vflset/en_US/base.js
+cookies:
+  match: [VISITOR_INFO1_LIVE, VISITOR_PRIVACY_METADATA, {name: YSC, domain: .youtube.com}, {name: __Secure-ROLLOUT_TOKEN, domain: .youtube.com}]
+  no_match: [YSC, {name: YSC, domain: shop.test}, VISITOR_INFO, youtube_banner_closed]

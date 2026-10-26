@@ -1,0 +1,31 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+# Pinterest Tag. _epik holds the click ID; _derived_epik is computed
+# from it.
+id: pinterest
+name: Pinterest Tag
+vendor: Pinterest
+category: advertising
+consent: needed
+hits:
+  - hosts: [ct.pinterest.com]
+    paths: ["/v3/*", "/user/*"]
+    methods: [GET, POST]
+scripts:
+  - hosts: [s.pinimg.com]
+    paths: [/ct/core.js, "/ct/lib/*.js"]
+cookies:
+  - _pin_unauth
+  - _pinterest_ct_ua
+  - _epik
+  - _derived_epik
+params:
+  event: [event]
+  id: [tid]
+fix: Load the Pinterest Tag only after the banner reports marketing consent
+docs: https://help.pinterest.com/en/business/article/track-conversions-with-pinterest-tag
+sources:
+  - https://help.pinterest.com/en/business/article/track-conversions-with-pinterest-tag
+  - https://developers.pinterest.com/docs/conversions/pinterest-tag/
+  - https://policy.pinterest.com/en/cookies

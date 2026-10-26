@@ -1,0 +1,19 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+hits:
+  match:
+    - https://googleads.g.doubleclick.net/pagead/viewthroughconversion/123456789/?random=1&cv=11&fst=1&gcs=G100
+    - https://www.googleadservices.com/pagead/conversion/123456789/?label=abc&value=1
+    - POST https://www.google.com/pagead/1p-conversion/123456789/?random=2
+    - https://td.doubleclick.net/td/rul/123456789?random=3
+  no_match:
+    - https://shop.test/pagead/conversion/123456789/
+    - https://www.google.com/search?q=shoes
+    - https://www.googleadservices.com/pagead/conversion_async.js
+scripts:
+  match:
+    - https://www.googleadservices.com/pagead/conversion_async.js
+cookies:
+  match: [_gcl_au, _gcl_aw, {name: IDE, domain: .doubleclick.net}, {name: test_cookie, domain: doubleclick.net}, _gcl_dc, _gcl_gb, {name: DSID, domain: .doubleclick.net}]
+  no_match: [_gcl_banner, {name: IDE, domain: shop.test}, test_cookie]

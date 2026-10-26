@@ -1,0 +1,23 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+# Google Fonts: stylesheets from fonts.googleapis.com and font files
+# from fonts.gstatic.com. Listed under "Seen, no consent needed" and
+# never judged. Loading them shares the visitor's IP address with
+# Google, which the Munich Regional Court (LG Muenchen I, 3 O 17493/20,
+# 20 January 2022) held unlawful without consent; the docs can point
+# site owners to self-hosting the fonts. They load as stylesheets and
+# fonts, which the scripts kind covers (loads, never held).
+id: google-fonts
+name: Google Fonts
+vendor: Google
+category: functional
+consent: "no"
+scripts:
+  - hosts: [fonts.googleapis.com]
+    paths: [/css, /css2, /icon]
+  - hosts: [fonts.gstatic.com]
+docs: https://developers.google.com/fonts/faq/privacy
+sources:
+  - https://developers.google.com/fonts/docs/getting_started
+  - https://developers.google.com/fonts/faq/privacy

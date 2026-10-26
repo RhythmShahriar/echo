@@ -1,0 +1,21 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+# Google Maps: the Embed API iframe and the Maps JavaScript API. Both
+# load from Google before the visitor chooses unless the site waits.
+id: google-maps
+name: Google Maps
+vendor: Google
+category: embed
+consent: needed
+frames:
+  - hosts: [www.google.com, maps.google.com]
+    paths: ["/maps/embed*", /maps/embed/**]
+scripts:
+  - hosts: [maps.googleapis.com]
+    paths: [/maps/api/js]
+fix: Show a static image with a click-to-load button and load the map only after consent
+docs: https://developers.google.com/maps/documentation/embed/get-started
+sources:
+  - https://developers.google.com/maps/documentation/embed/get-started
+  - https://developers.google.com/maps/documentation/javascript/load-maps-js-api

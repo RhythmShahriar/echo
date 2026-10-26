@@ -1,0 +1,25 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+# Reddit Pixel.
+id: reddit
+name: Reddit Pixel
+vendor: Reddit
+category: advertising
+consent: needed
+hits:
+  - hosts: [alb.reddit.com]
+    paths: [/rp.gif]
+scripts:
+  - hosts: [www.redditstatic.com]
+    paths: [/ads/pixel.js]
+cookies:
+  - _rdt_uuid
+params:
+  event: [event]
+  id: [id]
+fix: Load the Reddit Pixel only after the banner reports marketing consent
+docs: https://business.reddithelp.com/s/article/Install-the-Reddit-Pixel-on-your-website
+sources:
+  - https://business.reddithelp.com/s/article/Install-the-Reddit-Pixel-on-your-website
+  - https://www.reddit.com/policies/cookies

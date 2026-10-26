@@ -1,0 +1,33 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+# YouTube embeds. The player in an iframe on www.youtube.com sets its
+# cookies and sends playback statistics before anyone presses play.
+# www.youtube-nocookie.com (privacy-enhanced mode) is deliberately not
+# listed: it is the fix, so it never counts.
+id: youtube
+name: YouTube embed
+vendor: Google
+category: embed
+consent: needed
+hits:
+  - hosts: [www.youtube.com, youtube.com]
+    paths: ["/api/stats/*", /youtubei/v1/log_event]
+frames:
+  - hosts: [www.youtube.com, youtube.com]
+    paths: ["/embed/*"]
+scripts:
+  - hosts: [www.youtube.com]
+    paths: [/iframe_api, /player_api, /s/player/**]
+cookies:
+  - VISITOR_INFO1_LIVE
+  - VISITOR_PRIVACY_METADATA
+  - {name: YSC, domain: youtube.com}
+  - {name: __Secure-ROLLOUT_TOKEN, domain: youtube.com}
+fix: Embed the video from www.youtube-nocookie.com or behind a click-to-load placeholder that loads the player only after consent
+docs: https://support.google.com/youtube/answer/171780
+sources:
+  - https://support.google.com/youtube/answer/171780
+  - https://developers.google.com/youtube/player_parameters
+  - https://developers.google.com/youtube/iframe_api_reference
+  - https://policies.google.com/technologies/cookies

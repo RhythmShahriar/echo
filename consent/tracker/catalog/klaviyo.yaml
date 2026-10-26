@@ -1,0 +1,27 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+# Klaviyo onsite tracking. The company ID is company_id on the loader
+# and on the client API calls.
+id: klaviyo
+name: Klaviyo
+vendor: Klaviyo
+category: advertising
+consent: needed
+hits:
+  - hosts: [a.klaviyo.com]
+    paths: ["/api/track*", "/client/events*"]
+    methods: [GET, POST]
+scripts:
+  - hosts: [static.klaviyo.com]
+    paths: [/onsite/js/**]
+cookies:
+  - __kla_id
+params:
+  id: [company_id]
+fix: Load Klaviyo's onsite script only after the banner reports marketing consent
+docs: https://developers.klaviyo.com/en/docs/introduction_to_the_klaviyo_object
+sources:
+  - https://developers.klaviyo.com/en/docs/introduction_to_the_klaviyo_object
+  - https://developers.klaviyo.com/en/reference/create_client_event
+  - https://help.klaviyo.com/hc/en-us/articles/115005076767

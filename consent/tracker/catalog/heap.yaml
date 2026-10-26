@@ -1,0 +1,26 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+# Heap. heapanalytics.com/h is the classic beacon; Heap's CSP docs name
+# c.us.heap-api.com for events and cdn.us.heap-api.com for the script.
+# Cookies are _hp2_id.<app id>, _hp2_ses_props.<app id> and so on.
+id: heap
+name: Heap
+vendor: Heap
+category: analytics
+consent: needed
+hits:
+  - hosts: [heapanalytics.com]
+    paths: [/h, /api/**]
+  - hosts: [c.us.heap-api.com, c.eu.heap-api.com]
+scripts:
+  - hosts: [cdn.heapanalytics.com, cdn.us.heap-api.com, cdn.eu.heap-api.com]
+cookies:
+  - "_hp2_*"
+params:
+  id: [a]
+fix: Load Heap only after the visitor accepts analytics
+docs: https://help.heap.io/hc/en-us/articles/37271939081617-What-cookies-does-Heap-set-and-what-are-they-used-for
+sources:
+  - https://help.heap.io/hc/en-us/articles/37271939081617-What-cookies-does-Heap-set-and-what-are-they-used-for
+  - https://developers.heap.io/docs/web

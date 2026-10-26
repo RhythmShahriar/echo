@@ -1,0 +1,18 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+hits:
+  match:
+    - https://ct.pinterest.com/v3/?event=init&tid=2612345678901&cb=1
+    - https://ct.pinterest.com/user/?event=pagevisit&tid=2612345678901
+    - POST https://ct.pinterest.com/v3/
+  no_match:
+    - https://shop.test/v3/?event=init
+    - https://s.pinimg.com/ct/core.js
+scripts:
+  match:
+    - https://s.pinimg.com/ct/core.js
+    - https://s.pinimg.com/ct/lib/main.4a5b6c7d.js
+cookies:
+  match: [_pin_unauth, _pinterest_ct_ua, _epik, _derived_epik]
+  no_match: [pin_unauth, _pinboard]

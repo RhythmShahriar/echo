@@ -1,0 +1,13 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+hits:
+  match:
+    - {url: "https://cdn.usefathom.com/?h=https%3A%2F%2Fshop.test&p=%2F&r=&sid=ABCDEFGH&qs=%7B%7D&cid=12345678", type: image}
+    - https://cdn.usefathom.com/?sid=ABCDEFGH&cid=87654321&name=signup
+  no_match:
+    - https://shop.test/?cid=12345678
+    - https://cdn.usefathom.com/script.js
+scripts:
+  match:
+    - https://cdn.usefathom.com/script.js

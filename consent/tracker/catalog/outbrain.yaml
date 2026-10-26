@@ -1,0 +1,30 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+# Outbrain Pixel (Amplify). traffic.outbrain.com/network/trackpxl is the
+# legacy pixel Outbrain asks advertisers to remove; it is still a hit.
+id: outbrain
+name: Outbrain Pixel
+vendor: Outbrain
+category: advertising
+consent: needed
+hits:
+  - hosts: [tr.outbrain.com]
+    paths: ["/unifiedPixel*"]
+  - hosts: [traffic.outbrain.com]
+    paths: [/network/trackpxl]
+scripts:
+  - hosts: [amplify.outbrain.com]
+    paths: [/cp/obtp.js]
+cookies:
+  - {name: obuid, domain: outbrain.com}
+params:
+  event: [name]
+  id: [marketerId]
+fix: Load the Outbrain Pixel only after the banner reports marketing consent
+docs: https://www.outbrain.com/help/advertisers/test-outbrain-pixel/
+sources:
+  - https://www.outbrain.com/help/advertisers/test-outbrain-pixel/
+  - https://www.outbrain.com/privacy/cookies/
+  # Cookie names cross-checked with the Open Cookie Database (Apache-2.0, see NOTICE).
+  - https://github.com/jkwakman/Open-Cookie-Database

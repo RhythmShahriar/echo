@@ -1,0 +1,28 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+# Taboola Pixel. The pixel calls trc.taboola.com (observed in the public
+# tag script); cdn.taboola.com serves the loader.
+id: taboola
+name: Taboola Pixel
+vendor: Taboola
+category: advertising
+consent: needed
+hits:
+  - hosts: [trc.taboola.com]
+scripts:
+  - hosts: [cdn.taboola.com]
+cookies:
+  - {name: t_gid, domain: taboola.com}
+  - {name: t_pt_gid, domain: taboola.com}
+  - taboola_session_id
+params:
+  event: [en, name]
+  id: [id]
+fix: Load the Taboola Pixel only after the banner reports marketing consent
+docs: https://developers.taboola.com/pixel/docs/pixel-overview
+sources:
+  - https://developers.taboola.com/pixel/docs/pixel-overview
+  - https://policies.taboola.com/en/cookie-policy/
+  # Cookie names cross-checked with the Open Cookie Database (Apache-2.0, see NOTICE).
+  - https://github.com/jkwakman/Open-Cookie-Database

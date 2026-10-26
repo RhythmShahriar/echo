@@ -1,0 +1,42 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+# Matomo, mostly self-hosted, so it is matched on any host: the tracker
+# endpoint with idsite and rec (rec=1 marks a tracking request). Matomo
+# Cloud is the same path on <name>.matomo.cloud, also listed by host so
+# a POST there is held before its body is seen. Piwik PRO shares the
+# _pk_ cookie names; they are listed here.
+id: matomo
+name: Matomo
+vendor: InnoCraft
+category: analytics
+consent: needed
+any_host: true
+hits:
+  - paths: [/matomo.php, /piwik.php, /js/tracker.php]
+    methods: [GET, POST]
+    params_all: [idsite, rec]
+  - hosts: ["*.matomo.cloud"]
+    paths: [/matomo.php, /piwik.php]
+    methods: [GET, POST]
+    params_all: [idsite, rec]
+scripts:
+  - paths: [/matomo.js, /piwik.js, /js/piwik.js]
+  - hosts: [cdn.matomo.cloud]
+    paths: ["/*/matomo.js", "/*/piwik.js"]
+cookies:
+  - "_pk_id.*"
+  - "_pk_ses.*"
+  - "_pk_ref.*"
+  - "_pk_cvar.*"
+  - "_pk_hsr.*"
+params:
+  event: [e_a, action_name]
+  id: [idsite]
+fix: Call _paq.push(['requireCookieConsent']) before tracking and rememberCookieConsentGiven once the visitor accepts, or run Matomo without cookies
+docs: https://developer.matomo.org/guides/tracking-consent
+sources:
+  - https://developer.matomo.org/guides/tracking-javascript-guide
+  - https://developer.matomo.org/guides/tracking-consent
+  - https://developer.matomo.org/api-reference/tracking-api
+  - https://matomo.org/faq/general/faq_146/

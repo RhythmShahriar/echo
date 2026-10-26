@@ -1,0 +1,17 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+hits:
+  match:
+    - https://sslwidget.criteo.com/event?a=12345&v=5.23.0&p0=e%3Dvh
+    - POST https://gum.criteo.com/sid/json?origin=onetag
+    - https://dis.criteo.com/dis/rtb/appnexus/cookiematch.aspx
+  no_match:
+    - https://shop.test/event?a=12345
+    - https://static.criteo.net/js/ld/ld.js
+scripts:
+  match:
+    - https://static.criteo.net/js/ld/ld.js?a=12345
+cookies:
+  match: [cto_bundle, cto_bidid]
+  no_match: [cto, bundle_cto]

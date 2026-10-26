@@ -1,0 +1,19 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+hits:
+  match:
+    - https://stats.shop.test/matomo.php?idsite=1&rec=1
+    - {method: POST, url: "https://shop.matomo.cloud/matomo.php", body: "idsite=1&rec=1&action_name=Home"}
+    - https://shop.test/piwik.php?idsite=3&rec=1&e_a=click
+  no_match:
+    - https://shop.test/matomo.php
+    - https://shop.test/matomo.php?idsite=1
+    - https://stats.shop.test/matomo.js
+scripts:
+  match:
+    - https://stats.shop.test/matomo.js
+    - https://cdn.matomo.cloud/shop.matomo.cloud/matomo.js
+cookies:
+  match: [_pk_id.1.1fff, _pk_ses.1.1fff, _pk_ref.1.1fff, _pk_cvar.1.1fff, _pk_hsr.1.1fff]
+  no_match: [_pk_id, pk_id.1.1fff, _pkg]

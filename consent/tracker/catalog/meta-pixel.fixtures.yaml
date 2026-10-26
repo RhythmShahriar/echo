@@ -1,0 +1,21 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+hits:
+  match:
+    - {url: "https://www.facebook.com/tr/?id=1234567890&ev=PageView&dl=https%3A%2F%2Fshop.test%2F&noscript=1", type: image}
+    - {method: POST, url: "https://www.facebook.com/tr/", body: "id=1234567890&ev=Purchase&cd[value]=10&cd[currency]=EUR", type: ping}
+    - https://facebook.com/tr?id=1234567890&ev=PageView
+    - https://capi.shop.test/tr?id=1234567890&ev=PageView
+  no_match:
+    - https://shop.test/tr/
+    - https://shop.test/tr?ev=PageView
+    - https://www.facebook.com/shop.test
+    - https://connect.facebook.net/en_US/fbevents.js
+scripts:
+  match:
+    - https://connect.facebook.net/en_US/fbevents.js
+    - https://connect.facebook.net/signals/config/1234567890?v=2.9.170&r=stable
+cookies:
+  match: [_fbp, _fbc, {name: fr, domain: .facebook.com}]
+  no_match: [fbp_banner, _fbp_seen, fr, {name: fr, domain: shop.test}]

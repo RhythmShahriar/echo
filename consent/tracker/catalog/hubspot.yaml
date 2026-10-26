@@ -1,0 +1,26 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+# HubSpot tracking code. The portal ID is a= on the __ptq.gif beacon.
+id: hubspot
+name: HubSpot
+vendor: HubSpot
+category: analytics
+consent: needed
+hits:
+  - hosts: [track.hubspot.com]
+    paths: [/__ptq.gif]
+scripts:
+  - hosts: [js.hs-scripts.com, js.hs-analytics.net, js-eu1.hs-scripts.com, js-eu1.hs-analytics.net]
+cookies:
+  - __hstc
+  - hubspotutk
+  - __hssc
+  - __hssrc
+params:
+  id: [a]
+fix: Turn on HubSpot's cookie consent banner or let your banner block the HubSpot tracking code until consent
+docs: https://knowledge.hubspot.com/privacy-and-consent/what-cookies-does-hubspot-set-in-a-visitor-s-browser
+sources:
+  - https://knowledge.hubspot.com/privacy-and-consent/what-cookies-does-hubspot-set-in-a-visitor-s-browser
+  - https://developers.hubspot.com/docs/api/events/tracking-code

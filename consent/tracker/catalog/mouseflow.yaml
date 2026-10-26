@@ -1,0 +1,22 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+# Mouseflow session recording. Recordings go to o2.mouseflow.com (the
+# data host the public tag script calls); cdn.mouseflow.com serves the
+# script. mf_<website id> and mf_user are its cookies.
+id: mouseflow
+name: Mouseflow
+vendor: Mouseflow
+category: session-replay
+consent: needed
+hits:
+  - hosts: [o2.mouseflow.com]
+scripts:
+  - hosts: [cdn.mouseflow.com]
+cookies:
+  - "mf_*"
+fix: Load Mouseflow only after the visitor accepts analytics or session recording
+docs: https://help.mouseflow.com/en/articles/4310818-cookies-used-by-mouseflow
+sources:
+  - https://help.mouseflow.com/en/articles/4310818-cookies-used-by-mouseflow
+  - https://mouseflow.com/legal/company/privacy-policy/

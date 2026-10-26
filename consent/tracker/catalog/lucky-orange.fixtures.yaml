@@ -1,0 +1,17 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+hits:
+  match:
+    - POST https://api.luckyorange.com/v1/visitors
+    - https://settings.luckyorange.net/abcdef12.json
+    - https://w1.visitors.live/socket
+  no_match:
+    - POST https://shop.test/v1/visitors
+    - https://tools.luckyorange.com/core/lo.js?site-id=abcdef12
+scripts:
+  match:
+    - https://tools.luckyorange.com/core/lo.js?site-id=abcdef12
+cookies:
+  match: [_lo_uid, _lo_v, lo-uid]
+  no_match: [lo_uid, _lorem]

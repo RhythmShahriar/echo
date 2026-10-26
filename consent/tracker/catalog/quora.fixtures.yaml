@@ -1,0 +1,13 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+hits:
+  match:
+    - {url: "https://q.quora.com/_/ad/0123456789abcdef/pixel?tag=ViewContent&noscript=1", type: image}
+    - https://q.quora.com/_/ad/0123456789abcdef/pixel?tag=Purchase
+  no_match:
+    - https://shop.test/_/ad/0123456789abcdef/pixel
+    - https://a.quora.com/qevents.js
+scripts:
+  match:
+    - https://a.quora.com/qevents.js

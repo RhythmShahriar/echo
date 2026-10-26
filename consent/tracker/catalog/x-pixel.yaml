@@ -1,0 +1,27 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+# X (Twitter) Pixel: uwt.js (oct.js is the older single-event tag).
+# personalization_id is set on twitter.com and x.com.
+id: x-pixel
+name: X (Twitter) Pixel
+vendor: X
+category: advertising
+consent: needed
+hits:
+  - hosts: [analytics.twitter.com, t.co]
+    paths: [/i/adsct]
+scripts:
+  - hosts: [static.ads-twitter.com]
+    paths: [/uwt.js, /oct.js]
+cookies:
+  - muc_ads
+  - {name: personalization_id, domain: twitter.com}
+  - {name: personalization_id, domain: x.com}
+params:
+  id: [txn_id]
+fix: Load the X Pixel only after the banner reports marketing consent
+docs: https://business.x.com/en/help/campaign-measurement-and-analytics/conversion-tracking-for-websites
+sources:
+  - https://business.x.com/en/help/campaign-measurement-and-analytics/conversion-tracking-for-websites
+  - https://help.x.com/en/rules-and-policies/x-cookies
