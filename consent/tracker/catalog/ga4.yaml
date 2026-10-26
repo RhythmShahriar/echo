@@ -1,0 +1,47 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+# Google Analytics 4 through gtag.js, Google Tag Manager or a
+# server-side Tag Manager container on the site's own domain. The
+# first-party form is matched by path and parameters only (v=2 and a
+# G- measurement ID), so a shop's own /collect endpoint never counts.
+id: ga4
+name: Google Analytics 4
+vendor: Google
+category: analytics
+consent: needed
+any_host: true
+hits:
+  - hosts: [www.google-analytics.com, region1.google-analytics.com, "*.google-analytics.com", analytics.google.com]
+    paths: [/g/collect, /g/s/collect]
+    methods: [GET, POST]
+  # Server-side tagging: the same request sent to the site's own host.
+  - paths: [/g/collect, /g/s/collect]
+    methods: [GET, POST]
+    params_all: [v, tid]
+    params_match: {v: '^2$', tid: '^G-'}
+  # Stape-style custom loaders rename the path; three GA4 parameters
+  # together prove it.
+  - paths: ["/*/collect"]
+    methods: [GET, POST]
+    params_all: [v, tid, cid]
+    params_match: {v: '^2$', tid: '^G-'}
+cookies:
+  - _ga
+  - "_ga_*"
+  # Server-side tagging's first-party cookies (HttpOnly, set by the
+  # site's own tagging server).
+  - FPID
+  - FPLC
+  - FPAU
+params:
+  event: [en]
+  id: [tid]
+fix: Set a Consent Mode default (all four signals denied) before the Google tag, or let the banner block it until consent
+docs: https://developers.google.com/tag-platform/gtagjs
+sources:
+  - https://developers.google.com/tag-platform/gtagjs
+  - https://developers.google.com/tag-platform/security/guides/csp
+  - https://developers.google.com/tag-platform/security/guides/consent
+  - https://developers.google.com/tag-platform/tag-manager/server-side/intro
+  - https://support.google.com/analytics/answer/11397207
