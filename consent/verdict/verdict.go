@@ -30,8 +30,12 @@ func (Evaluator) Evaluate(r *consent.Result, p *consent.Plan) {
 	j := newJudge(r, p)
 	r.Issues = []consent.Issue{}
 	r.Inconclusive = []consent.Inconclusive{}
+	j.markExempt()
 	for i := range r.Pages {
 		j.summarize(&r.Pages[i])
+	}
+	for i := range r.Pages {
+		j.trackers(&r.Pages[i])
 	}
 }
 
