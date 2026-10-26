@@ -4,12 +4,15 @@
 package cli
 
 import (
+	"maps"
 	"regexp"
 	"slices"
 	"strings"
 	"time"
 
+	"github.com/RhythmShahriar/echo/config"
 	"github.com/RhythmShahriar/echo/consent"
+	"github.com/RhythmShahriar/echo/model"
 )
 
 // The defaults of a consent check (PRD 7).
@@ -249,4 +252,120 @@ func levenshtein(a, b string) int {
 		prev, cur = cur, prev
 	}
 	return prev[len(rb)]
+}
+
+// applyConfig sets on p what the consent: block of the config says;
+// flags then win over it. The config is already validated, so an error
+// here only repeats what validation would say.
+func applyConfig(p *consent.Plan, c *config.Consent) error {
+	if c == nil {
+		return nil
+	}
+	var err error
+	if len(c.Runs) > 0 {
+		if p.Runs, err = consent.ParseRuns(strings.Join(c.Runs, ",")); err != nil {
+			return usagef("consent: runs %s", strings.TrimPrefix(err.Error(), "--runs "))
+		}
+	}
+	if c.Pages != nil {
+		p.Pages = *c.Pages
+	}
+	if c.Settle != nil {
+		p.Settle = c.Settle.Duration
+	}
+	if c.BannerWait != nil {
+		p.BannerWait = c.BannerWait.Duration
+	}
+	if c.Timeout != nil {
+		p.Timeout = c.Timeout.Duration
+	}
+	if c.Retries != nil {
+		p.Retries = *c.Retries
+	}
+	if c.Parallel != 0 {
+		p.Parallel = c.Parallel
+	}
+	if c.CMP != "" {
+		if p.CMP, err = parseCMP("consent: cmp", c.CMP); err != nil {
+			return err
+		}
+	}
+	if c.Click != "" {
+		if p.Click, err = consent.ParseClickMode(c.Click); err != nil {
+			return usagef("consent: click %s", strings.TrimPrefix(err.Error(), "--click "))
+		}
+	}
+	if c.ConsentMode != "" {
+		if p.Policy, err = consent.ParsePolicy(c.ConsentMode); err != nil {
+			return usagef("consent: consent_mode %s", strings.TrimPrefix(err.Error(), "--consent-mode "))
+		}
+	}
+	if c.AcceptSelector != "" {
+		if p.AcceptSelector, err = parseSelector("consent: accept_selector", c.AcceptSelector); err != nil {
+			return err
+		}
+	}
+	if c.RejectSelector != "" {
+		if p.RejectSelector, err = parseSelector("consent: reject_selector", c.RejectSelector); err != nil {
+			return err
+		}
+	}
+	if c.Geo != "" {
+		if p.Geo, err = parseGeo("consent: geo", c.Geo); err != nil {
+			return err
+		}
+	}
+	if c.Locale != "" {
+		if p.Locale, err = parseLocale("consent: locale", c.Locale); err != nil {
+			return err
+		}
+	}
+	if c.Timezone != "" {
+		if p.Timezone, err = parseTimezone("consent: timezone", c.Timezone); err != nil {
+			return err
+		}
+	}
+	if c.Viewport != "" {
+		if p.Viewport, err = parseViewport("consent: viewport", c.Viewport); err != nil {
+			return err
+		}
+	}
+	for _, e := range c.Exempt {
+		p.Exempt = appendNew(p.Exempt, strings.TrimSpace(e))
+	}
+	p.Ignore = slices.Clone(c.Ignore)
+	return nil
+}
+
+// checkLevels are the checks: levels of consent check IDs, which the
+// verdict applies ("off" removes the check).
+func checkLevels(cfg config.Config) map[string]model.Level {
+	var out map[string]model.Level
+	for id, l := range cfg.Checks {
+		if !strings.HasPrefix(id, "consent/") {
+			continue
+		}
+		if out == nil {
+			out = map[string]model.Level{}
+		}
+		out[id] = model.Level(l)
+	}
+	return out
+}
+
+// clonePlan copies p deeply enough that a site's own flags can change
+// the copy: the slices and maps a plan's fields hold.
+func clonePlan(p *consent.Plan) *consent.Plan {
+	q := *p
+	q.Targets = slices.Clone(p.Targets)
+	q.Runs = slices.Clone(p.Runs)
+	q.AcceptSelector = slices.Clone(p.AcceptSelector)
+	q.RejectSelector = slices.Clone(p.RejectSelector)
+	q.Exempt = slices.Clone(p.Exempt)
+	q.MapHosts = maps.Clone(p.MapHosts)
+	q.Headers = maps.Clone(p.Headers)
+	q.Cookies = slices.Clone(p.Cookies)
+	q.Ignore = slices.Clone(p.Ignore)
+	q.CheckLevels = maps.Clone(p.CheckLevels)
+	return &q
 }
