@@ -113,6 +113,7 @@ lines, messages), with the exact text.
 
 - c18 passes its Echo as `--echo={echo}`; comparison scenarios (c08) share `--store ../.echo` between their states.
 - e05 runs rhythm-echo with a fresh short temporary folder of the system's (`echo-e05-*`, removed after): Chrome's `SingletonSocket` lives there and a Unix socket path over about 107 bytes stopped Chrome from starting under a deep work folder.
+- e05's `profile files left` leaves out `rod/` and `rod/user-data/`, the shared parents rod makes and never removes; a profile or file inside them still counts.
 - e13's `slow-banner` fixture is a Cookiebot replica (script and `window.Cookiebot` from the start, banner after 4 s good, 15 s broken) instead of the generic banner: with no named CMP and nothing fired, a late generic banner is a page with nothing to consent to (exit 0), not a CMP whose banner never came. Broken now prints `Banner: none found within 10s (Cookiebot's script loaded)` and exits 3 with `no_banner`.
 - The memory measure reads rhythm-echo's own peak (see the measures bullet above); on this machine a Go-mode run measured 110.5 MiB.
 

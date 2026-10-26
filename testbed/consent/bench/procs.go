@@ -64,11 +64,15 @@ func processesWith(ctx context.Context, sub string) (int, error) {
 }
 
 // entriesUnder counts the files and folders under dir (dir itself not
-// counted); 0 when it doesn't exist.
+// counted); 0 when it doesn't exist. rod/ and rod/user-data/ are left
+// out: rod makes them as the shared parents of every profile and never
+// removes them (another launch may be using them), so only a profile
+// or file inside them is a leftover.
 func entriesUnder(dir string) int {
+	scaffold := map[string]bool{filepath.Join(dir, "rod"): true, filepath.Join(dir, "rod", "user-data"): true}
 	n := 0
-	_ = filepath.WalkDir(dir, func(p string, _ os.DirEntry, err error) error {
-		if err == nil && p != dir {
+	_ = filepath.WalkDir(dir, func(p string, d os.DirEntry, err error) error {
+		if err == nil && p != dir && !(d.IsDir() && scaffold[p]) {
 			n++
 		}
 		return nil

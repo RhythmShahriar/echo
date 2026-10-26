@@ -172,8 +172,13 @@ func TestProcessesWith(t *testing.T) {
 		t.Errorf("a made-up name: %d", n)
 	}
 	dir := t.TempDir()
+	_ = os.MkdirAll(filepath.Join(dir, "rod", "user-data"), 0o750)
+	if n := entriesUnder(dir); n != 0 {
+		t.Errorf("rod's shared parents alone = %d", n)
+	}
 	_ = os.MkdirAll(filepath.Join(dir, "rod", "user-data", "p1"), 0o750)
-	if n := entriesUnder(dir); n != 3 {
+	_ = os.WriteFile(filepath.Join(dir, "rod", "user-data", "p1", "Local State"), nil, 0o600)
+	if n := entriesUnder(dir); n != 2 {
 		t.Errorf("entries = %d", n)
 	}
 	if n := entriesUnder(filepath.Join(dir, "none")); n != 0 {
