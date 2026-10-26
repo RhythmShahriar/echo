@@ -30,7 +30,9 @@ cookies:
 params:
   event: [ev]
   id: [id]
-  personal: ["ud[em]", "ud[ph]", "ud[fn]", "ud[ln]", "ud[external_id]", em, ph, fn, ln, external_id]
+  # Every advanced matching field Meta documents, as fbevents.js sends
+  # it (ud[..]) and in the plain form some server-side relays use.
+  personal: ["ud[em]", "ud[ph]", "ud[fn]", "ud[ln]", "ud[external_id]", "ud[ge]", "ud[db]", "ud[ct]", "ud[st]", "ud[zp]", "ud[country]", em, ph, fn, ln, external_id]
 fix: Meta Pixel doesn't read Google Consent Mode. Call fbq('consent', 'revoke') before fbq('init'), then fbq('consent', 'grant') when the banner reports marketing consent, or let the banner block the pixel script.
 docs: https://developers.facebook.com/docs/meta-pixel/implementation/gdpr
 sources:

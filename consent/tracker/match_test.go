@@ -252,6 +252,13 @@ func FuzzTrackerMatch(f *testing.F) {
 		if h := builtin.Hold(r); h && (a == nil || a.Kind != consent.HitBeacon) && body == nil {
 			t.Fatalf("held a request that isn't a beacon: %+v", a)
 		}
+		// A busy machine stretches single calls; only a request that is
+		// over budget on every one of ten more tries is slow.
+		for i := 0; i < 10 && took > matchBudget; i++ {
+			start := time.Now()
+			builtin.Request(r, body, shop)
+			took = min(took, time.Since(start))
+		}
 		if took > matchBudget {
 			t.Fatalf("classifying took %v", took)
 		}

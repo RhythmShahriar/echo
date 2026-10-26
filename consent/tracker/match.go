@@ -6,6 +6,7 @@ package tracker
 import (
 	"bytes"
 	"encoding/json"
+	"maps"
 	"net"
 	"net/url"
 	"path"
@@ -13,6 +14,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"golang.org/x/net/idna"
 	"golang.org/x/net/publicsuffix"
@@ -63,6 +65,12 @@ const masked = "••••"
 // for, so a hostile request can't make classifying it slow.
 const maxPairs = 512
 
+// maxLine is the longest body line read.
+const maxLine = 64 << 10
+
+// maxEvent caps one event name.
+const maxEvent = 100
+
 // maxHost is the longest DNS name (RFC 1035), in its ASCII form.
 const maxHost = 253
 
@@ -106,6 +114,7 @@ type request struct {
 	parsed bool
 	form   map[string]string // body as form lines, or top-level JSON strings
 	lines  []map[string]string
+	cut    bool // more body lines than were read
 	json   map[string]json.RawMessage
 }
 
@@ -212,8 +221,16 @@ func (q *request) parseBody() {
 	}
 	for line := range strings.SplitSeq(string(b), "\n") {
 		line = strings.TrimSuffix(line, "\r")
-		if line == "" {
+		if line == "" || len(line) > maxLine {
+			// A GA4 batch line is a few hundred bytes; one over 64 KiB
+			// is no event and isn't worth the time.
 			continue
+		}
+		if len(q.lines) > consent.DefaultLimits.BatchEvents {
+			// One line past the events a batch may give is read, so a
+			// longer batch shows as truncated.
+			q.cut = true
+			break
 		}
 		f := parseQuery(line)
 		q.lines = append(q.lines, f)
@@ -275,7 +292,9 @@ func (r *rule) matches(q *request) bool {
 			return false
 		}
 		for _, k := range r.bodyJSON {
-			if _, ok := q.json[k]; !ok {
+			// Only a JSON string proves the key: Plausible's n and u are
+			// strings, and anything else fails closed.
+			if raw, ok := q.json[k]; !ok || len(raw) == 0 || raw[0] != '"' {
 				return false
 			}
 		}
@@ -352,8 +371,15 @@ func (c *Catalog) Request(r *consent.Request, body []byte, site *url.URL) *conse
 	h.FirstParty = site != nil && sameSite(q.host, normHost(site.Hostname()))
 	h.ID = e.id(q)
 	if m.kind == consent.HitBeacon {
-		h.Events = e.eventNames(q)
+		var truncated bool
+		h.Events, truncated = e.eventNames(q)
 		h.Params = e.params(q)
+		if truncated {
+			if h.Params == nil {
+				h.Params = map[string]string{}
+			}
+			h.Params["events_truncated"] = "true"
+		}
 		h.Google = google(q)
 	}
 	return h
@@ -393,12 +419,12 @@ func sameSite(host, site string) bool {
 func (e *entry) id(q *request) string {
 	for _, n := range e.ids {
 		if v, ok := q.get(n); ok && v != "" {
-			return consent.MaskID(consent.SafeText(v, maxValue))
+			return consent.MaskID(safeText(v, maxValue))
 		}
 	}
 	if e.idPath != nil {
 		if g := e.idPath.FindStringSubmatch(q.path); g != nil && g[1] != "" {
-			return consent.MaskID(consent.SafeText(g[1], maxValue))
+			return consent.MaskID(safeText(g[1], maxValue))
 		}
 	}
 	return ""
@@ -406,17 +432,17 @@ func (e *entry) id(q *request) string {
 
 // eventNames lists the events a beacon carries: the first event
 // parameter found in the query, then one per body line (a GA4 batch),
-// at most consent.DefaultLimits.BatchEvents.
-func (e *entry) eventNames(q *request) []string {
+// at most consent.DefaultLimits.BatchEvents. truncated is true when the
+// batch had more.
+func (e *entry) eventNames(q *request) (events []string, truncated bool) {
 	if len(e.events) == 0 {
-		return nil
+		return nil, false
 	}
 	limit := consent.DefaultLimits.BatchEvents
-	var out []string
 	first := func(get func(string) (string, bool)) {
 		for _, n := range e.events {
 			if v, ok := get(n); ok && v != "" {
-				out = append(out, consent.SafeText(v, 100))
+				events = append(events, safeText(v, maxEvent))
 				return
 			}
 		}
@@ -428,16 +454,19 @@ func (e *entry) eventNames(q *request) []string {
 			first(func(n string) (string, bool) { v, ok := q.form[n]; return v, ok })
 		}
 		for _, l := range q.lines {
-			if len(out) >= limit {
+			if len(events) > limit {
 				break
 			}
 			first(func(n string) (string, bool) { v, ok := l[n]; return v, ok })
 		}
+		// Lines past the ones read may hold events too; say so rather
+		// than report a short batch as whole.
+		truncated = q.cut
 	}
-	if len(out) > limit {
-		out = out[:limit]
+	if len(events) > limit {
+		events, truncated = events[:limit], true
 	}
-	return out
+	return events, truncated
 }
 
 // keptParams are the parameters a beacon's Params keeps; everything
@@ -459,13 +488,16 @@ func (e *entry) params(q *request) map[string]string {
 		}
 		switch n {
 		case "tid", "id":
-			v = consent.MaskID(consent.SafeText(v, maxValue))
+			v = consent.MaskID(safeText(v, maxValue))
 		case "dl", "dr":
-			v = consent.SafeText(consent.MaskURL(v, false), 1024)
+			v = safeText(consent.MaskURL(v, false), 1024)
 		default:
-			v = consent.SafeText(v, maxValue)
+			v = safeText(v, maxValue)
 		}
 		out[n] = v
+	}
+	if cd := customNames(q); cd != "" {
+		out["cd"] = cd
 	}
 	var personal []string
 	for _, n := range e.personal {
@@ -482,6 +514,35 @@ func (e *entry) params(q *request) map[string]string {
 	return out
 }
 
+// maxCustom is how many custom data names a beacon lists.
+const maxCustom = 32
+
+// customNames lists the custom data parameters (Meta's cd[value],
+// cd[currency]...) by name only, sorted: what a page reports with an
+// event can be personal, so values are never kept.
+func customNames(q *request) string {
+	seen := map[string]bool{}
+	add := func(m map[string]string) {
+		for k := range m {
+			if strings.HasPrefix(k, "cd[") {
+				seen[safeText(k, maxEvent)] = true
+			}
+		}
+	}
+	add(q.query)
+	if len(q.body) > 0 {
+		q.parseBody()
+		add(q.form)
+	}
+	names := slices.Sorted(maps.Keys(seen))
+	if len(names) > maxCustom {
+		// Cut after sorting, so the same request always lists the same
+		// names.
+		names = names[:maxCustom]
+	}
+	return safeText(strings.Join(names, ","), 1024)
+}
+
 // google copies the Consent Mode parameters raw; the recorder decodes
 // them with the signal decoders.
 func google(q *request) *consent.GoogleConsent {
@@ -491,11 +552,26 @@ func google(q *request) *consent.GoogleConsent {
 		to   *string
 	}{{"gcs", &g.GCS}, {"gcd", &g.GCD}, {"npa", &g.NPA}, {"dma", &g.DMA}} {
 		if v, ok := q.get(f.name); ok && v != "" {
-			*f.to = consent.SafeText(v, 64)
+			*f.to = safeText(v, 64)
 		}
 	}
 	if *g == (consent.GoogleConsent{}) {
 		return nil
 	}
 	return g
+}
+
+// safeText is consent.SafeText capped at n bytes as well as n runes:
+// an escaped control byte takes up to six bytes, and stored values have
+// a byte budget (PRD 13.8). A cut ends on a whole rune and an ellipsis.
+func safeText(s string, n int) string {
+	t := consent.SafeText(s, n)
+	if len(t) <= n {
+		return t
+	}
+	cut := n - len("…")
+	for cut > 0 && !utf8.RuneStart(t[cut]) {
+		cut--
+	}
+	return t[:cut] + "…"
 }
