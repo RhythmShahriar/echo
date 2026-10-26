@@ -21,8 +21,11 @@ Every named rule has these pages, plus at most one special case:
 | `script-no-banner.html` | the CMP's script and global, no banner |
 
 Special cases: `cookiebot/details-tab.html` (Reject through the Details
-tab, styled switches pre-ticked) and `onetrust/preference-centre.html`
-(the preference center with styled switches, two pre-ticked).
+tab, styled switches pre-ticked), `onetrust/preference-centre.html`
+(the preference center with styled switches, two pre-ticked) and
+`cookieyes/cookie-law-info.html` (the older Cookie Law Info bar:
+present, not found, since it keeps its choice in other cookies).
+Complianz has none.
 
 ## expect.yaml
 

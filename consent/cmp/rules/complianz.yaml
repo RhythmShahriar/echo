@@ -1,0 +1,44 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+# Complianz (the Complianz GDPR/CCPA Cookie Consent WordPress plugin).
+# The cmplz_<category> cookies (allow or deny) are in Complianz's cookie
+# list; the container, banner, button and checkbox classes are the ones
+# the banner template of the GPL plugin (complianz-gdpr 7.5.6,
+# wordpress.org) carries, read on 2026-10-26. The settings open inside
+# the banner itself, so Save is part of the banner.
+id: complianz
+name: Complianz
+priority: 20
+detect:
+  selectors: ["#cmplz-cookiebanner-container", ".cmplz-cookiebanner"]
+  globals: [complianz, cmplz_set_cookie]
+  scripts: [complianz-gdpr/cookiebanner/js/complianz]
+banner:
+  selector: ".cmplz-cookiebanner"
+accept: [".cmplz-accept"]
+reject:
+  first_layer: [".cmplz-deny"]
+  second_layer:
+    open: [".cmplz-view-preferences"]
+    toggles_off: ".cmplz-consent-checkbox:not([disabled])"
+    save: [".cmplz-save-preferences"]
+reopen:
+  selectors: [".cmplz-manage-consent", ".cmplz-show-banner"]
+verify:
+  parser: complianz
+  cookies: [cmplz_*]
+  accepted: {statistics: true, marketing: true}
+  rejected: {statistics: false, marketing: false}
+sources:
+  - https://complianz.io/add-a-link-to-show-the-cookie-banner/
+  - https://complianz.io/cookie-banner-does-not-appear/
+  - https://wordpress.org/plugins/complianz-gdpr/
+fixtures:
+  - testdata/complianz/first-layer.html
+  - testdata/complianz/second-layer.html
+  - testdata/complianz/hidden.html
+  - testdata/complianz/late.html
+  - testdata/complianz/two-banners.html
+  - testdata/complianz/text-only.html
+  - testdata/complianz/script-no-banner.html

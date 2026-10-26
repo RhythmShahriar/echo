@@ -393,8 +393,9 @@ func FuzzCMPRuleYAML(f *testing.F) {
 	f.Add([]byte(""))
 	f.Add([]byte("id: [\n"))
 	f.Add([]byte("id: x\nname: y\nbanner: {selector: '#a'}\napi: {reject: 'eval(1)'}\n"))
-	for _, name := range []string{"cookiebot.yaml", "onetrust.yaml"} {
-		if b, err := fs.ReadFile(rulesFS, "rules/"+name); err == nil {
+	files, _ := fs.Glob(rulesFS, "rules/*.yaml")
+	for _, name := range files {
+		if b, err := fs.ReadFile(rulesFS, name); err == nil {
 			f.Add(b)
 		}
 	}

@@ -140,3 +140,46 @@ texts, for the release notes and the docs team.
   `expect.yaml` each (format in `consent/cmp/testdata/README.md`); all
   pass Detect, Find and Choose (Accept and Reject, button and API) in
   headless Chrome 153 as well as in the FakeTab tests.
+
+## C5 CookieYes and Complianz rules
+
+- `consent cmps` rows:
+  - `cookieyes  .cky-consent-container, window.getCkyConsent  button  first layer or settings  cookieyes-consent cookie`
+  - `complianz  #cmplz-cookiebanner-container, window.complianz  button  first layer or settings  cmplz_* cookies`
+  (PRD 6.4 shows CookieYes as `button, api` and `first layer, api`:
+  CookieYes documents no accept or reject function, only
+  `getCkyConsent()`, so the rule has a state call and no API choice.
+  Both rules have a settings layer, so REJECT reads
+  `first layer or settings`.)
+- CookieYes: detected by `.cky-consent-container`, the older Cookie Law
+  Info markup (`#cookie-law-info-bar`, `#wt-cli-accept-all-btn`,
+  `#wt-cli-reject-btn`), `window.getCkyConsent` or a `cdn-cookieyes.com`
+  script. Accept `[data-cky-tag=accept-button]`; Reject
+  `[data-cky-tag=reject-button]`, else Customize
+  (`[data-cky-tag=settings-button]`), every `.cky-switch` checkbox off
+  and Save My Preferences (`[data-cky-tag=detail-save-button]`, in the
+  preference center modal outside the banner). Verified from the
+  `cookieyes-consent` cookie: Reject needs `analytics` and
+  `advertisement` off; Accept needs a decided state (`action:yes`)
+  only. A Cookie Law Info bar is reported present, not found: it keeps
+  its choice in other cookies the rule can't verify.
+- Complianz: detected by `#cmplz-cookiebanner-container`,
+  `.cmplz-cookiebanner`, `window.complianz`, `window.cmplz_set_cookie`
+  or a `complianz-gdpr/cookiebanner/js/complianz` script (the script is
+  an addition to the lane text: the plugin loads it from that path).
+  Accept `.cmplz-accept`; Reject `.cmplz-deny`, else View preferences
+  (`.cmplz-view-preferences`, which opens the categories inside the
+  banner), every `.cmplz-consent-checkbox` off and
+  `.cmplz-save-preferences`. Verified from the `cmplz_<category>`
+  cookies (`allow` or `deny`): Accept needs statistics and marketing
+  allowed, Reject both denied.
+- Checked against the plugins' current markup: the banner templates of
+  cookie-law-info 3.5.7 and complianz-gdpr 7.5.6 from wordpress.org
+  (GPL) carry every class and `data-cky-tag` the rules use; nothing
+  differed from the lane text. Complianz also defines
+  `window.cmplz_accept_all` and `window.cmplz_deny_all`; they are not
+  in its documentation, so the rule doesn't call them.
+- Replica pages for both under `consent/cmp/testdata/` (seven standard
+  pages each, plus `cookieyes/cookie-law-info.html`), with
+  `expect.yaml`. All rows pass Detect, Find and Choose (Accept and
+  Reject) in headless Chrome as well as in the FakeTab tests.

@@ -1,0 +1,50 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+# CookieYes (cookieyes.com and the CookieYes | GDPR Cookie Consent
+# WordPress plugin, formerly Cookie Law Info). getCkyConsent() and its
+# categories are in CookieYes's API documentation; the data-cky-tag
+# controls and classes are the ones the banner template of the GPL
+# plugin (cookie-law-info 3.5.7, wordpress.org) carries, read on
+# 2026-10-26. The older Cookie Law Info bar (#cookie-law-info-bar) is
+# detection evidence only: it keeps its choice in other cookies.
+id: cookieyes
+name: CookieYes
+priority: 20
+detect:
+  selectors: [".cky-consent-container", "#cookie-law-info-bar", "#wt-cli-accept-all-btn", "#wt-cli-reject-btn"]
+  globals: [getCkyConsent]
+  scripts: [cdn-cookieyes.com]
+banner:
+  selector: ".cky-consent-container"
+accept: ["[data-cky-tag=accept-button]"]
+reject:
+  first_layer: ["[data-cky-tag=reject-button]"]
+  second_layer:
+    # The preference center is a modal outside the banner container.
+    open: ["[data-cky-tag=settings-button]"]
+    toggles_off: ".cky-switch input:not([disabled])"
+    save: ["[data-cky-tag=detail-save-button]"]
+reopen:
+  selectors: ["[data-cky-tag=revisit-consent]"]
+api:
+  state: JSON.stringify(getCkyConsent())
+verify:
+  parser: cookieyes
+  cookies: [cookieyes-consent]
+  # Accept is verified by a decided state alone: which categories a
+  # site uses is its own setup.
+  accepted: {}
+  rejected: {analytics: false, advertisement: false}
+sources:
+  - https://www.cookieyes.com/documentation/retrieving-consent-data-using-api-getckyconsent/
+  - https://wordpress.org/plugins/cookie-law-info/
+fixtures:
+  - testdata/cookieyes/first-layer.html
+  - testdata/cookieyes/second-layer.html
+  - testdata/cookieyes/hidden.html
+  - testdata/cookieyes/late.html
+  - testdata/cookieyes/two-banners.html
+  - testdata/cookieyes/text-only.html
+  - testdata/cookieyes/script-no-banner.html
+  - testdata/cookieyes/cookie-law-info.html

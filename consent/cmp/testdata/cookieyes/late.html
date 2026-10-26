@@ -1,0 +1,66 @@
+<!doctype html>
+<!-- Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+     SPDX-License-Identifier: MIT -->
+<!-- Replica of a CookieYes page for Echo's CMP tests (banner injected after 4 s), written
+     fresh from CookieYes's public API documentation and the banner template of
+     the GPL WordPress plugin (cookie-law-info 3.5.7); none of CookieYes's code.
+     Source: https://www.cookieyes.com/documentation/retrieving-consent-data-using-api-getckyconsent/
+     Captured 2026-10-26. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Shop with CookieYes: banner injected after 4 s</title>
+<style>
+  body { font: 16px/1.5 sans-serif; margin: 0; padding: 24px; }
+  .cky-hide { display: none; }
+  .cky-consent-container { position: fixed; left: 24px; bottom: 24px; width: 440px; z-index: 9999999; background: #fff;
+    border: 1px solid #ccc; padding: 16px; box-shadow: 0 4px 16px rgba(0,0,0,.2); }
+  .cky-modal { display: none; position: fixed; top: 10%; left: 20%; right: 20%; z-index: 99999999; background: #fff; border: 1px solid #333; padding: 16px; }
+  .cky-modal.cky-modal-open { display: block; }
+  .cky-btn { margin: 4px 8px 4px 0; padding: 8px 16px; font-size: 15px; }
+  .cky-btn-revisit-wrapper { position: fixed; left: 15px; bottom: 15px; width: 45px; height: 45px; border-radius: 50%; background: #0056a7; color: #fff; z-index: 999999; cursor: pointer; }
+  .cky-revisit-hide { display: none; }
+  .cky-accordion { padding: 6px 0; }
+  .newsletter { position: fixed; top: 24px; right: 24px; z-index: 1000; width: 280px; background: #ffe; border: 1px solid #aa8; padding: 16px; }
+</style>
+</head>
+<body>
+<h1>Corner Shop</h1>
+<p>Hand-made goods, shipped from a small workshop.</p>
+<template id="replica-banner">
+<div class="cky-btn-revisit-wrapper cky-revisit-hide" data-cky-tag="revisit-consent" role="button" aria-label="Consent Preferences">Cookies</div>
+<div class="cky-consent-container cky-hide" tabindex="0">
+  <div class="cky-consent-bar" data-cky-tag="notice">
+    <div class="cky-notice">
+      <p class="cky-title" role="heading" aria-level="2" data-cky-tag="title">We value your privacy</p>
+      <div class="cky-notice-group">
+        <div class="cky-notice-des" data-cky-tag="description"><p>We use cookies to enhance your browsing experience, serve personalised ads or content, and analyse our traffic. <a href="/cookie-policy">Cookie Policy</a></p></div>
+        <div class="cky-notice-btn-wrapper" data-cky-tag="notice-buttons">
+        <button class="cky-btn cky-btn-customize" aria-label="Customize" aria-haspopup="true" aria-controls="ckyPreferenceCenter" data-cky-tag="settings-button">Customize</button>
+        <button class="cky-btn cky-btn-reject" aria-label="Reject All" data-cky-tag="reject-button">Reject All</button>
+        <button class="cky-btn cky-btn-accept" aria-label="Accept All" data-cky-tag="accept-button">Accept All</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="cky-modal" tabindex="0">
+  <div class="cky-preference-center" id="ckyPreferenceCenter" data-cky-tag="detail" role="dialog" aria-label="Customize Consent Preferences">
+    <span class="cky-preference-title" role="heading" aria-level="2" data-cky-tag="detail-title">Customize Consent Preferences</span>
+    <div class="cky-accordion" id="ckyDetailCategorynecessary"><button class="cky-accordion-btn" data-cky-tag="detail-category-title">Necessary</button> <span class="cky-always-active">Always Active</span></div>
+    <div class="cky-accordion" id="ckyDetailCategoryfunctional"><button class="cky-accordion-btn" data-cky-tag="detail-category-title">Functional</button> <div class="cky-switch" data-cky-tag="detail-category-toggle"><input type="checkbox" id="ckySwitchfunctional"></div></div>
+    <div class="cky-accordion" id="ckyDetailCategoryanalytics"><button class="cky-accordion-btn" data-cky-tag="detail-category-title">Analytics</button> <div class="cky-switch" data-cky-tag="detail-category-toggle"><input type="checkbox" id="ckySwitchanalytics"></div></div>
+    <div class="cky-accordion" id="ckyDetailCategoryperformance"><button class="cky-accordion-btn" data-cky-tag="detail-category-title">Performance</button> <div class="cky-switch" data-cky-tag="detail-category-toggle"><input type="checkbox" id="ckySwitchperformance"></div></div>
+    <div class="cky-accordion" id="ckyDetailCategoryadvertisement"><button class="cky-accordion-btn" data-cky-tag="detail-category-title">Advertisement</button> <div class="cky-switch" data-cky-tag="detail-category-toggle"><input type="checkbox" id="ckySwitchadvertisement"></div></div>
+    <div class="cky-prefrence-btn-wrapper" data-cky-tag="detail-buttons">
+      <button class="cky-btn cky-btn-reject" data-cky-tag="detail-reject-button">Reject All</button>
+      <button class="cky-btn cky-btn-preferences" data-cky-tag="detail-save-button">Save My Preferences</button>
+      <button class="cky-btn cky-btn-accept" data-cky-tag="detail-accept-button">Accept All</button>
+    </div>
+  </div>
+</div>
+</template>
+<script id="cookieyes" src="cdn-cookieyes.com/client_data/replica/script.js" data-show="late"></script>
+</body>
+</html>

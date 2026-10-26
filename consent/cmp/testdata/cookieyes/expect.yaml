@@ -1,0 +1,85 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+# What Echo should see on each CookieYes replica page (format in
+# ../README.md). found, present, banner_after_ms, detected_by and the
+# layers are checked in a real browser by the testbed's X8; sees answers
+# the FakeTab tests of consent/cmp.
+cmp: cookieyes
+pages:
+  - page: first-layer.html
+    found: true
+    present: true
+    detected_by: "selector:.cky-consent-container and global:getCkyConsent"
+    accept_layer: 1
+    reject_layer: 1
+    sees:
+      selectors: [".cky-consent-container"]
+      globals: [getCkyConsent]
+      scripts: [cdn-cookieyes.com]
+      banner: true
+      controls: ["[data-cky-tag=accept-button]", "[data-cky-tag=reject-button]", "[data-cky-tag=settings-button]"]
+  - page: second-layer.html
+    found: true
+    present: true
+    detected_by: "selector:.cky-consent-container and global:getCkyConsent"
+    accept_layer: 1
+    reject_layer: 2
+    sees:
+      selectors: [".cky-consent-container"]
+      globals: [getCkyConsent]
+      scripts: [cdn-cookieyes.com]
+      banner: true
+      controls: ["[data-cky-tag=accept-button]", "[data-cky-tag=settings-button]"]
+      settings: ["[data-cky-tag=detail-save-button]"]
+      toggles: [false, false, false, false]
+  - page: hidden.html
+    found: false
+    present: true
+    detected_by: "selector:.cky-consent-container and global:getCkyConsent"
+    sees:
+      selectors: [".cky-consent-container"]
+      globals: [getCkyConsent]
+      scripts: [cdn-cookieyes.com]
+  - page: late.html
+    found: true
+    present: true
+    banner_after_ms: 4000
+    detected_by: "selector:.cky-consent-container and global:getCkyConsent"
+    accept_layer: 1
+    reject_layer: 1
+    sees:
+      selectors: [".cky-consent-container"]
+      globals: [getCkyConsent]
+      scripts: [cdn-cookieyes.com]
+      banner: true
+      controls: ["[data-cky-tag=accept-button]", "[data-cky-tag=reject-button]", "[data-cky-tag=settings-button]"]
+  - page: two-banners.html
+    found: true
+    present: true
+    detected_by: "selector:.cky-consent-container and global:getCkyConsent"
+    accept_layer: 1
+    reject_layer: 1
+    sees:
+      selectors: [".cky-consent-container"]
+      globals: [getCkyConsent]
+      scripts: [cdn-cookieyes.com]
+      banner: true
+      controls: ["[data-cky-tag=accept-button]", "[data-cky-tag=reject-button]", "[data-cky-tag=settings-button]"]
+      decoys: ["#newsletter-accept", ".newsletter-close"]
+  - page: text-only.html
+    found: false
+    present: false
+  - page: script-no-banner.html
+    found: false
+    present: true
+    detected_by: "global:getCkyConsent and script:cdn-cookieyes.com"
+    sees:
+      globals: [getCkyConsent]
+      scripts: [cdn-cookieyes.com]
+  - page: cookie-law-info.html
+    found: false
+    present: true
+    detected_by: "selector:#cookie-law-info-bar"
+    sees:
+      selectors: ["#cookie-law-info-bar", "#wt-cli-accept-all-btn", "#wt-cli-reject-btn"]

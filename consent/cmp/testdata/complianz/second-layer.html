@@ -1,0 +1,64 @@
+<!doctype html>
+<!-- Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+     SPDX-License-Identifier: MIT -->
+<!-- Replica of a Complianz page for Echo's CMP tests (Reject only in the preferences, every category off), written
+     fresh from Complianz's public documentation and the banner template of the
+     GPL WordPress plugin (complianz-gdpr 7.5.6); none of Complianz's code.
+     Source: https://complianz.io/add-a-link-to-show-the-cookie-banner/
+     Captured 2026-10-26. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Shop with Complianz: Reject only in the preferences, every category off</title>
+<style>
+  body { font: 16px/1.5 sans-serif; margin: 0; padding: 24px; }
+  .cmplz-hidden { display: none !important; }
+  .cmplz-cookiebanner { position: fixed; right: 24px; bottom: 24px; width: 460px; z-index: 99999; background: #fff;
+    border: 1px solid #ccc; padding: 16px; box-shadow: 0 4px 16px rgba(0,0,0,.2); }
+  .cmplz-cookiebanner.cmplz-dismissed { display: none; }
+  .cmplz-cookiebanner .cmplz-categories, .cmplz-cookiebanner .cmplz-save-preferences { display: none; }
+  .cmplz-cookiebanner.cmplz-categories-visible .cmplz-categories { display: block; }
+  .cmplz-cookiebanner.cmplz-categories-visible .cmplz-save-preferences { display: inline-block; }
+  .cmplz-cookiebanner.cmplz-categories-visible .cmplz-view-preferences { display: none; }
+  .cmplz-btn { margin: 4px 8px 4px 0; padding: 8px 16px; font-size: 15px; }
+  .cmplz-category { padding: 4px 0; }
+  .cmplz-close { float: right; cursor: pointer; }
+  .cmplz-manage-consent { position: fixed; left: 16px; bottom: 0; }
+  .newsletter { position: fixed; top: 24px; right: 24px; z-index: 1000; width: 280px; background: #ffe; border: 1px solid #aa8; padding: 16px; }
+</style>
+</head>
+<body>
+<h1>Corner Shop</h1>
+<p>Hand-made goods, shipped from a small workshop.</p>
+<template id="replica-banner">
+<div id="cmplz-cookiebanner-container">
+<div class="cmplz-cookiebanner cmplz-hidden banner-1 optin cmplz-bottom-right cmplz-categories-type-view-preferences" aria-modal="true" data-nosnippet="true" role="dialog" aria-live="polite" aria-labelledby="cmplz-header-1-optin" aria-describedby="cmplz-message-1-optin">
+  <div class="cmplz-header">
+    <div class="cmplz-title" id="cmplz-header-1-optin">Manage Cookie Consent</div>
+    <div class="cmplz-close" tabindex="0" role="button" aria-label="Close dialog">&times;</div>
+  </div>
+  <div class="cmplz-body">
+    <div class="cmplz-message" id="cmplz-message-1-optin">To provide the best experiences, we use technologies like cookies to store and/or access device information.</div>
+    <div class="cmplz-categories">
+      <div class="cmplz-category cmplz-functional"><span class="cmplz-category-title">Functional</span> <span class="cmplz-always-active"><span class="cmplz-banner-checkbox"><input type="checkbox" id="cmplz-functional-optin" data-category="cmplz_functional" class="cmplz-consent-checkbox cmplz-functional" value="1" checked disabled><label class="cmplz-label" for="cmplz-functional-optin">Functional</label></span> Always active</span></div>
+      <div class="cmplz-category cmplz-preferences"><span class="cmplz-category-title">Preferences</span> <span class="cmplz-banner-checkbox"><input type="checkbox" id="cmplz-preferences-optin" data-category="cmplz_preferences" class="cmplz-consent-checkbox cmplz-preferences" value="1"><label class="cmplz-label" for="cmplz-preferences-optin">Preferences</label></span></div>
+      <div class="cmplz-category cmplz-statistics"><span class="cmplz-category-title">Statistics</span> <span class="cmplz-banner-checkbox"><input type="checkbox" id="cmplz-statistics-optin" data-category="cmplz_statistics" class="cmplz-consent-checkbox cmplz-statistics" value="1"><label class="cmplz-label" for="cmplz-statistics-optin">Statistics</label></span></div>
+      <div class="cmplz-category cmplz-marketing"><span class="cmplz-category-title">Marketing</span> <span class="cmplz-banner-checkbox"><input type="checkbox" id="cmplz-marketing-optin" data-category="cmplz_marketing" class="cmplz-consent-checkbox cmplz-marketing" value="1"><label class="cmplz-label" for="cmplz-marketing-optin">Marketing</label></span></div>
+    </div>
+  </div>
+  <div class="cmplz-buttons">
+    <button class="cmplz-btn cmplz-accept">Accept</button>
+    <button class="cmplz-btn cmplz-view-preferences">View preferences</button>
+    <button class="cmplz-btn cmplz-save-preferences">Save preferences</button>
+  </div>
+  <div class="cmplz-documents cmplz-links">
+    <ul><li><a class="cmplz-link cookie-statement" href="/cookie-policy-eu/">Cookie Policy</a></li></ul>
+  </div>
+</div>
+</div>
+<button class="cmplz-btn cmplz-hidden cmplz-manage-consent manage-consent-1" aria-haspopup="dialog" aria-controls="cmplz-cookiebanner-1-optin">Manage consent</button>
+</template>
+<script id="cmplz-cookiebanner-js" src="wp-content/plugins/complianz-gdpr/cookiebanner/js/complianz.min.js" data-show="now"></script>
+</body>
+</html>
