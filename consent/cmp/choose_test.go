@@ -639,3 +639,51 @@ func TestChooseRejectNoCategories(t *testing.T) {
 		t.Fatalf("choice %+v, reason %q, err %v", ch, reason, err)
 	}
 }
+
+// dialogRule is acme with its settings dialog named.
+var dialogRule = strings.Replace(acmeRule, `    save: ["#acme-save"]`, `    save: ["#acme-save"]
+    dialog: "#acme-prefs"`, 1)
+
+func TestChooseSecondLayerInDialog(t *testing.T) {
+	// Save is looked for only inside the settings dialog the rule names;
+	// without one, anywhere on the page.
+	for name, tc := range map[string]struct {
+		rule string
+		want string // the dialog's CSS; "" for none
+	}{
+		"dialog":    {dialogRule, "#acme-prefs"},
+		"no dialog": {acmeRule, ""},
+	} {
+		d, pg, fs, p := chooseSetup(t, map[string]string{"acme.yaml": tc.rule})
+		var within [][]consent.Locator
+		ht := &hookTab{FakeTab: pg.tab, after: func(name string, args []any) {
+			if name != "cmp-probe" || len(args) == 0 {
+				return
+			}
+			if in, ok := args[0].(probeInput); ok && len(in.Targets) > 0 && in.Targets[0].Key == "#acme-save" {
+				within = append(within, in.Within)
+			}
+		}}
+		pg.show("#acme-settings", "Settings")
+		pg.tab.OnClick = func(_ *consenttest.FakeTab, l consent.Locator) {
+			switch l.CSS {
+			case "#acme-settings":
+				pg.show("#acme-save", "Save")
+			case "#acme-save":
+				decide(pg, fs, false)
+			}
+		}
+		ch, reason, err := d.Choose(context.Background(), ht, p, acme, consent.RunReject)
+		if err != nil || reason != consent.ReasonNone || !ch.Verified || ch.Layer != 2 {
+			t.Fatalf("%s: choice %+v, reason %q, err %v", name, ch, reason, err)
+		}
+		if len(within) == 0 {
+			t.Fatalf("%s: Save was never probed", name)
+		}
+		for _, w := range within {
+			if (tc.want == "" && w != nil) || (tc.want != "" && (len(w) != 1 || w[0].CSS != tc.want)) {
+				t.Errorf("%s: Save probed within %+v; want %q", name, w, tc.want)
+			}
+		}
+	}
+}

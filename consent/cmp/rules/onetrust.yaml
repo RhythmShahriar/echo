@@ -22,6 +22,7 @@ reject:
     open: ["#onetrust-pc-btn-handler"]
     toggles_off: "#onetrust-pc-sdk input.category-switch-handler:not([disabled])"
     save: ["#onetrust-pc-sdk .save-preference-btn-handler"]
+    dialog: "#onetrust-pc-sdk"
 # The Cookie Settings button OneTrust gives sites to paste in their
 # footer carries id ot-sdk-btn and class ot-sdk-show-settings; the
 # floating button its banner draws is #ot-sdk-btn-floating.

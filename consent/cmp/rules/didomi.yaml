@@ -28,6 +28,7 @@ reject:
       - ".didomi-consent-popup-categories button[data-choice=disagree]"
       - ".didomi-consent-popup-categories .didomi-components-radio__option--disagree"
     save: [".didomi-consent-popup-actions button[aria-label*=Save]"]
+    dialog: "#didomi-popup"
 reopen:
   api: reopen
 api:
