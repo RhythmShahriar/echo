@@ -108,7 +108,7 @@ func idOfIssue(is *consent.Issue) issueID {
 
 // issues finds broke, new and fixed: the issue keys only one side has.
 // An ignored issue in cur is hidden on purpose, so it is never broke or
-// new, and it still exists, so the base one isn't fixed either. A base
+// new; it still exists, so the base one isn't fixed either. A base
 // issue on a page or run cur didn't check isn't fixed: nothing was
 // looked at.
 func (c *comparison) issues() {

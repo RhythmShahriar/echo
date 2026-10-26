@@ -179,7 +179,7 @@ func detectSamples() map[string]*consent.DetectResult {
 		"found": {URL: "https://staging.shop.test/", CMP: cookiebot, Accept: accept, Reject: reject, Screenshot: shot, Browser: browser},
 		"no-reject": {URL: "https://staging.shop.test/", CMP: consent.CMPInfo{ID: "onetrust", Name: "OneTrust", Found: true, Present: true,
 			DetectedBy: "script:cdn.cookielaw.org", BannerAtMS: 1430, RejectLayer: 2},
-			Accept: &consent.Choice{How: "button", Text: "Accept all", Selector: "#onetrust-accept-btn-handler", Layer: 2},
+			Accept:     &consent.Choice{How: "button", Text: "Accept all", Selector: "#onetrust-accept-btn-handler", Layer: 2},
 			Screenshot: shot, Browser: browser},
 		"no-banner": {URL: "https://shop.example/", CMP: consent.CMPInfo{ID: "cookiebot", Name: "Cookiebot", Present: true, DetectedBy: "global:Cookiebot"},
 			Screenshot: shot, Browser: browser},
@@ -211,10 +211,10 @@ func TestDetectTextGolden(t *testing.T) {
 	// Page text never reaches the terminal raw.
 	buf.Reset()
 	hostile := detectSamples()["found"]
-	hostile.Accept.Text = "Allow\x1b[2J all‮"
+	hostile.Accept.Text = "Allow\x1b[2J all\u202e"
 	hostile.CMP.Name = "Evil\x07"
 	_ = WriteConsentDetect(&buf, hostile, false, ConsentTextOptions{})
-	if strings.ContainsAny(buf.String(), "\x1b\x07‮") {
+	if strings.ContainsAny(buf.String(), "\x1b\x07\u202e") {
 		t.Errorf("raw controls: %q", buf.String())
 	}
 }

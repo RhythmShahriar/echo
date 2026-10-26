@@ -19,9 +19,9 @@ import (
 )
 
 // The consent schemas are generated from the Go types by reflection, so
-// they describe the JSON exactly as the types serialise it: a field
+// they describe the JSON exactly as the types serialize it: a field
 // without omitempty is required, a slice, map or pointer without it may
-// be null, and every typed string lists its values. TestConsentSchemas
+// be null; every typed string lists its values. TestConsentSchemas
 // fails when a type changes; -update rewrites the files.
 
 // schemaEnums are the values of every typed string the consent kinds

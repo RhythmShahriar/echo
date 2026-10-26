@@ -126,7 +126,7 @@ func (j *judge) ignoreExpired() {
 }
 
 // matches reports whether ignore: entry ig names issue is: the same
-// check, and the same tracker, page and run where the entry sets them. A
+// check plus the same tracker, page and run where the entry sets them. A
 // page given as a whole URL matches by its path, the way issues name
 // pages.
 func matches(ig consent.Ignore, is consent.Issue) bool {
@@ -143,7 +143,7 @@ func matches(ig consent.Ignore, is consent.Issue) bool {
 }
 
 // applyIgnores marks the issues an ignore: entry still in date names.
-// They stay in the list, in their place, and don't count.
+// They stay in the list in their place and don't count.
 func (j *judge) applyIgnores() {
 	if j.p == nil {
 		return
