@@ -6,6 +6,7 @@ package main
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"slices"
 	"strings"
@@ -76,6 +77,10 @@ func TestDoctorChromeLine(t *testing.T) {
 	t.Setenv("CI", "")
 	t.Setenv("RHYTHM_OFFLINE", "")
 	pinned := majorVersion(browser.PinnedVersion())
+	download := "will download Chrome for Testing " + pinned
+	if mb := browser.PinnedSizeMB(); mb > 0 {
+		download += fmt.Sprintf(" (%d MB)", mb)
+	}
 	for _, tc := range []struct {
 		name       string
 		bin        string
@@ -88,7 +93,7 @@ func TestDoctorChromeLine(t *testing.T) {
 		{"installed", "/usr/bin/google-chrome", false, nil, "153", "", "ok    Chrome for consent checks: found (Chrome 153 at /usr/bin/google-chrome)"},
 		{"no version", "C:/Chrome/chrome.exe", false, nil, "", "", "ok    Chrome for consent checks: found (C:/Chrome/chrome.exe)"},
 		{"downloaded", "/cache/chrome", true, nil, "", "", "ok    Chrome for consent checks: found (Chrome for Testing " + pinned + " at /cache/chrome)"},
-		{"will download", "", false, errors.New("no Chrome"), "", "", "note  Chrome for consent checks: will download Chrome for Testing " + pinned},
+		{"will download", "", false, errors.New("no Chrome"), "", "", "note  Chrome for consent checks: " + download},
 		{"offline", "", false, errors.New("no Chrome"), "", "RHYTHM_OFFLINE", "note  Chrome for consent checks: missing (--no-download)"},
 		{"ci", "", false, errors.New("no Chrome"), "", "CI", "note  Chrome for consent checks: missing (--no-download)"},
 	} {

@@ -54,6 +54,17 @@ var pinned = Release{Version: cftVersion, Archives: cftArchives}
 // when no Chrome is installed, or "" when the build has no pins.
 func PinnedVersion() string { return pinned.Version }
 
+// PinnedSizeMB is the size in MB (rounded up) of the Chrome for Testing
+// archive this build would download for this platform, or 0 when there
+// is none. Doctor names it so a user knows what a first check costs.
+func PinnedSizeMB() int64 {
+	pin, ok := pinned.Archives[Platform()]
+	if !ok || pin.Size <= 0 {
+		return 0
+	}
+	return (pin.Size + (1 << 20) - 1) >> 20
+}
+
 // maxArchive caps a download well above any real Chrome for Testing
 // zip (about 150 to 250 MB), so a broken mirror can't fill the disk.
 const maxArchive = 1 << 30

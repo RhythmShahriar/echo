@@ -151,7 +151,7 @@ docs team writes the wiki from this file and real command output.
 - `rhythm echo doctor` ends with one line about the browser (never a failure, never a download; also when Echo isn't running; in `--json` it is a check named `Chrome for consent checks`):
   - `ok    Chrome for consent checks: found (Chrome 153 at /usr/bin/google-chrome)` (version from `<chrome> --version`; `found (<path>)` when it doesn't say, as on Windows)
   - `ok    Chrome for consent checks: found (Chrome for Testing 156 at <path>)` (the downloaded one)
-  - `note  Chrome for consent checks: will download Chrome for Testing 156`
+  - `note  Chrome for consent checks: will download Chrome for Testing 156 (191 MB)` (the size of the pinned archive for this system, rounded up)
   - `note  Chrome for consent checks: missing (--no-download)` (no Chrome and `RHYTHM_OFFLINE` or `CI` set)
   - `note  Chrome for consent checks: missing (no Chrome for Testing build for this system; install Chrome or Chromium)`
   - The `ok` line doesn't count in `N checks passed`: that tally stays the capture layers'. In the styled view a label longer than the column gets its own width.

@@ -80,6 +80,10 @@ func (d *doctor) chrome() {
 	case browser.Platform() == "" || browser.PinnedVersion() == "":
 		d.add(doctorNote, chromeLabel, "missing (no Chrome for Testing build for this system; install Chrome or Chromium)")
 	default:
-		d.add(doctorNote, chromeLabel, fmt.Sprintf("will download Chrome for Testing %s", majorVersion(browser.PinnedVersion())))
+		line := "will download Chrome for Testing " + majorVersion(browser.PinnedVersion())
+		if mb := browser.PinnedSizeMB(); mb > 0 {
+			line += fmt.Sprintf(" (%d MB)", mb)
+		}
+		d.add(doctorNote, chromeLabel, line)
 	}
 }
