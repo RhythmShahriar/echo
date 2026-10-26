@@ -221,7 +221,7 @@ func siteOptions(s site) (*options, error) {
 	// variables into a request.
 	for _, h := range slices.Concat(o.headers, o.cookies) {
 		if !siteEnvValue(h) {
-			return nil, usagef("site %q: consent: args: header and cookie values must be env:RHYTHM_ECHO_NAME, never a file or the value itself", s.Name)
+			return nil, usagef("site %q: consent: args: header and cookie values must be env:RHYTHM_ECHO_NAME, never a file, the value itself or one of Echo's own variables (RHYTHM_ECHO_TOKEN, RHYTHM_ECHO_URL and the like)", s.Name)
 		}
 	}
 	return o, nil
@@ -230,14 +230,30 @@ func siteOptions(s site) (*options, error) {
 // siteEnvRef is a value read from one of Echo's variables.
 var siteEnvRef = regexp.MustCompile(`^env:RHYTHM_ECHO_[A-Z0-9_]+$`)
 
+// echoOwnEnv are the variables Echo itself reads for its own API,
+// mail sinks, relay, login and proxy. A shared --sites file chooses
+// both the page and the header, so it could send one of these to any
+// host: only the command line may name them.
+var echoOwnEnv = []string{
+	"RHYTHM_ECHO_TOKEN", "RHYTHM_ECHO_WRITE_TOKEN", "RHYTHM_ECHO_URL", "RHYTHM_ECHO_SMTP",
+	"RHYTHM_ECHO_RELAY", "RHYTHM_ECHO_LOGIN", "RHYTHM_ECHO_PROXY", "RHYTHM_ECHO_RUN",
+}
+
 // siteEnvValue reports whether a site's -H or --cookie value comes
-// from one of Echo's variables.
+// from one of Echo's variables other than its own (echoOwnEnv).
 func siteEnvValue(arg string) bool {
 	if name, value, ok := strings.Cut(arg, ":"); ok && !strings.HasPrefix(arg, "env:") && headerToken.MatchString(strings.TrimSpace(name)) {
-		return siteEnvRef.MatchString(strings.TrimSpace(value))
+		return siteEnvName(value)
 	}
 	if _, value, ok := strings.Cut(arg, "="); ok {
-		return siteEnvRef.MatchString(strings.TrimSpace(value))
+		return siteEnvName(value)
 	}
 	return false
+}
+
+// siteEnvName reports whether value is env:RHYTHM_ECHO_<NAME> naming a
+// variable a site file may read.
+func siteEnvName(value string) bool {
+	value = strings.TrimSpace(value)
+	return siteEnvRef.MatchString(value) && !slices.Contains(echoOwnEnv, strings.TrimPrefix(value, "env:"))
 }
