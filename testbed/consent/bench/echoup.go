@@ -16,12 +16,19 @@ import (
 	"time"
 )
 
-// Go mode's Echo for c18 (--echo): rhythm-echo up, sealed, on two of the
-// probe range's ports, so it never meets a developer's own Echo on 8025.
+// Go mode's Echo for c18 (--echo): rhythm-echo up, sealed, on the last
+// two of the probe range's 30 ports (23438 and 23439 by default), so it
+// never meets a developer's own Echo on 8025.
 const (
-	echoAPI   = "127.0.0.1:23438"
-	echoProxy = "127.0.0.1:23439"
+	portEchoAPI   = 28
+	portEchoProxy = 29
 )
+
+// echoAddrs are the API and proxy addresses of Go mode's Echo for the
+// probe range that starts at first.
+func echoAddrs(first int) (api, proxy string) {
+	return fmt.Sprintf("127.0.0.1:%d", first+portEchoAPI), fmt.Sprintf("127.0.0.1:%d", first+portEchoProxy)
+}
 
 // echoUp is a running rhythm-echo up.
 type echoUp struct {
@@ -33,7 +40,7 @@ type echoUp struct {
 // startEchoUp runs rhythm-echo up in dir with its own store and config
 // folders and waits until it answers, then saves its CA for the testbed
 // server's Conversions API sender.
-func startEchoUp(ctx context.Context, bin, dir string) (*echoUp, error) {
+func startEchoUp(ctx context.Context, bin, dir, echoAPI, echoProxy string) (*echoUp, error) {
 	if answers(echoAPI) || answers(echoProxy) {
 		return nil, errors.New("something already answers on " + echoAPI + " or " + echoProxy)
 	}

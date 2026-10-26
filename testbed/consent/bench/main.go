@@ -335,7 +335,8 @@ func openBed(ctx context.Context, o options, root string, jobs []job, logf func(
 	echoURL, proxy, ca := "", "", ""
 	if needsEcho {
 		var err error
-		echo, err = startEchoUp(ctx, o.bin, filepath.Join(o.work, "echo"))
+		echoAPI, echoProxy := echoAddrs(o.probePort)
+		echo, err = startEchoUp(ctx, o.bin, filepath.Join(o.work, "echo"), echoAPI, echoProxy)
 		if err != nil {
 			logf("no Echo for --echo, so c18 fails: " + err.Error())
 		} else {
