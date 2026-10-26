@@ -68,6 +68,12 @@ func (f fakeArgs) siteID() string {
 }
 
 func fakeEcho(mode string, args []string) int {
+	// Called the way the runner calls peakmem: leave a peak, then go on
+	// as rhythm-echo with the rest.
+	if len(args) > 3 && args[0] == peakmemBin && args[1] == "-o" {
+		_ = os.WriteFile(args[2], []byte("123456\n"), 0o600)
+		args = args[4:]
+	}
 	if len(args) > 0 && args[0] == "--version" {
 		fmt.Println("rhythm-echo 9.9.9-test")
 		return 0

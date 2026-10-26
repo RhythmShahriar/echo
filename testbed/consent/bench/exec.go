@@ -10,11 +10,13 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/RhythmShahriar/echo/internal/browser/proc"
+	"github.com/RhythmShahriar/echo/testbed/consent/bench/hwm"
 )
 
 // Exec is how one command went.
@@ -23,7 +25,7 @@ type Exec struct {
 	Stdout string        // what it printed
 	Stderr string        // what it printed on stderr, plus why it couldn't start
 	Wall   time.Duration // wall time
-	MaxRSS int64         // the child's peak resident memory in bytes; 0 when unknown
+	MaxRSS int64         // rhythm-echo's own peak resident memory in bytes, Chrome left out; 0 when unknown
 }
 
 // Output is stdout and stderr together, for says and never checks.
@@ -43,9 +45,20 @@ func run(cmd *exec.Cmd) Exec {
 	proc.Interrupt(cmd)
 	cmd.WaitDelay = 15 * time.Second
 	_ = os.Remove(filepath.Join(cmd.Dir, rssFile))
+	inside := measuredInside(cmd)
 	start := time.Now()
-	err := cmd.Run()
+	err := cmd.Start()
+	var w *hwm.Watcher
+	if err == nil {
+		if !inside {
+			w = hwm.Watch(cmd.Process.Pid)
+		}
+		err = cmd.Wait()
+	}
 	e := Exec{Wall: time.Since(start), Stdout: out.String(), Stderr: errOut.String()}
+	if w != nil {
+		e.MaxRSS = w.Stop()
+	}
 	var exitErr *exec.ExitError
 	switch {
 	case err == nil:
@@ -56,10 +69,14 @@ func run(cmd *exec.Cmd) Exec {
 	e.Exit = -1
 	if cmd.ProcessState != nil {
 		e.Exit = cmd.ProcessState.ExitCode()
-		e.MaxRSS = maxRSS(cmd.ProcessState)
 	}
-	// In Docker mode GNU time in the runner wrote the peak of
-	// rhythm-echo itself; the rusage above is docker's own client's.
+	// The child's rusage (ru_maxrss) would count the largest process it
+	// reaped, which is Chrome, so the mark of rhythm-echo alone is read
+	// instead: here by hwm, in Docker mode by peakmem in the runner,
+	// which leaves it in rssFile (the local process is docker's client).
+	if !inside {
+		return e
+	}
 	if data, err := os.ReadFile(filepath.Join(cmd.Dir, rssFile)); err == nil { //nolint:gosec // the run's own folder
 		if kib, err := strconv.ParseInt(strings.TrimSpace(lastLine(string(data))), 10, 64); err == nil {
 			e.MaxRSS = kib << 10
@@ -67,6 +84,10 @@ func run(cmd *exec.Cmd) Exec {
 	}
 	return e
 }
+
+// measuredInside reports whether cmd runs rhythm-echo through peakmem
+// in the runner, which measures it there.
+func measuredInside(cmd *exec.Cmd) bool { return slices.Contains(cmd.Args, peakmemBin) }
 
 // lastLine is the last non-empty line of s.
 func lastLine(s string) string {

@@ -76,7 +76,7 @@ type Timing struct {
 	Detects   int     `json:"detects"`    // consent detect samples
 	DetectP50 float64 `json:"detect_p50"` // wall time of consent detect
 	DetectMax float64 `json:"detect_max"` //
-	RSSMax    int64   `json:"rss_max"`    // the largest peak resident memory of a run, bytes; 0 unknown
+	RSSMax    int64   `json:"rss_max"`    // rhythm-echo's largest own peak resident memory of a run (Chrome left out), bytes; 0 unknown
 }
 
 // The states of a Measure.

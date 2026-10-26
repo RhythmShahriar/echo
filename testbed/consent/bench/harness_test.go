@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -273,7 +274,7 @@ func TestDockerBedPaths(t *testing.T) {
 	b := &dockerBed{compose: filepath.Join(root, "docker-compose.yml"), work: "/bench/work-a"}
 	cmd := b.Command(t.Context(), "c01/good", []string{"consent", "https://c01.shop.test/"})
 	got := strings.Join(cmd.Args, " ")
-	for _, want := range []string{"compose -p echo-consent-testbed -f ", "exec -T -w /bench/work-a/c01/good runner /usr/bin/time -f %M -o /bench/work-a/c01/good/.maxrss-kib rhythm-echo consent https://c01.shop.test/"} {
+	for _, want := range []string{"compose -p echo-consent-testbed -f ", "exec -T -w /bench/work-a/c01/good runner /usr/local/bin/peakmem -o /bench/work-a/c01/good/.maxrss-kib rhythm-echo consent https://c01.shop.test/"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("command %q lacks %q", got, want)
 		}
@@ -286,11 +287,12 @@ func TestDockerBedPaths(t *testing.T) {
 func TestExecReadsTheRunnersPeakMemory(t *testing.T) {
 	t.Setenv(fakeEnv, "bench")
 	dir := t.TempDir()
+	stale := func() { _ = os.WriteFile(filepath.Join(dir, rssFile), []byte("999999\n"), 0o600) }
+	// Run locally, the mark of the process itself is read and a peak
+	// file is never looked at.
+	stale()
 	cmd := execCommand(t.Context(), self(t), "--version")
 	cmd.Dir = dir
-	// The file a previous run left is removed first; one written during
-	// the run (by GNU time in the runner) is read after.
-	_ = os.WriteFile(filepath.Join(dir, rssFile), []byte("999999\n"), 0o600)
 	ex := run(cmd)
 	if ex.Exit != 0 || !strings.Contains(ex.Stdout, "9.9.9-test") {
 		t.Fatalf("exec = %+v", ex)
@@ -298,11 +300,22 @@ func TestExecReadsTheRunnersPeakMemory(t *testing.T) {
 	if ex.MaxRSS == 999999<<10 {
 		t.Error("a stale peak memory file was read")
 	}
+	if runtime.GOOS == "linux" && ex.MaxRSS <= 0 {
+		t.Errorf("no peak memory read for a local run: %d", ex.MaxRSS)
+	}
 	if ex.Wall <= 0 {
 		t.Errorf("wall = %v", ex.Wall)
 	}
+	// Through peakmem, as in the runner: the file a previous run left
+	// is removed first; the one written during the run is read after.
+	stale()
+	cmd = execCommand(t.Context(), self(t), peakmemBin, "-o", filepath.Join(dir, rssFile), "rhythm-echo", "--version")
+	cmd.Dir = dir
+	if ex = run(cmd); ex.Exit != 0 || ex.MaxRSS != 123456<<10 {
+		t.Errorf("through peakmem = %+v", ex)
+	}
 	missing := run(execCommand(t.Context(), filepath.Join(dir, "none")))
-	if missing.Exit != -1 || !strings.Contains(missing.Stderr, "bench: ") {
+	if missing.Exit != -1 || !strings.Contains(missing.Stderr, "bench: ") || missing.MaxRSS != 0 {
 		t.Errorf("a missing binary = %+v", missing)
 	}
 }

@@ -188,6 +188,7 @@ services:
       CI: "true"
     volumes:
       - ./runtime/linux/rhythm-echo:/usr/local/bin/rhythm-echo:ro
+      - ./runtime/linux/peakmem:/usr/local/bin/peakmem:ro
       - ./ca/ca.pem:/testbed-ca.pem:ro
       - ./bench:/bench
     depends_on:

@@ -219,15 +219,20 @@ func (b *dockerBed) Hits(id string) ([]server.Hit, error) {
 	return all, nil
 }
 
-// Command runs rhythm-echo in the runner, through GNU time so the
-// child's peak memory is measured inside the container (see rssFile).
+// Command runs rhythm-echo in the runner, through peakmem so its own
+// peak memory (Chrome left out) is measured inside the container (see
+// rssFile).
 func (b *dockerBed) Command(ctx context.Context, rel string, args []string) *exec.Cmd {
 	dir := path.Join(b.work, rel)
 	full := append([]string{"compose", "-p", composeProject, "-f", b.compose, "exec", "-T", "-w", dir, "runner",
-		"/usr/bin/time", "-f", "%M", "-o", path.Join(dir, rssFile), "rhythm-echo"}, args...)
+		peakmemBin, "-o", path.Join(dir, rssFile), "rhythm-echo"}, args...)
 	return exec.CommandContext(ctx, "docker", full...) //nolint:gosec // docker with the benchmark's own arguments
 }
 
-// rssFile is where Docker mode's runs leave the child's peak resident
-// memory in KiB, in the run's folder.
+// rssFile is where Docker mode's runs leave rhythm-echo's own peak
+// resident memory in KiB, in the run's folder.
 const rssFile = ".maxrss-kib"
+
+// peakmemBin is testbed/consent/bench/peakmem in the runner, mounted
+// from runtime/linux by docker-compose.yml.
+const peakmemBin = "/usr/local/bin/peakmem"

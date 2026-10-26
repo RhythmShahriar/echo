@@ -44,10 +44,11 @@ reproduce: ## two full benchmark runs, then -diff: fails when any outcome differ
 		b=$$?; if [ $$a -gt 1 ] || [ $$b -gt 1 ]; then exit 3; fi; \
 		$(BENCH) -diff $(ROOT)/bench/work-a/results.json $(ROOT)/bench/work-b/results.json
 
-runtime: ## build what the containers run into runtime/: rhythm-echo (release flags), the testbed server, the resolver and the gate certificates
+runtime: ## build what the containers run into runtime/: rhythm-echo (release flags), peakmem, the testbed server, the resolver and the gate certificates
 	@test -f ca/ca.pem || $(MAKE) ca
 	mkdir -p runtime/linux runtime/gate state
 	cd $(REPO) && $(LINUX) -o $(ROOT)/runtime/linux/rhythm-echo ./cmd/rhythm-echo
+	cd $(REPO) && $(LINUX) -o $(ROOT)/runtime/linux/peakmem ./testbed/consent/bench/peakmem
 	cd $(REPO) && $(LINUX) -o $(ROOT)/runtime/linux/consent-testbed ./testbed/consent/server/cmd/consent-testbed
 	cd $(REPO) && $(LINUX) -o $(ROOT)/runtime/linux/dns ./testbed/consent/dns
 	cp runtime/linux/rhythm-echo runtime/rhythm-echo
