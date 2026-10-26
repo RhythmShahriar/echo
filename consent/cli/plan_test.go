@@ -5,6 +5,7 @@ package cli
 
 import (
 	"bytes"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/RhythmShahriar/echo/consent"
 	"github.com/RhythmShahriar/echo/consent/consenttest"
+	kitcli "github.com/RhythmShahriar/rhythm/kit/cli"
 )
 
 // inDir runs the rest of t in a new empty folder, with a config of cfg
@@ -479,5 +481,44 @@ func TestSignKeyChecked(t *testing.T) {
 	}
 	if _, err := os.Stat(".echo"); err == nil {
 		t.Error("a refused key made the store")
+	}
+}
+
+// --proxy takes http, https or socks5 with a host; anything else is a
+// usage error that shows the value masked.
+func TestProxyFlag(t *testing.T) {
+	inDir(t, "")
+	for in, want := range map[string]string{
+		"http://127.0.0.1:8080":   "http://127.0.0.1:8080",
+		"HTTPS://proxy.eu.test/":  "https://proxy.eu.test",
+		"socks5://[::1]:1080":     "socks5://[::1]:1080",
+		" socks5://eu.test:1080 ": "socks5://eu.test:1080",
+	} {
+		if p := mustPrepare(t, "--proxy", in, "https://shop.test/").plans[0]; p.Proxy != want {
+			t.Errorf("--proxy %q: %q, want %q", in, p.Proxy, want)
+		}
+	}
+	secret := "pr0xy" + "-pass-" + "x7q"
+	for _, in := range []string{
+		"ftp://u:" + secret + "@x.test",
+		"http://u:" + secret + "@x.test:8080",
+		"socks5://" + secret + "@x.test",
+		"127.0.0.1:8080",
+		"proxy.eu.test",
+		"http://",
+		"http://x.test/path",
+		"http://x.test/?k=" + secret,
+		"socks4://x.test:1080",
+		"http://x.test%zz",
+	} {
+		_, err := prepareArgs(t, "--proxy", in, "https://shop.test/")
+		var ue kitcli.UsageError
+		if !errors.As(err, &ue) {
+			t.Errorf("--proxy %q: %v; want a usage error", in, err)
+			continue
+		}
+		if strings.Contains(ue.Msg, secret) || !strings.Contains(ue.Msg, "--proxy") {
+			t.Errorf("--proxy %q: message %q", in, ue.Msg)
+		}
 	}
 }

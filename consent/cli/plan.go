@@ -5,6 +5,7 @@ package cli
 
 import (
 	"maps"
+	"net/url"
 	"regexp"
 	"slices"
 	"strings"
@@ -123,7 +124,9 @@ func applyFlags(p *consent.Plan, o *options) error {
 		p.UserAgent = o.userAgent
 	}
 	if set["proxy"] {
-		p.Proxy = o.proxy
+		if p.Proxy, err = parseProxy("--proxy", o.proxy); err != nil {
+			return err
+		}
 	}
 	p.Insecure = p.Insecure || o.insecure
 	p.InsecurePublic = p.InsecurePublic || o.insecurePublic
@@ -218,6 +221,30 @@ func parseViewport(what, v string) (string, error) {
 		return w, nil
 	}
 	return "", usagef("%s %q: want desktop or mobile", what, v)
+}
+
+// proxySchemes are the proxy kinds the browser takes in its
+// --proxy-server switch.
+var proxySchemes = []string{"http", "https", "socks5"}
+
+// parseProxy reads a proxy URL: http, https or socks5 with a host and
+// nothing after it. The browser drops a login written in the URL
+// (user:pass@) and would then fail without saying why, so that is
+// refused too. Errors show the value masked: it can hold a password.
+func parseProxy(what, v string) (string, error) {
+	raw := strings.TrimSpace(v)
+	if raw == "" {
+		return "", nil
+	}
+	u, err := url.Parse(raw)
+	if err != nil || !slices.Contains(proxySchemes, strings.ToLower(u.Scheme)) || u.Hostname() == "" ||
+		u.Opaque != "" || (u.Path != "" && u.Path != "/") || u.RawQuery != "" || u.Fragment != "" {
+		return "", usagef("%s %q: want http://, https:// or socks5:// and a host, e.g. socks5://127.0.0.1:1080", what, consent.MaskURL(raw, false))
+	}
+	if u.User != nil {
+		return "", usagef("%s %q: the browser can't log in to a proxy from its URL; use one that needs no login, e.g. a local tunnel", what, consent.MaskURL(raw, false))
+	}
+	return strings.ToLower(u.Scheme) + "://" + u.Host, nil
 }
 
 // closestWord is the word of options a mistyped one most likely meant,
