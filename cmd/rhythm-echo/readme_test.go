@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/RhythmShahriar/echo/config"
+	"github.com/RhythmShahriar/echo/consent"
 	"github.com/RhythmShahriar/echo/model"
 	"github.com/RhythmShahriar/echo/recognize"
 )
@@ -98,5 +99,73 @@ func TestReadmeProviderCount(t *testing.T) {
 	}
 	if want := strconv.Itoa(len(recognize.Catalog())); m[1] != want {
 		t.Errorf("README says %s services are recognized; the catalog has %s", m[1], want)
+	}
+}
+
+// consentSection is the README's cookie consent section, up to the next
+// section.
+func consentSection(t *testing.T) string {
+	t.Helper()
+	_, after, ok := strings.Cut(readme(t), "\n## Cookie consent checks\n")
+	if !ok {
+		t.Fatal("README has no ## Cookie consent checks section")
+	}
+	section, _, _ := strings.Cut(after, "\n## ")
+	return section
+}
+
+// Every flag the README's consent section names is one consent or one
+// of its subcommands takes, so an example can't drift from the CLI.
+func TestReadmeConsentFlags(t *testing.T) {
+	var help strings.Builder
+	for _, args := range [][]string{{"consent", "--help"}, {"consent", "detect", "--help"}, {"consent", "report", "--help"},
+		{"consent", "verify", "--help"}, {"consent", "cmps", "--help"}, {"consent", "trackers", "--help"}, {"consent", "prune", "--help"}} {
+		code, out, errOut := runCLI(t, args...)
+		if code != exitOK {
+			t.Fatalf("%s: exit %d\n%s", strings.Join(args, " "), code, errOut)
+		}
+		help.WriteString(out)
+	}
+	known := map[string]bool{}
+	for _, m := range regexp.MustCompile(`--[a-z][a-z-]*`).FindAllString(help.String(), -1) {
+		known[m] = true
+	}
+	flags := regexp.MustCompile(`(?:^|[\s(`+"`"+`])(--[a-z][a-z-]*)`).FindAllStringSubmatch(consentSection(t), -1)
+	if len(flags) < 10 {
+		t.Fatalf("found %d flags in the README's consent section; the pattern no longer matches", len(flags))
+	}
+	for _, f := range flags {
+		if !known[f[1]] {
+			t.Errorf("README's consent section names %s, which consent's help doesn't list", f[1])
+		}
+	}
+}
+
+// The README's honest limits are consent.HonestLimits, the text the help
+// and the report print.
+func TestReadmeConsentLimits(t *testing.T) {
+	section := consentSection(t)
+	_, limits, ok := strings.Cut(section, "### Honest limits\n")
+	if !ok {
+		t.Fatal("README's consent section has no ### Honest limits")
+	}
+	var paras, cur []string
+	for line := range strings.SplitSeq(limits, "\n") {
+		switch {
+		case strings.HasPrefix(line, "> "):
+			cur = append(cur, strings.ReplaceAll(strings.TrimPrefix(line, "> "), "**", ""))
+		case len(cur) > 0:
+			paras = append(paras, strings.Join(cur, " "))
+			cur = nil
+		}
+	}
+	if got := strings.Join(paras, "\n\n"); got != consent.HonestLimits {
+		t.Errorf("README's honest limits differ from consent.HonestLimits:\n got %q\nwant %q", got, consent.HonestLimits)
+	}
+	for _, want := range []string{"Hits are held in the browser: checking production adds nothing to anyone's analytics.",
+		"Does Reject really reject?", "mode: consent"} {
+		if !strings.Contains(section, want) {
+			t.Errorf("README's consent section lacks %q", want)
+		}
 	}
 }
