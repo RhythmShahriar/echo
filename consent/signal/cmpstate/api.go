@@ -6,6 +6,8 @@ package cmpstate
 import (
 	"bytes"
 	"encoding/json"
+	"maps"
+	"slices"
 	"strings"
 
 	"github.com/RhythmShahriar/echo/consent"
@@ -46,8 +48,8 @@ func API(parser string, raw []byte) (*consent.CMPState, error) {
 	}
 	if json.Unmarshal(raw, &generic) == nil && generic.Decided != nil {
 		cats := categories{}
-		for k, v := range generic.Categories {
-			cats.set(k, v)
+		for _, k := range slices.Sorted(maps.Keys(generic.Categories)) {
+			cats.set(k, generic.Categories[k])
 		}
 		return &consent.CMPState{CMP: parser, Source: apiSource, Decided: *generic.Decided, Categories: cats.orNil()}, nil
 	}
@@ -75,8 +77,8 @@ func API(parser string, raw []byte) (*consent.CMPState, error) {
 		}
 		if json.Unmarshal(raw, &c) == nil && c.Categories != nil {
 			cats := categories{}
-			for k, v := range c.Categories {
-				cats.set(k, v)
+			for _, k := range slices.Sorted(maps.Keys(c.Categories)) {
+				cats.set(k, c.Categories[k])
 			}
 			return &consent.CMPState{CMP: parser, Source: apiSource, Decided: c.Done, Categories: cats.orNil()}, nil
 		}
