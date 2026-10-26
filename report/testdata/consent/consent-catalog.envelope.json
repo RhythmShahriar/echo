@@ -20,28 +20,28 @@
   "data": {
     "cmps": [
       {
-        "ID": "cookiebot",
-        "Name": "Cookiebot",
-        "DetectedBy": "#CybotCookiebotDialog, window.Cookiebot",
-        "Accept": "#CybotCookiebotDialogBodyLevelButtonLevelOptinAllowAll",
-        "Reject": "#CybotCookiebotDialogBodyButtonDecline",
-        "StateFrom": "cookie CookieConsent",
-        "Sources": [
+        "id": "cookiebot",
+        "name": "Cookiebot",
+        "detected_by": "#CybotCookiebotDialog, window.Cookiebot",
+        "accept": "#CybotCookiebotDialogBodyLevelButtonLevelOptinAllowAll",
+        "reject": "#CybotCookiebotDialogBodyButtonDecline",
+        "state_from": "cookie CookieConsent",
+        "sources": [
           "https://www.cookiebot.com/en/developer/"
         ]
       }
     ],
     "trackers": [
       {
-        "ID": "meta-pixel",
-        "Name": "Meta Pixel",
-        "Vendor": "Meta",
-        "Category": "advertising",
-        "Need": "needed",
-        "Matches": "facebook.com/tr, connect.facebook.net/*/fbevents.js",
-        "Fix": "Block the pixel until Accept.",
-        "Docs": "https://developers.facebook.com/docs/meta-pixel/implementation/gdpr",
-        "Sources": [
+        "id": "meta-pixel",
+        "name": "Meta Pixel",
+        "vendor": "Meta",
+        "category": "advertising",
+        "need": "needed",
+        "matches": "facebook.com/tr, connect.facebook.net/*/fbevents.js",
+        "fix": "Block the pixel until Accept.",
+        "docs": "https://developers.facebook.com/docs/meta-pixel/implementation/gdpr",
+        "sources": [
           "https://developers.facebook.com/docs/meta-pixel/"
         ]
       }

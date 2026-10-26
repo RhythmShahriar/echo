@@ -12,12 +12,15 @@ import (
 
 // TrackerInfo is one catalog entry as `consent trackers` lists it.
 type TrackerInfo struct {
-	ID, Name, Vendor string
-	Category         Category
-	Need             ConsentNeed
-	Matches          string // one-line summary for `consent trackers`
-	Fix, Docs        string
-	Sources          []string
+	ID       string      `json:"id"`
+	Name     string      `json:"name"`
+	Vendor   string      `json:"vendor"`
+	Category Category    `json:"category"`
+	Need     ConsentNeed `json:"need"`
+	Matches  string      `json:"matches"` // one-line summary for `consent trackers`
+	Fix      string      `json:"fix"`
+	Docs     string      `json:"docs"`
+	Sources  []string    `json:"sources,omitempty"`
 }
 
 // Classifier is the tracker catalog: it tells tracker requests,
@@ -116,8 +119,13 @@ type Tab interface {
 
 // CMPRuleInfo is one CMP rule as `consent cmps` lists it.
 type CMPRuleInfo struct {
-	ID, Name, DetectedBy, Accept, Reject, StateFrom string
-	Sources                                         []string
+	ID         string   `json:"id"`
+	Name       string   `json:"name"`
+	DetectedBy string   `json:"detected_by"`
+	Accept     string   `json:"accept"`
+	Reject     string   `json:"reject"`
+	StateFrom  string   `json:"state_from"`
+	Sources    []string `json:"sources,omitempty"`
 }
 
 // CMPDriver finds a page's CMP and makes the choice on it (consent/cmp).

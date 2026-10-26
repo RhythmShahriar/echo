@@ -101,42 +101,38 @@
   "$defs": {
     "cmpRuleInfo": {
       "properties": {
-        "Accept": {
+        "accept": {
           "type": "string"
         },
-        "DetectedBy": {
+        "detected_by": {
           "type": "string"
         },
-        "ID": {
+        "id": {
           "type": "string"
         },
-        "Name": {
+        "name": {
           "type": "string"
         },
-        "Reject": {
+        "reject": {
           "type": "string"
         },
-        "Sources": {
+        "sources": {
           "items": {
             "type": "string"
           },
-          "type": [
-            "array",
-            "null"
-          ]
+          "type": "array"
         },
-        "StateFrom": {
+        "state_from": {
           "type": "string"
         }
       },
       "required": [
-        "ID",
-        "Name",
-        "DetectedBy",
-        "Accept",
-        "Reject",
-        "StateFrom",
-        "Sources"
+        "id",
+        "name",
+        "detected_by",
+        "accept",
+        "reject",
+        "state_from"
       ],
       "type": "object"
     },
@@ -188,7 +184,7 @@
     },
     "trackerInfo": {
       "properties": {
-        "Category": {
+        "category": {
           "enum": [
             "analytics",
             "advertising",
@@ -200,22 +196,22 @@
           ],
           "type": "string"
         },
-        "Docs": {
+        "docs": {
           "type": "string"
         },
-        "Fix": {
+        "fix": {
           "type": "string"
         },
-        "ID": {
+        "id": {
           "type": "string"
         },
-        "Matches": {
+        "matches": {
           "type": "string"
         },
-        "Name": {
+        "name": {
           "type": "string"
         },
-        "Need": {
+        "need": {
           "enum": [
             "needed",
             "exempt",
@@ -223,29 +219,25 @@
           ],
           "type": "string"
         },
-        "Sources": {
+        "sources": {
           "items": {
             "type": "string"
           },
-          "type": [
-            "array",
-            "null"
-          ]
+          "type": "array"
         },
-        "Vendor": {
+        "vendor": {
           "type": "string"
         }
       },
       "required": [
-        "ID",
-        "Name",
-        "Vendor",
-        "Category",
-        "Need",
-        "Matches",
-        "Fix",
-        "Docs",
-        "Sources"
+        "id",
+        "name",
+        "vendor",
+        "category",
+        "need",
+        "matches",
+        "fix",
+        "docs"
       ],
       "type": "object"
     }

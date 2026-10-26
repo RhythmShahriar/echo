@@ -283,7 +283,7 @@ func TestCmpsTrackers(t *testing.T) {
 	if code, out, _ := runMain(t, "cmps"); code != exitOK || out != "CATALOG cmps\ncmp fake\n" {
 		t.Errorf("cmps: exit %d %q", code, out)
 	}
-	if code, out, _ := runMain(t, "cmps", "--json"); code != exitOK || !strings.Contains(out, `"kind":"consent-catalog"`) || !strings.Contains(out, `"ID":"fake"`) {
+	if code, out, _ := runMain(t, "cmps", "--json"); code != exitOK || !strings.Contains(out, `"kind":"consent-catalog"`) || !strings.Contains(out, `"id":"fake"`) {
 		t.Errorf("cmps --json: exit %d %q", code, out)
 	}
 	code, out, errOut := runMain(t, "trackers")

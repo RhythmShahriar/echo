@@ -20,33 +20,31 @@
   "data": {
     "cmps": [
       {
-        "ID": "cookiebot",
-        "Name": "Cookiebot",
-        "DetectedBy": "#CybotCookiebotDialog, window.Cookiebot",
-        "Accept": "button, api",
-        "Reject": "first layer, api",
-        "StateFrom": "CookieConsent cookie",
-        "Sources": [
+        "id": "cookiebot",
+        "name": "Cookiebot",
+        "detected_by": "#CybotCookiebotDialog, window.Cookiebot",
+        "accept": "button, api",
+        "reject": "first layer, api",
+        "state_from": "CookieConsent cookie",
+        "sources": [
           "https://www.cookiebot.com/en/developer/"
         ]
       },
       {
-        "ID": "onetrust",
-        "Name": "OneTrust",
-        "DetectedBy": "#onetrust-banner-sdk, window.OneTrust",
-        "Accept": "button, api",
-        "Reject": "first layer or settings, api",
-        "StateFrom": "OptanonConsent cookie",
-        "Sources": null
+        "id": "onetrust",
+        "name": "OneTrust",
+        "detected_by": "#onetrust-banner-sdk, window.OneTrust",
+        "accept": "button, api",
+        "reject": "first layer or settings, api",
+        "state_from": "OptanonConsent cookie"
       },
       {
-        "ID": "generic",
-        "Name": "Generic",
-        "DetectedBy": "buttons whose text means accept or reject (30 languages)",
-        "Accept": "button",
-        "Reject": "first layer or settings",
-        "StateFrom": "banner gone and stays gone",
-        "Sources": null
+        "id": "generic",
+        "name": "Generic",
+        "detected_by": "buttons whose text means accept or reject (30 languages)",
+        "accept": "button",
+        "reject": "first layer or settings",
+        "state_from": "banner gone and stays gone"
       }
     ],
     "catalog": {

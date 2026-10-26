@@ -6,110 +6,110 @@
   },
   "Rules": [
     {
-      "ID": "cookiebot",
-      "Name": "Cookiebot",
-      "DetectedBy": "#CybotCookiebotDialog, window.Cookiebot",
-      "Accept": "button, api",
-      "Reject": "first layer or settings, api",
-      "StateFrom": "CookieConsent cookie",
-      "Sources": [
+      "id": "cookiebot",
+      "name": "Cookiebot",
+      "detected_by": "#CybotCookiebotDialog, window.Cookiebot",
+      "accept": "button, api",
+      "reject": "first layer or settings, api",
+      "state_from": "CookieConsent cookie",
+      "sources": [
         "https://www.cookiebot.com/en/developer/"
       ]
     },
     {
-      "ID": "didomi",
-      "Name": "Didomi",
-      "DetectedBy": "#didomi-host, window.Didomi",
-      "Accept": "button, api",
-      "Reject": "first layer or settings, api",
-      "StateFrom": "didomi_token cookie",
-      "Sources": [
+      "id": "didomi",
+      "name": "Didomi",
+      "detected_by": "#didomi-host, window.Didomi",
+      "accept": "button, api",
+      "reject": "first layer or settings, api",
+      "state_from": "didomi_token cookie",
+      "sources": [
         "https://developers.didomi.io/cmp/web-sdk/reference/api",
         "https://docs.didomi.io/get-started/general/cookies-and-local-storage"
       ]
     },
     {
-      "ID": "onetrust",
-      "Name": "OneTrust",
-      "DetectedBy": "#onetrust-banner-sdk, window.OneTrust",
-      "Accept": "button, api",
-      "Reject": "first layer or settings, api",
-      "StateFrom": "OptanonConsent cookie",
-      "Sources": [
+      "id": "onetrust",
+      "name": "OneTrust",
+      "detected_by": "#onetrust-banner-sdk, window.OneTrust",
+      "accept": "button, api",
+      "reject": "first layer or settings, api",
+      "state_from": "OptanonConsent cookie",
+      "sources": [
         "https://developer.onetrust.com/onetrust/docs/javascript-api"
       ]
     },
     {
-      "ID": "usercentrics",
-      "Name": "Usercentrics",
-      "DetectedBy": "#usercentrics-root (shadow DOM), window.UC_UI",
-      "Accept": "button, api",
-      "Reject": "first layer or settings, api",
-      "StateFrom": "uc_settings storage",
-      "Sources": [
+      "id": "usercentrics",
+      "name": "Usercentrics",
+      "detected_by": "#usercentrics-root (shadow DOM), window.UC_UI",
+      "accept": "button, api",
+      "reject": "first layer or settings, api",
+      "state_from": "uc_settings storage",
+      "sources": [
         "https://usercentrics.com/docs/web/features/custom-css/configuration/",
         "https://usercentrics.atlassian.net/wiki/spaces/SKB/pages/705593353",
         "https://usercentrics.com/docs/web/features/events/uc-consent/"
       ]
     },
     {
-      "ID": "borlabs",
-      "Name": "Borlabs Cookie",
-      "DetectedBy": "#BorlabsCookieBox, window.BorlabsCookie",
-      "Accept": "button",
-      "Reject": "first layer or settings",
-      "StateFrom": "borlabs-cookie cookie",
-      "Sources": [
+      "id": "borlabs",
+      "name": "Borlabs Cookie",
+      "detected_by": "#BorlabsCookieBox, window.BorlabsCookie",
+      "accept": "button",
+      "reject": "first layer or settings",
+      "state_from": "borlabs-cookie cookie",
+      "sources": [
         "https://borlabs.io/kb/javascript-api/",
         "https://borlabs.io/kb/javascript-api-v3/",
         "https://borlabs.io/kb/what-information-does-borlabs-cookie-store/"
       ]
     },
     {
-      "ID": "complianz",
-      "Name": "Complianz",
-      "DetectedBy": "#cmplz-cookiebanner-container, window.complianz",
-      "Accept": "button",
-      "Reject": "first layer or settings",
-      "StateFrom": "cmplz_* cookies",
-      "Sources": [
+      "id": "complianz",
+      "name": "Complianz",
+      "detected_by": "#cmplz-cookiebanner-container, window.complianz",
+      "accept": "button",
+      "reject": "first layer or settings",
+      "state_from": "cmplz_* cookies",
+      "sources": [
         "https://complianz.io/add-a-link-to-show-the-cookie-banner/",
         "https://complianz.io/cookie-banner-does-not-appear/",
         "https://wordpress.org/plugins/complianz-gdpr/"
       ]
     },
     {
-      "ID": "cookieyes",
-      "Name": "CookieYes",
-      "DetectedBy": ".cky-consent-container, window.getCkyConsent",
-      "Accept": "button",
-      "Reject": "first layer or settings",
-      "StateFrom": "cookieyes-consent cookie",
-      "Sources": [
+      "id": "cookieyes",
+      "name": "CookieYes",
+      "detected_by": ".cky-consent-container, window.getCkyConsent",
+      "accept": "button",
+      "reject": "first layer or settings",
+      "state_from": "cookieyes-consent cookie",
+      "sources": [
         "https://www.cookieyes.com/documentation/retrieving-consent-data-using-api-getckyconsent/",
         "https://wordpress.org/plugins/cookie-law-info/"
       ]
     },
     {
-      "ID": "iubenda",
-      "Name": "iubenda",
-      "DetectedBy": "#iubenda-cs-banner, window._iub",
-      "Accept": "button, api",
-      "Reject": "first layer or settings, api",
-      "StateFrom": "_iub_cs-* cookies",
-      "Sources": [
+      "id": "iubenda",
+      "name": "iubenda",
+      "detected_by": "#iubenda-cs-banner, window._iub",
+      "accept": "button, api",
+      "reject": "first layer or settings, api",
+      "state_from": "_iub_cs-* cookies",
+      "sources": [
         "https://www.iubenda.com/en/help/1205-how-to-configure-your-cookie-solution-advanced-guide",
         "https://www.iubenda.com/en/help/680"
       ]
     },
     {
-      "ID": "generic",
-      "Name": "Generic banner",
-      "DetectedBy": "buttons whose text means accept or reject (30 languages)",
-      "Accept": "button",
-      "Reject": "first layer or settings",
-      "StateFrom": "banner gone and stays gone",
-      "Sources": [
+      "id": "generic",
+      "name": "Generic banner",
+      "detected_by": "buttons whose text means accept or reject (30 languages)",
+      "accept": "button",
+      "reject": "first layer or settings",
+      "state_from": "banner gone and stays gone",
+      "sources": [
         "https://www.edpb.europa.eu/our-work-tools/our-documents/other/report-work-undertaken-cookie-banner-taskforce_en"
       ]
     }

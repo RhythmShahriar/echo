@@ -20,37 +20,34 @@
   "data": {
     "trackers": [
       {
-        "ID": "ga4",
-        "Name": "Google Analytics 4",
-        "Vendor": "",
-        "Category": "analytics",
-        "Need": "needed",
-        "Matches": "/g/collect (any host with tid=G-), region*.google-analytics.com",
-        "Fix": "",
-        "Docs": "",
-        "Sources": null
+        "id": "ga4",
+        "name": "Google Analytics 4",
+        "vendor": "",
+        "category": "analytics",
+        "need": "needed",
+        "matches": "/g/collect (any host with tid=G-), region*.google-analytics.com",
+        "fix": "",
+        "docs": ""
       },
       {
-        "ID": "plausible",
-        "Name": "Plausible",
-        "Vendor": "",
-        "Category": "analytics",
-        "Need": "exempt",
-        "Matches": "plausible.io/api/event (cookieless)",
-        "Fix": "",
-        "Docs": "",
-        "Sources": null
+        "id": "plausible",
+        "name": "Plausible",
+        "vendor": "",
+        "category": "analytics",
+        "need": "exempt",
+        "matches": "plausible.io/api/event (cookieless)",
+        "fix": "",
+        "docs": ""
       },
       {
-        "ID": "stripe",
-        "Name": "Stripe.js",
-        "Vendor": "",
-        "Category": "necessary",
-        "Need": "no",
-        "Matches": "js.stripe.com, m.stripe.network",
-        "Fix": "",
-        "Docs": "",
-        "Sources": null
+        "id": "stripe",
+        "name": "Stripe.js",
+        "vendor": "",
+        "category": "necessary",
+        "need": "no",
+        "matches": "js.stripe.com, m.stripe.network",
+        "fix": "",
+        "docs": ""
       }
     ],
     "catalog": {
