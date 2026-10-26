@@ -131,6 +131,12 @@ jobs:
         with:
           go-version-file: go.mod
       - run: make fuzz-consent FUZZTIME=2m
+      # The testbed's own parsers: its scenario file and its resolver's
+      # answers to whatever a query holds.
+      - name: Fuzz the testbed
+        run: |
+          go test -run '^$' -fuzz '^FuzzParse$' -fuzztime 2m ./testbed/consent/scenarios
+          go test -run '^$' -fuzz '^FuzzRespond$' -fuzztime 2m ./testbed/consent/dns
       - name: Upload the crashers
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -139,6 +145,7 @@ jobs:
           path: |
             consent/**/testdata/fuzz/
             report/testdata/fuzz/
+            testbed/consent/**/testdata/fuzz/
           if-no-files-found: ignore
 
   # The tests with every consent stage required: a stage that isn't
