@@ -41,6 +41,27 @@ func TestMaskURL(t *testing.T) {
 // The page URL a tag copies into dl (or dr, page_location...) carries
 // the site's own token, encoded once or twice: none of its forms may be
 // left.
+// Text over 64 KiB is cut before it is masked: what is kept is still
+// masked, nothing past the cut comes back, and short text is untouched.
+func TestMaskURLCap(t *testing.T) {
+	mail := "a" + "@" + "shop.test"
+	long := "https://x.test/?em=" + mail + "&" + strings.Repeat("q=v&", 20<<10) + "secret=" + strings.Repeat("z", 10)
+	got := consent.MaskURL(long, false)
+	if len(got) > 70<<10 || !strings.HasSuffix(got, "…") {
+		t.Errorf("not cut: %d bytes", len(got))
+	}
+	if strings.Contains(got, mail) || strings.Contains(got, "secret=") {
+		t.Error("the cut text isn't masked, or text past the cut came back")
+	}
+	if !strings.HasSuffix(got, "q=v…") {
+		t.Errorf("not cut at a separator: %q", got[len(got)-20:])
+	}
+	short := "https://x.test/?q=v"
+	if got := consent.MaskURL(short, false); got != short {
+		t.Errorf("short URL changed: %q", got)
+	}
+}
+
 func TestMaskURLNested(t *testing.T) {
 	page := "https://shop.test/account?token=" + fakeToken + "&cid=99887766"
 	once := url.QueryEscape(page)

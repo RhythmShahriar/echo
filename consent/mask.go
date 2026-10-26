@@ -58,9 +58,24 @@ const maxNesting = 3
 // showIDs keeps cid/tid/id values (never credentials or personal data).
 // A login in the URL (user:pass@) is masked whole. Text that isn't a URL
 // is masked as text.
+//
+// Text over 64 KiB is cut first, at the last '&', '/' or space before
+// the limit when there is one, and ends in "…": masking is linear but
+// slow enough on hostile megabytes to matter, and no URL a check keeps
+// is that long (the recorder cuts at 8 KiB).
 func MaskURL(raw string, showIDs bool) string {
+	if len(raw) > maxMaskInput {
+		cut := raw[:maxMaskInput]
+		if i := strings.LastIndexAny(cut, "&/ "); i > maxMaskInput-1024 {
+			cut = cut[:i]
+		}
+		return maskURL(strings.ToValidUTF8(cut, ""), showIDs, 0) + "…"
+	}
 	return maskURL(raw, showIDs, 0)
 }
+
+// maxMaskInput is the most of a text MaskURL reads.
+const maxMaskInput = 64 << 10
 
 func maskURL(raw string, showIDs bool, depth int) string {
 	if raw == "" {
