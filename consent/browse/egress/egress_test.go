@@ -5,16 +5,21 @@ package egress
 
 import (
 	"bufio"
+	"context"
+	"errors"
 	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/netip"
 	"net/url"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/RhythmShahriar/rhythm/kit/httpx"
 )
 
 // connect sends CONNECT addr to the proxy and returns the status and
@@ -243,6 +248,76 @@ func TestMapOnlyRefuses(t *testing.T) {
 	p = startGuard(t, Options{Target: "127.0.0.1", MapHosts: []string{"*.shop.test"}})
 	if resp, _ := get(t, p, srv.URL); resp.StatusCode != http.StatusOK {
 		t.Errorf("without --map-only: %d", resp.StatusCode)
+	}
+}
+
+// TestMappedHostNeverDialed: a host --map-host covers is answered in
+// the tab; a request for it that reaches the guard (one Fetch never
+// paused) is refused by CONNECT and by plain HTTP, with or without
+// --map-only, and never reaches the real listener. The same loopback
+// listener by an unmapped name still goes through.
+func TestMappedHostNeverDialed(t *testing.T) {
+	srv, hits := counter(t)
+	_, port, _ := net.SplitHostPort(strings.TrimPrefix(srv.URL, "http://"))
+	for _, mapOnly := range []bool{true, false} {
+		p := startGuard(t, Options{Target: "127.0.0.1", MapHosts: []string{"localhost", "*.shop.test"}, MapOnly: mapOnly})
+		for _, addr := range []string{"localhost:" + port, "LOCALHOST.:" + port, "api.shop.test:443"} {
+			if code, _, _ := connect(t, p, addr); code != http.StatusForbidden {
+				t.Errorf("map-only %v: CONNECT %s = %d; want 403", mapOnly, addr, code)
+			}
+		}
+		resp, _ := get(t, p, "http://localhost:"+port+"/")
+		if resp.StatusCode != http.StatusForbidden || resp.Header.Get("X-Rhythm-Echo-Refused") != ReasonMapped {
+			t.Errorf("map-only %v: GET localhost = %d %q", mapOnly, resp.StatusCode, resp.Header.Get("X-Rhythm-Echo-Refused"))
+		}
+		if got := p.Reason("localhost", port); got != ReasonMapped {
+			t.Errorf("map-only %v: Reason = %q", mapOnly, got)
+		}
+		if s := p.Stats(); s.Refused != 4 || s.BrowserInternal != 0 {
+			t.Errorf("map-only %v: stats = %+v; want 4 refused", mapOnly, s)
+		}
+		if hits.Load() != 0 {
+			t.Fatalf("map-only %v: the real listener was reached %d times", mapOnly, hits.Load())
+		}
+	}
+	// Negative: the same listener by its unmapped address goes through.
+	p := startGuard(t, Options{Target: "127.0.0.1", MapHosts: []string{"localhost"}})
+	if resp, _ := get(t, p, srv.URL+"/"); resp.StatusCode != http.StatusOK || hits.Load() != 1 {
+		t.Errorf("unmapped 127.0.0.1 = %d, hits %d", resp.StatusCode, hits.Load())
+	}
+}
+
+// TestGuardDialRefusesMetadata: the guard's dial checks every resolved
+// address, so a metadata address is refused even for a link-local
+// target the kit guard alone would allow it for. The check runs before
+// connect, so no packet leaves. A loopback target still dials its own
+// listener.
+func TestGuardDialRefusesMetadata(t *testing.T) {
+	p := startGuard(t, Options{Target: "169.254.10.1"})
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if !p.guard.Allow(ctx, netip.MustParseAddr("169.254.169.254")) {
+		t.Fatal("the kit guard no longer allows link-local for a link-local target; the test needs another fixture")
+	}
+	for _, addr := range []string{"169.254.169.254:80", "[::ffff:169.254.169.254]:80"} {
+		c, err := p.guardDial(ctx, "tcp", addr)
+		if err == nil {
+			_ = c.Close()
+			t.Fatalf("guardDial %s connected", addr)
+		}
+		if !errors.Is(err, httpx.ErrPrivate) {
+			t.Errorf("guardDial %s: %v; want ErrPrivate", addr, err)
+		}
+	}
+	srv, hits := counter(t)
+	lp := startGuard(t, Options{Target: "127.0.0.1"})
+	c, err := lp.guardDial(ctx, "tcp", strings.TrimPrefix(srv.URL, "http://"))
+	if err != nil {
+		t.Fatalf("loopback dial: %v", err)
+	}
+	_ = c.Close()
+	if hits.Load() != 0 {
+		t.Errorf("hits = %d", hits.Load())
 	}
 }
 

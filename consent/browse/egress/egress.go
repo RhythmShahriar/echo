@@ -13,9 +13,11 @@
 // address guard for the target host, so loopback, link-local and
 // private destinations are allowed only when the target itself is one;
 // the cloud metadata addresses and Chrome's own service hosts are
-// refused whatever the target. With --map-only every host --map-host
-// doesn't cover is refused. With --proxy the connections a guard allows
-// go on through that upstream proxy.
+// refused whatever the target. A host --map-host covers is Echo's to
+// answer in the tab, so a request for one that reaches a guard is
+// refused rather than sent to the real host. With --map-only every host
+// --map-host doesn't cover is refused too. With --proxy the connections
+// a guard allows go on through that upstream proxy.
 //
 // The proxies never read, log or keep a body. Classification never
 // relies on them: they see only the host and port of a TLS connection.
@@ -37,6 +39,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"time"
 
 	"github.com/RhythmShahriar/rhythm/kit/httpx"
@@ -48,10 +51,11 @@ import (
 // The reasons a proxy refuses a request, as consent.Request.Refused
 // spells them.
 const (
-	ReasonPrivate   = "private address" // loopback, link-local, private or metadata, for a target that isn't one
-	ReasonBrowser   = "browser traffic" // Chrome's own: outside any run, or a browser service host
-	ReasonNotMapped = "not mapped"      // --map-only and no --map-host covers the host
-	ReasonLimit     = "limit"           // too many open tunnels
+	ReasonPrivate   = "private address"             // loopback, link-local, private or metadata, for a target that isn't one
+	ReasonBrowser   = "browser traffic"             // Chrome's own: outside any run, or a browser service host
+	ReasonNotMapped = "not mapped"                  // --map-only and no --map-host covers the host
+	ReasonMapped    = "mapped host outside the tab" // a --map-host host never goes to its real address
+	ReasonLimit     = "limit"                       // too many open tunnels
 )
 
 // The defaults Start uses for a zero Options field.
@@ -303,6 +307,11 @@ func (p *Proxy) check(ctx context.Context, host string) string {
 		return ReasonBrowser
 	case metadataHosts[host]:
 		return ReasonPrivate
+	case MatchHost(p.opts.MapHosts, host):
+		// The tab answers a mapped host from its mapped address; one
+		// that got past it (a request Fetch never paused) must not
+		// reach the real host the mapping stands in for.
+		return ReasonMapped
 	case p.opts.MapOnly && !MatchHost(p.opts.MapHosts, host):
 		return ReasonNotMapped
 	}
@@ -372,9 +381,32 @@ func (p *Proxy) logf(format string, args ...any) {
 func (p *Proxy) dial(ctx context.Context, host, port string) (net.Conn, error) {
 	addr := net.JoinHostPort(host, port)
 	if p.upstream == nil {
-		return p.guard.DialContext(ctx, "tcp", addr)
+		return p.guardDial(ctx, "tcp", addr)
 	}
 	return dialUpstream(ctx, p.upstream, addr)
+}
+
+// guardDial connects like the kit guard's DialContext and also refuses
+// the metadata addresses: its check runs after DNS on every address the
+// dialer tries, so a name that resolves to 169.254.169.254 is refused
+// even for a link-local target the kit guard would let through.
+func (p *Proxy) guardDial(ctx context.Context, network, addr string) (net.Conn, error) {
+	d := net.Dialer{Timeout: 30 * time.Second, KeepAlive: 30 * time.Second}
+	d.ControlContext = func(cctx context.Context, _, address string, _ syscall.RawConn) error {
+		host, _, err := net.SplitHostPort(address)
+		if err != nil {
+			return err
+		}
+		ip, err := netip.ParseAddr(host)
+		if err != nil {
+			return err
+		}
+		if metadataHosts[ip.Unmap().String()] || !p.guard.Allow(cctx, ip) {
+			return fmt.Errorf("refusing to connect to %s: %w", ip, httpx.ErrPrivate)
+		}
+		return nil
+	}
+	return d.DialContext(ctx, network, addr)
 }
 
 // tunnel connects a CONNECT request and copies bytes both ways until
@@ -481,7 +513,7 @@ func (p *Proxy) transport() *http.Transport {
 		t.Proxy = http.ProxyURL(p.upstream)
 		t.DialContext = (&net.Dialer{Timeout: 30 * time.Second, KeepAlive: 30 * time.Second}).DialContext
 	} else if p.guard != nil {
-		t.DialContext = p.guard.DialContext
+		t.DialContext = p.guardDial
 	}
 	return t
 }
