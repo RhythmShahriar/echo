@@ -81,3 +81,6 @@ func (p *process) stop() {
 
 // getPID is Chrome's process id, which is also its process group.
 func (p *process) getPID() int { return p.pid }
+
+// profile is Chrome's temporary profile folder.
+func (p *process) profile() string { return p.userDir }

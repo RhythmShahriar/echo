@@ -7,6 +7,7 @@ import (
 	"context"
 
 	"github.com/go-rod/rod/lib/launcher"
+	"github.com/go-rod/rod/lib/launcher/flags"
 
 	"github.com/RhythmShahriar/echo/internal/browser/proc"
 )
@@ -34,3 +35,9 @@ func (p *process) stop() {
 	p.l.Kill()
 	cleanup(p.l)
 }
+
+// getPID is Chrome's process id.
+func (p *process) getPID() int { return p.l.PID() }
+
+// profile is Chrome's temporary profile folder.
+func (p *process) profile() string { return p.l.Get(flags.UserDataDir) }

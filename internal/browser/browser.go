@@ -81,11 +81,40 @@ func splitFlag(f string) (name, value string, err error) {
 	return strings.TrimPrefix(name, "--"), value, nil
 }
 
+// ErrNoBrowser marks the errors Find and Launch return when there is no
+// browser to start: none installed with downloads off, a --browser path
+// that doesn't exist, or a Chrome for Testing download that failed.
+var ErrNoBrowser = errors.New("no browser")
+
+// ErrSandboxRoot marks the error Launch returns when it runs as root
+// without the opt-in to turn Chrome's sandbox off.
+var ErrSandboxRoot = errors.New("root without --no-sandbox")
+
+// markedError is an error that also matches a sentinel with errors.Is,
+// keeping its own message.
+type markedError struct {
+	err, mark error
+}
+
+func (e *markedError) Error() string   { return e.err.Error() }
+func (e *markedError) Unwrap() []error { return []error{e.err, e.mark} }
+
+// mark makes err match mark with errors.Is; nil stays nil.
+func mark(err, m error) error {
+	if err == nil {
+		return nil
+	}
+	return &markedError{err, m}
+}
+
 // Browser is a running Chrome.
 type Browser struct {
 	*rod.Browser
 	proc *process
 	Bin  string
+	// ControlURL is the DevTools WebSocket address Chrome printed. rod
+	// asks for an ephemeral port on 127.0.0.1, never a fixed one.
+	ControlURL string
 	// Version is the running browser's version, e.g. 153.0.8010.52. It
 	// hides rod's Browser.Version method, which asks Chrome each time.
 	Version string
@@ -125,7 +154,7 @@ func Find(opts Options) (bin string, downloaded bool, err error) {
 func FindContext(ctx context.Context, opts Options) (bin string, downloaded bool, err error) {
 	if opts.Bin != "" {
 		if _, err := os.Stat(opts.Bin); err != nil {
-			return "", false, fmt.Errorf("browser %s: %w", opts.Bin, err)
+			return "", false, mark(fmt.Errorf("browser %s: %w", opts.Bin, err), ErrNoBrowser)
 		}
 		return opts.Bin, false, nil
 	}
@@ -143,11 +172,11 @@ func FindContext(ctx context.Context, opts Options) (bin string, downloaded bool
 		}
 	}
 	if opts.NoDownload {
-		return "", false, errors.New("no Chrome or Chromium found; install Chrome, pass --browser /path/to/chrome, or allow the one-time Chrome for Testing download")
+		return "", false, mark(errors.New("no Chrome or Chromium found; install Chrome, pass --browser /path/to/chrome, or allow the one-time Chrome for Testing download"), ErrNoBrowser)
 	}
 	p, err := install(ctx, pinned, platform, dir, opts.Log)
 	if err != nil {
-		return "", false, err
+		return "", false, mark(err, ErrNoBrowser)
 	}
 	return p, true, nil
 }
@@ -181,17 +210,18 @@ func Launch(ctx context.Context, opts Options) (*Browser, error) {
 	}
 	var b *rod.Browser
 	var proc *process
+	var control string
 	err = retry.Do(ctx, retry.Policy{Tries: launchTries, Pause: launchPause, Again: launchAgain,
 		Note: func(_ int, err error) { logf(opts, "Chrome didn't start ("+err.Error()+"); starting it again") },
 	}, func() error {
 		var err error
-		b, proc, err = launchOnce(ctx, opts, bin, noSandbox)
+		b, proc, control, err = launchOnce(ctx, opts, bin, noSandbox)
 		return err
 	})
 	if err != nil {
 		return nil, err
 	}
-	br := &Browser{Browser: b, proc: proc, Bin: bin, Downloaded: downloaded}
+	br := &Browser{Browser: b, proc: proc, Bin: bin, ControlURL: control, Downloaded: downloaded}
 	if v, err := (proto.BrowserGetVersion{}).Call(b); err == nil {
 		br.Version = productVersion(v.Product)
 	}
@@ -214,9 +244,39 @@ func launchAgain(err error) bool {
 	return !strings.Contains(strings.ToLower(err.Error()), "sandbox")
 }
 
+// Args is the command line Launch would start Chrome with for opts
+// (without the binary; the profile folder is a fresh random path each
+// time), so callers can check the exact switches. The sandbox switch
+// follows opts.NoSandbox alone here.
+func Args(opts Options) ([]string, error) {
+	l, err := newLauncher(context.Background(), opts, opts.NoSandbox)
+	if err != nil {
+		return nil, err
+	}
+	return l.FormatArgs(), nil
+}
+
 // launchOnce is one try of Launch: it starts Chrome in a new profile and
 // connects to it.
-func launchOnce(ctx context.Context, opts Options, bin string, noSandbox bool) (*rod.Browser, *process, error) {
+func launchOnce(ctx context.Context, opts Options, bin string, noSandbox bool) (*rod.Browser, *process, string, error) {
+	l, err := newLauncher(ctx, opts, noSandbox)
+	if err != nil {
+		return nil, nil, "", err
+	}
+	u, proc, err := start(ctx, l, bin)
+	if err != nil {
+		return nil, nil, "", fmt.Errorf("starting %s: %w%s", bin, err, sandboxHint(err, noSandbox))
+	}
+	b := rod.New().ControlURL(u).Context(ctx)
+	if err := b.Connect(); err != nil {
+		proc.stop()
+		return nil, nil, "", fmt.Errorf("connecting to the browser: %w", err)
+	}
+	return b, proc, u, nil
+}
+
+// newLauncher sets up Chrome's switches for opts.
+func newLauncher(ctx context.Context, opts Options, noSandbox bool) (*launcher.Launcher, error) {
 	l := launcher.New().Context(ctx).Headless(!opts.Visible).
 		Set("disable-gpu").Set("hide-scrollbars").Set("mute-audio").
 		Set("disable-features", "Translate,MediaRouter,OptimizationHints").
@@ -225,7 +285,11 @@ func launchOnce(ctx context.Context, opts Options, bin string, noSandbox bool) (
 		// background: without these Chrome throttles their timers and
 		// rendering so the tabs end up taking turns.
 		Set("disable-background-timer-throttling").Set("disable-backgrounding-occluded-windows").
-		Set("disable-renderer-backgrounding").Set("disable-ipc-flooding-protection")
+		Set("disable-renderer-backgrounding").Set("disable-ipc-flooding-protection").
+		// rod turns site isolation trials off by default; a page checked
+		// for trackers must keep cross-site frames in their own processes,
+		// as a visitor's Chrome does.
+		Delete("disable-site-isolation-trials")
 	// rod turns the sandbox off by itself inside containers; only the
 	// rule in sandbox decides here.
 	l = l.NoSandbox(noSandbox)
@@ -238,7 +302,7 @@ func launchOnce(ctx context.Context, opts Options, bin string, noSandbox bool) (
 	for _, f := range opts.Flags {
 		name, value, err := splitFlag(f)
 		if err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 		if value == "" {
 			l = l.Set(flags.Flag(name))
@@ -246,16 +310,7 @@ func launchOnce(ctx context.Context, opts Options, bin string, noSandbox bool) (
 			l = l.Set(flags.Flag(name), value)
 		}
 	}
-	u, proc, err := start(ctx, l, bin)
-	if err != nil {
-		return nil, nil, fmt.Errorf("starting %s: %w%s", bin, err, sandboxHint(err, noSandbox))
-	}
-	b := rod.New().ControlURL(u).Context(ctx)
-	if err := b.Connect(); err != nil {
-		proc.stop()
-		return nil, nil, fmt.Errorf("connecting to the browser: %w", err)
-	}
-	return b, proc, nil
+	return l, nil
 }
 
 // productVersion turns "HeadlessChrome/153.0.8010.52" into the number.
@@ -284,7 +339,7 @@ const SoundcheckNoSandboxEnv = "SOUNDCHECK_NO_SANDBOX"
 func sandbox(opts Options) (off bool, err error) {
 	off = opts.NoSandbox || os.Getenv(NoSandboxEnv) == "1" || os.Getenv(SoundcheckNoSandboxEnv) == "1"
 	if geteuid() == 0 && !off {
-		return false, errors.New("running as root, where Chrome can't use its sandbox. Run Echo as a normal user, or pass --no-sandbox (or set " + NoSandboxEnv + "=1) to run Chrome without it (only for sites you trust, e.g. in a throwaway container)")
+		return false, mark(errors.New("running as root, where Chrome can't use its sandbox. Run Echo as a normal user, or pass --no-sandbox (or set "+NoSandboxEnv+"=1) to run Chrome without it (only for sites you trust, e.g. in a throwaway container)"), ErrSandboxRoot)
 	}
 	if off {
 		logf(opts, "WARNING: Chrome is running without its sandbox. A page that exploits a browser bug could take over this machine; only check sites you trust.")
@@ -327,6 +382,33 @@ func (b *Browser) Session() (*rod.Browser, error) {
 	})
 	return sess, err
 }
+
+// SessionWithProxy is Session for a context whose traffic goes through
+// proxy (e.g. "http://127.0.0.1:41234"), bypassing it for the hosts in
+// bypass, which is Chrome's --proxy-bypass-list syntax ("<-loopback>"
+// sends loopback through the proxy too). Close the returned browser to
+// dispose of the context.
+func (b *Browser) SessionWithProxy(proxy, bypass string) (*rod.Browser, error) {
+	var sess *rod.Browser
+	err := retry.Do(b.GetContext(), retry.Policy{Tries: launchTries, Pause: launchPause}, func() error {
+		res, err := proto.TargetCreateBrowserContext{ProxyServer: proxy, ProxyBypassList: bypass}.Call(b.Browser)
+		if err != nil {
+			return err
+		}
+		c := *b.Browser
+		c.BrowserContextID = res.BrowserContextID
+		sess = &c
+		return nil
+	})
+	return sess, err
+}
+
+// PID is the browser process's id, for tests that check it is gone
+// after Close.
+func (b *Browser) PID() int { return b.proc.getPID() }
+
+// ProfileDir is Chrome's temporary profile folder, which Close removes.
+func (b *Browser) ProfileDir() string { return b.proc.profile() }
 
 // Close shuts the browser down, kills any of its processes still
 // running and removes its temporary profile.

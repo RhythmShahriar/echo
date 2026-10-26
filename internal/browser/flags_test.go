@@ -4,6 +4,7 @@
 package browser
 
 import (
+	"errors"
 	"strings"
 	"testing"
 )
@@ -64,5 +65,35 @@ func TestSandboxEnvNames(t *testing.T) {
 		if err != nil || off != c.off {
 			t.Errorf("echo=%q soundcheck=%q: off = %v, err = %v; want %v", c.echo, c.soundcheck, off, err, c.off)
 		}
+	}
+}
+
+// A marked error keeps its own text and matches its sentinel.
+func TestMarkedErrors(t *testing.T) {
+	err := mark(errors.New("no Chrome or Chromium found"), ErrNoBrowser)
+	if err.Error() != "no Chrome or Chromium found" || !errors.Is(err, ErrNoBrowser) || errors.Is(err, ErrSandboxRoot) {
+		t.Errorf("mark: %v", err)
+	}
+	if mark(nil, ErrNoBrowser) != nil {
+		t.Error("mark(nil) isn't nil")
+	}
+	old := geteuid
+	t.Cleanup(func() { geteuid = old })
+	geteuid = func() int { return 0 }
+	t.Setenv(NoSandboxEnv, "")
+	t.Setenv(SoundcheckNoSandboxEnv, "")
+	if _, err := sandbox(Options{}); !errors.Is(err, ErrSandboxRoot) {
+		t.Errorf("root: %v", err)
+	}
+	if _, _, err := Find(Options{Bin: "/nonexistent/chrome"}); !errors.Is(err, ErrNoBrowser) {
+		t.Errorf("missing --browser: %v", err)
+	}
+	restore := SwapGeteuid(func() int { return 42 })
+	if geteuid() != 42 {
+		t.Error("SwapGeteuid didn't swap")
+	}
+	restore()
+	if geteuid() != 0 {
+		t.Error("SwapGeteuid didn't restore")
 	}
 }
