@@ -1,0 +1,51 @@
+<!doctype html>
+<!-- Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+     SPDX-License-Identifier: MIT -->
+<!-- Replica of a Cookiebot page for Echo's CMP tests (banner injected after 4 s), written
+     fresh from Cookiebot's public developer documentation and the dialog
+     markup Cookiebot serves on public pages; none of Cookiebot's code.
+     Source: https://www.cookiebot.com/en/developer/
+     Captured 2026-10-26. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Shop with Cookiebot: banner injected after 4 s</title>
+<style>
+  body { font: 16px/1.5 sans-serif; margin: 0; padding: 24px; }
+  #CybotCookiebotDialog { position: fixed; left: 0; right: 0; bottom: 0; z-index: 2147483631; background: #fff;
+    border-top: 2px solid #1032cf; padding: 16px 24px; box-shadow: 0 -4px 16px rgba(0,0,0,.2); }
+  #CybotCookiebotDialog button, #CybotCookiebotDialogNav a { margin: 4px 8px 4px 0; padding: 8px 16px; font-size: 15px; }
+  #CybotCookiebotDialogDetail { display: none; border: 1px solid #ccc; padding: 8px; margin: 8px 0; }
+  .slider-input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+  .slider { display: inline-block; padding: 4px 12px; border: 1px solid #333; border-radius: 12px; cursor: pointer; }
+  .newsletter { position: fixed; top: 24px; right: 24px; z-index: 1000; width: 280px; background: #ffe; border: 1px solid #aa8; padding: 16px; }
+</style>
+</head>
+<body>
+<h1>Corner Shop</h1>
+<p>Hand-made goods, shipped from a small workshop.</p>
+<template id="replica-banner">
+<div id="CybotCookiebotDialog" role="dialog" aria-modal="true" aria-labelledby="CybotCookiebotDialogBodyContentTitle">
+  <div id="CybotCookiebotDialogBody">
+    <h2 id="CybotCookiebotDialogBodyContentTitle">This website uses cookies</h2>
+    <div id="CybotCookiebotDialogBodyContentText">We use cookies to personalise content and ads and to analyse our traffic.
+      <a href="/privacy">Privacy policy</a></div>
+  </div>
+  <div id="CybotCookiebotDialogDetail">
+    <label><input type="checkbox" id="CybotCookiebotDialogBodyLevelButtonNecessary" class="CybotCookiebotDialogBodyLevelButton" checked disabled> Necessary</label>
+    <label><input type="checkbox" id="CybotCookiebotDialogBodyLevelButtonPreferences" class="CybotCookiebotDialogBodyLevelButton"> Preferences</label>
+    <label><input type="checkbox" id="CybotCookiebotDialogBodyLevelButtonStatistics" class="CybotCookiebotDialogBodyLevelButton"> Statistics</label>
+    <label><input type="checkbox" id="CybotCookiebotDialogBodyLevelButtonMarketing" class="CybotCookiebotDialogBodyLevelButton"> Marketing</label>
+    <button id="CybotCookiebotDialogBodyLevelButtonLevelOptinAllowallSelection">Allow selection</button>
+  </div>
+  <div id="CybotCookiebotDialogBodyButtons">
+    <button id="CybotCookiebotDialogBodyButtonDecline">Deny</button>
+    <button id="CybotCookiebotDialogBodyLevelButtonCustomize">Customize</button>
+    <button id="CybotCookiebotDialogBodyLevelButtonLevelOptinAllowAll">Allow all</button>
+  </div>
+</div>
+</template>
+<script id="Cookiebot" src="consent.cookiebot.com/uc.js" data-cbid="00000000-0000-0000-0000-000000000000" data-show="late"></script>
+</body>
+</html>

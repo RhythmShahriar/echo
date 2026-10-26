@@ -1,0 +1,56 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+# OneTrust. The JavaScript API (AllowAll, RejectAll, ToggleInfoDisplay,
+# OnetrustActiveGroups) and the OptanonConsent and OptanonAlertBoxClosed
+# cookies are in the developer documentation; the banner and preference
+# center IDs are the ones the banner OneTrust serves carries, read on
+# public pages on 2026-10-26.
+id: onetrust
+name: OneTrust
+priority: 10
+detect:
+  selectors: ["#onetrust-banner-sdk", "#onetrust-consent-sdk"]
+  globals: [OneTrust, Optanon]
+  scripts: [cdn.cookielaw.org, optanon.blob.core.windows.net]
+banner:
+  selector: "#onetrust-banner-sdk"
+accept: ["#onetrust-accept-btn-handler"]
+reject:
+  first_layer: ["#onetrust-reject-all-handler"]
+  second_layer:
+    open: ["#onetrust-pc-btn-handler"]
+    toggles_off: "#onetrust-pc-sdk input.category-switch-handler:not([disabled])"
+    save: ["#onetrust-pc-sdk .save-preference-btn-handler"]
+reopen:
+  api: reopen
+api:
+  accept: OneTrust.AllowAll()
+  reject: OneTrust.RejectAll()
+  reopen: OneTrust.ToggleInfoDisplay()
+  state: "JSON.stringify({groups: OnetrustActiveGroups})"
+verify:
+  parser: onetrust
+  cookies: [OptanonConsent, OptanonAlertBoxClosed]
+  # Which groups a site has is its own setup (C0001 strictly necessary is
+  # always on), so Accept is verified by a decided state alone; Reject
+  # needs performance (C0002) and targeting (C0004) off or absent.
+  accepted: {}
+  rejected: {C0002: false, C0004: false}
+# Unverified: otgeo is reported by third parties, not in OneTrust's own
+# documentation (which offers OneTrust.setGeoLocation in the page). Used
+# only with --geo; the result says it is unverified.
+geo_override:
+  param: otgeo
+  value_from: country
+sources:
+  - https://developer.onetrust.com/onetrust/docs/javascript-api
+fixtures:
+  - testdata/onetrust/first-layer.html
+  - testdata/onetrust/second-layer.html
+  - testdata/onetrust/hidden.html
+  - testdata/onetrust/late.html
+  - testdata/onetrust/two-banners.html
+  - testdata/onetrust/text-only.html
+  - testdata/onetrust/script-no-banner.html
+  - testdata/onetrust/preference-centre.html

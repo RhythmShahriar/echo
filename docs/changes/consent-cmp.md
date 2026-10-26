@@ -89,3 +89,54 @@ texts, for the release notes and the docs team.
 - Without the state reader linked, Choose fails with
   `consent: state reader not linked into this build`.
 - A run kind other than accept or reject: `consent: a <kind> run makes no choice on the banner; want accept or reject`.
+
+## C4 Cookiebot and OneTrust rules
+
+- `consent cmps` rows:
+  - `cookiebot  #CybotCookiebotDialog, window.Cookiebot  button, api  first layer or settings, api  CookieConsent cookie`
+  - `onetrust  #onetrust-banner-sdk, window.OneTrust  button, api  first layer or settings, api  OptanonConsent cookie`
+  (the PRD 6.4 table shows Cookiebot's REJECT as `first layer, api`;
+  the rule has a second layer for dialogs without Deny, so the column
+  reads `first layer or settings, api`).
+- Cookiebot: detected by `#CybotCookiebotDialog`, `window.Cookiebot` or
+  a `consent.cookiebot.com/uc.js` or `consent.cookiebot.eu/uc.js`
+  script. Accept `#CybotCookiebotDialogBodyLevelButtonLevelOptinAllowAll`
+  then `#CybotCookiebotDialogBodyButtonAccept`; Reject
+  `#CybotCookiebotDialogBodyButtonDecline`, else Customize
+  (`#CybotCookiebotDialogBodyLevelButtonCustomize`) or the Details tab
+  (`#CybotCookiebotDialogNavDetails`), the level switches off and
+  `#CybotCookiebotDialogBodyLevelButtonLevelOptinAllowallSelection`.
+  API: `Cookiebot.submitCustomConsent(true,true,true)`,
+  `Cookiebot.submitCustomConsent(false,false,false)`, `Cookiebot.renew()`,
+  state `JSON.stringify(Cookiebot.consent)`. Verified from the
+  `CookieConsent` cookie: Accept needs statistics and marketing on,
+  Reject both off.
+- OneTrust: detected by `#onetrust-banner-sdk`, `#onetrust-consent-sdk`,
+  `window.OneTrust`, `window.Optanon` or a `cdn.cookielaw.org` or
+  `optanon.blob.core.windows.net` script. Accept
+  `#onetrust-accept-btn-handler`; Reject `#onetrust-reject-all-handler`,
+  else Cookie Settings (`#onetrust-pc-btn-handler`), every
+  `input.category-switch-handler` off and Confirm My Choices
+  (`.save-preference-btn-handler`). API: `OneTrust.AllowAll()`,
+  `OneTrust.RejectAll()`, `OneTrust.ToggleInfoDisplay()`, state
+  `JSON.stringify({groups: OnetrustActiveGroups})`. Verified from
+  `OptanonConsent` and `OptanonAlertBoxClosed`: Reject needs C0002 and
+  C0004 off (or absent); Accept needs a decided state only, because
+  which groups exist is each site's setup.
+- Checked against the vendors' documentation, with these differences
+  (the vendor wins where it speaks):
+  - Cookiebot's developer page documents the API and the cookie but no
+    dialog element IDs; the rule's IDs are the ones the served dialog
+    carries.
+  - OneTrust's JavaScript API page documents `AllowAll`, `RejectAll`,
+    `ToggleInfoDisplay`, `OnetrustActiveGroups` and the two cookies;
+    it doesn't mention `Optanon` (an older global, kept as detection
+    evidence only) or the element IDs.
+  - OneTrust doesn't document `otgeo`; it documents
+    `OneTrust.setGeoLocation(country, state)` instead. The rule keeps
+    `geo_override: {param: otgeo, value_from: country}` marked
+    unverified, used only with `--geo` (C9 adds the note).
+- Replica pages for both under `consent/cmp/testdata/<cmp>/` with an
+  `expect.yaml` each (format in `consent/cmp/testdata/README.md`); all
+  pass Detect, Find and Choose (Accept and Reject, button and API) in
+  headless Chrome 153 as well as in the FakeTab tests.

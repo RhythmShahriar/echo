@@ -1,0 +1,93 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+# What Echo should see on each OneTrust replica page (format in
+# ../README.md). found, present, banner_after_ms, detected_by and the
+# layers are checked in a real browser by the testbed's X8; sees answers
+# the FakeTab tests of consent/cmp.
+cmp: onetrust
+pages:
+  - page: first-layer.html
+    found: true
+    present: true
+    detected_by: "selector:#onetrust-banner-sdk and global:OneTrust"
+    accept_layer: 1
+    reject_layer: 1
+    sees:
+      selectors: ["#onetrust-banner-sdk", "#onetrust-consent-sdk"]
+      globals: [OneTrust, Optanon]
+      scripts: [cdn.cookielaw.org]
+      banner: true
+      controls: ["#onetrust-accept-btn-handler", "#onetrust-reject-all-handler", "#onetrust-pc-btn-handler"]
+  - page: second-layer.html
+    found: true
+    present: true
+    detected_by: "selector:#onetrust-banner-sdk and global:OneTrust"
+    accept_layer: 1
+    reject_layer: 2
+    sees:
+      selectors: ["#onetrust-banner-sdk", "#onetrust-consent-sdk"]
+      globals: [OneTrust, Optanon]
+      scripts: [cdn.cookielaw.org]
+      banner: true
+      controls: ["#onetrust-accept-btn-handler", "#onetrust-pc-btn-handler"]
+      settings: ["#onetrust-pc-sdk .save-preference-btn-handler"]
+      toggles: [false, false, false]
+  - page: hidden.html
+    found: false
+    present: true
+    detected_by: "selector:#onetrust-banner-sdk and global:OneTrust"
+    sees:
+      selectors: ["#onetrust-banner-sdk", "#onetrust-consent-sdk"]
+      globals: [OneTrust, Optanon]
+      scripts: [cdn.cookielaw.org]
+  - page: late.html
+    found: true
+    present: true
+    banner_after_ms: 4000
+    detected_by: "selector:#onetrust-banner-sdk and global:OneTrust"
+    accept_layer: 1
+    reject_layer: 1
+    sees:
+      selectors: ["#onetrust-banner-sdk", "#onetrust-consent-sdk"]
+      globals: [OneTrust, Optanon]
+      scripts: [cdn.cookielaw.org]
+      banner: true
+      controls: ["#onetrust-accept-btn-handler", "#onetrust-reject-all-handler", "#onetrust-pc-btn-handler"]
+  - page: two-banners.html
+    found: true
+    present: true
+    detected_by: "selector:#onetrust-banner-sdk and global:OneTrust"
+    accept_layer: 1
+    reject_layer: 1
+    sees:
+      selectors: ["#onetrust-banner-sdk", "#onetrust-consent-sdk"]
+      globals: [OneTrust, Optanon]
+      scripts: [cdn.cookielaw.org]
+      banner: true
+      controls: ["#onetrust-accept-btn-handler", "#onetrust-reject-all-handler", "#onetrust-pc-btn-handler"]
+      decoys: ["#newsletter-accept", ".newsletter-close"]
+  - page: text-only.html
+    found: false
+    present: false
+  - page: script-no-banner.html
+    found: false
+    present: true
+    detected_by: "global:OneTrust and script:cdn.cookielaw.org"
+    sees:
+      globals: [OneTrust, Optanon]
+      scripts: [cdn.cookielaw.org]
+  - page: preference-centre.html
+    found: true
+    present: true
+    detected_by: "selector:#onetrust-banner-sdk and global:OneTrust"
+    accept_layer: 1
+    reject_layer: 2
+    sees:
+      selectors: ["#onetrust-banner-sdk", "#onetrust-consent-sdk"]
+      globals: [OneTrust, Optanon]
+      scripts: [cdn.cookielaw.org]
+      banner: true
+      controls: ["#onetrust-accept-btn-handler", "#onetrust-pc-btn-handler"]
+      settings: ["#onetrust-pc-sdk .save-preference-btn-handler"]
+      toggles: [true, false, true]
