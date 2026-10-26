@@ -106,8 +106,8 @@ func TestEchoArgIsJoined(t *testing.T) {
 }
 
 // TestFenceSettings: a run under the work folder finds the fence, not a
-// .echo further up (testbed/.echo is Echo's own testbed's), and the
-// fence loads as Echo's defaults.
+// .echo further up (testbed/.echo is Echo's own testbed's). The fence
+// loads as Echo's defaults.
 func TestFenceSettings(t *testing.T) {
 	outer := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(outer, ".echo"), 0o750); err != nil {
