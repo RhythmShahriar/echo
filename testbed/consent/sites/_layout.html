@@ -1,0 +1,22 @@
+{{define "layout"}}<!doctype html>
+<html lang="{{block "lang" .}}en{{end}}"{{block "htmlattrs" .}}{{end}}>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{block "title" .}}{{.ID}} shop{{end}}</title>
+<link rel="icon" href="data:,">
+<style>body{font:16px/1.5 system-ui,sans-serif;margin:0;padding:0 16px}nav a{margin-right:12px}.tall{min-height:2600px}</style>
+{{block "head" .}}{{end}}
+</head>
+<body>
+<header><nav><a href="/">Home</a><a href="/page-2/">Products</a><a href="/cart/">Cart</a><a href="/logout/">Log out</a></nav></header>
+<main>
+{{block "body" .}}<h1>{{.ID}} shop</h1>
+<p>A small shop page for the consent testbed.</p>{{end}}
+<section class="tall"><p>More products further down the page.</p></section>
+<footer><p>Bottom of the page.</p></footer>
+</main>
+{{block "foot" .}}{{end}}
+</body>
+</html>
+{{end}}
