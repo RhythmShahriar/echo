@@ -566,9 +566,14 @@ func satisfied(r *rule, k consent.RunKind, st *consent.CMPState) bool {
 
 // matches reports whether st is a decided choice with every category of
 // want as want says. A category the CMP doesn't list counts as not
-// granted: a missing group was never consented to.
+// granted: a missing group was never consented to. A state with no
+// categories at all matches no categories: a stored choice whose
+// categories couldn't be read is not a verified Reject.
 func matches(st *consent.CMPState, want map[string]bool) bool {
 	if st == nil || !st.Decided {
+		return false
+	}
+	if len(want) > 0 && len(st.Categories) == 0 {
 		return false
 	}
 	for k, v := range want {
