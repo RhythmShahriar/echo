@@ -89,7 +89,10 @@ func New(opts Options) (*Server, error) {
 	}
 	s := &Server{opts: opts, sitesDir: sites, stateDir: filepath.Join(opts.Root, "state"), sink: newSink()}
 	if opts.EchoProxy != "" {
-		c, err := newCAPISender(opts.EchoProxy, opts.EchoCA)
+		// Docker mode names the admin address by its Compose service
+		// (-internal shop:8081); only then may the proxy be one too.
+		adminHost, _, _ := net.SplitHostPort(opts.Admin)
+		c, err := newCAPISender(opts.EchoProxy, opts.EchoCA, serviceName(adminHost) && adminHost != "localhost")
 		if err != nil {
 			return nil, err
 		}

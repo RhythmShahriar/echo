@@ -32,16 +32,26 @@ type capiSender struct {
 }
 
 // newCAPISender returns a sender through proxy, which must be an http
-// URL on a loopback address or a single-label name (a Compose service
-// such as echo), trusting the CA in caFile.
-func newCAPISender(proxy, caFile string) (*capiSender, error) {
+// URL on a loopback address or localhost, trusting the CA in caFile.
+// With services set (Docker mode) a single-label name such as the
+// Compose service echo is accepted too. Go mode never accepts one: on a
+// network with DNS search domains a bare name could resolve to a host
+// off the machine.
+func newCAPISender(proxy, caFile string, services bool) (*capiSender, error) {
 	u, err := url.Parse(proxy)
 	if err != nil || u.Scheme != "http" || u.Host == "" {
 		return nil, fmt.Errorf("-echo-proxy %q: want http://host:port of rhythm-echo up", proxy)
 	}
 	host := u.Hostname()
-	if ip := net.ParseIP(host); (ip == nil && strings.Contains(host, ".")) || (ip != nil && !ip.IsLoopback()) {
-		return nil, fmt.Errorf("-echo-proxy %q: want a loopback address or a Compose service name", proxy)
+	ok := host == "localhost" || (services && serviceName(host))
+	if ip := net.ParseIP(host); ip != nil {
+		ok = ip.IsLoopback()
+	}
+	if !ok {
+		if services {
+			return nil, fmt.Errorf("-echo-proxy %q: want a loopback address or a Compose service name", proxy)
+		}
+		return nil, fmt.Errorf("-echo-proxy %q: want a loopback address (Compose service names need Docker mode)", proxy)
 	}
 	tr := &http.Transport{
 		Proxy: http.ProxyURL(u),
@@ -66,6 +76,12 @@ func newCAPISender(proxy, caFile string) (*capiSender, error) {
 		tr.TLSClientConfig.RootCAs = pool
 	}
 	return &capiSender{client: &http.Client{Transport: tr, Timeout: 10 * time.Second}}, nil
+}
+
+// serviceName reports whether host is a single-label name such as a
+// Compose service (echo, shop): no dot and not an IP address.
+func serviceName(host string) bool {
+	return host != "" && !strings.Contains(host, ".") && !strings.Contains(host, ":") && net.ParseIP(host) == nil
 }
 
 // maybeSend sends a PageView event for the page in r: in the good state

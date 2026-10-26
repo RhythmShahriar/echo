@@ -38,7 +38,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 	caDir := fs.String("ca", "", "the testbed CA folder (default <root>/ca)")
 	makeCA := fs.String("make-ca", "", "write a new testbed CA into this folder and exit")
 	printMap := fs.Bool("print-map", false, "print the rhythm-echo --map-host flags for -listen and exit")
-	echoProxy := fs.String("echo-proxy", "", "Echo's proxy (http://127.0.0.1:8026) for c18's server-side event; without it none is sent")
+	echoProxy := fs.String("echo-proxy", "", "Echo's proxy (http://127.0.0.1:8026, a loopback address; a Compose service name only with -internal service:port) for c18's server-side event; without it none is sent")
 	echoCA := fs.String("echo-ca", "", "Echo's CA certificate (PEM) for -echo-proxy")
 	internal := fs.String("internal", "", "the private address the ssrf-probe page asks for (default -admin)")
 	gateCerts := fs.String("gate-certs", "", "write the Docker gate's certificates, issued by the testbed CA, into this folder and exit")
