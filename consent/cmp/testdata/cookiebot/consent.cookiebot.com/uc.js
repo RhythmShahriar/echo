@@ -4,7 +4,7 @@
 // A replica of Cookiebot for Echo's tests, written fresh from the public
 // developer documentation (https://www.cookiebot.com/en/developer/):
 // window.Cookiebot with consent, consented, declined, hasResponse,
-// show, hide, renew, withdraw and submitCustomConsent, and the
+// show, hide, renew, withdraw and submitCustomConsent plus the
 // CookieConsent cookie in its documented JavaScript-object form. It is
 // not Cookiebot's code. Captured 2026-10-26.
 //
