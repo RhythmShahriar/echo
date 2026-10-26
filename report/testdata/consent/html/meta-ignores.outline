@@ -1102,7 +1102,7 @@ html
                   code
                     | 13r3r3r3r5
                 td
-                  | ad_storage default denied, update granted (r); analytics_storage default denied, update granted (r); ad_user_data default denied, update granted (r); ad_personalization default denied, update granted (r)
+                  | ad_storage default denied, update granted (r); analytics_storage default denied, update granted (r); ad_user_data default denied, update granted (r); ad_personalization default denied, update granted (r) [unofficial mapping]
               tr
                 td
                   | Accept
@@ -1119,7 +1119,7 @@ html
                   code
                     | 13r3r3r3r5
                 td
-                  | ad_storage default denied, update granted (r); analytics_storage default denied, update granted (r); ad_user_data default denied, update granted (r); ad_personalization default denied, update granted (r)
+                  | ad_storage default denied, update granted (r); analytics_storage default denied, update granted (r); ad_user_data default denied, update granted (r); ad_personalization default denied, update granted (r) [unofficial mapping]
               tr
                 td
                   | Accept
@@ -1136,7 +1136,7 @@ html
                   code
                     | 13r3r3r3r5
                 td
-                  | ad_storage default denied, update granted (r); analytics_storage default denied, update granted (r); ad_user_data default denied, update granted (r); ad_personalization default denied, update granted (r)
+                  | ad_storage default denied, update granted (r); analytics_storage default denied, update granted (r); ad_user_data default denied, update granted (r); ad_personalization default denied, update granted (r) [unofficial mapping]
               tr
                 td
                   | Accept
@@ -1153,7 +1153,7 @@ html
                   code
                     | 13r3r3r3r5
                 td
-                  | ad_storage default denied, update granted (r); analytics_storage default denied, update granted (r); ad_user_data default denied, update granted (r); ad_personalization default denied, update granted (r)
+                  | ad_storage default denied, update granted (r); analytics_storage default denied, update granted (r); ad_user_data default denied, update granted (r); ad_personalization default denied, update granted (r) [unofficial mapping]
               tr
                 td
                   | Accept
@@ -1170,7 +1170,7 @@ html
                   code
                     | 13r3r3r3r5
                 td
-                  | ad_storage default denied, update granted (r); analytics_storage default denied, update granted (r); ad_user_data default denied, update granted (r); ad_personalization default denied, update granted (r)
+                  | ad_storage default denied, update granted (r); analytics_storage default denied, update granted (r); ad_user_data default denied, update granted (r); ad_personalization default denied, update granted (r) [unofficial mapping]
               tr
                 td
                   | Accept
@@ -1187,7 +1187,7 @@ html
                   code
                     | 13r3r3r3r5
                 td
-                  | ad_storage default denied, update granted (r); analytics_storage default denied, update granted (r); ad_user_data default denied, update granted (r); ad_personalization default denied, update granted (r)
+                  | ad_storage default denied, update granted (r); analytics_storage default denied, update granted (r); ad_user_data default denied, update granted (r); ad_personalization default denied, update granted (r) [unofficial mapping]
       p class=sub
         | gcd decoded with an unofficial, community-documented mapping.
       h2

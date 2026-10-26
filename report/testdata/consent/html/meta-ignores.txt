@@ -395,42 +395,42 @@ Google Analytics 4
 G111
 ad_storage granted, analytics_storage granted
 13r3r3r3r5
-ad_storage default denied, update granted (r); analytics_storage default denied, update granted (r); ad_user_data default denied, update granted (r); ad_personalization default denied, update granted (r)
+ad_storage default denied, update granted (r); analytics_storage default denied, update granted (r); ad_user_data default denied, update granted (r); ad_personalization default denied, update granted (r) [unofficial mapping]
 Accept
 2.34s
 Google Ads
 G111
 ad_storage granted, analytics_storage granted
 13r3r3r3r5
-ad_storage default denied, update granted (r); analytics_storage default denied, update granted (r); ad_user_data default denied, update granted (r); ad_personalization default denied, update granted (r)
+ad_storage default denied, update granted (r); analytics_storage default denied, update granted (r); ad_user_data default denied, update granted (r); ad_personalization default denied, update granted (r) [unofficial mapping]
 Accept
 9.70s
 Google Analytics 4
 G111
 ad_storage granted, analytics_storage granted
 13r3r3r3r5
-ad_storage default denied, update granted (r); analytics_storage default denied, update granted (r); ad_user_data default denied, update granted (r); ad_personalization default denied, update granted (r)
+ad_storage default denied, update granted (r); analytics_storage default denied, update granted (r); ad_user_data default denied, update granted (r); ad_personalization default denied, update granted (r) [unofficial mapping]
 Accept
 9.74s
 Google Ads
 G111
 ad_storage granted, analytics_storage granted
 13r3r3r3r5
-ad_storage default denied, update granted (r); analytics_storage default denied, update granted (r); ad_user_data default denied, update granted (r); ad_personalization default denied, update granted (r)
+ad_storage default denied, update granted (r); analytics_storage default denied, update granted (r); ad_user_data default denied, update granted (r); ad_personalization default denied, update granted (r) [unofficial mapping]
 Accept
 13.20s
 Google Analytics 4
 G111
 ad_storage granted, analytics_storage granted
 13r3r3r3r5
-ad_storage default denied, update granted (r); analytics_storage default denied, update granted (r); ad_user_data default denied, update granted (r); ad_personalization default denied, update granted (r)
+ad_storage default denied, update granted (r); analytics_storage default denied, update granted (r); ad_user_data default denied, update granted (r); ad_personalization default denied, update granted (r) [unofficial mapping]
 Accept
 13.24s
 Google Ads
 G111
 ad_storage granted, analytics_storage granted
 13r3r3r3r5
-ad_storage default denied, update granted (r); analytics_storage default denied, update granted (r); ad_user_data default denied, update granted (r); ad_personalization default denied, update granted (r)
+ad_storage default denied, update granted (r); analytics_storage default denied, update granted (r); ad_user_data default denied, update granted (r); ad_personalization default denied, update granted (r) [unofficial mapping]
 gcd decoded with an unofficial, community-documented mapping.
 Run details
 Echo

@@ -889,7 +889,13 @@ func gcdWords(g *consent.GCD) string {
 		parts = append(parts, fmt.Sprintf("%s default %s, update %s (%s)", s.name, Safe(cmp.Or(string(s.sig.Default), "unset")),
 			Safe(cmp.Or(string(s.sig.Update), "unset")), Safe(s.sig.Letter)))
 	}
-	return strings.Join(parts, "; ")
+	// The gcd letters have no official documentation: every decoded
+	// value says so where it is read, with the decoder's own note.
+	tag := "unofficial mapping"
+	if g.Note != "" {
+		tag += ", " + Safe(g.Note)
+	}
+	return strings.Join(parts, "; ") + " [" + tag + "]"
 }
 
 // exempt lists the services seen that need no consent: exempt

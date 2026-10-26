@@ -43,6 +43,7 @@ Only on pages with Google hits. These issues name no tracker: their key ends in 
 - `consent/reject-granted` (after the Reject click an update granted ad_storage or analytics_storage, or a Google hit's known gcs grants one): title `After Reject, Google was told <signal> is granted`, or `After Reject, Google was told ad_storage and analytics_storage are granted`; detail names each update (`gtag('consent', 'update') at 2.01s granted analytics_storage`, `dataLayer.push(['consent', 'update']) at ...`) and the hits (`<Name> hit with gcs G111 at 2.30s`, or `<n> Google hits with a granted gcs, the first <Name> with gcs <gcs> at <s.ss>s`).
 - A gcs or gcd Echo can't read never raises reject-granted or accept-not-granted.
 - The result note `gcd decoded with an unofficial, community-documented mapping.` is added once whenever a page with Google hits has a hit with a decoded gcd.
+- In `report.html`'s Consent Mode panel every decoded gcd ends in `[unofficial mapping]`, or `[unofficial mapping, <the decoder's note>]` when it has one (for example `letter e is documented by one source`).
 
 ## V4 Choice checks and inconclusive runs
 
