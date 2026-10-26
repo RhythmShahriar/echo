@@ -186,6 +186,25 @@ func detectSamples() map[string]*consent.DetectResult {
 	}
 }
 
+// TestDetectedByWords: the CMP driver's list ("a and b") and the older
+// comma form read the same; a selector keeps its own spaces and commas.
+func TestDetectedByWords(t *testing.T) {
+	for in, want := range map[string]string{
+		"selector:#CybotCookiebotDialog and global:Cookiebot":             "#CybotCookiebotDialog and window.Cookiebot",
+		"selector:#CybotCookiebotDialog,global:Cookiebot":                 "#CybotCookiebotDialog and window.Cookiebot",
+		"selector:div.cc-window, .cc-banner and script:cdn.cookielaw.org": "div.cc-window, .cc-banner and its script on cdn.cookielaw.org",
+		"selector:#a > .b and global:OneTrust":                            "#a > .b and window.OneTrust",
+		"global:Cookiebot":                                                "window.Cookiebot",
+		"generic":                                                         "the generic rule",
+		"buttons whose text means accept":                                 "buttons whose text means accept",
+		"":                                                                "",
+	} {
+		if got := detectedBy(in); got != want {
+			t.Errorf("detectedBy(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
 func TestDetectTextGolden(t *testing.T) {
 	for name, d := range detectSamples() {
 		var buf bytes.Buffer

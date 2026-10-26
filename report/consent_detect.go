@@ -6,6 +6,7 @@ package report
 import (
 	"fmt"
 	"io"
+	"regexp"
 	"strings"
 	"time"
 
@@ -107,28 +108,52 @@ func layerWords(n int) string {
 	return fmt.Sprintf("layer %d", n)
 }
 
-// detectedBy turns a CMPInfo.DetectedBy list ("selector:#X,global:Y")
-// into words: "#X and window.Y".
+// detectedBy turns a CMPInfo.DetectedBy list into words: the CMP
+// driver writes "selector:#X and global:Y" (older results
+// "selector:#X,global:Y"), which reads "#X and window.Y". A selector
+// may hold spaces and commas of its own, so the list is cut only where
+// the next kind: starts.
 func detectedBy(s string) string {
+	s = strings.TrimSpace(s)
+	if s == "generic" {
+		return "the generic rule"
+	}
+	starts := detectedKind.FindAllStringIndex(s, -1)
+	if len(starts) == 0 {
+		return s
+	}
 	var words []string
-	for part := range strings.FieldsFuncSeq(s, func(r rune) bool { return r == ',' || r == '+' || r == ' ' }) {
-		kind, what, ok := strings.Cut(part, ":")
-		switch {
-		case !ok && part == "generic":
-			words = append(words, "the generic rule")
-		case !ok:
-			words = append(words, part)
-		case kind == "selector":
+	if lead := trimDetectedSep(s[:starts[0][0]]); lead != "" {
+		words = append(words, lead)
+	}
+	for i, st := range starts {
+		end := len(s)
+		if i+1 < len(starts) {
+			end = starts[i+1][0]
+		}
+		kind, what, _ := strings.Cut(trimDetectedSep(s[st[0]:end]), ":")
+		switch kind {
+		case "selector":
 			words = append(words, what)
-		case kind == "global":
+		case "global":
 			words = append(words, "window."+what)
-		case kind == "script":
+		case "script":
 			words = append(words, "its script on "+what)
-		default:
-			words = append(words, part)
 		}
 	}
 	return andList(words)
+}
+
+// detectedKind finds where each part of a DetectedBy list starts: at
+// the start or after " and ", a comma or a plus.
+var detectedKind = regexp.MustCompile(`(?:^|\s+and\s+|\s*[,+]\s*)(?:selector|global|script):`)
+
+// trimDetectedSep drops the separator a part of a DetectedBy list
+// starts or ends with.
+func trimDetectedSep(p string) string {
+	p = strings.TrimSpace(p)
+	p = strings.TrimPrefix(p, "and ")
+	return strings.TrimSpace(strings.Trim(p, ",+"))
 }
 
 // andList lists words as "a", "a and b" or "a, b and c".
