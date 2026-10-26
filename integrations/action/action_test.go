@@ -16,14 +16,35 @@ import (
 	"time"
 )
 
-// Ports for the Action's Echo and the fixture shop it checks, inside the
-// range the CI fixture's own test leaves free.
-const (
-	listen   = "127.0.0.1:20513"
-	smtp     = "127.0.0.1:20514"
-	shopPort = "20515"
-	deadEcho = "http://127.0.0.1:20519"
+// Ports for the Action's Echo, its SMTP sink, the fixture shop and an
+// address where nothing listens. They are free ports picked when the
+// tests start, so two checkouts running the suite at once on a busy
+// machine never collide on them.
+var (
+	listen   = "127.0.0.1:" + freePorts[0]
+	smtp     = "127.0.0.1:" + freePorts[1]
+	shopPort = freePorts[2]
+	deadEcho = "http://127.0.0.1:" + freePorts[3]
 )
+
+// freePorts are four loopback ports that were free together: each is
+// held until all are picked, so none repeats.
+var freePorts = func() []string {
+	var lns []net.Listener
+	var ports []string
+	for range 4 {
+		ln, err := net.Listen("tcp", "127.0.0.1:0")
+		if err != nil {
+			panic(err)
+		}
+		lns = append(lns, ln)
+		ports = append(ports, strconv.Itoa(ln.Addr().(*net.TCPAddr).Port))
+	}
+	for _, ln := range lns {
+		_ = ln.Close()
+	}
+	return ports
+}()
 
 // shop is a monorepo layout: the CI fixture in sites/shop, served by
 // php -S, with Echo built from this checkout on PATH in place of the
@@ -79,7 +100,7 @@ func shop(t *testing.T) *runner {
 			_ = c.Close()
 			break
 		}
-		if i == 100 {
+		if i == 600 { // 30s: a loaded machine can be slow to start php -S
 			t.Fatal("php -S didn't start")
 		}
 		time.Sleep(50 * time.Millisecond)
@@ -98,8 +119,9 @@ func stopEcho(r *runner) {
 			_ = p.Signal(syscall.SIGTERM)
 		}
 	}
-	// Wait until the API port is free for the next test.
-	for range 50 {
+	// Wait until the API port is free for the next test (up to 15s on
+	// a loaded machine).
+	for range 150 {
 		c, err := net.DialTimeout("tcp", listen, 100*time.Millisecond)
 		if err != nil {
 			return
