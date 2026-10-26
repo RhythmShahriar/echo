@@ -1,0 +1,35 @@
+# OneTrust OptanonConsent fixtures (URL-decoded once, so groups and the
+# datestamp are plain; a still-encoded groups field is decoded again).
+# Shape: https://www.observepoint.com/cookies/optanonconsent/
+- name: accepted
+  values:
+    OptanonConsent: "isGpcEnabled=0&datestamp=Sun+Oct+26+2026+10:00:00+GMT+0100&version=202409.1.0&interactionCount=1&isAnonUser=1&landingPath=NotLandingPage&groups=C0001:1,C0002:1,C0003:1,C0004:1&AwaitingReconsent=false"
+    OptanonAlertBoxClosed: "2026-10-26T09:00:00.000Z"
+  want: {decided: true, source: "cookie:OptanonConsent", categories: {C0001: true, C0002: true, C0003: true, C0004: true}}
+- name: rejected
+  values:
+    OptanonConsent: "isGpcEnabled=0&interactionCount=2&groups=C0001:1,C0002:0,C0003:0,C0004:0,C0005:0"
+    OptanonAlertBoxClosed: "2026-10-26T09:00:00.000Z"
+  want: {decided: true, source: "cookie:OptanonConsent", categories: {C0001: true, C0002: false, C0003: false, C0004: false, C0005: false}}
+- name: decided by interaction count alone
+  values: {OptanonConsent: "interactionCount=1&groups=C0001:1,C0002:0"}
+  want: {decided: true, source: "cookie:OptanonConsent", categories: {C0001: true, C0002: false}}
+- name: undecided
+  values: {OptanonConsent: "isGpcEnabled=0&interactionCount=0&landingPath=https://shop.test/&groups=C0001:1,C0002:0,C0003:0,C0004:0"}
+  want: {decided: false, source: "cookie:OptanonConsent", categories: {C0001: true, C0002: false, C0003: false, C0004: false}}
+- name: groups still encoded
+  values: {OptanonConsent: "interactionCount=1&groups=C0001%3A1%2CC0002%3A0%2CSPD_BG%3A1"}
+  want: {decided: true, source: "cookie:OptanonConsent", categories: {C0001: true, C0002: false, SPD_BG: true}}
+- name: odd group values dropped
+  values: {OptanonConsent: "interactionCount=1&groups=C0001:1,C0002:yes,,C0003"}
+  want: {decided: true, source: "cookie:OptanonConsent", categories: {C0001: true}}
+- name: garbage
+  values: {OptanonConsent: "not a query string"}
+  unreadable: true
+  want: {decided: false, source: "cookie:OptanonConsent"}
+- name: closed cookie without the consent cookie
+  values: {OptanonAlertBoxClosed: "2026-10-26T09:00:00.000Z"}
+  want: null
+- name: missing
+  values: {}
+  want: null

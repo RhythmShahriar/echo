@@ -1,0 +1,44 @@
+# Cookiebot CookieConsent fixtures. Values are as the state reader hands
+# them over: URL-decoded once. Shapes follow the CookieConsent cookie and
+# the Cookiebot.consent object (https://www.cookiebot.com/en/developer/).
+- name: accepted
+  values: {CookieConsent: "{stamp:'tbQ2xV8n',necessary:true,preferences:true,statistics:true,marketing:true,method:'explicit',ver:1,utc:1761400000000,region:'de'}"}
+  want: {decided: true, source: "cookie:CookieConsent", categories: {necessary: true, preferences: true, statistics: true, marketing: true}}
+- name: rejected
+  values: {CookieConsent: "{stamp:'tbQ2xV8n',necessary:true,preferences:false,statistics:false,marketing:false,method:'explicit',ver:1,utc:1761400000000,region:'de'}"}
+  want: {decided: true, source: "cookie:CookieConsent", categories: {necessary: true, preferences: false, statistics: false, marketing: false}}
+- name: implied
+  values: {CookieConsent: "{stamp:'tbQ2xV8n',necessary:true,preferences:true,statistics:true,marketing:true,method:'implied',ver:1}"}
+  want: {decided: true, source: "cookie:CookieConsent", categories: {necessary: true, preferences: true, statistics: true, marketing: true}}
+- name: undecided (no stamp)
+  values: {CookieConsent: "{stamp:'',necessary:true,preferences:false,statistics:false,marketing:false,method:'explicit',ver:1}"}
+  want: {decided: false, source: "cookie:CookieConsent", categories: {necessary: true, preferences: false, statistics: false, marketing: false}}
+- name: undecided (no method)
+  values: {CookieConsent: "{stamp:'0',necessary:true,preferences:false,statistics:false,marketing:false,method:null}"}
+  want: {decided: false, source: "cookie:CookieConsent", categories: {necessary: true, preferences: false, statistics: false, marketing: false}}
+- name: no consent needed
+  values: {CookieConsent: "-1"}
+  want: {decided: true, source: "cookie:CookieConsent"}
+- name: still URL-encoded
+  values: {CookieConsent: "%7Bstamp:%27tbQ2xV8n%27%2Cnecessary:true%2Cpreferences:false%2Cstatistics:false%2Cmarketing:false%2Cmethod:%27explicit%27%2Cver:1%7D"}
+  want: {decided: true, source: "cookie:CookieConsent", categories: {necessary: true, preferences: false, statistics: false, marketing: false}}
+- name: JSON form
+  values: {CookieConsent: '{"stamp":"tbQ2xV8n","necessary":true,"preferences":false,"statistics":true,"marketing":false,"method":"explicit"}'}
+  want: {decided: true, source: "cookie:CookieConsent", categories: {necessary: true, preferences: false, statistics: true, marketing: false}}
+- name: nested values skipped
+  values: {CookieConsent: "{stamp:'tbQ2xV8n',necessary:true,preferences:false,statistics:false,marketing:true,method:'explicit',iab2:{v:[1,2,{w:'x\\'y'}]},gacm:[]}"}
+  want: {decided: true, source: "cookie:CookieConsent", categories: {necessary: true, preferences: false, statistics: false, marketing: true}}
+- name: garbage
+  values: {CookieConsent: "hello world"}
+  unreadable: true
+  want: {decided: false, source: "cookie:CookieConsent"}
+- name: unclosed
+  values: {CookieConsent: "{stamp:'tbQ2xV8n',method:'explicit'"}
+  unreadable: true
+  want: {decided: false, source: "cookie:CookieConsent"}
+- name: string category is not a boolean
+  values: {CookieConsent: "{stamp:'x',marketing:'true',method:'explicit'}"}
+  want: {decided: true, source: "cookie:CookieConsent"}
+- name: missing
+  values: {}
+  want: null

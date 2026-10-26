@@ -1,0 +1,21 @@
+# Borlabs Cookie borlabs-cookie fixtures (URL-encoded JSON, here decoded
+# once). Contents: https://borlabs.io/kb/what-information-does-borlabs-cookie-store/
+- name: accepted
+  values: {borlabs-cookie: '{"consents":{"essential":["borlabs-cookie"],"statistics":["google-analytics"],"marketing":["facebook-pixel"],"external-media":["youtube"]},"domainPath":"shop.test/","expires":"Mon, 26 Oct 2027 10:00:00 GMT","uid":"tbx1y2z3","version":"1"}'}
+  want: {decided: true, source: "cookie:borlabs-cookie", categories: {essential: true, statistics: true, marketing: true, external-media: true}}
+- name: rejected
+  values: {borlabs-cookie: '{"consents":{"essential":["borlabs-cookie"],"statistics":[],"marketing":[]},"domainPath":"shop.test/","uid":"tbx1y2z3","version":"1"}'}
+  want: {decided: true, source: "cookie:borlabs-cookie", categories: {essential: true, statistics: false, marketing: false}}
+- name: still URL-encoded (Borlabs 3)
+  values: {borlabs-cookie: "%7B%22consents%22%3A%7B%22essential%22%3A%5B%22borlabs-cookie%22%5D%2C%22marketing%22%3A%5B%5D%7D%2C%22uid%22%3A%22tbx1y2z3%22%2C%22v3%22%3Atrue%7D"}
+  want: {decided: true, source: "cookie:borlabs-cookie", categories: {essential: true, marketing: false}}
+- name: undecided (no uid)
+  values: {borlabs-cookie: '{"consents":{"essential":["borlabs-cookie"]},"uid":"","version":"1"}'}
+  want: {decided: false, source: "cookie:borlabs-cookie", categories: {essential: true}}
+- name: garbage
+  values: {borlabs-cookie: '{"uid":"tbx1y2z3"}'}
+  unreadable: true
+  want: {decided: false, source: "cookie:borlabs-cookie"}
+- name: missing
+  values: {}
+  want: null

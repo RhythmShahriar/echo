@@ -1,0 +1,96 @@
+# gcd decoder fixtures. Each row: the raw value, whether the whole value
+# is known, each signal as default/update (or unknown) in the order
+# ad_storage, analytics_storage, ad_user_data, ad_personalization, the
+# kept tail and note, where the value came from and when it was taken.
+# Rows from real gtag.js hits have a source starting "capture" plus the
+# gcs from the same hit and what it reads (gcs, gcs_signals); see
+# captures/README.md. TestFixtureRowsHaveSource checks every row.
+- raw: 13t3p3p3p5
+  known: true
+  signals: [granted/unset, denied/unset, denied/unset, denied/unset]
+  source: public example (PRD 12.2; Stape, Didomi, Complianz tables)
+  date: 2026-10-26
+- raw: 13u3q3q3q5
+  known: true
+  signals: [granted/denied, denied/denied, denied/denied, denied/denied]
+  source: public example (PRD 12.2; Stape, Didomi, Complianz tables)
+  date: 2026-10-26
+- raw: 11p1p1p1p5
+  known: true
+  signals: [denied/unset, denied/unset, denied/unset, denied/unset]
+  source: public example (PRD 12.2; Stape, Didomi, Complianz tables)
+  date: 2026-10-26
+- raw: 11t1t1t1p5
+  known: true
+  signals: [granted/unset, granted/unset, granted/unset, denied/unset]
+  source: public example (PRD 12.2; Stape, Didomi, Complianz tables)
+  date: 2026-10-26
+- raw: 13p3p3p3p5l1
+  known: true
+  signals: [denied/unset, denied/unset, denied/unset, denied/unset]
+  extra: l1
+  source: built from the letter table (trailing part as seen in community examples)
+  date: 2026-10-26
+- raw: 13r3r3r3r5l1
+  known: true
+  signals: [denied/granted, denied/granted, denied/granted, denied/granted]
+  extra: l1
+  source: built from the letter table (trailing part as seen in community examples)
+  date: 2026-10-26
+- raw: 13r3r3p3p5
+  known: true
+  signals: [denied/granted, denied/granted, denied/unset, denied/unset]
+  source: built from the letter table
+  date: 2026-10-26
+- raw: 13l3l3l3l5
+  known: true
+  signals: [unset/unset, unset/unset, unset/unset, unset/unset]
+  source: built from the letter table
+  date: 2026-10-26
+- raw: 13e3e3e3e5
+  known: true
+  signals: [unknown/granted, unknown/granted, unknown/granted, unknown/granted]
+  note: letter e is documented by one source
+  source: built from the Didomi letter table
+  date: 2026-10-26
+- raw: 13v3n3m3t7
+  known: true
+  signals: [granted/granted, unset/granted, unset/denied, granted/unset]
+  source: built from the letter table
+  date: 2026-10-26
+# Negatives.
+- raw: 12p3p3p3p5
+  known: false
+  signals: [unknown, unknown, unknown, unknown]
+  source: constructed (wrong prefix)
+  date: 2026-10-26
+- raw: 13p3p3p3p
+  known: false
+  signals: [unknown, unknown, unknown, unknown]
+  source: constructed (too short)
+  date: 2026-10-26
+- raw: 13x3p3p3p5
+  known: false
+  signals: [unknown, denied/unset, denied/unset, denied/unset]
+  source: constructed (unknown letter)
+  date: 2026-10-26
+- raw: 13p2p3p3p5
+  known: false
+  signals: [unknown, unknown, unknown, unknown]
+  source: constructed (wrong separator)
+  date: 2026-10-26
+- raw: 13p3p3p3p3
+  known: false
+  signals: [unknown, unknown, unknown, unknown]
+  source: constructed (wrong last digit)
+  date: 2026-10-26
+- raw: 1303p3p3p5
+  known: false
+  signals: [unknown, unknown, unknown, unknown]
+  source: constructed (digit where a letter belongs)
+  date: 2026-10-26
+- raw: ""
+  known: false
+  signals: [unknown, unknown, unknown, unknown]
+  source: constructed (empty)
+  date: 2026-10-26

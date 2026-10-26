@@ -1,0 +1,22 @@
+# CookieYes cookieyes-consent fixtures (comma-separated key:value). The
+# categories match getCkyConsent():
+# https://www.cookieyes.com/documentation/retrieving-consent-data-using-api-getckyconsent/
+- name: accepted
+  values: {cookieyes-consent: "consentid:dGJ4eHh4,consent:yes,action:yes,necessary:yes,functional:yes,analytics:yes,performance:yes,advertisement:yes,other:yes"}
+  want: {decided: true, source: "cookie:cookieyes-consent", categories: {necessary: true, functional: true, analytics: true, performance: true, advertisement: true, other: true}}
+- name: rejected
+  values: {cookieyes-consent: "consentid:dGJ4eHh4,consent:no,action:yes,necessary:yes,functional:no,analytics:no,performance:no,advertisement:no,other:no"}
+  want: {decided: true, source: "cookie:cookieyes-consent", categories: {necessary: true, functional: false, analytics: false, performance: false, advertisement: false, other: false}}
+- name: undecided
+  values: {cookieyes-consent: "consentid:,consent:,action:,necessary:yes,functional:no,analytics:no,performance:no,advertisement:no"}
+  want: {decided: false, source: "cookie:cookieyes-consent", categories: {necessary: true, functional: false, analytics: false, performance: false, advertisement: false}}
+- name: with renewal date
+  values: {cookieyes-consent: "consentid:dGJ4eHh4,consent:yes,action:yes,necessary:yes,analytics:yes,advertisement:no,lastRenewedDate:1761400000000"}
+  want: {decided: true, source: "cookie:cookieyes-consent", categories: {necessary: true, analytics: true, advertisement: false}}
+- name: garbage
+  values: {cookieyes-consent: "yes please"}
+  unreadable: true
+  want: {decided: false, source: "cookie:cookieyes-consent"}
+- name: missing
+  values: {}
+  want: null

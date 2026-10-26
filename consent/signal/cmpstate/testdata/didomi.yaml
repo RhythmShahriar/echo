@@ -1,0 +1,28 @@
+# Didomi didomi_token fixtures (base64 JSON). Fields:
+# https://docs.didomi.io/get-started/general/cookies-and-local-storage
+- name: accepted
+  values: {didomi_token: "eyJ1c2VyX2lkIjoidGItMGY2ZSIsImNyZWF0ZWQiOiIyMDI2LTEwLTI2VDA5OjAwOjAwLjAwMFoiLCJ1cGRhdGVkIjoiMjAyNi0xMC0yNlQwOTowMDowMC4wMDBaIiwidmVuZG9ycyI6eyJlbmFibGVkIjpbImdvb2dsZSIsImM6aG90amFyIl0sImRpc2FibGVkIjpbXX0sInB1cnBvc2VzIjp7ImVuYWJsZWQiOlsiY29va2llcyIsIm1lYXN1cmVfY29udGVudF9wZXJmb3JtYW5jZSIsInNlbGVjdF9iYXNpY19hZHMiXSwiZGlzYWJsZWQiOltdfSwidmVyc2lvbiI6Mn0="}
+  want: {decided: true, source: "cookie:didomi_token", categories: {cookies: true, measure_content_performance: true, select_basic_ads: true}}
+- name: rejected
+  values: {didomi_token: "eyJ1c2VyX2lkIjoidGItMGY2ZSIsImNyZWF0ZWQiOiIyMDI2LTEwLTI2VDA5OjAwOjAwLjAwMFoiLCJ1cGRhdGVkIjoiMjAyNi0xMC0yNlQwOTowMDowMC4wMDBaIiwidmVuZG9ycyI6eyJlbmFibGVkIjpbXSwiZGlzYWJsZWQiOlsiZ29vZ2xlIl19LCJwdXJwb3NlcyI6eyJlbmFibGVkIjpbXSwiZGlzYWJsZWQiOlsiY29va2llcyIsIm1lYXN1cmVfY29udGVudF9wZXJmb3JtYW5jZSJdfSwidmVyc2lvbiI6Mn0="}
+  want: {decided: true, source: "cookie:didomi_token", categories: {cookies: false, measure_content_performance: false}}
+- name: undecided
+  values: {didomi_token: "eyJ1c2VyX2lkIjoidGItMGY2ZSIsImNyZWF0ZWQiOiIyMDI2LTEwLTI2VDA5OjAwOjAwLjAwMFoiLCJ1cGRhdGVkIjoiMjAyNi0xMC0yNlQwOTowMDowMC4wMDBaIiwidmVuZG9ycyI6eyJlbmFibGVkIjpbXSwiZGlzYWJsZWQiOltdfSwicHVycG9zZXMiOnsiZW5hYmxlZCI6W10sImRpc2FibGVkIjpbXX0sInZlcnNpb24iOjJ9"}
+  want: {decided: false, source: "cookie:didomi_token"}
+- name: still URL-encoded
+  values: {didomi_token: "eyJ1c2VyX2lkIjoidGItMGY2ZSIsImNyZWF0ZWQiOiIyMDI2LTEwLTI2VDA5OjAwOjAwLjAwMFoiLCJ1cGRhdGVkIjoiMjAyNi0xMC0yNlQwOTowMDowMC4wMDBaIiwidmVuZG9ycyI6eyJlbmFibGVkIjpbImdvb2dsZSIsImM6aG90amFyIl0sImRpc2FibGVkIjpbXX0sInB1cnBvc2VzIjp7ImVuYWJsZWQiOlsiY29va2llcyIsIm1lYXN1cmVfY29udGVudF9wZXJmb3JtYW5jZSIsInNlbGVjdF9iYXNpY19hZHMiXSwiZGlzYWJsZWQiOltdfSwidmVyc2lvbiI6Mn0%3D"}
+  want: {decided: true, source: "cookie:didomi_token", categories: {cookies: true, measure_content_performance: true, select_basic_ads: true}}
+- name: unpadded
+  values: {didomi_token: "eyJ1c2VyX2lkIjoidGItMGY2ZSIsImNyZWF0ZWQiOiIyMDI2LTEwLTI2VDA5OjAwOjAwLjAwMFoiLCJ1cGRhdGVkIjoiMjAyNi0xMC0yNlQwOTowMDowMC4wMDBaIiwidmVuZG9ycyI6eyJlbmFibGVkIjpbImdvb2dsZSIsImM6aG90amFyIl0sImRpc2FibGVkIjpbXX0sInB1cnBvc2VzIjp7ImVuYWJsZWQiOlsiY29va2llcyIsIm1lYXN1cmVfY29udGVudF9wZXJmb3JtYW5jZSIsInNlbGVjdF9iYXNpY19hZHMiXSwiZGlzYWJsZWQiOltdfSwidmVyc2lvbiI6Mn0"}
+  want: {decided: true, source: "cookie:didomi_token", categories: {cookies: true, measure_content_performance: true, select_basic_ads: true}}
+- name: base64 of something else
+  values: {didomi_token: "bm90IGpzb24="}
+  unreadable: true
+  want: {decided: false, source: "cookie:didomi_token"}
+- name: garbage
+  values: {didomi_token: "***"}
+  unreadable: true
+  want: {decided: false, source: "cookie:didomi_token"}
+- name: missing
+  values: {}
+  want: null
