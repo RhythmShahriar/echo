@@ -270,11 +270,15 @@ func (b genButton) clickable() bool {
 
 // genContainer is one candidate banner.
 type genContainer struct {
-	Path    string      `json:"path"`
-	Frame   string      `json:"frame"`
-	Cookie  bool        `json:"cookie"`
-	Consent bool        `json:"consent"`
-	Ignored bool        `json:"ignored"`
+	Path    string `json:"path"`
+	Frame   string `json:"frame"`
+	Cookie  bool   `json:"cookie"`
+	Consent bool   `json:"consent"`
+	Ignored bool   `json:"ignored"`
+	// Named is the id of the named rule whose detect selector or banner
+	// is visible inside the container (or holds it), as the same scan
+	// saw it; "" when none is.
+	Named   string      `json:"named,omitempty"`
 	Text    string      `json:"text"`
 	Buttons []genButton `json:"buttons"`
 }
@@ -322,12 +326,34 @@ func (c genContainer) choice() bool {
 	return a || r
 }
 
+// namedRule is a named rule's selectors as the generic script gets
+// them: a container that holds one of them belongs to that rule.
+type namedRule struct {
+	ID   string            `json:"id"`
+	Locs []consent.Locator `json:"locs"`
+}
+
+// namedFor is the generic script's named input for rules: every rule but
+// the generic one, with its detect selectors and banner containers.
+func namedFor(rules []*rule) []namedRule {
+	var out []namedRule
+	for _, r := range rules {
+		if r.ID == genericID {
+			continue
+		}
+		out = append(out, namedRule{ID: r.ID, Locs: slices.Concat(r.Selectors, r.Banners)})
+	}
+	return out
+}
+
 // genericScan runs the generic script in the page and in each
-// cross-origin frame.
-func genericScan(ctx context.Context, t consent.Tab) ([]genContainer, error) {
+// cross-origin frame. named, when set, makes the script say which
+// container holds a named rule's markup.
+func genericScan(ctx context.Context, t consent.Tab, named ...namedRule) ([]genContainer, error) {
 	in := struct {
 		Words genericWords `json:"words"`
-	}{words.scan}
+		Named []namedRule  `json:"named,omitempty"`
+	}{words.scan, named}
 	var top genResult
 	raw, err := isolated(ctx, t, genericJS, in)
 	if err != nil {
@@ -399,6 +425,7 @@ func clampContainers(list []genContainer) []genContainer {
 			continue
 		}
 		c.Text = cutRunes(c.Text, 200)
+		c.Named = cutRunes(c.Named, 64)
 		btns := make([]genButton, 0, min(len(c.Buttons), maxButtons))
 		for _, b := range c.Buttons {
 			if len(btns) == maxButtons {
@@ -418,8 +445,8 @@ func clampContainers(list []genContainer) []genContainer {
 
 // genericBanner is the first container that is a banner with a choice;
 // ok false when there is none.
-func genericBanner(ctx context.Context, t consent.Tab) (genContainer, bool, error) {
-	list, err := genericScan(ctx, t)
+func genericBanner(ctx context.Context, t consent.Tab, named ...namedRule) (genContainer, bool, error) {
+	list, err := genericScan(ctx, t, named...)
 	if err != nil {
 		return genContainer{}, false, err
 	}
