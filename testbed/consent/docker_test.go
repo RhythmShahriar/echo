@@ -52,15 +52,17 @@ func startSealed(t *testing.T) {
 		}
 	}
 	running, _ := docker(ctx, composeArgs("ps", "-q", "gate")...)
-	if out, err := docker(ctx, composeArgs("up", "-d", "--wait", "dns", "gate", "shop", "tags", "echo", "sealcheck")...); err != nil {
-		t.Fatalf("compose up: %v\n%s", err, out)
-	}
+	// The cleanup goes in before up, so a failed up leaves nothing
+	// running either.
 	if strings.TrimSpace(running) == "" {
 		t.Cleanup(func() {
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 			defer cancel()
 			_, _ = docker(ctx, composeArgs("down", "-v", "--remove-orphans")...)
 		})
+	}
+	if out, err := docker(ctx, composeArgs("up", "-d", "--wait", "dns", "gate", "shop", "tags", "echo", "sealcheck")...); err != nil {
+		t.Fatalf("compose up: %v\n%s", err, out)
 	}
 }
 
