@@ -348,7 +348,7 @@ func TestSitesFile(t *testing.T) {
 	if brew.Targets[0].URL.String() != "https://brew.test/" || brew.Targets[1].URL.Path != "/menu/" || len(brew.Runs) != 4 || brew.Headers["Authorization"] != "Basic YnJldw==" {
 		t.Errorf("brew: %+v", brew)
 	}
-	// Neighbouring sites that would run the same way share one plan;
+	// Neighboring sites that would run the same way share one plan;
 	// a site with its own args, and anything after it, doesn't join.
 	putFile(t, "join.yaml", `
 - {name: a, url: a.test}

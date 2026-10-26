@@ -235,9 +235,9 @@ func sitePlan(base *consent.Plan, s site, sec *secrets) (*consent.Plan, error) {
 	return p, nil
 }
 
-// joinPlans joins neighbouring --sites plans that differ only in their
+// joinPlans joins neighboring --sites plans that differ only in their
 // pages (sites without consent.args of their own, the usual case) into
-// one, so --parallel and one browser serve them all. Only neighbours
+// one, so --parallel and one browser serve them all. Only neighbors
 // join, which keeps the pages in the sites file's order.
 func joinPlans(plans []*consent.Plan) []*consent.Plan {
 	var out []*consent.Plan
