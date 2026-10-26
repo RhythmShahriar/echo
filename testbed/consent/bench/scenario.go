@@ -66,7 +66,7 @@ func againstName(args []string) string {
 // of a comparison scenario saves the baseline its broken state is
 // compared with, so it drops --against (no baseline exists yet) and adds
 // --save. Both states then use one store, the parent of their working
-// folders (rhythm-echo's store is .echo in the working folder, and each
+// folders (rhythm-echo's store is .echo in the working folder; each
 // state runs in its own), so the broken state finds the baseline. {echo}
 // becomes echo; ok is false when the scenario needs an Echo and none
 // runs.
