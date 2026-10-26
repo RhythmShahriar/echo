@@ -36,6 +36,9 @@ COPY $TARGETPLATFORM/rhythm-echo /usr/local/bin/rhythm-echo
 # by its service name or IP address (http://echo:8025). A router's name,
 # such as <project>.ddev.site, needs --hostname or RHYTHM_ECHO_HOSTNAMES.
 USER nonroot:nonroot
+# There is no browser in here, so consent says so (and how to run it on
+# the host) rather than offer to download Chrome.
+ENV RHYTHM_ECHO_IMAGE=1
 WORKDIR /home/nonroot/.config/rhythm/echo
 WORKDIR /home/nonroot
 EXPOSE 8025 1025

@@ -8,3 +8,10 @@
 
 # Raw emails keep the CRLF line ends SMTP gives them, byte for byte.
 *.eml -text
+
+# Consent goldens, HAR files and testbed pages compare byte for byte on
+# every OS; screenshots are never touched.
+*.golden -text eol=lf
+*.png binary
+*.har -text eol=lf
+testbed/consent/**/*.html eol=lf

@@ -2,7 +2,7 @@ GOLANGCI := go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.
 
 IMAGE_ARCH ?= $(shell go env GOARCH)
 
-.PHONY: build image test test-connectors test-docker actionlint lint fmt check hooks testbed testbed-down bench
+.PHONY: build image test test-connectors test-docker test-browser test-integrated fuzz-consent bench-consent testbed-consent testbed-consent-down actionlint lint fmt check hooks testbed testbed-down bench
 
 build: ## build bin/rhythm-echo
 	go build -o bin/rhythm-echo ./cmd/rhythm-echo
@@ -22,6 +22,17 @@ test-connectors: ## run the Node, Laravel and WordPress connector suites (needs 
 
 test-docker: ## run every Docker test, as the nightly CI does
 	go test -tags docker -timeout 20m ./...
+
+test-browser: ## run the consent tests that start Chrome (they skip when there is none)
+	go test -tags browser -timeout 20m ./consent/... ./internal/browser/... ./testbed/consent/...
+
+test-integrated: ## run the tests with every consent stage required, as the nightly CI and the release do
+	ECHO_CONSENT_REQUIRE_LINKED=1 go test -race ./...
+
+FUZZTIME ?= 30s
+
+fuzz-consent: ## run every consent fuzz target for FUZZTIME each (default 30s)
+	scripts/fuzz-consent.sh $(FUZZTIME)
 
 actionlint: ## lint the GitHub workflows, from the image CI pins
 	docker run --rm -v "$(CURDIR):/repo" -w /repo rhysd/actionlint@sha256:887a259a5a534f3c4f36cb02dca341673c6089431057242cdc931e9f133147e9 -color
@@ -45,3 +56,12 @@ testbed-down:
 
 bench: build ## run the benchmark against the testbed; writes docs/benchmark.md
 	go run -tags testbed ./testbed/bench -bin $(CURDIR)/bin/rhythm-echo
+
+testbed-consent: ## start the consent testbed in Docker on 127.0.0.1:18950-18969
+	$(MAKE) -C testbed/consent up
+
+testbed-consent-down:
+	$(MAKE) -C testbed/consent down
+
+bench-consent: ## run the consent benchmark against the consent testbed; writes docs/benchmark-consent.md
+	$(MAKE) build && $(MAKE) -C testbed/consent bench BIN=$(CURDIR)/bin/rhythm-echo
