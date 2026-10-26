@@ -1,0 +1,14 @@
+rhythm echo 1.2.0 - consent check of https://g12.consent.test/
+
+Hits held: tracking hits are recorded and stopped in the browser. Nothing reached Google, Meta or any other tracker.
+Hosts mapped with --map-host.
+
+https://g12.consent.test/
+  No banner and no trackers: nothing to consent to
+  [1/3] No choice   ok nothing fired
+  [2/3] Accept      ok nothing fired
+  [3/3] Reject      ok nothing fired
+
+All clear - 0 errors, 0 warnings, 0 notices - 3 runs, 0 trackers, policy advanced
+
+Evidence, not legal advice.

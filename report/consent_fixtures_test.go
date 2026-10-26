@@ -41,7 +41,7 @@ func judgedResult(t testing.TB, name string) *consent.Result {
 }
 
 // golden compares got with testdata/consent/<name>, rewriting it with
-// -update. Line ends are normalised, so a checkout with CRLF passes.
+// -update. Line ends are normalized, so a checkout with CRLF passes.
 func golden(t *testing.T, name, got string) {
 	t.Helper()
 	path := filepath.Join("testdata", "consent", name)
@@ -61,4 +61,13 @@ func golden(t *testing.T, name, got string) {
 	if norm(got) != norm(string(want)) {
 		t.Errorf("%s changed (go test ./report -run %s -update to accept):\n%s", path, t.Name(), got)
 	}
+}
+
+// consentEvaluate judges r again after a test changed it, so the notes
+// follow its new settings.
+func consentEvaluate(t testing.TB, r *consent.Result) {
+	t.Helper()
+	p := consenttest.NewPlan(t, r.Pages[0].URL)
+	p.Policy, p.Geo, p.Hold = r.Policy, r.Geo, r.Held
+	consentverdict.Evaluator{NowFunc: func() time.Time { return consentNow }}.Evaluate(r, p)
 }

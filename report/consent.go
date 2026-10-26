@@ -21,7 +21,7 @@ type ConsentTextOptions struct {
 	Color      bool          // color on (a terminal, no --no-color, no NO_COLOR)
 	Quiet      bool          // -q: the verdict line and issues only
 	Verbose    bool          // -v: the timeline of every run and the issue keys
-	Width      int           // terminal width; 0 is 80
+	Width      int           // terminal width; 0 is 100
 	FailOn     string        // --fail-on, for the verdict line
 	FirstRun   bool          // the first consent run on this machine: say where the evidence is
 	ReportPath string        // the HTML report, for the "full report:" line; "" when none
@@ -72,11 +72,6 @@ type VerifySignature struct {
 	Present bool   `json:"present"`
 	OK      bool   `json:"ok"`
 	Key     string `json:"key"` // the public key file, or its id
-}
-
-// WriteConsentText writes the terminal output of a consent check.
-func WriteConsentText(w io.Writer, r *consent.Result, o ConsentTextOptions) error {
-	return errConsentNotBuilt
 }
 
 // WriteConsentMarkdown writes the Markdown summary of a consent check.

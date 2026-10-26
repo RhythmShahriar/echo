@@ -1,0 +1,25 @@
+rhythm echo 1.2.0 - consent check of https://meta-ignores.consent.test/
+
+Hits held: tracking hits are recorded and stopped in the browser. Nothing reached Google, Meta or any other tracker.
+Hosts mapped with --map-host.
+
+https://meta-ignores.consent.test/
+  Banner: Complianz, found after 0.4s, Reject on the banner
+  Consent Mode: v2 default, all four signals denied at 0.12s
+  [1/3] No choice   FAIL Meta Pixel fired before the choice
+  [2/3] Accept      ok Google Analytics 4, Google Ads, Meta Pixel fired; update granted at 2.0s; kept on 1 more page
+  [3/3] Reject      FAIL Meta Pixel fired after Reject on 3 of 3 pages; update denied at 2.0s; kept on 1 more page
+
+Findings - 2 errors, 0 warnings, 1 notice - 3 runs, 3 trackers, policy advanced
+
+  error   consent/before-choice   Meta Pixel fired before the visitor chose
+          3 hits (PageView on /, /shop/, /); cookie _fbp written
+          fix: Load the tracker only after the visitor accepts: let the consent banner block its
+          script, or start it with consent denied and grant it on Accept.
+  error   consent/after-reject    Meta Pixel fired after Reject
+          3 hits (PageView on /, /shop/, /); cookie _fbp written
+          fix: Make Reject stop the tracker: block its script while consent is denied and keep it
+          blocked on every page after the choice.
+  notice  consent/meta-no-consent-api  Meta Pixel never received fbq('consent', ...)
+
+Evidence, not legal advice.
