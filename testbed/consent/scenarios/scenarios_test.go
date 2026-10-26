@@ -211,6 +211,7 @@ func TestSitesRender(t *testing.T) {
 }
 
 func TestLoadRefusesBadManifests(t *testing.T) {
+	const g01 = "scenarios:\n  - {id: g01, name: x, area: cmp, cmp: x, needs: go, toggle: x, allow: []}\n"
 	cases := map[string]string{
 		"unknown key":        "scenarios:\n  - {id: c01, name: x, area: cmp, cmp: x, needs: go, toggle: x, expect: [{check: a}], expct: []}\n",
 		"bad area":           "scenarios:\n  - {id: c01, name: x, area: nope, cmp: x, needs: go, toggle: x, expect: [{check: a}]}\n",
@@ -218,6 +219,15 @@ func TestLoadRefusesBadManifests(t *testing.T) {
 		"no expect":          "scenarios:\n  - {id: c01, name: x, area: cmp, cmp: x, needs: go, toggle: x}\n",
 		"good without allow": "scenarios:\n  - {id: g01, name: x, area: cmp, cmp: x, needs: go, toggle: x}\n",
 		"duplicate":          "scenarios:\n  - {id: g01, name: x, area: cmp, cmp: x, needs: go, toggle: x, allow: []}\n  - {id: g01, name: x, area: cmp, cmp: x, needs: go, toggle: x, allow: []}\n",
+		"variant of nothing": g01 + "variants:\n  - {id: c09-wp, of: c09, cmp: x, site: c09-wp, needs: docker}\n",
+		"variant in go":      g01 + "variants:\n  - {id: g01-wp, of: g01, cmp: x, site: g01-wp, needs: go}\n",
+		"variant no site":    g01 + "variants:\n  - {id: g01-wp, of: g01, cmp: x, needs: docker}\n",
+		"variant id taken":   g01 + "variants:\n  - {id: g01, of: g01, cmp: x, site: g01-wp, needs: docker}\n",
+		"probe no broken":    g01 + "environment:\n  - {id: e01, name: x, probe: p, needs: local, toggle: x, good: [{step: s}]}\n",
+		"probe bad needs":    g01 + "environment:\n  - {id: e01, name: x, probe: p, needs: cloud, toggle: x, good: [{step: s}], broken: [{step: s}]}\n",
+		"probe no step":      g01 + "environment:\n  - {id: e01, name: x, probe: p, needs: local, toggle: x, good: [{exit: 0}], broken: [{step: s}]}\n",
+		"probe no probe":     g01 + "environment:\n  - {id: e01, name: x, needs: local, toggle: x, good: [{step: s}], broken: [{step: s}]}\n",
+		"probe unknown key":  g01 + "environment:\n  - {id: e01, name: x, probe: p, needs: local, toggle: x, good: [{step: s, exitt: 0}], broken: [{step: s}]}\n",
 	}
 	for name, body := range cases {
 		dir := t.TempDir()
@@ -229,11 +239,19 @@ func TestLoadRefusesBadManifests(t *testing.T) {
 		}
 	}
 	dir := t.TempDir()
-	good := "scenarios:\n  - {id: g01, name: x, area: cmp, cmp: x, needs: go, toggle: x, allow: []}\n"
+	good := g01 + "variants:\n  - {id: g01-wp, of: g01, cmp: x, site: g01-wp, needs: docker}\n" +
+		"environment:\n  - {id: e01, name: x, probe: p, needs: local, toggle: x, good: [{step: s, exit: 0}], broken: [{step: s, says: [y]}]}\n"
 	if err := os.WriteFile(filepath.Join(dir, File), []byte(good), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Load(dir); err != nil {
-		t.Errorf("a valid manifest: %v", err)
+	m, err := Load(dir)
+	if err != nil {
+		t.Fatalf("a valid manifest: %v", err)
+	}
+	if p, ok := m.FindProbe("e01"); !ok || p.Broken[0].String() != `s: says "y"` || p.Good[0].String() != "s: exit 0" {
+		t.Errorf("e01 = %+v", p)
+	}
+	if _, ok := m.FindProbe("e99"); ok {
+		t.Error("found e99")
 	}
 }

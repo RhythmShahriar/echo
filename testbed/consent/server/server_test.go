@@ -243,6 +243,13 @@ func TestSinkCountsAndResets(t *testing.T) {
 	if strings.TrimSpace(w.Body.String()) != "[]" {
 		t.Errorf("hits of nobody = %s", w.Body.String())
 	}
+	// One scenario's reset leaves the others' counts alone.
+	if w := get(t, adm, "POST", "127.0.0.1", "/_sink/reset?scenario=unknown", nil, nil); w.Code != http.StatusNoContent {
+		t.Errorf("reset unknown = %d", w.Code)
+	}
+	if s.Count("unknown").Hits != 0 || s.Count("t01").Hits != 4 {
+		t.Errorf("after resetting unknown: unknown %+v, t01 %+v", s.Count("unknown"), s.Count("t01"))
+	}
 	if w := get(t, adm, "POST", "127.0.0.1", "/_sink/reset", nil, nil); w.Code != http.StatusNoContent {
 		t.Errorf("reset = %d", w.Code)
 	}

@@ -381,8 +381,14 @@ func (s *Server) AdminHandler() http.Handler {
 		}
 		writeJSON(w, hits)
 	})
-	mux.HandleFunc("POST /_sink/reset", func(w http.ResponseWriter, _ *http.Request) {
-		s.sink.reset()
+	mux.HandleFunc("POST /_sink/reset", func(w http.ResponseWriter, r *http.Request) {
+		// ?scenario=c01 clears one scenario, so parallel benchmark jobs
+		// don't clear each other's counts; without it every count goes.
+		if id := r.URL.Query().Get("scenario"); id != "" {
+			s.sink.resetScenario(id)
+		} else {
+			s.sink.reset()
+		}
 		w.WriteHeader(http.StatusNoContent)
 	})
 	mux.HandleFunc("/_internal/", func(w http.ResponseWriter, r *http.Request) {

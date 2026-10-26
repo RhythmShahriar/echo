@@ -30,8 +30,76 @@ var (
 
 // Manifest is scenarios.yaml.
 type Manifest struct {
-	Scenarios []Scenario `yaml:"scenarios"`
-	Fixtures  []Fixture  `yaml:"fixtures"`
+	Scenarios   []Scenario `yaml:"scenarios"`
+	Variants    []Variant  `yaml:"variants"`
+	Environment []Probe    `yaml:"environment"`
+	Fixtures    []Fixture  `yaml:"fixtures"`
+}
+
+// Variant is a scenario run a second way in Docker mode: on the real
+// WordPress plugin instead of the Go-mode replica. It keeps the
+// scenario's expectations; the benchmark runs it only with -mode docker.
+type Variant struct {
+	ID  string `yaml:"id" json:"id"`   // c01-wp
+	Of  string `yaml:"of" json:"of"`   // c01
+	CMP string `yaml:"cmp" json:"cmp"` // complianz-wp
+	// Site is the host the variant is served on, under .shop.test: the
+	// WordPress site of Docker mode with the plugin and the scenario's
+	// state turned on.
+	Site  string `yaml:"site" json:"site"`
+	Needs string `yaml:"needs" json:"needs"` // docker
+}
+
+// ProbeNeeds are the values a probe's needs: takes: local (the probe's
+// own servers on 127.0.0.1:23410-23439) or docker (the sealed testbed).
+var ProbeNeeds = []string{"local", "docker"}
+
+// Probe is an environment scenario (e01 to e18): the site is what it
+// always was; what is around Echo goes wrong. Its probe function
+// (testbed/consent/bench/probes.go) sets up the good or the broken state
+// and runs rhythm-echo as named steps; Good and Broken are checked on
+// those steps.
+type Probe struct {
+	ID     string  `yaml:"id" json:"id"`
+	Name   string  `yaml:"name" json:"name"`
+	Probe  string  `yaml:"probe" json:"probe"`
+	Needs  string  `yaml:"needs" json:"needs"`
+	Toggle string  `yaml:"toggle" json:"toggle"`
+	Good   []Check `yaml:"good" json:"good"`
+	Broken []Check `yaml:"broken" json:"broken"`
+}
+
+// Check is one thing a probe step must show. Every field set must hold;
+// Says and Never compare case-insensitively with what the step printed
+// plus the notes its probe added (such as "chrome left: 0").
+type Check struct {
+	Step     string   `yaml:"step" json:"step"`
+	Exit     *int     `yaml:"exit" json:"exit,omitempty"`
+	Verdict  string   `yaml:"verdict" json:"verdict,omitempty"`
+	Complete *bool    `yaml:"complete" json:"complete,omitempty"`
+	Says     []string `yaml:"says" json:"says,omitempty"`
+	Never    []string `yaml:"never" json:"never,omitempty"`
+}
+
+// String is the check as the scoreboard lists it.
+func (c Check) String() string {
+	var parts []string
+	if c.Exit != nil {
+		parts = append(parts, fmt.Sprintf("exit %d", *c.Exit))
+	}
+	if c.Verdict != "" {
+		parts = append(parts, "verdict "+c.Verdict)
+	}
+	if c.Complete != nil {
+		parts = append(parts, fmt.Sprintf("complete %v", *c.Complete))
+	}
+	for _, s := range c.Says {
+		parts = append(parts, fmt.Sprintf("says %q", s))
+	}
+	for _, s := range c.Never {
+		parts = append(parts, fmt.Sprintf("never %q", s))
+	}
+	return c.Step + ": " + strings.Join(parts, ", ")
 }
 
 // Scenario is one site with a good and a broken state.
@@ -153,6 +221,38 @@ func (m *Manifest) check() error {
 		}
 		seen[s.ID] = true
 	}
+	for _, v := range m.Variants {
+		_, ok := m.Find(v.Of)
+		switch {
+		case v.ID == "" || seen[v.ID]:
+			return fmt.Errorf("variant id %q is empty or listed twice", v.ID)
+		case !ok:
+			return fmt.Errorf("%s: of %q: no such scenario", v.ID, v.Of)
+		case v.Needs != "docker":
+			return fmt.Errorf("%s: a variant runs on the real plugins: needs docker", v.ID)
+		case v.CMP == "" || v.Site == "":
+			return fmt.Errorf("%s: cmp and site are required", v.ID)
+		}
+		seen[v.ID] = true
+	}
+	for _, p := range m.Environment {
+		switch {
+		case p.ID == "" || seen[p.ID]:
+			return fmt.Errorf("probe id %q is empty or listed twice", p.ID)
+		case p.Probe == "" || p.Name == "" || p.Toggle == "":
+			return fmt.Errorf("%s: name, probe and toggle are required", p.ID)
+		case !slices.Contains(ProbeNeeds, p.Needs):
+			return fmt.Errorf("%s: needs %q: want local or docker", p.ID, p.Needs)
+		case len(p.Good) == 0 || len(p.Broken) == 0:
+			return fmt.Errorf("%s: a probe needs good and broken checks", p.ID)
+		}
+		for _, c := range slices.Concat(p.Good, p.Broken) {
+			if c.Step == "" {
+				return fmt.Errorf("%s: every check names its step", p.ID)
+			}
+		}
+		seen[p.ID] = true
+	}
 	for _, f := range m.Fixtures {
 		if f.ID == "" || seen[f.ID] {
 			return fmt.Errorf("fixture id %q is empty or listed twice", f.ID)
@@ -170,6 +270,16 @@ func (m *Manifest) Find(id string) (Scenario, bool) {
 		}
 	}
 	return Scenario{}, false
+}
+
+// FindProbe returns the environment probe with id.
+func (m *Manifest) FindProbe(id string) (Probe, bool) {
+	for _, p := range m.Environment {
+		if p.ID == id {
+			return p, true
+		}
+	}
+	return Probe{}, false
 }
 
 // Sites lists every site the manifest names: scenarios and fixtures.

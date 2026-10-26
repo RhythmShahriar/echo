@@ -386,3 +386,190 @@ fixtures:
   - {id: redirect-loop, use: "redirects: a loop when broken"}
   - {id: self-signed, use: "e12: a self-signed certificate"}
   - {id: slow-banner, use: "the banner after 4 s good, 15 s broken"}
+
+# Environment probes (PRD 18.1 e01 to e18): the site is what it always
+# was; what's around Echo goes wrong. Each names its probe in
+# bench/probes.go, which sets up the good or the broken state on its own
+# servers (127.0.0.1:23410-23439) and runs rhythm-echo as named steps.
+#   needs     local, or docker (run only with -mode docker)
+#   good, broken  checks, each on one step: exit, verdict (of --json),
+#             complete, says and never (case-insensitive text in what the
+#             step printed, its JSON report and the probe's notes). The
+#             good state must pass for the probe to count; the broken
+#             state passing its own checks is caught.
+environment:
+  - id: e01
+    name: The site is down
+    probe: site-down
+    needs: local
+    toggle: the testbed server stops before the check
+    good:
+      - {step: check, exit: 0}
+    broken:
+      - {step: check, exit: 3, says: ["didn't answer"], never: ["all clear"]}
+  - id: e02
+    name: No Chrome and no download
+    probe: no-chrome
+    needs: local
+    toggle: an empty PATH and cache, then --browser naming nothing, both with --no-download
+    good:
+      - {step: missing browser, exit: 0}
+    broken:
+      - {step: missing browser, exit: 3, says: [chrome], never: ["all clear"]}
+  - id: e03
+    name: A bot wall instead of the shop
+    probe: bot-wall
+    needs: local
+    toggle: the site answers a 403 Cloudflare challenge page
+    good:
+      - {step: check, exit: 0}
+    broken:
+      - {step: check, exit: 3, says: [bot check], never: ["all clear"]}
+  - id: e04
+    name: The named CMP isn't there
+    probe: cmp-absent
+    needs: local
+    toggle: --cmp onetrust on a Cookiebot page instead of a OneTrust one
+    good:
+      - {step: check, exit: 0}
+    broken:
+      - {step: check, exit: 3, says: [cmp_not_found]}
+  - id: e05
+    name: Ctrl-C during the Reject run
+    probe: interrupt
+    needs: local
+    toggle: SIGINT (a console Ctrl-Break on Windows) once the Reject run's events file appears
+    good:
+      - {step: check, exit: 0, complete: true, says: ["chrome left: 0", "profile files left: 0"]}
+    broken:
+      - {step: check, exit: 130, complete: false, says: ["chrome left: 0", "profile files left: 0"]}
+  - id: e06
+    name: Every CPU busy
+    probe: cpu-busy
+    needs: local
+    toggle: a busy loop on every core during the checks
+    good:
+      - {step: g01, exit: 0, verdict: ok}
+      - {step: c02, exit: 0, verdict: findings}
+    broken:
+      - {step: g01, exit: 0, verdict: ok}
+      - {step: c02, exit: 0, verdict: findings}
+  - id: e07
+    name: --parallel 1 against --parallel 3
+    probe: parallel
+    needs: local
+    toggle: the broken c02 checked with --parallel 1 and with --parallel 3
+    good:
+      - {step: parallel 3, exit: 0, verdict: findings}
+    broken:
+      - {step: parallel 1, exit: 0, verdict: findings}
+      - {step: parallel 3, exit: 0, verdict: findings, says: ["same issues: yes"]}
+  - id: e08
+    name: Held mode on pages that fire early
+    probe: held-everywhere
+    needs: local
+    toggle: c01, c02, c09, c13, c14, c22 and c23 broken, all checked in the default held mode
+    good:
+      - {step: g01, says: ["sink hits: 0"]}
+    broken:
+      - {step: c01, says: ["sink hits: 0"]}
+      - {step: c02, says: ["sink hits: 0"]}
+      - {step: c09, says: ["sink hits: 0"]}
+      - {step: c13, says: ["sink hits: 0"]}
+      - {step: c14, says: ["sink hits: 0"]}
+      - {step: c22, says: ["sink hits: 0"]}
+      - {step: c23, says: ["sink hits: 0"]}
+  - id: e09
+    name: --send-hits on a production host
+    probe: send-hits-production
+    needs: local
+    toggle: the config lists c01.shop.test under production
+    good:
+      - {step: check, exit: 0, says: ["Browser: "]}
+    broken:
+      - {step: check, exit: 2, says: [production], never: ["Browser: "]}
+  - id: e10
+    name: Every hit Echo reports reached the sink
+    probe: send-hits-complete
+    needs: local
+    toggle: c01 broken with --send-hits; the good state is g01 with --send-hits
+    good:
+      - {step: check, exit: 0, says: ["unmatched: 0"], never: ["sink hits: 0,"]}
+    broken:
+      - {step: check, exit: 0, says: ["unmatched: 0"], never: ["sink hits: 0,"]}
+  - id: e11
+    name: A baseline written by Echo 1.2.0
+    probe: old-baseline
+    needs: local
+    toggle: --against testdata/runs/1.2.0/g01/consent.json instead of a baseline this Echo saved
+    good:
+      - {step: compare, exit: 0, says: ['"against"']}
+    broken:
+      - {step: compare, exit: 0, says: ['"against"'], never: ["isn't a consent result"]}
+  - id: e12
+    name: A self-signed certificate
+    probe: self-signed
+    needs: local
+    toggle: no -k on a local https site with a self-signed certificate
+    good:
+      - {step: check, exit: 0}
+    broken:
+      - {step: check, exit: 3, says: [certificate]}
+  - id: e13
+    name: CMP present, banner never shows
+    probe: no-banner-cmp
+    needs: local
+    toggle: slow-banner shows its banner after 15 s, past --banner-wait 10s
+    good:
+      - {step: check, exit: 0}
+    broken:
+      - {step: check, exit: 3, says: [no_banner], never: ["all clear"]}
+  - id: e14
+    name: A request storm
+    probe: request-storm
+    needs: local
+    toggle: request-storm sends more requests than the per-run limit
+    good:
+      - {step: check, exit: 0}
+    broken:
+      - {step: check, exit: 3, says: [limit-reached]}
+  - id: e15
+    name: A huge dataLayer
+    probe: huge-datalayer
+    needs: local
+    toggle: huge-datalayer floods the dataLayer
+    good:
+      - {step: check, exit: 0, never: ["rss over 200 MB"]}
+    broken:
+      - {step: check, says: ['"truncated": true'], never: ["rss over 200 MB"]}
+  - id: e16
+    name: Private addresses on the page
+    probe: ssrf
+    needs: docker
+    toggle: ssrf-probe also asks for 169.254.169.254 and 10.0.0.5
+    good:
+      - {step: check, says: ["internal: 0"]}
+    broken:
+      - {step: check, says: ["internal: 0"]}
+  - id: e17
+    name: Hostile text in the banner and the page
+    probe: hostile-text
+    needs: local
+    toggle: markup, escape codes, bidi overrides, Markdown and CSV injection in the title, buttons, text and dataLayer
+    good:
+      - {step: hostile-banner, says: ["raw hostile text: none"]}
+      - {step: hostile-text, says: ["raw hostile text: none"]}
+    broken:
+      - {step: hostile-banner, says: ["raw hostile text: none"]}
+      - {step: hostile-text, says: ["raw hostile text: none"]}
+  - id: e18
+    name: Secrets and personal data in the URL and hits
+    probe: secrets
+    needs: local
+    toggle: a token in the page URL copied into every hit, a header and cookie through env:, an e-mail, phone and user ID in hits; broken sends them before the choice
+    good:
+      - {step: secret-url, says: ["raw secrets found: none"]}
+      - {step: pii-beacons, says: ["raw secrets found: none"]}
+    broken:
+      - {step: secret-url, says: ["raw secrets found: none"]}
+      - {step: pii-beacons, says: ["raw secrets found: none"]}
