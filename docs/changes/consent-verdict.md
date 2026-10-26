@@ -43,3 +43,24 @@ Only on pages with Google hits. These issues name no tracker: their key ends in 
 - `consent/reject-granted` (after the Reject click an update granted ad_storage or analytics_storage, or a Google hit's known gcs grants one): title `After Reject, Google was told <signal> is granted`, or `After Reject, Google was told ad_storage and analytics_storage are granted`; detail names each update (`gtag('consent', 'update') at 2.01s granted analytics_storage`, `dataLayer.push(['consent', 'update']) at ...`) and the hits (`<Name> hit with gcs G111 at 2.30s`, or `<n> Google hits with a granted gcs, the first <Name> with gcs <gcs> at <s.ss>s`).
 - A gcs or gcd Echo can't read never raises reject-granted or accept-not-granted.
 - The result note `gcd decoded with an unofficial, community-documented mapping.` is added once whenever a page with Google hits has a hit with a decoded gcd.
+
+## V4 Choice checks and inconclusive runs
+
+- `consent/reject-not-kept` (Reject confirmed, then a later page or the reload showed the banner, or the CMP state read after the reload has no choice or grants a category Reject turned off): title `After Reject, the banner came back on <path>`, or `After Reject, the CMP forgot the choice on <path>` when only the stored state is wrong; detail `the banner showed again on the next page (/blog/) at 9.00s` (`the reload` for the reload) and `after the reload <state source> has no choice` or `... grants marketing`, joined with `; `.
+- `consent/reject-broken` (the button failed and the CMP's API reject worked): title `The Reject button doesn't work; only the CMP's API could reject`, detail `clicked "<text>" (<selector>) <n> times and the choice wasn't confirmed; <CMP>'s API reject worked`.
+- `consent/no-first-layer-reject` (Reject found on layer 2 or deeper; not raised for a one-step `--reject-selector`): title `Reject isn't on the banner: Echo had to open settings`, detail `Reject was on layer <n>: Echo clicked "<text>" (<selector>)`.
+- `consent/no-banner` (no run saw a banner and the page has before-choice issues; run none): title `<names> are on the page but no consent banner showed` (`is` for one tracker), detail PRD message 17 with the names and `--banner-wait`: `<names> are on the page but no consent banner showed within 10s. Many banners show only to visitors in some countries: try --geo de, or an EU --proxy. A banner Echo doesn't know: --accept-selector and --reject-selector`.
+- `consent/click-fallback` (the choice or the withdraw Reject fell back to the API): title `Echo couldn't click the button and used <CMP>'s API, so the button itself wasn't tested` (`the CMP's API` when the CMP has no name), detail `<Run>: no <Accept|Reject> button was found with --click button,api`.
+- `consent/tcf-mismatch` (a TCF CMP; the last TC string read after the choice): `The TCF string grants purposes 1 and 3 after Reject` or `The TCF string grants no purpose after Accept`; detail `TC string read at <s.ss>s (CMP <id>, <n> vendors with consent)`. An unreadable string adds the note `<Run> on <path>: the TCF string after the choice couldn't be read, so consent/tcf-mismatch wasn't checked`.
+- `consent/server-side` (with `--echo`; one issue per provider): title `<Provider> received <events> from the server after Reject` (`after consent was withdrawn` in the withdraw run; `Meta Conversions API`, `GA4 Measurement Protocol`; `an event` when none is named), detail `<n> messages caught by Echo, the first at <s.ss>s (<ids>)`. The key's tracker part is the provider id (`meta-capi`, `ga4-mp`).
+- `inconclusive` lists every run that still has a reason after the page summary, with these details:
+  - `no_button`: `<Run>: <CMP>'s banner showed but Echo found no <Accept|Reject> on it or in its settings. Set --<accept|reject>-selector (rhythm echo consent detect shows what Echo sees), or --click button,api to use <CMP>'s API`
+  - `click_missed`: `<Run>: clicked "<text>" (<selector>) <n> times and the banner stayed. Something may cover it (a chat bubble, a newsletter popup); --show-browser shows the page` (`once` for one click)
+  - `state_unchanged`: `<Run>: clicked "<text>" and the banner closed but <CMP>'s stored state didn't change (<cookie> still has no choice). Hiding a banner is not rejecting` (`accepting` for Accept)
+  - `timeout`: `<Run>: the run took longer than --timeout 90s; the last request still open was <url>` (the last request with no status that wasn't held or refused; the second half is left out when there is none)
+  - `no_banner`: `<Run>: no banner showed within <banner-wait>` plus ` (<CMP>'s script loaded)` when the CMP is on the page
+  - `cmp_not_found`: `<Run>: --cmp <name> was named but its banner wasn't found`
+  - `navigation_failed`: the load error as browse recorded it, else `<Run>: the page didn't load`
+  - `limit`: `stopped after 20000 requests` (the plan's request limit)
+  - `canceled`: `interrupted`
+  - Durations read as the flags take them: `10s`, `90s`, `2m`.

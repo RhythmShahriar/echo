@@ -37,6 +37,7 @@ func (Evaluator) Evaluate(r *consent.Result, p *consent.Plan) {
 	for i := range r.Pages {
 		j.trackers(&r.Pages[i])
 		j.consentMode(&r.Pages[i])
+		j.choices(&r.Pages[i])
 	}
 }
 
