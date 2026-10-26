@@ -5,6 +5,8 @@ package browse
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"image/gif"
 	"net/url"
@@ -328,5 +330,32 @@ func TestClassifyRawURLAndBodyHold(t *testing.T) {
 	send := unitRecorder(t, consent.RunNone, func(p *consent.Plan) { p.Hold = false })
 	if _, hold := send.classify(req, raw, nil); hold {
 		t.Error("held with --send-hits")
+	}
+}
+
+// TestReqBody: a body in parts hashes and windows like the joined body,
+// without a whole second copy for the window.
+func TestReqBody(t *testing.T) {
+	whole := []byte("a=1&b=" + strings.Repeat("x", 300) + "&c=3")
+	parts := reqBody{whole[:5], whole[5:200], nil, whole[200:]}
+	one := reqBody{whole}
+	sum := sha256.Sum256(whole)
+	for name, b := range map[string]reqBody{"parts": parts, "one": one} {
+		if b.size() != len(whole) || b.sum() != hex.EncodeToString(sum[:]) || !bytes.Equal(b.bytes(), whole) {
+			t.Errorf("%s: size %d, sum %s", name, b.size(), b.sum())
+		}
+		for _, lim := range []int{0, 3, 5, 6, 199, 200, 201, len(whole), len(whole) + 10} {
+			if got, want := b.window(lim), whole[:min(lim, len(whole))]; !bytes.Equal(got, want) {
+				t.Errorf("%s: window(%d) = %d bytes; want %d", name, lim, len(got), len(want))
+			}
+		}
+		if len(b.window(-1)) != 0 {
+			t.Errorf("%s: window(-1) not empty", name)
+		}
+	}
+	// Negative: no body has no size, no window and no bytes.
+	var none reqBody
+	if none.size() != 0 || len(none.window(10)) != 0 || len(none.bytes()) != 0 {
+		t.Error("empty body is not empty")
 	}
 }

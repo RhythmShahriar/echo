@@ -38,7 +38,16 @@ with the exact texts.
 ## B2 Egress proxy
 
 - Refusal reasons as `request.refused` spells them: `private address`,
-  `browser traffic`, `not mapped`, `limit`.
+  `browser traffic`, `not mapped`, `mapped host outside the tab`,
+  `limit`.
+- A host `--map-host` covers is never dialed at its real address: a
+  request for it that reaches a guard (one Chrome sends outside the
+  tab's interception, such as a connection opened ahead of a service
+  worker) is refused with `mapped host outside the tab` and counted in
+  `network.refused`, with or without `--map-only`. A frameless request
+  the tab does see for a mapped host is answered from the mapped
+  address; with `--map-only` an unmapped one is failed in the browser.
+  Both still count in `network.browser_internal`.
 - A refused request gets `403` with the body
   `refused by rhythm-echo consent: <reason>` and the header
   `X-Rhythm-Echo-Refused: <reason>`. The 257th open tunnel on one
@@ -53,7 +62,8 @@ with the exact texts.
   counted in `network.browser_internal`, not in `network.refused`
   (PRD 13.7; the lane spec listed them under Refused).
   `169.254.169.254`, `fd00:ec2::254` and `metadata.google.internal` are
-  refused for every target and counted in `network.refused`.
+  refused for every target and counted in `network.refused`, also when
+  a name resolves to one of them (checked on every resolved address).
 
 ## B3 Contexts, emulation and click hardening
 
@@ -350,7 +360,7 @@ with the exact texts.
   masked URL, `queryString` from the masked URL, request headers (Cookie,
   Authorization and Proxy-Authorization dropped; Referer, Location,
   Origin and Content-Location masked as URLs; the rest through kit
-  `secrets.RedactHeader`; values at most 8 KiB), status, status text,
+  `secrets.RedactHeader`; values masked whole, then cut at 8 KiB), status, status text,
   `httpVersion` (Chrome's protocol upper-cased, e.g. `H2`,
   `HTTP/1.1`), response headers with each Set-Cookie as its cookie name
   only (also for responses a `--map-host` address answered), content

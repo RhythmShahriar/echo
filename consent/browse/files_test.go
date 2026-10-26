@@ -238,3 +238,23 @@ func TestNDJSONLateStatus(t *testing.T) {
 		t.Errorf("lines %+v", got)
 	}
 }
+
+// TestMaskHeaderMasksBeforeCut: a secret across the HAR's header cut is
+// masked whole, so no leading fragment of it lands in the file; a plain
+// long value is still cut.
+func TestMaskHeaderMasksBeforeCut(t *testing.T) {
+	key := "sk_" + "live_" + strings.Repeat("Q7x", 10) // assembled: a literal key trips push protection
+	pad := strings.Repeat("a", maxHeaderValue-10) + " "
+	got := maskHeader("x-debug", pad+key+" tail", false)
+	if strings.Contains(got, "sk_live") || strings.Contains(got, "sk_li") || strings.Contains(got, "Q7xQ7x") {
+		t.Errorf("a fragment of the secret is left: ...%q", got[max(0, len(got)-40):])
+	}
+	if len(got) > maxHeaderValue+64 {
+		t.Errorf("len = %d; want it cut near %d", len(got), maxHeaderValue)
+	}
+	// Negative: a value with no secret keeps its text up to the cut.
+	plain := maskHeader("x-debug", strings.Repeat("b", 2*maxHeaderValue), false)
+	if !strings.HasPrefix(plain, strings.Repeat("b", 64)) || len(plain) > maxHeaderValue+64 {
+		t.Errorf("plain value: len %d", len(plain))
+	}
+}
