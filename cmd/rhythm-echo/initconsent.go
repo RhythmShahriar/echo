@@ -11,6 +11,8 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
+	"time"
 
 	"gopkg.in/yaml.v3"
 
@@ -51,9 +53,16 @@ consent:
   #   - check: consent/before-choice
   #     tracker: hotjar
   #     reason: "client signs off until the launch"
-  #     until: 2026-11-30
+  #     until: {{until}}
   # trackers: []                      # your own trackers, the shape of the built-in catalog
 `
+
+// consentBlockAt is consentBlock with the ignore example's until: set
+// to 30 days after now, so the example is a date still to come when
+// someone uncomments it.
+func consentBlockAt(now time.Time) string {
+	return strings.Replace(consentBlock, "{{until}}", now.AddDate(0, 0, 30).Format(time.DateOnly), 1)
+}
 
 // errHasConsent is init --consent's error for a config that already
 // has a consent: block.
@@ -88,10 +97,10 @@ func initConsent(path string, force bool) (appended bool, err error) {
 		if !bytes.HasSuffix(old, []byte("\n")) {
 			b.WriteByte('\n')
 		}
-		b.WriteString(consentBlock)
+		b.WriteString(consentBlockAt(time.Now()))
 	} else {
 		b.WriteString("# Echo's settings: https://github.com/RhythmShahriar/echo#configuration\n")
-		b.WriteString(consentBlock)
+		b.WriteString(consentBlockAt(time.Now()))
 	}
 	// Written beside the config and loaded before it takes its place:
 	// a block that broke the config would be a bug here, never the

@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/RhythmShahriar/echo/config"
 )
@@ -48,6 +49,34 @@ var goldenDir = func() string {
 	return filepath.Join(wd, "testdata")
 }()
 
+// withoutUntil puts the {{until}} placeholder back for the ignore
+// example's date, which init --consent sets to 30 days from today; it
+// fails when that date isn't there.
+func withoutUntil(t *testing.T, data string) string {
+	t.Helper()
+	day := time.Now().AddDate(0, 0, 30).Format(time.DateOnly)
+	if !strings.Contains(data, "#     until: "+day+"\n") {
+		// The test may have run across midnight: yesterday's +30 is fine.
+		day = time.Now().AddDate(0, 0, 29).Format(time.DateOnly)
+	}
+	if !strings.Contains(data, "#     until: "+day+"\n") {
+		t.Fatalf("no until: 30 days from today in\n%s", data)
+	}
+	return strings.Replace(data, day, "{{until}}", 1)
+}
+
+// The ignore example's date is 30 days after the day init runs, never
+// a fixed date that would one day be in the past.
+func TestConsentBlockUntil(t *testing.T) {
+	got := consentBlockAt(time.Date(2027, 12, 15, 23, 0, 0, 0, time.UTC))
+	if !strings.Contains(got, "#     until: 2028-01-14\n") || strings.Contains(got, "{{until}}") {
+		t.Errorf("until:\n%s", got)
+	}
+	if strings.Contains(consentBlockAt(time.Now()), "2026-11-30") {
+		t.Error("a fixed date is left in the block")
+	}
+}
+
 // init --consent appends the commented block to an existing config,
 // which still loads; a second one is refused.
 func TestInitConsentAppends(t *testing.T) {
@@ -62,7 +91,7 @@ func TestInitConsentAppends(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	goldenFile(t, "init-consent-appended.yaml", string(data))
+	goldenFile(t, "init-consent-appended.yaml", withoutUntil(t, string(data)))
 	if c, err := config.Load(config.Path()); err != nil || c.Site != "https://staging.shop.test" {
 		t.Errorf("the config doesn't load after init --consent: %v", err)
 	}
@@ -95,7 +124,7 @@ func TestInitConsentFresh(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	goldenFile(t, "init-consent-fresh.yaml", string(data))
+	goldenFile(t, "init-consent-fresh.yaml", withoutUntil(t, string(data)))
 	c, err := config.Load(config.Path())
 	if err != nil || c.Consent != nil || len(c.Actions) != 0 {
 		t.Errorf("the fresh config: %+v %v", c.Consent, err)

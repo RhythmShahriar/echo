@@ -29,5 +29,5 @@ consent:
   #   - check: consent/before-choice
   #     tracker: hotjar
   #     reason: "client signs off until the launch"
-  #     until: 2026-11-30
+  #     until: {{until}}
   # trackers: []                      # your own trackers, the shape of the built-in catalog
