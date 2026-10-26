@@ -195,6 +195,11 @@ func TestConsentRejectsSchemes(t *testing.T) {
 		!strings.HasSuffix(errOut, "@shop.test/\": a URL with a login in it isn't allowed; pass it with -H \"Authorization: env:RHYTHM_ECHO_NAME\"\n") {
 		t.Errorf("login in the URL: exit %d %q", code, errOut)
 	}
+	// A scheme-relative URL is masked as the https URL it becomes.
+	code, _, errOut = runMain(t, "//user:"+pass+"@shop.test/")
+	if want := "rhythm echo: consent \"https://•••••@shop.test/\": a URL with a login in it isn't allowed; pass it with -H \"Authorization: env:RHYTHM_ECHO_NAME\"\n"; code != exitUsage || errOut != want {
+		t.Errorf("scheme-relative login: exit %d %q, want %q", code, errOut, want)
+	}
 }
 
 func TestURLRules(t *testing.T) {

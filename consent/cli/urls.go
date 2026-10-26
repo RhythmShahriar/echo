@@ -47,7 +47,10 @@ func target(raw, site string) (*url.URL, error) {
 		}
 		s = base.ResolveReference(ref).String()
 	case strings.HasPrefix(s, "//"):
+		// Masked again with the scheme: MaskURL reads //u:p@host as
+		// no URL at all and would print "://•••••@host".
 		s = "https:" + s
+		shown = consent.MaskURL(s, false)
 	case refusedSchemes.MatchString(s):
 		return nil, bad()
 	case strings.Contains(s, "://"):

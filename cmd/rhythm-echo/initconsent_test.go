@@ -11,6 +11,8 @@ import (
 	"testing"
 	"time"
 
+	"gopkg.in/yaml.v3"
+
 	"github.com/RhythmShahriar/echo/config"
 )
 
@@ -145,12 +147,85 @@ func TestInitConsentFresh(t *testing.T) {
 	if _, err := config.Load(config.Path()); err != nil {
 		t.Errorf("the block with every key uncommented doesn't load: %v\n%s", err, strings.Join(kept, "\n"))
 	}
-	// --force replaces an existing config with only the block.
+	// --force over a config without a consent: block appends it.
 	writeConfig(t, "site: https://old.test\n")
 	if code, _, _ := runCLI(t, "init", "--consent", "--force"); code != exitOK {
 		t.Errorf("init --consent --force: %d", code)
 	}
-	if after, _ := os.ReadFile(config.Path()); string(after) != string(data) {
-		t.Error("--force didn't write the fresh block")
+	if after, _ := os.ReadFile(config.Path()); !strings.HasPrefix(string(after), "site: https://old.test\n\n# Cookie consent checks") {
+		t.Errorf("--force without a consent: block didn't append it:\n%s", after)
 	}
+}
+
+// --force with --consent replaces only the consent: block: the actions,
+// the site and the comments of the other keys stay.
+func TestInitConsentForceKeepsRest(t *testing.T) {
+	t.Chdir(t.TempDir())
+	rest := "site: https://staging.shop.test\n" +
+		"actions:\n  - name: contact\n    http: {method: POST, url: /contact}\n"
+	tail := "# where reports go\nproduction: [shop.example.com]\n"
+	writeConfig(t, rest+"# my old consent settings\nconsent:\n  runs: [none, accept]\n  geo: fr\n\n"+tail)
+	code, out, errOut := runCLI(t, "init", "--consent", "--force")
+	if code != exitOK || errOut != "" || !strings.HasPrefix(out, "Replaced the consent: block in .echo/config.yaml; the rest of it is unchanged.\n") {
+		t.Fatalf("init --consent --force: %d %q %q", code, out, errOut)
+	}
+	data, err := os.ReadFile(config.Path())
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(data)
+	if !strings.HasPrefix(got, rest+"\n"+tail+"\n# Cookie consent checks") || strings.Contains(got, "geo: fr") ||
+		strings.Contains(got, "my old consent") || strings.Count(got, "\nconsent:") != 1 {
+		t.Errorf("the config after --force:\n%s", got)
+	}
+	c, err := config.Load(config.Path())
+	if err != nil || len(c.Actions) != 1 || c.Site != "https://staging.shop.test" || c.Consent != nil {
+		t.Fatalf("the config doesn't keep its actions: %+v %v", c, err)
+	}
+	// Twice gives the same file: the generated block replaces itself.
+	if code, _, _ := runCLI(t, "init", "--consent", "--force"); code != exitOK {
+		t.Fatalf("a second --force: %d", code)
+	}
+	if again, _ := os.ReadFile(config.Path()); string(again) != got {
+		t.Errorf("a second --force changed the file:\n%s\nwas\n%s", again, got)
+	}
+	// A config with only the block is written fresh.
+	writeConfig(t, "consent:\n  geo: fr\n")
+	if code, out, _ := runCLI(t, "init", "--consent", "--force"); code != exitOK || !strings.HasPrefix(out, "Wrote .echo/config.yaml with a consent: block") {
+		t.Errorf("--force over a lone block: %d %q", code, out)
+	}
+	// A config that isn't YAML is never replaced.
+	writeConfig(t, "site: [unclosed\n")
+	if code, _, errOut := runCLI(t, "init", "--consent", "--force"); code != exitError || !strings.HasPrefix(errOut, "rhythm echo: .echo/config.yaml: ") {
+		t.Errorf("--force over broken YAML: %d %q", code, errOut)
+	}
+	if after, _ := os.ReadFile(config.Path()); string(after) != "site: [unclosed\n" {
+		t.Error("--force changed a broken config")
+	}
+}
+
+// FuzzCutTopKey: cutting consent: from any YAML never panics and leaves
+// a document without that key.
+func FuzzCutTopKey(f *testing.F) {
+	f.Add("site: a\nconsent:\n  geo: fr\nproduction: [b]\n")
+	f.Add("# head\nconsent: {geo: fr}\n# tail\nsite: a\n")
+	f.Add("consent:\n")
+	f.Add("site: a\n\n# c\nconsent:\n  # x\n\n# y\nquiet: 2s")
+	f.Fuzz(func(t *testing.T, data string) {
+		var root yaml.Node
+		if yaml.Unmarshal([]byte(data), &root) != nil || !hasKey(&root, "consent") || root.Content[0].Style&yaml.FlowStyle != 0 {
+			return
+		}
+		out := cutTopKey([]byte(data), &root, "consent")
+		var after yaml.Node
+		if err := yaml.Unmarshal(out, &after); err != nil {
+			// Cutting lines out of an exotic document (anchors used
+			// below, multi-line keys) may break it; initConsent loads
+			// the result before writing, so that is caught there.
+			return
+		}
+		if hasKey(&after, "consent") && strings.Count(data, "consent") < 2 {
+			t.Errorf("consent: is still there:\n%s", out)
+		}
+	})
 }

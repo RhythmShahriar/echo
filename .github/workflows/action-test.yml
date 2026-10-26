@@ -265,31 +265,13 @@ jobs:
           if grep -F customer@example.com <<< "$body"; then echo "::error::the comment shows a recipient"; exit 1; fi
           gh api -X DELETE "repos/$GITHUB_REPOSITORY/issues/comments/$FIRST"
 
-  # mode consent needs Echo 1.2.0 or later: until that release is out
-  # the consent job is skipped with a notice.
-  consent-release:
-    runs-on: ubuntu-latest
-    outputs:
-      ready: ${{ steps.release.outputs.ready }}
-    steps:
-      - id: release
-        run: |
-          url=$(curl -fsSI -o /dev/null -w '%{redirect_url}' https://github.com/RhythmShahriar/echo/releases/latest)
-          tag=${url##*/tag/}
-          if [ "$(printf '%s\n' v1.2.0 "$tag" | sort -V | head -n 1)" = v1.2.0 ]; then
-            echo "ready=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "::notice::The latest Echo release ($tag) has no consent checks; the consent job runs from 1.2.0 on."
-          fi
-
   # mode consent against a local page that sets consent up right and one
   # whose stand-in pixel fires before the choice. Nothing leaves the
   # runner: the pages load no other host and Echo holds the pixel's hits
   # in the browser, so the pixel counts none. A site that spells a shell
-  # command stays text.
+  # command stays text. Echo is built from this checkout, so the job
+  # tests this commit's consent checks, not the latest release.
   consent:
-    needs: consent-release
-    if: needs.consent-release.outputs.ready == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -300,6 +282,10 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
+      - name: Build Echo from this checkout
+        run: |
+          CGO_ENABLED=0 go build -o "$RUNNER_TEMP/build/rhythm-echo" ./cmd/rhythm-echo
+          echo "RHYTHM_ECHO_ACTION_BINARY=$RUNNER_TEMP/build/rhythm-echo" >> "$GITHUB_ENV"
       - name: Start the consent site
         run: |
           go build -o "$RUNNER_TEMP/consentsite" ./integrations/action/testdata/consentsite

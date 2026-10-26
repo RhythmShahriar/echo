@@ -33,8 +33,8 @@ func baselinesDir(st store.Store) string {
 }
 
 // loadAgainst reads what --against names, before anything runs: last
-// (the newest result in the store), a consent.json, a result folder or
-// a baseline's name. A missing one is a usage error (PRD 10.2 message
+// (the newest result in the store), a baseline's name, a consent.json or
+// a result folder. A missing one is a usage error (PRD 10.2 message
 // 5 for a name).
 func loadAgainst(st store.Store, against string) (*consent.Result, error) {
 	if against == lastWord {
@@ -47,6 +47,16 @@ func loadAgainst(st store.Store, against string) (*consent.Result, error) {
 		}
 		return readResult(against, filepath.Join(dir, evidence.ResultFile))
 	}
+	// A saved baseline wins over a folder of the same name in the working
+	// folder (--against baseline next to a ./baseline folder): a name
+	// can't hold a path separator, so a path that means a folder there
+	// can still be written ./baseline.
+	if store.CheckName(against) == nil && !strings.ContainsAny(against, `/\`) {
+		path := filepath.Join(baselinesDir(st), against, evidence.ResultFile)
+		if _, err := os.Stat(path); err == nil {
+			return readResult(against, path)
+		}
+	}
 	if fi, err := os.Stat(against); err == nil {
 		path := against
 		if fi.IsDir() {
@@ -56,12 +66,6 @@ func loadAgainst(st store.Store, against string) (*consent.Result, error) {
 			}
 		}
 		return readResult(against, path)
-	}
-	if store.CheckName(against) == nil {
-		path := filepath.Join(baselinesDir(st), against, evidence.ResultFile)
-		if _, err := os.Stat(path); err == nil {
-			return readResult(against, path)
-		}
 	}
 	return nil, usagef("--against %q: no saved consent result by that name in %s; rhythm echo consent <url> --save %s makes one",
 		against, shown(baselinesDir(st)), saveHint(against))

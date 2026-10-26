@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"regexp"
+	"runtime"
 	"strings"
 	"time"
 
@@ -27,9 +28,16 @@ var chromeFinder = func() (bin string, downloaded bool, err error) {
 
 // chromeVersion asks an installed Chrome for its version
 // ("Google Chrome 153.0.8010.52") and returns the major number, or ""
-// when it doesn't say (Chrome on Windows prints nothing). Tests replace
-// it.
-var chromeVersion = func(bin string) string {
+// when it doesn't say. Tests replace it.
+var chromeVersion = func(bin string) string { return askVersion(runtime.GOOS, bin) }
+
+// askVersion runs bin --version, except on Windows: chrome.exe there
+// prints nothing for --version and starts the browser instead, so
+// doctor would open a window.
+func askVersion(goos, bin string) string {
+	if goos == "windows" {
+		return ""
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	out, err := exec.CommandContext(ctx, bin, "--version").Output() //nolint:gosec // the browser Find picked

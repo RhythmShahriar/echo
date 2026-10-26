@@ -11,6 +11,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -69,27 +70,33 @@ func consentBlockAt(now time.Time) string {
 var errHasConsent = errors.New("the config already has a consent block")
 
 // initConsent adds the consent: block to the config at path, or writes
-// a config with only that block when there is none (or force replaces
-// it). It returns whether it appended.
-func initConsent(path string, force bool) (appended bool, err error) {
+// a config with only that block when there is none. With force an
+// existing consent: block is replaced and the rest of the file kept:
+// someone regenerating the block shouldn't lose their actions. It
+// returns whether it appended to a config and whether that replaced a
+// consent: block.
+func initConsent(path string, force bool) (appended, replaced bool, err error) {
 	old, err := os.ReadFile(path) //nolint:gosec // the project's own config
 	switch {
-	case errors.Is(err, fs.ErrNotExist) || force:
+	case errors.Is(err, fs.ErrNotExist):
 		old = nil
 	case err != nil:
-		return false, err
+		return false, false, err
 	default:
 		var root yaml.Node
 		if err := yaml.Unmarshal(old, &root); err != nil {
-			return false, fmt.Errorf("%s: %w", path, err)
+			return false, false, fmt.Errorf("%s: %w", path, err)
 		}
 		if hasKey(&root, "consent") {
-			return false, errHasConsent
+			if !force {
+				return false, false, errHasConsent
+			}
+			old, replaced = cutTopKey(old, &root, "consent"), true
 		}
 	}
 	// .echo/ will hold consent results, so only its owner may open it.
 	if err := os.MkdirAll(config.Dir, 0o700); err != nil {
-		return false, err
+		return false, false, err
 	}
 	var b bytes.Buffer
 	if len(old) > 0 {
@@ -107,27 +114,79 @@ func initConsent(path string, force bool) (appended bool, err error) {
 	// user's to find on the next command.
 	tmp, err := os.CreateTemp(filepath.Dir(path), ".config-*.yaml")
 	if err != nil {
-		return false, err
+		return false, false, err
 	}
 	defer func() { _ = os.Remove(tmp.Name()) }()
 	if _, err := tmp.Write(b.Bytes()); err != nil {
 		_ = tmp.Close()
-		return false, err
+		return false, false, err
 	}
 	if err := tmp.Close(); err != nil {
-		return false, err
+		return false, false, err
 	}
 	if _, err := config.Load(tmp.Name()); err != nil {
-		return false, fmt.Errorf("the consent: block would break %s: %w", path, err)
+		return false, false, fmt.Errorf("the consent: block would break %s: %w", path, err)
 	}
 	if err := os.Chmod(tmp.Name(), 0o644); err != nil { //nolint:gosec // a project file meant to be committed
-		return false, err
+		return false, false, err
 	}
 	if err := os.Rename(tmp.Name(), path); err != nil {
-		return false, err
+		return false, false, err
 	}
 	store.Store{Root: config.Dir}.ExcludeFromGit()
-	return len(old) > 0, nil
+	return len(old) > 0, replaced, nil
+}
+
+// cutTopKey returns data without the top-level key of root (its line,
+// its value up to the next top-level key and the comment lines right
+// above it), so init --consent --force can put a fresh block in its
+// place. Comments at the left edge just above the next key stay with
+// that key.
+func cutTopKey(data []byte, root *yaml.Node, key string) []byte {
+	m := root.Content[0]
+	lines := yamlLines(string(data))
+	for i := 0; i+1 < len(m.Content); i += 2 {
+		if m.Content[i].Value != key {
+			continue
+		}
+		start, end := m.Content[i].Line-1, len(lines)
+		if i+2 < len(m.Content) {
+			end = m.Content[i+2].Line - 1
+			for end > start+1 && (strings.TrimSpace(lines[end-1]) == "" || strings.HasPrefix(lines[end-1], "#")) {
+				end--
+			}
+		}
+		for start > 0 && strings.HasPrefix(lines[start-1], "#") {
+			start--
+		}
+		kept := strings.TrimRight(strings.Join(slices.Concat(lines[:start], lines[end:]), ""), "\r\n")
+		if strings.TrimSpace(kept) == "" {
+			return nil
+		}
+		return []byte(kept + "\n")
+	}
+	return data
+}
+
+// yamlLines splits s after each line break YAML counts (\r\n, \n or a
+// lone \r), so its lines match the parser's line numbers.
+func yamlLines(s string) []string {
+	var lines []string
+	for len(s) > 0 {
+		i := strings.IndexAny(s, "\r\n")
+		if i < 0 {
+			break
+		}
+		n := i + 1
+		if s[i] == '\r' && n < len(s) && s[n] == '\n' {
+			n++
+		}
+		lines, s = append(lines, s[:n]), s[n:]
+	}
+	if len(s) > 0 {
+		lines = append(lines, s)
+	}
+	return lines
 }
 
 // hasKey reports whether the YAML document root has key at its top.
@@ -147,7 +206,7 @@ func hasKey(root *yaml.Node, key string) bool {
 // cmdInitConsent is init --consent.
 func cmdInitConsent(force bool, stdout, stderr io.Writer) int {
 	path := config.Path()
-	appended, err := initConsent(path, force)
+	appended, replaced, err := initConsent(path, force)
 	switch {
 	case errors.Is(err, errHasConsent):
 		fmt.Fprintf(stderr, "rhythm echo: %s already has consent:\n", path)
@@ -155,6 +214,8 @@ func cmdInitConsent(force bool, stdout, stderr io.Writer) int {
 	case err != nil:
 		fmt.Fprintln(stderr, "rhythm echo:", err)
 		return exitError
+	case appended && replaced:
+		fmt.Fprintf(stdout, "Replaced the consent: block in %s; the rest of it is unchanged.\n", path)
 	case appended:
 		fmt.Fprintf(stdout, "Added a consent: block to %s; uncomment a key to change its default.\n", path)
 	default:
