@@ -236,6 +236,18 @@ func (lx *lexicon) classify(text string) (btnClass, int) {
 	return best, bestLen
 }
 
+// aboutCookies reports whether text holds a cookie noun or a consent
+// word, matched as the page script matches a container's text.
+func (lx *lexicon) aboutCookies(text string) bool {
+	n := normText(text)
+	for _, w := range slices.Concat(lx.scan.Cookie, lx.scan.Consent) {
+		if strings.Contains(n, w) {
+			return true
+		}
+	}
+	return false
+}
+
 // words is the compiled-in lexicon. TestGenericWords loads the file, so
 // a broken one never ships.
 var words = func() *lexicon {
@@ -288,10 +300,35 @@ type genResult struct {
 }
 
 // banner reports whether c reads as a cookie banner at all: a cookie
-// noun, or a consent word without the words of a newsletter, login,
-// cart, age gate or other pop-up.
+// noun or a consent word without the words of a newsletter, login,
+// cart, age gate or other pop-up. A container with both a cookie noun
+// and such words (an age gate or a newsletter offer that mentions
+// cookies in passing) is a banner only when one of its controls is
+// about cookies: it opens or saves settings, or it accepts or rejects
+// with a cookie or consent word in its own text ("Accept cookies"). So
+// "Accept offer" in a newsletter that says "we use cookies" is never
+// clicked.
 func (c genContainer) banner() bool {
-	return c.Cookie || (c.Consent && !c.Ignored)
+	switch {
+	case !c.Ignored:
+		return c.Cookie || c.Consent
+	case !c.Cookie:
+		return false
+	}
+	for _, b := range c.Buttons {
+		if !b.clickable() {
+			continue
+		}
+		switch cl, _ := words.classify(b.Text); cl {
+		case classSettings, classSave:
+			return true
+		case classAccept, classReject:
+			if words.aboutCookies(b.Text) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // loc is a locator for a path inside c's document.

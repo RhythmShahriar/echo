@@ -217,8 +217,30 @@ func TestGenericContainer(t *testing.T) {
 		t.Error("a login dialog that asks for consent was taken for a banner")
 	}
 	cart := genContainer{Cookie: true, Ignored: true, Buttons: cookieBar("Checkout", "Continue shopping").Buttons}
-	if !cart.banner() || cart.choice() {
-		t.Error("a cart drawer that names cookies: a banner without a choice")
+	if cart.banner() || cart.choice() {
+		t.Error("a cart drawer that names cookies was taken for a banner")
+	}
+	// A cookie noun next to the words of another pop-up: a banner only
+	// when a control is about cookies.
+	for _, tc := range []struct {
+		buttons []string
+		banner  bool
+	}{
+		{[]string{"Accept offer", "No thanks"}, false},       // a newsletter that says "we use cookies"
+		{[]string{"I am over 18", "Accept", "Leave"}, false}, // an age gate that says it sets a cookie
+		{[]string{"Accept cookies", "Reject cookies"}, true},
+		{[]string{"Accept all", "Reject all", "Cookie settings"}, true},
+		{[]string{"Accept all", "Manage preferences"}, true},
+	} {
+		c := genContainer{Cookie: true, Ignored: true, Buttons: cookieBar(tc.buttons...).Buttons}
+		if c.banner() != tc.banner || c.choice() != tc.banner {
+			t.Errorf("cookie noun and ignore word, buttons %q: banner %v; want %v", tc.buttons, c.banner(), tc.banner)
+		}
+	}
+	hidden := genContainer{Cookie: true, Ignored: true, Buttons: cookieBar("Accept cookies").Buttons}
+	hidden.Buttons[0].Visible = false
+	if hidden.banner() {
+		t.Error("a control that can't be clicked made a mixed container a banner")
 	}
 	for name, change := range map[string]func(*genButton){
 		"policy link": func(b *genButton) { b.Policy = true },
