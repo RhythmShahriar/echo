@@ -1,0 +1,30 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+# Google Tag Manager and the gtag.js loader. Only script loads: they
+# are never held (holding the tag would make nothing fire and the site
+# falsely pass). Loading the container before consent is reported on
+# its own; the hits it then sends belong to ga4, google-ads and so on.
+id: google-tag-manager
+name: Google Tag Manager
+vendor: Google
+category: analytics
+consent: needed
+any_host: true
+scripts:
+  - hosts: [www.googletagmanager.com]
+    paths: [/gtm.js, /gtag/js, /gtag/destination]
+  # First-party loaders (server-side Tag Manager) serve the container
+  # from the site's own host; the GTM- or G- ID in the query proves it.
+  - paths: [/gtm.js]
+    params_match: {id: '^GTM-'}
+  - paths: [/gtag/js]
+    params_match: {id: '^(G|AW|DC|GT)-'}
+params:
+  id: [id]
+fix: Under strict policy load Google Tag Manager only after consent
+docs: https://developers.google.com/tag-platform/tag-manager/web
+sources:
+  - https://developers.google.com/tag-platform/tag-manager/web
+  - https://developers.google.com/tag-platform/gtagjs/install
+  - https://developers.google.com/tag-platform/security/guides/csp

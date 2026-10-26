@@ -15,4 +15,22 @@ exact text they see. The docs team writes the wiki from this file.
 - Hit `id` is the measurement or pixel ID masked to its last 4 (`••••D001`); for Google Ads, remarketing, Floodlight, Quora, Yandex and Adobe it comes from the path.
 - Config `consent.trackers` (custom trackers) is refused for now with `consent: trackers: custom trackers from the config aren't supported in this build yet` (an empty list is accepted). Item T9 builds them.
 - Catalog file errors (for catalog authors; custom trackers will use the same messages) always start with `<file>:<line>: `, for example `catalog/bad.yaml:4: unknown key "hostz"`, `catalog/other.yaml:1: id "shop-pixel" must match the file name (other.yaml)`, `catalog/x.yaml:8: a hit on any host needs params_all, params_match or body_json to prove it`, `catalog/x.fixtures.yaml:2: hits.match "https://px.shop.example/other" doesn't match shop-pixel`, `catalog/x.fixtures.yaml:3: hits.no_match "..." matches shop-pixel`, `<id> needs at least one hits.no_match fixture`, `<id> needs at least one cookies.match and one cookies.no_match fixture`, `an exempt entry sets no cookies`, `cookies: "_shpx" is already claimed by other-pixel`.
-- The first catalog entry is `ga4`; the other entries follow in the next changes.
+
+## Entries
+
+Each entry with its consent need, what `consent trackers` shows under Matches and the fix line its issues carry.
+
+| id | name | category | consent | matches | fix |
+|---|---|---|---|---|---|
+| `floodlight` | Google Floodlight | advertising | needed | `fls.doubleclick.net, ad.doubleclick.net/activity*, ad.doubleclick.net/ddm/activity/*` | Set a Consent Mode default (all four signals denied) before the Floodlight tag, or let the banner block it until consent |
+| `ga4` | Google Analytics 4 | analytics | needed | `www.google-analytics.com/g/collect, www.google-analytics.com/g/s/collect, region1.google-analytics.com/g/collect and 8 more` | Set a Consent Mode default (all four signals denied) before the Google tag, or let the banner block it until consent |
+| `google-ads` | Google Ads | advertising | needed | `googleads.g.doubleclick.net/pagead/viewthroughconversion/*, googleads.g.doubleclick.net/pagead/conversion/*, www.googleadservices.com/pagead/conversion/* and 4 more` | Set a Consent Mode default (all four signals denied) before the Google tag, or let the banner block Google Ads until consent |
+| `google-ccm` | Google tag measurement (ccm) | advertising | needed | `www.google.com/ccm/collect` | Set a Consent Mode default (all four signals denied) before the Google tag, or let the banner block it until consent |
+| `google-remarketing` | Google Ads remarketing | advertising | needed | `www.google.com/pagead/1p-user-list/*` | Set a Consent Mode default (all four signals denied) before the Google tag, or let the banner block remarketing until consent |
+| `google-tag-manager` | Google Tag Manager | analytics | needed | `www.googletagmanager.com/gtm.js, www.googletagmanager.com/gtag/js, www.googletagmanager.com/gtag/destination and 2 more` | Under strict policy load Google Tag Manager only after consent |
+| `universal-analytics` | Universal Analytics | analytics | needed | `www.google-analytics.com/collect, www.google-analytics.com/r/collect, www.google-analytics.com/j/collect and 9 more` | Remove Universal Analytics (Google no longer processes its data) or let the banner block it until consent |
+
+Notes users may notice:
+
+- GA4 is also recognised on the site's own host (server-side tagging) when the request is `/g/collect` or `/g/s/collect` with `v=2` and a `tid=G-...`, or any `/<x>/collect` with `v=2`, `tid=G-...` and `cid` (renamed loaders).
+- Google Tag Manager is script only: `www.googletagmanager.com/gtm.js`, `/gtag/js` and `/gtag/destination`, plus `/gtm.js?id=GTM-...` or `/gtag/js?id=G-...` on any host.

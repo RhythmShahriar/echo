@@ -1,0 +1,14 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+scripts:
+  match:
+    - https://www.googletagmanager.com/gtm.js?id=GTM-TESTBED
+    - https://www.googletagmanager.com/gtag/js?id=G-TESTBED001
+    - https://www.googletagmanager.com/gtag/destination?id=AW-123456789
+    - https://shop.test/gtm.js?id=GTM-TESTBED
+    - https://load.metrics.shop.test/gtag/js?id=G-TESTBED001
+  no_match:
+    - https://shop.test/gtm.js
+    - https://shop.test/assets/gtm.js?id=GTM-TESTBED
+    - https://shop.test/gtag/js?id=shoes
