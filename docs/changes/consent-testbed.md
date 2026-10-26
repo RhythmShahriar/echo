@@ -108,3 +108,11 @@ lines, messages), with the exact text.
 - e05 presses Ctrl-C only once the Reject run's events file is there; when the run ends first it is not interrupted. The broken state now also asks for `reject run seen before the interrupt: true`. Completeness read from `consent.json` comes from its runs (an inconclusive entry, or a run inconclusive, truncated or canceled, means incomplete), never from words in the file.
 - c12 expects `check=consent/before-choice tracker=ga4 level=error first_party=true`: a new match field `first_party` asks that a hit behind the issue (the hits its evidence names, else its tracker's hits in its run) was recognized on the site's own host.
 - docker-compose.yml: every alpine container uses `alpine:3.22@sha256:2e0b81d60597f449baa56dc25d355367869d2dca4cd57e866f1e2b52af3eb55f`; `dns` runs as `${TESTBED_UID}:${TESTBED_GID}` with `cap_drop: [ALL]` and `net.ipv4.ip_unprivileged_port_start: 53`; `runner` uses `seccomp=./runner/seccomp-chrome.json` (Docker's default profile plus `clone`, `setns` and `unshare`) instead of `seccomp=unconfined`; `echo` is in the `echo` profile and `shop` depends on it with `required: false`. `make up` and `make down` pass `--profile echo`. `TestComposeHardening` and `TestSeccompProfile` guard it.
+
+## Integration fixes
+
+- c18 passes its Echo as `--echo={echo}`; comparison scenarios (c08) share `--store ../.echo` between their states.
+- e05 runs rhythm-echo with a fresh short temporary folder of the system's (`echo-e05-*`, removed after): Chrome's `SingletonSocket` lives there and a Unix socket path over about 107 bytes stopped Chrome from starting under a deep work folder.
+- e13's `slow-banner` fixture is a Cookiebot replica (script and `window.Cookiebot` from the start, banner after 4 s good, 15 s broken) instead of the generic banner: with no named CMP and nothing fired, a late generic banner is a page with nothing to consent to (exit 0), not a CMP whose banner never came. Broken now prints `Banner: none found within 10s (Cookiebot's script loaded)` and exits 3 with `no_banner`.
+- The memory measure reads rhythm-echo's own peak (see the measures bullet above); on this machine a Go-mode run measured 110.5 MiB.
+

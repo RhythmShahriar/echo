@@ -385,7 +385,7 @@ fixtures:
   - {id: redirect-chain, use: "redirects: 3 hops good, 12 broken"}
   - {id: redirect-loop, use: "redirects: a loop when broken"}
   - {id: self-signed, use: "e12: a self-signed certificate"}
-  - {id: slow-banner, use: "the banner after 4 s good, 15 s broken"}
+  - {id: slow-banner, use: "Cookiebot's banner after 4 s good, 15 s broken"}
 
 # Docker variants: the scenarios PRD 18.1 also runs on the real
 # WordPress plugins (Complianz, CookieYes) in the sealed Docker testbed.

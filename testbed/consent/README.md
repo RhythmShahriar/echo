@@ -204,6 +204,6 @@ The same scenario on the real WordPress plugin, run only with `-mode docker`.
 | redirect-chain | redirects: 3 hops good, 12 broken |
 | redirect-loop | redirects: a loop when broken |
 | self-signed | e12: a self-signed certificate |
-| slow-banner | the banner after 4 s good, 15 s broken |
+| slow-banner | Cookiebot's banner after 4 s good, 15 s broken |
 
 <!-- End of the generated scenario tables. -->

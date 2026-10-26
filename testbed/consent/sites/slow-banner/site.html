@@ -1,6 +1,6 @@
-{{/* slow-banner: the banner shows late. Good: after 4 s, inside the default --banner-wait (10 s); broken: after 15 s, outside it. */}}
+{{/* slow-banner: a named CMP (Cookiebot) whose banner shows late. Good: after 4 s, inside the default --banner-wait (10 s); broken: after 15 s, outside it. The CMP's script and global are there from the start, so Echo knows a CMP is present and its banner never came. */}}
 {{define "head"}}
 {{template "cm-default" .}}
-{{if .Broken}}{{template "generic" (dict "attrs" `data-tb-delay="15000"`)}}{{else}}{{template "generic" (dict "attrs" `data-tb-delay="4000"`)}}{{end}}
-{{template "gtag" (dict "attrs" `type="text/plain" data-consent="analytics"`)}}
+{{if .Broken}}{{template "cookiebot" (dict "attrs" `data-tb-delay="15000"`)}}{{else}}{{template "cookiebot" (dict "attrs" `data-tb-delay="4000"`)}}{{end}}
+{{template "gtag" (dict "attrs" `type="text/plain" data-cookieconsent="statistics"`)}}
 {{end}}
