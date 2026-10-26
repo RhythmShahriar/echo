@@ -1,0 +1,11 @@
+{{/* c02 Meta Pixel ignores Consent Mode. Google is set up right; broken: fbq init and PageView run with no revoke. */}}
+{{define "head"}}
+{{template "cm-default" .}}
+{{template "complianz" (dict)}}
+{{template "gtag" (dict )}}
+{{if .Broken}}
+{{template "meta" (dict )}}
+{{else}}
+{{template "meta" (dict "glue" true)}}
+{{end}}
+{{end}}

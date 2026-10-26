@@ -1,0 +1,15 @@
+{{/* c23 A second plugin injects its own GA4 hit the CMP does not block. Broken: a minimal analytics snippet sends to /g/collect directly on every page. */}}
+{{define "head"}}
+{{template "cm-default" .}}
+{{template "complianz" (dict)}}
+{{template "gtag" (dict )}}
+{{if .Broken}}
+<script>
+// "Lite analytics" plugin: GA4 without gtag.js, so Consent Mode never reaches it.
+(function () { var u = 'https://www.google-analytics.com/g/collect?v=2&tid=G-TESTBED002&cid=' + Date.now() + '.1&en=page_view&dl=' + encodeURIComponent(location.href) + '&_tbrun=c23';
+  addEventListener('load', function () { navigator.sendBeacon(u); }); })();
+</script>
+{{else}}
+
+{{end}}
+{{end}}

@@ -1,0 +1,24 @@
+{{/* g13 Tracker scripts load before consent but every hit waits; orestbida cookieconsent (vendored, MIT) sends the updates. */}}
+{{define "head"}}
+{{template "cm-default" .}}
+{{template "gtag" (dict )}}
+{{template "meta" (dict "glue" true)}}
+<link rel="stylesheet" href="/vendor/cookieconsent/cookieconsent.css">
+<script src="/vendor/cookieconsent/cookieconsent.umd.js"></script>
+<script>
+function tbFromCC() {
+  var a = CookieConsent.acceptedCategory('analytics'), m = CookieConsent.acceptedCategory('marketing');
+  var g = function (b) { return b ? 'granted' : 'denied'; };
+  gtag('consent', 'update', {analytics_storage: g(a), ad_storage: g(m), ad_user_data: g(m), ad_personalization: g(m)});
+  window.dispatchEvent(new CustomEvent('tb-consent', {detail: {analytics: a, marketing: m}}));
+}
+window.addEventListener('DOMContentLoaded', function () {
+  CookieConsent.run({hideFromBots: false, onConsent: tbFromCC, onChange: tbFromCC,
+    categories: {necessary: {enabled: true, readOnly: true}, analytics: {}, marketing: {}},
+    language: {default: 'en', translations: {en: {
+      consentModal: {title: 'Cookies on this site', description: 'We use cookies for analytics and marketing.', acceptAllBtn: 'Accept all', acceptNecessaryBtn: 'Reject all', showPreferencesBtn: 'Manage preferences'},
+      preferencesModal: {title: 'Cookie preferences', acceptAllBtn: 'Accept all', acceptNecessaryBtn: 'Reject all', savePreferencesBtn: 'Save preferences',
+        sections: [{title: 'Analytics', linkedCategory: 'analytics'}, {title: 'Marketing', linkedCategory: 'marketing'}]}}}}});
+});
+</script>
+{{end}}

@@ -1,0 +1,63 @@
+{{/* Tag snippets the scenario sites share. Each takes a dict:
+     attrs: extra attributes on every script tag (a CMP's blocking mark,
+            such as type="text/plain" class="cmplz-script" data-category="statistics")
+     mode:  advanced for Consent Mode advanced (cookieless pings) */}}
+
+{{define "cm-default"}}<script>
+window.dataLayer = window.dataLayer || [];
+function gtag(){dataLayer.push(arguments);}
+gtag('consent', 'default', {ad_storage: 'denied', analytics_storage: 'denied', ad_user_data: 'denied', ad_personalization: 'denied', wait_for_update: 500});
+</script>{{end}}
+
+{{define "cm-default-v1"}}<script>
+window.dataLayer = window.dataLayer || [];
+function gtag(){dataLayer.push(arguments);}
+gtag('consent', 'default', {ad_storage: 'denied', analytics_storage: 'denied', wait_for_update: 500});
+</script>{{end}}
+
+{{define "gtag"}}<script {{with .attrs}}{{.}}{{end}} async {{if .mode}}data-mode="{{.mode}}" {{end}}src="https://www.googletagmanager.com/gtag/js?id=G-TESTBED001"></script>
+<script {{with .attrs}}{{.}}{{end}}>
+window.dataLayer = window.dataLayer || [];
+function gtag(){dataLayer.push(arguments);}
+gtag('js', new Date());
+gtag('config', 'G-TESTBED001'{{if .transport}}, {transport_url: '{{.transport}}'}{{end}});
+{{if not .noads}}gtag('config', 'AW-100000001');{{end}}
+</script>{{end}}
+
+{{define "gtm"}}<script {{with .attrs}}{{.}}{{end}}>
+window.__tb_gtm = {ga4: 'G-TESTBED001', ads: 'AW-100000001'};
+(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],j=d.createElement(s);j.async=true;j.src='https://www.googletagmanager.com/gtm.js?id='+i;{{if .mode}}j.setAttribute('data-mode','{{.mode}}');{{end}}f.parentNode.insertBefore(j,f);})(window,document,'script','dataLayer','GTM-TESTBED1');
+</script>{{end}}
+
+{{/* meta: the Meta Pixel. With glue, it starts revoked unless the CMP
+     already reported marketing consent and is granted when it does. */}}
+{{define "meta"}}<script {{with .attrs}}{{.}}{{end}}>
+!function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,document,'script','https://connect.facebook.net/en_US/fbevents.js');
+{{if .glue}}fbq('consent', window.tbConsent.marketing ? 'grant' : 'revoke');
+tbOnConsent(function (c) { if (c.marketing) fbq('consent', 'grant'); });
+{{end}}fbq('init', '100000000000001'{{if .em}}, {em: '{{.em}}'}{{end}});
+fbq('track', 'PageView');
+</script>{{end}}
+
+{{define "tiktok"}}<script {{with .attrs}}{{.}}{{end}}>
+!function(w){var t=w.ttq=w.ttq||[];['page','track','holdConsent','grantConsent','revokeConsent'].forEach(function(m){t[m]=function(){t.push([m].concat([].slice.call(arguments)))}});t.load=function(id){t._id=id;var s=document.createElement('script');s.async=true;s.src='https://analytics.tiktok.com/i18n/pixel/events.js?sdkid='+id+'&lib=ttq';document.head.appendChild(s)};}(window);
+ttq.load('TESTBEDTT0001');
+ttq.page();
+</script>{{end}}
+
+{{define "linkedin"}}<script {{with .attrs}}{{.}}{{end}}>window._linkedin_partner_id = '1000001';</script>
+<script {{with .attrs}}{{.}}{{end}} async {{if .scroll}}data-scroll {{end}}src="https://snap.licdn.com/li.lms-analytics/insight.min.js"></script>{{end}}
+
+{{define "clarity"}}<script {{with .attrs}}{{.}}{{end}}>
+(function(c,l,a,r,i,t,y){c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);})(window,document,"clarity","script","tbclarity1");
+</script>{{end}}
+
+{{define "hotjar"}}<script {{with .attrs}}{{.}}{{end}}>
+(function(h,o,t,j,a,r){h.hj=h.hj||function(){(h.hj.q=h.hj.q||[]).push(arguments)};h._hjSettings={hjid:1000001,hjsv:6};a=o.getElementsByTagName('head')[0];r=o.createElement('script');r.async=1;r.src=t+h._hjSettings.hjid+j+h._hjSettings.hjsv;a.appendChild(r);})(window,document,'https://static.hotjar.com/c/hotjar-','.js?sv=');
+</script>{{end}}
+
+{{define "plausible"}}<script defer data-domain="{{.host}}" src="https://plausible.io/js/script.js"></script>{{end}}
+
+{{/* youtube: a youtube.com embed; with block set, the CMP loads it
+     from data-src after consent (its attrs carry the CMP's mark). */}}
+{{define "youtube"}}<iframe width="320" height="180" title="Product video" {{with .attrs}}{{.}}{{end}} {{if .block}}data-src{{else}}src{{end}}="https://www.youtube.com/embed/tbvideo1"></iframe>{{end}}

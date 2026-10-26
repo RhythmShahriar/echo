@@ -1,0 +1,5 @@
+# rhythm-echo v1.1.2 for linux-amd64, in bytes: rebuilt from the v1.1.2 tag
+# with the release flags (CGO_ENABLED=0, -trimpath, -ldflags "-s -w
+# -X main.version=1.1.2", go1.27.3). The benchmark compares a binary
+# built the same way (Docker mode's runtime/rhythm-echo) with it.
+16519328

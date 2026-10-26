@@ -1,0 +1,11 @@
+{{/* c06 Consent Mode v1 only. Broken: the default and the CMP updates leave out ad_user_data and ad_personalization. */}}
+{{define "head"}}
+{{if .Broken}}
+{{template "cm-default-v1" .}}
+{{template "cookieyes" (dict "attrs" `data-tb-gcm-v1`)}}
+{{else}}
+{{template "cm-default" .}}
+{{template "cookieyes" (dict)}}
+{{end}}
+{{template "gtag" (dict )}}
+{{end}}

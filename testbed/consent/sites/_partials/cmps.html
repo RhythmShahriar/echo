@@ -1,0 +1,23 @@
+{{/* The CMP snippets the scenario sites share; each takes a dict whose
+     attrs go on the CMP's script tag (the replicas' data-tb-* switches). */}}
+
+{{define "cookiebot"}}<script id="Cookiebot" src="https://consent.cookiebot.com/uc.js" data-cbid="00000000-0000-4000-8000-000000000001" data-blockingmode="{{if .manual}}manual{{else}}auto{{end}}"{{if .nogcm}} data-consentmode="disabled"{{end}} {{with .attrs}}{{.}}{{end}}></script>{{end}}
+
+{{define "onetrust"}}<script src="https://cdn.cookielaw.org/scripttemplates/otSDKStub.js" data-domain-script="00000000-0000-4000-8000-000000000002" charset="UTF-8" {{with .attrs}}{{.}}{{end}}></script>
+<script>function OptanonWrapper() {}</script>{{end}}
+
+{{define "usercentrics"}}<script id="usercentrics-cmp" src="https://app.usercentrics.eu/browser-ui/latest/loader.js" data-settings-id="tbSettings1" {{with .attrs}}{{.}}{{end}}></script>{{end}}
+
+{{define "didomi"}}<script>window.didomiConfig = {}; window.didomiOnReady = window.didomiOnReady || [];</script>
+<script src="https://sdk.privacy-center.org/tb-api-key-0001/loader.js" {{with .attrs}}{{.}}{{end}}></script>{{end}}
+
+{{define "iubenda"}}<script>var _iub = _iub || []; _iub.csConfiguration = {siteId: 1234567, cookiePolicyId: 12345678, lang: 'en'};</script>
+<script src="https://cdn.iubenda.com/cs/iubenda_cs.js" charset="UTF-8" {{with .attrs}}{{.}}{{end}}></script>{{end}}
+
+{{define "borlabs"}}<script src="/wp-content/plugins/borlabs-cookie/assets/javascript/borlabs-cookie.min.js" {{with .attrs}}{{.}}{{end}}></script>{{end}}
+
+{{define "complianz"}}<script src="/wp-content/plugins/complianz-gdpr/cookiebanner/js/complianz.min.js" {{with .attrs}}{{.}}{{end}}></script>{{end}}
+
+{{define "cookieyes"}}<script id="cookieyes" src="https://cdn-cookieyes.com/client_data/tbcookieyes0001/script.js" {{with .attrs}}{{.}}{{end}}></script>{{end}}
+
+{{define "generic"}}<script src="/_tb/banner.js" data-lang="{{or .lang "en"}}" {{with .attrs}}{{.}}{{end}}></script>{{end}}

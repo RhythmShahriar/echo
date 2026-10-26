@@ -1,0 +1,16 @@
+{{/* g14 Lookalikes that are not trackers: a first-party /api/collect, Google Fonts, reCAPTCHA, a youtube-nocookie embed, a site cookie ga_banner_closed, a newsletter dialog with "Accept offer" and a banner that shows after 4 s. */}}
+{{define "head"}}
+{{template "cm-default" .}}
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto">
+<script src="https://www.google.com/recaptcha/api.js" async></script>
+{{template "generic" (dict "attrs" `data-newsletter data-tb-delay="4000"`)}}
+{{template "gtag" (dict "attrs" `type="text/plain" data-consent="analytics"`)}}
+<script>
+document.cookie = 'ga_banner_closed=1; path=/; max-age=86400; samesite=lax';
+fetch('/api/collect', {method: 'POST', body: JSON.stringify({page: location.pathname})});
+</script>
+{{end}}
+{{define "body"}}
+<h1>{{.ID}} shop</h1>
+<iframe width="320" height="180" title="Product video" src="https://www.youtube-nocookie.com/embed/tbvideo1"></iframe>
+{{end}}

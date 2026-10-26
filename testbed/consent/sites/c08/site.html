@@ -1,0 +1,12 @@
+{{/* c08 A plugin update adds TikTok before consent; run with --against a baseline of the good state. */}}
+{{define "head"}}
+{{template "cm-default" .}}
+{{template "didomi" (dict)}}
+{{template "gtag" (dict )}}
+{{template "meta" (dict "attrs" `type="didomi/javascript" data-vendor="facebook"`)}}
+{{if .Broken}}
+{{template "tiktok" (dict )}}
+{{else}}
+{{template "tiktok" (dict "attrs" `type="didomi/javascript" data-vendor="tiktok"`)}}
+{{end}}
+{{end}}

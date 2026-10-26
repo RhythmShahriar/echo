@@ -1,0 +1,13 @@
+{{/* secret-url (e18): the probe opens this page with a fake token in its query (assembled at run time, never stored here). The stand-in tags copy location.href into dl, so every hit carries it. Echo must mask it in every output and file. Broken: no Consent Mode default (hits before the choice); good: they wait. */}}
+{{define "head"}}
+{{if not .Broken}}{{template "cm-default" .}}{{end}}
+{{template "complianz" (dict)}}
+{{template "gtag" (dict)}}
+{{template "meta" (dict "glue" (not .Broken))}}
+<script>
+// Keeps the query on the internal links too, as some shops do.
+document.addEventListener('DOMContentLoaded', function () {
+  document.querySelectorAll('a[href^="/page-2/"]').forEach(function (a) { a.href = '/page-2/' + location.search; });
+});
+</script>
+{{end}}

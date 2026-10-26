@@ -1,0 +1,10 @@
+/state/*
+!/state/.gitkeep
+# the testbed CA: make ca writes it, nothing else may use it
+/ca/
+/bench/work/
+/bench/work-a/
+/bench/work-b/
+/bench/work-*.md
+# make runtime: binaries and gate certificates for Docker mode
+/runtime/

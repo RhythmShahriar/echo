@@ -1,0 +1,10 @@
+{{/* c01 GA4 before consent. Good: Consent Mode default denied before the Google tag. Broken: no default, so gtag config fires at once. */}}
+{{define "head"}}
+{{if .Broken}}
+
+{{else}}
+{{template "cm-default" .}}
+{{end}}
+{{template "complianz" (dict)}}
+{{template "gtag" (dict )}}
+{{end}}

@@ -1,0 +1,10 @@
+{{/* c25 Consent Mode advanced checked under --consent-mode strict. Good: Complianz blocks Google Tag Manager until consent. Broken: GTM loads at once in advanced mode and sends cookieless pings. */}}
+{{define "head"}}
+{{template "cm-default" .}}
+{{template "complianz" (dict)}}
+{{if .Broken}}
+{{template "gtm" (dict "mode" `advanced`)}}
+{{else}}
+{{template "gtm" (dict "attrs" `type="text/plain" class="cmplz-script" data-category="statistics"`)}}
+{{end}}
+{{end}}

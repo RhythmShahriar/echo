@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>YouTube embed (testbed stand-in)</title>
+</head>
+<body style="margin:0;background:#000;color:#fff;font:14px sans-serif">
+<p>Video player stand-in.</p>
+<script>
+// Stand-in for a youtube.com embed: the server set VISITOR_INFO1_LIVE
+// and YSC on this frame's response; the player then reports a stats hit.
+(function () {
+  window.__tb_loaded = window.__tb_loaded || {};
+  window.__tb_loaded.youtube = true;
+  var top = (location.ancestorOrigins && location.ancestorOrigins[0]) || document.referrer || '';
+  var m = /([a-z0-9-]+)\.shop\.test/.exec(top);
+  new Image().src = '/api/stats/qoe?event=streamingstats&docid=tbvideo1&_tbrun=' + (m ? m[1] : 'unknown');
+})();
+</script>
+</body>
+</html>

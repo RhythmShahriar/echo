@@ -1,0 +1,13 @@
+{{/* c05 Consent Mode default late. Broken: the GTM snippet runs first and the default is pushed 1.5 s later. */}}
+{{define "head"}}
+{{if .Broken}}
+<script>window.__tb_gtm = {ga4: 'G-TESTBED001'}; window.dataLayer = window.dataLayer || []; dataLayer.push({'gtm.start': Date.now(), event: 'gtm.js'});</script>
+<script src="https://www.googletagmanager.com/gtm.js?id=GTM-TESTBED1"></script>
+<script>setTimeout(function () { window.dataLayer.push(['consent', 'default', {ad_storage: 'denied', analytics_storage: 'denied', ad_user_data: 'denied', ad_personalization: 'denied'}]); }, 1500);</script>
+{{template "usercentrics" (dict)}}
+{{else}}
+{{template "cm-default" .}}
+{{template "usercentrics" (dict)}}
+{{template "gtm" (dict )}}
+{{end}}
+{{end}}

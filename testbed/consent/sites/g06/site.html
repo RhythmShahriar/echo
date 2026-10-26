@@ -1,0 +1,11 @@
+{{/* g06 Usercentrics in an open shadow root; both buttons work. */}}
+{{define "head"}}
+{{template "cm-default" .}}
+{{template "usercentrics" (dict)}}
+{{template "gtag" (dict )}}
+{{template "meta" (dict "attrs" `type="text/plain" data-usercentrics="Meta Pixel"`)}}
+{{end}}
+{{define "body"}}
+<h1>{{.ID}} shop</h1>
+{{template "youtube" (dict "attrs" `data-usercentrics="YouTube Video"` "block" true)}}
+{{end}}

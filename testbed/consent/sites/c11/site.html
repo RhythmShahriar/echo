@@ -1,0 +1,15 @@
+{{/* c11 YouTube embed in a cross-site frame after Reject, Usercentrics in a closed shadow root (run with --click button,api). Broken: the frame loads whatever the choice. */}}
+{{define "head"}}
+{{template "cm-default" .}}
+{{template "usercentrics" (dict "attrs" `data-tb-shadow="closed"`)}}
+{{template "gtag" (dict "attrs" `type="text/plain" data-usercentrics="Google Analytics"`)}}
+{{end}}
+{{define "body"}}
+<h1>{{.ID}} shop</h1>
+<p>Watch the product video.</p>
+{{if .Broken}}
+{{template "youtube" (dict )}}
+{{else}}
+{{template "youtube" (dict "attrs" `data-usercentrics="YouTube Video"` "block" true)}}
+{{end}}
+{{end}}

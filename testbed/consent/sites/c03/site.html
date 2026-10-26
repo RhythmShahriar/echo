@@ -1,0 +1,10 @@
+{{/* c03 Cookiebot misconfigured. Good: auto-blocking with its Consent Mode integration over a GTM container. Broken: blocking mode manual, Consent Mode off and no default, so GTM fires GA4 and Ads whatever the choice. */}}
+{{define "head"}}
+{{if .Broken}}
+{{template "cookiebot" (dict "manual" true "nogcm" true)}}
+{{else}}
+{{template "cm-default" .}}
+{{template "cookiebot" (dict)}}
+{{end}}
+{{template "gtm" (dict )}}
+{{end}}

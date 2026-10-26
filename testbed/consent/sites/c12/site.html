@@ -1,0 +1,10 @@
+{{/* c12 Server-side GTM on a first-party host before the choice. Broken: no Consent Mode default, so hits go to metrics.c12.shop.test at once. */}}
+{{define "head"}}
+{{if .Broken}}
+
+{{else}}
+{{template "cm-default" .}}
+{{end}}
+{{template "cookiebot" (dict)}}
+{{template "gtag" (dict "transport" `https://metrics.c12.shop.test` "noads" true)}}
+{{end}}

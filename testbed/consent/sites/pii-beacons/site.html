@@ -1,0 +1,9 @@
+{{/* pii-beacons (e18): hits carrying personal data: Meta advanced matching (ud[em]), an e-mail and phone in the page URL that the tags copy into dl plus a GA4 user_id. Echo must keep only names, never the values, in every file. Broken: no Consent Mode default, so the hits go before the choice; good: they wait. */}}
+{{define "head"}}
+{{if not .Broken}}{{template "cm-default" .}}{{end}}
+{{template "generic" (dict)}}
+{{template "gtag" (dict)}}
+<script>gtag('config', 'G-TESTBED001', {user_id: 'buyer-4711', user_properties: {email: 'buyer@shop.test'}});</script>
+{{template "meta" (dict "em" "tbhashedemail0001" "glue" (not .Broken))}}
+{{end}}
+{{define "body"}}<h1>{{.ID}}</h1><p><a href="/page-2/?email=buyer%40shop.test&amp;phone=%2B15550100">Your order</a></p>{{end}}

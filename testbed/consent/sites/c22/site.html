@@ -1,0 +1,11 @@
+{{/* c22 Scroll-gated LinkedIn tag. Broken: the Insight Tag loads unblocked and fires on the first scroll, before any choice. */}}
+{{define "head"}}
+{{template "cm-default" .}}
+{{template "cookieyes" (dict)}}
+{{template "gtag" (dict "attrs" `type="text/plain" data-cookieyes="cookieyes-analytics"`)}}
+{{if .Broken}}
+{{template "linkedin" (dict "scroll" true)}}
+{{else}}
+{{template "linkedin" (dict "attrs" `type="text/plain" data-cookieyes="cookieyes-advertisement"` "scroll" true)}}
+{{end}}
+{{end}}

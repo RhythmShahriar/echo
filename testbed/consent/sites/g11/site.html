@@ -1,0 +1,19 @@
+{{/* g11 Plausible (cookieless, exempt) before consent; Klaro (vendored, BSD-3-Clause) gates the rest. */}}
+{{define "head"}}
+{{template "cm-default" .}}
+{{template "plausible" (dict "host" .Host)}}
+<script>
+window.klaroConfig = {storageMethod: 'cookie', cookieName: 'klaro', acceptAll: true, hideDeclineAll: false, disablePoweredBy: true, lang: 'en',
+  translations: {en: {consentNotice: {description: 'We use cookies for analytics and marketing. {purposes}'}, ok: 'Accept all', decline: 'Reject all',
+    purposes: {analytics: 'Analytics', marketing: 'Marketing'}}},
+  services: [
+    {name: 'google-analytics', title: 'Google Analytics', purposes: ['analytics'], cookies: [/^_ga/],
+     callback: function (ok) { gtag('consent', 'update', {analytics_storage: ok ? 'granted' : 'denied'}); }},
+    {name: 'meta-pixel', title: 'Meta Pixel', purposes: ['marketing'], cookies: ['_fbp'],
+     callback: function (ok) { gtag('consent', 'update', {ad_storage: ok ? 'granted' : 'denied', ad_user_data: ok ? 'granted' : 'denied', ad_personalization: ok ? 'granted' : 'denied'}); }}]};
+</script>
+<script defer data-config="klaroConfig" src="/vendor/klaro/klaro.js"></script>
+<script type="text/plain" data-type="application/javascript" data-name="google-analytics" data-src="https://www.googletagmanager.com/gtag/js?id=G-TESTBED001"></script>
+<script type="text/plain" data-type="application/javascript" data-name="google-analytics">gtag('js', new Date()); gtag('config', 'G-TESTBED001');</script>
+{{template "meta" (dict "attrs" `type="text/plain" data-type="application/javascript" data-name="meta-pixel"`)}}
+{{end}}

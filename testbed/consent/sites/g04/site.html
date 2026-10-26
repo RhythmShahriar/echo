@@ -1,0 +1,8 @@
+{{/* g04 OneTrust with Reject All on the first layer and Google Consent Mode. */}}
+{{define "head"}}
+{{template "cm-default" .}}
+{{template "onetrust" (dict)}}
+{{template "gtag" (dict )}}
+{{template "meta" (dict "attrs" `type="text/plain" class="optanon-category-C0004"`)}}
+{{template "linkedin" (dict "attrs" `type="text/plain" class="optanon-category-C0004"`)}}
+{{end}}

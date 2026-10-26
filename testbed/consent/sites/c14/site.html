@@ -1,0 +1,11 @@
+{{/* c14 GTM in a Web Worker (Partytown style). Broken: no Consent Mode default reaches the worker, so it sends at once. */}}
+{{define "head"}}
+{{if .Broken}}
+
+{{else}}
+{{template "cm-default" .}}
+{{end}}
+{{template "complianz" (dict)}}
+<script>window.__tb_gtm = {ga4: 'G-TESTBED001'};</script>
+<script src="/~partytown/loader.js"></script>
+{{end}}

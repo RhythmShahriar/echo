@@ -1,0 +1,10 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+# The real CMP plugins of Docker mode, downloaded from wordpress.org when
+# the wp image is built and checked against these SHA-256 sums (the build
+# fails on a mismatch). Fields: slug, version, sha256 of the zip. Update
+# both together: download https://downloads.wordpress.org/plugin/<slug>.<version>.zip
+# and record its sha256sum.
+complianz-gdpr 7.5.6 f2124fe848cbd348cca56ad7a506872e4d0cb9855bb441c0eeab39441cb85072
+cookie-law-info 3.5.7 521627dc7bea30f3abc27d8e6b3a8fd92636aef46dddd40fca4685ece38fb8bc

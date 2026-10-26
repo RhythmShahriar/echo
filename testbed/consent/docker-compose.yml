@@ -1,0 +1,193 @@
+# Copyright (c) 2026 Rhythm Shahriar <me@rhy.io>
+# SPDX-License-Identifier: MIT
+
+# Echo consent testbed, sealed Docker mode: the benchmark of record
+# (PRD 18.1). The browser runs in `runner`, on a network with no gateway,
+# whose resolver (`dns`) answers every name with the gate. So a bug in
+# Echo's host handling, a stand-in naming a real host or one of Chrome's
+# own background requests has nowhere to go but the testbed.
+#
+#   gate    nginx: TLS for every name with the testbed CA; the only
+#           service on both networks; publishes 127.0.0.1:18950-18959
+#   dns     every name to the gate, never forwards
+#   shop    the scenario sites (the Go testbed server, plain HTTP)
+#   tags    the stand-in tag hosts and the tracker sink (same server)
+#   wp, db  WordPress 6.8 with Complianz and CookieYes pinned from
+#           wordpress.org (wp/plugins.lock), for the Docker variants
+#   echo    rhythm-echo up, for c18's --echo
+#   runner  Chrome for Testing and the rhythm-echo built from this
+#           checkout (runtime/); the benchmark runs it with docker
+#           compose exec
+#
+# make up builds runtime/ (binaries, gate certificates) and starts it;
+# make down deletes everything, volumes included. State is shared with
+# the host through state/ (toggle.sh), read-only in the containers.
+name: echo-consent-testbed
+
+networks:
+  sealed:
+    internal: true # no gateway: nothing here reaches the internet
+    ipam:
+      config:
+        - subnet: 10.254.250.0/24
+  egress: {} # the gate's side, for the published ports only
+
+# What every container that runs a browser (runner) or checks the seal
+# (sealcheck) gets: the sealed network only and the testbed resolver.
+x-sealed-client: &sealed-client
+  networks:
+    sealed: {}
+  dns: [10.254.250.53]
+
+x-go-server: &go-server
+  image: alpine:3.22
+  networks: [sealed]
+  user: "${TESTBED_UID:-1000}:${TESTBED_GID:-1000}"
+  volumes:
+    - ./runtime/linux:/runtime:ro
+    - ./sites:/testbed/sites:ro
+    - ./state:/testbed/state:ro
+  healthcheck:
+    test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8081/_admin/health"]
+    interval: 2s
+    timeout: 3s
+    retries: 30
+
+services:
+  gate:
+    image: nginx:1.27-alpine@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10
+    networks:
+      sealed:
+        ipv4_address: 10.254.250.10
+      egress: {}
+    volumes:
+      - ./gate/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./runtime/gate:/certs:ro
+    ports:
+      - "127.0.0.1:18950:443"   # every site and tag host over TLS (send Host or use --resolve)
+      - "127.0.0.1:18951:18951" # the tracker sink and state endpoints (tags)
+      - "127.0.0.1:18952:18952" # the sites' sink (first-party hits on *.shop.test)
+      - "127.0.0.1:18953:18953" # Echo's API for c18
+    depends_on:
+      shop: {condition: service_healthy}
+      tags: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:18959/"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  dns:
+    image: alpine:3.22
+    networks:
+      sealed:
+        ipv4_address: 10.254.250.53
+    volumes:
+      - ./runtime/linux:/runtime:ro
+    command: ["/runtime/dns", "-listen", "0.0.0.0:53", "-answer", "10.254.250.10"]
+
+  shop:
+    <<: *go-server
+    # c18's server-side event goes through Echo's proxy when Echo is up;
+    # the CA it needs is fetched from the proxy at start.
+    entrypoint: ["sh", "-c"]
+    command:
+      - >-
+        if wget -q -O /tmp/echo-ca.pem http://echo:8026/ca.pem; then set -- -echo-proxy http://echo:8026 -echo-ca /tmp/echo-ca.pem; fi;
+        exec /runtime/consent-testbed -root /testbed -listen 0.0.0.0:8080 -admin 0.0.0.0:8081 -internal shop:8081 "$$@"
+    depends_on:
+      echo: {condition: service_healthy}
+
+  tags:
+    <<: *go-server
+    command: ["/runtime/consent-testbed", "-root", "/testbed", "-listen", "0.0.0.0:8080", "-admin", "0.0.0.0:8081", "-internal", "shop:8081"]
+
+  db:
+    image: mariadb:11.4.8@sha256:bc474f00629f0123c10f9e1bca193a45d18af15a274cf0656acda64f1086c3b6
+    networks: [sealed]
+    environment:
+      MARIADB_DATABASE: wordpress
+      MARIADB_USER: wordpress
+      MARIADB_PASSWORD: wordpress
+      MARIADB_RANDOM_ROOT_PASSWORD: "1"
+    tmpfs:
+      - /var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
+  wp:
+    build: ./wp
+    image: echo-consent-testbed-wp:6.8.3
+    networks: [sealed]
+    depends_on:
+      db: {condition: service_healthy}
+    environment:
+      WORDPRESS_DB_HOST: db
+      WORDPRESS_DB_USER: wordpress
+      WORDPRESS_DB_PASSWORD: wordpress
+      WORDPRESS_DB_NAME: wordpress
+      WORDPRESS_CONFIG_EXTRA: |
+        define('DISABLE_WP_CRON', true);
+        define('AUTOMATIC_UPDATER_DISABLED', true);
+        define('WP_HTTP_BLOCK_EXTERNAL', true);
+        if (($$_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https') { $$_SERVER['HTTPS'] = 'on'; }
+        if (!empty($$_SERVER['HTTP_HOST'])) { define('WP_HOME', 'https://' . $$_SERVER['HTTP_HOST']); define('WP_SITEURL', WP_HOME); }
+    volumes:
+      - wp:/var/www/html
+      - ./wp/mu-plugins:/var/www/html/wp-content/mu-plugins:ro
+      - ./state:/var/www/html/wp-content/testbed-state:ro
+      - ./wp/seed.sh:/seed.sh:ro
+
+  echo:
+    image: alpine:3.22
+    networks: [sealed]
+    user: "${TESTBED_UID:-1000}:${TESTBED_GID:-1000}"
+    environment:
+      HOME: /tmp
+      RHYTHM_OFFLINE: "1"
+    volumes:
+      - ./runtime/linux:/runtime:ro
+    command: ["/runtime/rhythm-echo", "up", "--seal", "--listen", "0.0.0.0:8025", "--smtp", "off", "--proxy", "0.0.0.0:8026", "--mitm", "--private-network", "--store", "/tmp/echo", "--plain"]
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8026/ca.pem"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  runner:
+    <<: *sealed-client
+    build:
+      context: ./runner
+    image: echo-consent-testbed-runner:156.0.8078.47
+    # A non-root user keeps Chrome's sandbox on; Docker's default seccomp
+    # profile refuses the namespaces the sandbox makes, so it is lifted
+    # for this container, which has no network route anywhere.
+    user: "${TESTBED_UID:-1000}:${TESTBED_GID:-1000}"
+    security_opt: ["seccomp=unconfined"]
+    shm_size: 1gb
+    environment:
+      HOME: /tmp/home
+      RHYTHM_OFFLINE: "1"
+      CI: "true"
+    volumes:
+      - ./runtime/linux/rhythm-echo:/usr/local/bin/rhythm-echo:ro
+      - ./ca/ca.pem:/testbed-ca.pem:ro
+      - ./bench:/bench
+    depends_on:
+      gate: {condition: service_healthy}
+      dns: {condition: service_started}
+
+  # sealcheck is TestSealed's client: the runner's network and resolver
+  # (the same anchor) on a small image, so the seal is checked without
+  # building Chrome. It never starts with make up.
+  sealcheck:
+    <<: *sealed-client
+    image: alpine:3.22
+    profiles: [test]
+    command: ["sleep", "infinity"]
+
+volumes:
+  wp: {}

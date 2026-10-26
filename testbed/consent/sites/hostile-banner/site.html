@@ -1,0 +1,20 @@
+{{/* hostile-banner (e17): a banner whose title and buttons carry markup, terminal escape codes and bidi overrides. Echo must escape them in every output. Broken: the hostile strings; good: plain ones. */}}
+{{define "title"}}{{if .Broken}}Shop &#27;[31m<b>&lt;script&gt;alert(1)&lt;/script&gt;</b> &#8238;evil{{else}}{{.ID}} shop{{end}}{{end}}
+{{define "head"}}
+{{template "cm-default" .}}
+{{template "gtag" (dict "attrs" `type="text/plain" data-consent="analytics"`)}}
+<style>#hb{position:fixed;left:0;right:0;bottom:0;z-index:2147483000;background:#fff;border-top:2px solid #333;padding:16px}</style>
+{{end}}
+{{define "body"}}<h1>{{.ID}}</h1>
+<div id="hb" role="dialog" aria-label="Cookie consent">
+<p>We use cookies.{{if .Broken}} &#27;]8;;https://evil.test/&#7;click&#27;]8;;&#7; | col | ]] --> `{{end}}</p>
+<button type="button" id="hb-accept">{{if .Broken}}Accept all &#27;[2J&#27;[H<img src=x>{{else}}Accept all{{end}}</button>
+<button type="button" id="hb-reject">{{if .Broken}}Reject all &#8238;lla tpecca{{else}}Reject all{{end}}</button>
+</div>
+<script>
+function hb(ok) { document.cookie = 'site_consent=' + (ok ? 'accepted' : 'rejected') + '; path=/; max-age=31536000; samesite=lax'; document.getElementById('hb').remove(); }
+if (/site_consent=/.test(document.cookie)) document.getElementById('hb').remove();
+document.getElementById('hb-accept').onclick = function () { hb(true); };
+document.getElementById('hb-reject').onclick = function () { hb(false); };
+</script>
+{{end}}

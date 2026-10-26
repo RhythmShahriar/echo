@@ -1,0 +1,11 @@
+{{/* hostile-text (e17): page text, link text and a dataLayer push carrying markup, Markdown, CSV and terminal injection. Broken: the hostile strings; good: plain ones. */}}
+{{define "title"}}{{if .Broken}}=cmd|' /C calc'!A0 [x](javascript:alert(1)) <img src=x onerror=alert(1)> &#27;[1;31mred{{else}}{{.ID}} shop{{end}}{{end}}
+{{define "head"}}
+{{template "cm-default" .}}
+{{template "generic" (dict)}}
+{{template "gtag" (dict "attrs" `type="text/plain" data-consent="analytics"`)}}
+{{if .Broken}}<script>window.dataLayer.push({event: '</script><script>window.__pwned = 1</script>', note: '\u001b[2J‮| a | b |\r\n## heading', deep: {a: {b: {c: {d: '<iframe src=//evil.test>'}}}}});</script>{{end}}
+{{end}}
+{{define "body"}}<h1>{{if .Broken}}&lt;h1&gt; | pipe | `code` **bold** &#8238;txet{{else}}{{.ID}}{{end}}</h1>
+<p><a href="/page-2/">{{if .Broken}}]]></a><a href="javascript:alert(1)">x{{else}}Products{{end}}</a></p>
+{{end}}

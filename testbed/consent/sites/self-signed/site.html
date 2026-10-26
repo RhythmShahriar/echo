@@ -1,0 +1,6 @@
+{{/* self-signed (e12): served with a self-signed certificate instead of one from the testbed CA (special handling in the server's TLS). Echo must refuse it without -k and run it with -k. */}}
+{{define "head"}}
+{{template "cm-default" .}}
+{{template "complianz" (dict)}}
+{{template "gtag" (dict)}}
+{{end}}

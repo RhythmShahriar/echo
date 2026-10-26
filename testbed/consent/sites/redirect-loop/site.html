@@ -1,0 +1,6 @@
+{{/* redirect-loop: the server answers / with redirects (special handling of redirect-loop in the server). Good: a short chain that lands here; broken: / and /loop/ redirect to each other. */}}
+{{define "head"}}
+{{template "cm-default" .}}
+{{template "complianz" (dict)}}
+{{template "gtag" (dict)}}
+{{end}}

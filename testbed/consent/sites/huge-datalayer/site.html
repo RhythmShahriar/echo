@@ -1,0 +1,14 @@
+{{/* huge-datalayer (e15): the page pushes thousands of large and deeply nested dataLayer entries. Echo's hook records are capped (4 KiB, 8 levels, 2,000 per run); its memory must stay bounded and the run marked truncated. Broken: the flood; good: a few normal pushes. */}}
+{{define "head"}}
+{{template "cm-default" .}}
+{{template "complianz" (dict)}}
+{{template "gtag" (dict)}}
+<script>
+(function () {
+  var n = {{if .Broken}}6000{{else}}5{{end}};
+  var big = new Array({{if .Broken}}20000{{else}}10{{end}}).join('x');
+  function deep(d) { return d ? {next: deep(d - 1), pad: 'y'} : {end: true}; }
+  for (var i = 0; i < n; i++) window.dataLayer.push({event: 'product_impression', index: i, blob: big, tree: deep({{if .Broken}}60{{else}}2{{end}})});
+})();
+</script>
+{{end}}

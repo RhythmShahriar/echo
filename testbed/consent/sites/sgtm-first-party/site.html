@@ -1,0 +1,6 @@
+{{/* sgtm-first-party: GA4 through a first-party server-side container on metrics.sgtm-first-party.shop.test. Good: Consent Mode default denied; broken: no default, so it sends before the choice. */}}
+{{define "head"}}
+{{if not .Broken}}{{template "cm-default" .}}{{end}}
+{{template "cookiebot" (dict)}}
+{{template "gtag" (dict "transport" "https://metrics.sgtm-first-party.shop.test" "noads" true)}}
+{{end}}

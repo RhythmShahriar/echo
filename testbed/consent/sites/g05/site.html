@@ -1,0 +1,8 @@
+{{/* g05 CookieYes set up per its docs (also run with --runs +gpc). */}}
+{{define "head"}}
+{{template "cm-default" .}}
+{{template "cookieyes" (dict)}}
+{{template "gtag" (dict )}}
+{{template "meta" (dict "attrs" `type="text/plain" data-cookieyes="cookieyes-advertisement"`)}}
+{{template "tiktok" (dict "attrs" `type="text/plain" data-cookieyes="cookieyes-advertisement"`)}}
+{{end}}

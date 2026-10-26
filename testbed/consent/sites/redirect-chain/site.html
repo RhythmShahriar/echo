@@ -1,0 +1,6 @@
+{{/* redirect-chain: the server answers / with redirects (special handling of redirect-chain in the server). Good: a short chain that lands here; broken: 12 hops, past Echo's limit of 10. */}}
+{{define "head"}}
+{{template "cm-default" .}}
+{{template "complianz" (dict)}}
+{{template "gtag" (dict)}}
+{{end}}

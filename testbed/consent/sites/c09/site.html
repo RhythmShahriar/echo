@@ -1,0 +1,13 @@
+{{/* c09 Session replay before consent. Broken: Clarity and Hotjar load at once and write storage and cookies before any choice. */}}
+{{define "head"}}
+{{template "cm-default" .}}
+{{template "iubenda" (dict)}}
+{{template "gtag" (dict )}}
+{{if .Broken}}
+{{template "clarity" (dict )}}
+{{template "hotjar" (dict )}}
+{{else}}
+{{template "clarity" (dict "attrs" `type="text/plain" class="_iub_cs_activate" data-iub-purposes="4"`)}}
+{{template "hotjar" (dict "attrs" `type="text/plain" class="_iub_cs_activate" data-iub-purposes="4"`)}}
+{{end}}
+{{end}}

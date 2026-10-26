@@ -1,0 +1,8 @@
+# Vendored open-source CMPs: name, version, file (under this folder), SHA-256.
+# TestVendoredHashes checks every file against this list.
+# Source: the npm packages klaro and vanilla-cookieconsent, from cdn.jsdelivr.net, 2026-10-26.
+klaro 0.7.22 klaro/klaro.js e388fb66bcf9c945eb03df3225c9b5ef9373b9873086ce84112ea93a4fb0d733
+klaro 0.7.22 klaro/LICENSE 77e99125636bef70b534cc86b6f890bf8b33b453d4a9402f3ff4b2cf26e7fa82
+cookieconsent 3.1.0 cookieconsent/cookieconsent.umd.js bc6e2f2e6381fc025b27a6b0afb5a0e1fc689c6f9fc40a78708adb2054ef4575
+cookieconsent 3.1.0 cookieconsent/cookieconsent.css ca046b8b1b1094107205988e7096a687b241c8ef5f3fefe5e543ed28d26646c1
+cookieconsent 3.1.0 cookieconsent/LICENSE e3cf4e09e007ffede1a8a50aa006b489a5eafd466a2094551a0ac2b308230bfd
