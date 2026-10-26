@@ -1058,6 +1058,7 @@ func (r *recorder) writer() {
 func (r *recorder) deliver(e consent.Event) {
 	r.seq++
 	e.Seq = r.seq
+	e.Run = r.kind
 	r.mu.Lock()
 	e.Phase = r.phaseLocked(e.AtMS)
 	e.Visit = r.visitLocked(e.AtMS)

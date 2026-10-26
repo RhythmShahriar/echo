@@ -129,7 +129,7 @@ func TestFullChannelDrops(t *testing.T) {
 // Visits split the events by start time; Live hears hits only.
 func TestVisitsAndLive(t *testing.T) {
 	var live []consent.Event // written by the writer goroutine, read after finish
-	r := unitRecorder(t, consent.RunNone, func(p *consent.Plan) { p.Live = func(e consent.Event) { live = append(live, e) } })
+	r := unitRecorder(t, consent.RunReject, func(p *consent.Plan) { p.Live = func(e consent.Event) { live = append(live, e) } })
 	r.addVisit(0)
 	r.addVisit(1000)
 	hit := &consent.Hit{Tracker: "ga4"}
@@ -140,8 +140,13 @@ func TestVisitsAndLive(t *testing.T) {
 	if len(rec.Events) != 3 || rec.Events[0].Visit != 0 || rec.Events[1].Visit != 1 || rec.Events[2].Cookie.Phase != consent.PhaseBefore || rec.Events[2].Cookie.AtMS != 1600 {
 		t.Errorf("events %+v", rec.Events)
 	}
-	if len(live) != 1 || live[0].Request.URL != "a" {
+	if len(live) != 1 || live[0].Request.URL != "a" || live[0].Run != consent.RunReject {
 		t.Errorf("live heard %+v", live)
+	}
+	for _, e := range rec.Events {
+		if e.Run != consent.RunReject {
+			t.Errorf("event %d has run %q, want reject", e.Seq, e.Run)
+		}
 	}
 }
 

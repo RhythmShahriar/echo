@@ -381,9 +381,10 @@ func liveWriter(w io.Writer, on bool) func(consent.Event) {
 }
 
 // liveLine is one --live line, 'hit  <s.ss>s  <run>  <tracker>
-// <host><path> (held)', or "" for an event that isn't a hit. An event
-// carries its phase, not its run, so the run shows as the phase says:
-// before the choice, then the choice made.
+// <host><path> (held)', or "" for an event that isn't a hit. The run is
+// named with the part of it the hit fell in when that isn't the run's
+// own choice: "Accept, before the choice". An event without a run (an
+// older runner) shows its phase alone.
 func liveLine(ev consent.Event) string {
 	if ev.Kind != consent.EvRequest || ev.Hit == nil || ev.Request == nil || ev.Hit.Kind == consent.HitScript {
 		return ""
@@ -396,8 +397,21 @@ func liveLine(ev consent.Event) string {
 	if ev.Request.Held {
 		held = " (held)"
 	}
-	return fmt.Sprintf("hit  %.2fs  %s  %s  %s%s", float64(ev.AtMS)/1000, phaseLabel(ev.Phase),
+	return fmt.Sprintf("hit  %.2fs  %s  %s  %s%s", float64(ev.AtMS)/1000, runLabel(ev),
 		consent.SafeText(ev.Hit.Name, 60), consent.SafeText(where, 200), held)
+}
+
+// runLabel names the run and phase of a --live line.
+func runLabel(ev consent.Event) string {
+	switch {
+	case ev.Run == "":
+		return phaseLabel(ev.Phase)
+	case ev.Phase == consent.PhaseBefore && ev.Run != consent.RunNone:
+		return ev.Run.Label() + ", before the choice"
+	case ev.Run == consent.RunWithdraw && ev.Phase == consent.PhaseAfterAccept:
+		return ev.Run.Label() + ", after Accept"
+	}
+	return ev.Run.Label()
 }
 
 // phaseLabel names a phase as the run lines do.

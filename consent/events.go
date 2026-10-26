@@ -29,6 +29,7 @@ type Event struct {
 	AtMS    int64       `json:"at_ms"` // ms since the run's first navigation, one clock (PRD 13.3)
 	Visit   int         `json:"visit"` // index into Run.Visits
 	Phase   Phase       `json:"phase"`
+	Run     RunKind     `json:"run,omitempty"` // the run it belongs to, set by the runner
 	Kind    EventKind   `json:"kind"`
 	Request *Request    `json:"request,omitempty"`
 	Hit     *Hit        `json:"hit,omitempty"`

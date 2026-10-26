@@ -337,6 +337,8 @@ with the exact texts.
   came late), the file is written again from the final events, so it
   always matches the run. A retry starts the file again. `events_file`
   is the relative path.
+- Every event in that file names its run (`"run": "reject"`) beside its
+  phase.
 - With `--har`, `har/page-<n>-<run>.har` (0600): HAR 1.2,
   `creator` `{"name": "rhythm-echo", "version": "<Echo's version or
   dev>"}`, one entry per recorded request in event order:

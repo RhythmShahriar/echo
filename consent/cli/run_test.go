@@ -444,6 +444,12 @@ func TestAgainstMissing(t *testing.T) {
 	}
 }
 
+// withRun sets the run an event belongs to.
+func withRun(ev consent.Event, k consent.RunKind) consent.Event {
+	ev.Run = k
+	return ev
+}
+
 func TestLiveLines(t *testing.T) {
 	hit := func(phase consent.Phase, held bool) consent.Event {
 		return consent.Event{Kind: consent.EvRequest, AtMS: 840, Phase: phase,
@@ -454,6 +460,12 @@ func TestLiveLines(t *testing.T) {
 		ptr(hit(consent.PhaseBefore, true)):       "hit  0.84s  before the choice  Meta Pixel  www.facebook.com/tr (held)",
 		ptr(hit(consent.PhaseAfterReject, true)):  "hit  0.84s  Reject  Meta Pixel  www.facebook.com/tr (held)",
 		ptr(hit(consent.PhaseAfterAccept, false)): "hit  0.84s  Accept  Meta Pixel  www.facebook.com/tr",
+		// With the run the runner sets, the line names it.
+		ptr(withRun(hit(consent.PhaseBefore, true), consent.RunNone)):            "hit  0.84s  No choice  Meta Pixel  www.facebook.com/tr (held)",
+		ptr(withRun(hit(consent.PhaseBefore, true), consent.RunReject)):          "hit  0.84s  Reject, before the choice  Meta Pixel  www.facebook.com/tr (held)",
+		ptr(withRun(hit(consent.PhaseAfterReject, true), consent.RunReject)):     "hit  0.84s  Reject  Meta Pixel  www.facebook.com/tr (held)",
+		ptr(withRun(hit(consent.PhaseAfterAccept, true), consent.RunWithdraw)):   "hit  0.84s  Withdraw, after Accept  Meta Pixel  www.facebook.com/tr (held)",
+		ptr(withRun(hit(consent.PhaseAfterWithdraw, true), consent.RunWithdraw)): "hit  0.84s  Withdraw  Meta Pixel  www.facebook.com/tr (held)",
 	} {
 		if got := liveLine(*ev); got != want {
 			t.Errorf("got  %q\nwant %q", got, want)
