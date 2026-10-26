@@ -150,13 +150,14 @@ func (b *liveBed) check(t *testing.T, bin string, s scenarios.Scenario, broken b
 }
 
 // TestScenarios runs the plan's four scenarios (c01, c02, c03, g01) and
-// g12, c11, c13 and c14: a bad scenario's good state must be clean and
+// g12, c11, c13, c14 and c07 (a choice stored under another path, behind
+// a banner container with no size of its own): a bad scenario's good state must be clean and
 // its broken state caught (every expect, no forbid), a good one clean;
 // the tracker sink stays empty in every run.
 func TestScenarios(t *testing.T) {
 	bin := needLinked(t)
 	b := startBed(t)
-	for _, id := range []string{"c01", "c02", "c03", "g01", "g12", "c11", "c13", "c14"} {
+	for _, id := range []string{"c01", "c02", "c03", "g01", "g12", "c11", "c13", "c14", "c07"} {
 		t.Run(id, func(t *testing.T) {
 			s, ok := b.m.Find(id)
 			if !ok {

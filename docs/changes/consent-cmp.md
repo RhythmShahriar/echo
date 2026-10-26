@@ -464,3 +464,14 @@ texts, for the release notes and the docs team.
 - Fixture text: the CookieYes and Didomi replica pages no longer carry
   a comma before "and" in their banner text (the selectors are
   unchanged).
+
+## Integration fixes
+
+- `BannerShowing` (and every banner test of a rule's `banner.selector`)
+  counts a container with no size of its own as shown when one of its
+  first 64 descendants is visible: Borlabs Cookie's `#BorlabsCookieBox`
+  only wraps a `position: fixed` box. A banner that came back on the
+  next page or the reload was missed before, so
+  `After Reject, the banner came back on /page-2/` (with `the banner
+  showed again on the next page (/page-2/) at 4.70s; the banner showed
+  again on the reload (/) at 7.73s`) now shows for such a CMP.

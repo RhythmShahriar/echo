@@ -90,7 +90,21 @@ function closedShown(host) {
 function shown(loc) {
   const w = walk(loc);
   if (w.closed) return closedShown(w.closed);
-  return visible(find(loc));
+  const el = find(loc);
+  return visible(el) || childShown(el);
+}
+
+// childShown: a banner container may have no size of its own when it
+// only wraps a position:fixed box (Borlabs Cookie's #BorlabsCookieBox
+// does). It is shown when one of its first descendants is visible;
+// visible checks the container's display and opacity on the way up.
+function childShown(el) {
+  if (!el || !el.isConnected || !el.querySelectorAll) return false;
+  const kids = el.querySelectorAll("*");
+  for (let i = 0; i < kids.length && i < 64; i++) {
+    if (visible(kids[i])) return true;
+  }
+  return false;
 }
 
 // visible: sized, not display:none or visibility hidden, not (with its
