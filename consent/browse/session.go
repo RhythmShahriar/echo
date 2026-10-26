@@ -336,20 +336,23 @@ func (s *session) navigate(raw string) error {
 	return nil
 }
 
-// evalMain runs js in the tab's main world and returns its JSON value.
+// evalMain runs the expression js in the tab's main world and returns
+// its JSON value, at most maxEvalResult: the page measures it before
+// returning it.
 func (s *session) evalMain(ctx context.Context, js string) (json.RawMessage, error) {
 	c := cdp{b: s.main.b, id: s.main.id, ctx: ctx}
-	res, err := proto.RuntimeEvaluate{Expression: js, ReturnByValue: true, AwaitPromise: true}.Call(c)
+	res, err := proto.RuntimeEvaluate{Expression: cappedJS(js), ReturnByValue: true, AwaitPromise: true}.Call(c)
 	if err != nil {
 		return nil, err
 	}
 	if res.ExceptionDetails != nil {
-		return nil, fmt.Errorf("script failed: %s", consent.SafeText(res.ExceptionDetails.Text, 200))
+		msg := exceptionText(res.ExceptionDetails)
+		if strings.Contains(msg, "result too large") {
+			return nil, errResultTooLarge
+		}
+		return nil, fmt.Errorf("script failed: %s", consent.SafeText(msg, 200))
 	}
-	if res.Result == nil {
-		return json.RawMessage("null"), nil
-	}
-	return json.Marshal(res.Result.Value)
+	return cappedResult(res)
 }
 
 // close ends recording, disposes of the context (its tab, cookies and

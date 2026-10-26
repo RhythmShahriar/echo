@@ -205,6 +205,21 @@ func TestEvalResultCap(t *testing.T) {
 	if raw, err := tab.EvalIsolated(t.Context(), `() => "x".repeat(200 * 1024)`); err != nil || len(raw) != 200*1024+2 {
 		t.Errorf("200 KiB: %d %v", len(raw), err)
 	}
+	// The main world measures its answer in the page too: an object is
+	// refused before it is sent, a smaller one comes back whole.
+	if _, err := tab.EvalMain(t.Context(), `({a: "x".repeat(300 * 1024)})`); !errors.Is(err, errResultTooLarge) {
+		t.Errorf("main object: %v", err)
+	}
+	if raw, err := tab.EvalMain(t.Context(), `({a: "x".repeat(200 * 1024)})`); err != nil || len(raw) != 200*1024+8 {
+		t.Errorf("main 200 KiB: %d %v", len(raw), err)
+	}
+	if raw, err := tab.EvalMain(t.Context(), "1 + 1 // a trailing comment"); err != nil || string(raw) != "2" {
+		t.Errorf("trailing comment: %s %v", raw, err)
+	}
+	// A page that replaces JSON.stringify can't pass off a non-string.
+	if _, err := tab.EvalMain(t.Context(), `(JSON.stringify = () => 5, 1)`); err == nil {
+		t.Error("a patched JSON.stringify was trusted")
+	}
 }
 
 // TestClickNavigatesAway: an Accept that sends the tab to another host

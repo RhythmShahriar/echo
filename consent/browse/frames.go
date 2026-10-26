@@ -132,10 +132,38 @@ func isolatedJS(fn string, args []any) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("script arguments: %w", err)
 	}
-	return "(async () => {\nconst __f = (\n" + fn + "\n);\nconst __r = await __f(..." + string(a) + ");\n" +
+	return cappedJS("(\n" + fn + "\n)(..." + string(a) + ")"), nil
+}
+
+// cappedJS wraps an expression so the page awaits it and returns the
+// JSON of its result as a string, refusing one larger than
+// maxEvalResult there: Echo never receives a huge answer over CDP. The
+// newlines end a trailing line comment in expr.
+func cappedJS(expr string) string {
+	return "(async () => {\nconst __r = await (\n" + expr + "\n);\n" +
 		"const __s = JSON.stringify(__r === undefined ? null : __r);\n" +
 		"if (__s !== undefined && __s.length > " + fmt.Sprint(maxEvalResult) + ") throw new Error(\"result too large\");\n" +
-		"return __s === undefined ? \"null\" : __s;\n})()", nil
+		"return __s === undefined ? \"null\" : __s;\n})()"
+}
+
+// cappedResult is the JSON a cappedJS script returned. The Go side
+// checks the size and the JSON again: in the main world the page can
+// replace JSON.stringify.
+func cappedResult(res *proto.RuntimeEvaluateResult) (json.RawMessage, error) {
+	if res.Result == nil {
+		return json.RawMessage("null"), nil
+	}
+	if res.Result.Type != proto.RuntimeRemoteObjectTypeString {
+		return nil, errors.New("script returned something that isn't JSON")
+	}
+	str := res.Result.Value.Str()
+	if len(str) > maxEvalResult {
+		return nil, errResultTooLarge
+	}
+	if !json.Valid([]byte(str)) {
+		return nil, errors.New("script returned something that isn't JSON")
+	}
+	return json.RawMessage(str), nil
 }
 
 // evalIsolated runs a function expression with args in f's isolated
@@ -172,17 +200,7 @@ func (s *session) evalIsolated(ctx context.Context, f frame, fn string, args ...
 			}
 			return nil, fmt.Errorf("script failed: %s", consent.SafeText(msg, 200))
 		}
-		if res.Result == nil {
-			return json.RawMessage("null"), nil
-		}
-		str := res.Result.Value.Str()
-		if len(str) > maxEvalResult {
-			return nil, errResultTooLarge
-		}
-		if !json.Valid([]byte(str)) {
-			return nil, errors.New("script returned something that isn't JSON")
-		}
-		return json.RawMessage(str), nil
+		return cappedResult(res)
 	}
 }
 

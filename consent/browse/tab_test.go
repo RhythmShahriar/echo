@@ -27,14 +27,23 @@ func TestFileWord(t *testing.T) {
 // isolatedJS passes the arguments as JSON and refuses ones that aren't.
 func TestIsolatedJS(t *testing.T) {
 	js, err := isolatedJS("(a, b) => a + b", []any{1, "x"})
-	if err != nil || !strings.Contains(js, `await __f(...[1,"x"])`) || !strings.Contains(js, "result too large") {
+	if err != nil || !strings.Contains(js, ")(...[1,\"x\"])") || !strings.Contains(js, "result too large") {
 		t.Errorf("%s %v", js, err)
 	}
-	if js, _ := isolatedJS("() => 1", nil); !strings.Contains(js, "__f(...[])") {
+	if js, _ := isolatedJS("() => 1", nil); !strings.Contains(js, ")(...[])") {
 		t.Errorf("no arguments: %s", js)
 	}
 	if _, err := isolatedJS("() => 1", []any{make(chan int)}); err == nil {
 		t.Error("a channel argument was accepted")
+	}
+}
+
+// cappedJS awaits the expression and measures its JSON in the page; a
+// trailing line comment can't swallow the rest of the wrapper.
+func TestCappedJS(t *testing.T) {
+	js := cappedJS("1 + 1 // note")
+	if !strings.Contains(js, "await (\n1 + 1 // note\n);") || !strings.Contains(js, "__s.length > 262144") {
+		t.Errorf("%s", js)
 	}
 }
 
