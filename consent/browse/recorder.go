@@ -150,12 +150,21 @@ type recorder struct {
 	activity atomic.Int64 // unix ns of the last request that started or ended, for settle
 	loads    atomic.Int64 // load events of the tab's top frame
 	topNavs  []topNav     // top-frame document requests, for a click that navigates away
+	doc      docNav       // the top frame's latest document load, for the run's load checks
 
 	limit    chan struct{} // closed when Limits.Requests is reached
 	counts   struct{ requests, held, refused, internal atomic.Int64 }
 	dropped  atomic.Int64
 	trunc    atomic.Bool
 	closedIn atomic.Bool
+	// halt ends work still in flight when the run closes (a mapped
+	// request waiting on its server), so it is recorded as it stands.
+	halt     context.Context
+	haltStop context.CancelFunc
+	// emitMu guards emit against the close of events: a handler or the
+	// hub may still emit while finish drains the run.
+	emitMu     sync.RWMutex
+	emitClosed bool
 
 	events   chan consent.Event
 	wake     chan struct{}
@@ -182,6 +191,7 @@ func newRecorder(ctx context.Context, h *hub, p *consent.Plan, site *url.URL, ki
 		worlds: map[proto.PageFrameID]proto.RuntimeExecutionContextID{}, hosts: map[proto.NetworkRequestID]string{},
 		setCookies: map[string]setCookieNote{}, blocked: map[string]bool{}, cookies: map[string]uint64{}, storage: map[string]int{},
 		events: make(chan consent.Event, ch), wake: make(chan struct{}, 1), writerD: make(chan struct{})}
+	r.halt, r.haltStop = context.WithCancel(context.WithoutCancel(ctx))
 	if p.Live != nil {
 		live := p.Live
 		r.sinks = append(r.sinks, func(e consent.Event) {
@@ -434,6 +444,7 @@ func (r *recorder) handle(msg *rod.Message) {
 	case "Network.responseReceived":
 		var e proto.NetworkResponseReceived
 		if msg.Load(&e) && e.Response != nil {
+			r.docResponse(e.RequestID, e.Response)
 			r.completed(e.RequestID, e.Response.Status, header(e.Response.Headers, "X-Rhythm-Echo-Refused"))
 		}
 	case "Network.responseReceivedExtraInfo":
@@ -448,6 +459,7 @@ func (r *recorder) handle(msg *rod.Message) {
 	case "Network.loadingFailed":
 		var e proto.NetworkLoadingFailed
 		if msg.Load(&e) {
+			r.docFailed(e.RequestID, e.ErrorText)
 			r.completed(e.RequestID, 0, e.ErrorText)
 		}
 	case "Network.loadingFinished":
@@ -520,8 +532,11 @@ func (r *recorder) willBeSent(t *target, e *proto.NetworkRequestWillBeSent) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if t.kind == kindPage && e.Type == proto.NetworkResourceTypeDocument && e.Request != nil &&
-		string(e.FrameID) == string(t.id) && len(r.topNavs) < maxTopNavs {
-		r.topNavs = append(r.topNavs, topNav{host: hostOfURL(e.Request.URL), at: time.Now()})
+		string(e.FrameID) == string(t.id) {
+		if len(r.topNavs) < maxTopNavs {
+			r.topNavs = append(r.topNavs, topNav{host: hostOfURL(e.Request.URL), at: time.Now()})
+		}
+		r.docRequestLocked(e)
 	}
 	if r.base == 0 && t.kind == kindPage && e.Type == proto.NetworkResourceTypeDocument {
 		r.base = float64(e.WallTime)
@@ -946,7 +961,9 @@ func safeHold(c consent.Classifier, req *consent.Request) (hold bool) {
 // emit hands an event to the writer without waiting: a full channel
 // drops it, counts it and marks the run truncated.
 func (r *recorder) emit(e consent.Event) {
-	if r.closedIn.Load() {
+	r.emitMu.RLock()
+	defer r.emitMu.RUnlock()
+	if r.emitClosed {
 		return
 	}
 	select {
@@ -1143,6 +1160,7 @@ func (r *recorder) finish() *Recording {
 	r.mu.Unlock()
 	r.closedIn.Store(true)
 	close(r.stop)
+	r.haltStop()
 	<-r.loopD
 	r.work.Wait()
 	r.mu.Lock()
@@ -1154,7 +1172,10 @@ func (r *recorder) finish() *Recording {
 	}
 	r.reqs = map[proto.NetworkRequestID]*pending{}
 	r.mu.Unlock()
+	r.emitMu.Lock()
+	r.emitClosed = true
 	close(r.events)
+	r.emitMu.Unlock()
 	<-r.writerD
 	r.mu.Lock()
 	for i := range r.out {
@@ -1172,8 +1193,8 @@ func (r *recorder) finish() *Recording {
 	return r.result()
 }
 
-// recordLockedFinal is recordLocked for the last flush, after emit is
-// closed to new events from handlers: it sends straight to the channel.
+// recordLockedFinal is recordLocked for the last flush, once every
+// handler is done: it sends straight to the channel.
 func (r *recorder) recordLockedFinal(p *pending) {
 	if p.recorded || p.req == nil || p.frameless {
 		return
@@ -1194,6 +1215,27 @@ func (r *recorder) result() *Recording {
 	return &Recording{Events: r.out, Dropped: int(r.dropped.Load()), Truncated: r.trunc.Load(), Limit: r.limitHit,
 		Requests: int(r.counts.requests.Load()), Held: int(r.counts.held.Load()), Refused: int(r.counts.refused.Load()),
 		Internal: int(r.counts.internal.Load())}
+}
+
+// signals returns the consent signals recorded so far, in order.
+func (r *recorder) signals() []consent.Signal {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	var out []consent.Signal
+	for _, e := range r.out {
+		if e.Kind == consent.EvSignal && e.Signal != nil {
+			out = append(out, *e.Signal)
+		}
+	}
+	return out
+}
+
+// limitPages is Limits.Pages, with the default for zero.
+func (r *recorder) limitPages() int {
+	if n := r.plan.Limits.Pages; n > 0 {
+		return n
+	}
+	return consent.DefaultLimits.Pages
 }
 
 // cut caps a stored URL at Limits.URLBytes, on a rune boundary.

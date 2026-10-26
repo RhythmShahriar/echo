@@ -120,6 +120,9 @@ type Browser struct {
 	Version string
 	// Downloaded is set when Bin is Soundcheck's own Chrome for Testing.
 	Downloaded bool
+	// NoSandbox is set when Chrome runs without its sandbox (--no-sandbox
+	// or the environment), so a report can say so.
+	NoSandbox bool
 }
 
 // Describe names the browser for the run's log, e.g. "Chrome for
@@ -221,7 +224,7 @@ func Launch(ctx context.Context, opts Options) (*Browser, error) {
 	if err != nil {
 		return nil, err
 	}
-	br := &Browser{Browser: b, proc: proc, Bin: bin, ControlURL: control, Downloaded: downloaded}
+	br := &Browser{Browser: b, proc: proc, Bin: bin, ControlURL: control, Downloaded: downloaded, NoSandbox: noSandbox}
 	if v, err := (proto.BrowserGetVersion{}).Call(b); err == nil {
 		br.Version = productVersion(v.Product)
 	}
@@ -416,9 +419,17 @@ func (b *Browser) ProfileDir() string { return b.proc.profile() }
 // Close shuts the browser down, kills any of its processes still
 // running and removes its temporary profile.
 func (b *Browser) Close() {
-	_ = b.Browser.Close()
+	// The launch context may be canceled already (Ctrl-C): ask Chrome to
+	// close on a context of its own, for a moment, then make sure.
+	ctx, cancel := context.WithTimeout(context.Background(), closeWait)
+	defer cancel()
+	_ = b.Browser.Context(ctx).Close()
 	b.proc.stop()
 }
+
+// closeWait is how long Close waits for Chrome to answer its close
+// request before stop kills it.
+const closeWait = 2 * time.Second
 
 // Prune deletes downloaded browsers other than the Chrome for Testing
 // version this build uses (all of them with all set, when an installed

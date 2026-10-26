@@ -439,3 +439,36 @@ func TestNotAProxyRequest(t *testing.T) {
 		t.Errorf("Add = %+v", s)
 	}
 }
+
+// TestDialErrorRemembered: a loopback port nothing listens on fails by
+// CONNECT and by plain HTTP; the guard keeps why, so the check can say
+// the site didn't answer. A port that answered has no error.
+func TestDialErrorRemembered(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	closed := ln.Addr().String()
+	_ = ln.Close()
+	srv, _ := counter(t)
+	p := startGuard(t, Options{Target: "127.0.0.1"})
+	if code, _, _ := connect(t, p, closed); code != http.StatusBadGateway {
+		t.Errorf("CONNECT %s = %d; want 502", closed, code)
+	}
+	host, port, _ := net.SplitHostPort(closed)
+	if got := p.DialError(host, port); !strings.Contains(got, "refused") {
+		t.Errorf("DialError after CONNECT = %q", got)
+	}
+	p2 := startGuard(t, Options{Target: "127.0.0.1"})
+	if resp, _ := get(t, p2, "http://"+closed+"/"); resp.StatusCode != http.StatusBadGateway {
+		t.Errorf("GET = %d; want 502", resp.StatusCode)
+	}
+	if got := p2.DialError(host, port); !strings.Contains(got, "refused") {
+		t.Errorf("DialError after GET = %q", got)
+	}
+	_, _ = get(t, p2, srv.URL+"/")
+	h2, p2port, _ := net.SplitHostPort(strings.TrimPrefix(srv.URL, "http://"))
+	if got := p2.DialError(h2, p2port); got != "" {
+		t.Errorf("DialError for a port that answered = %q", got)
+	}
+}

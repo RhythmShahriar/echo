@@ -117,7 +117,7 @@ func (r *recorder) fetchMapped(s cdp, e *proto.FetchRequestPaused, u *url.URL, b
 	if u.RawQuery != "" {
 		target += "?" + u.RawQuery
 	}
-	ctx, cancel := context.WithTimeout(context.WithoutCancel(r.ctx), mapTimeout)
+	ctx, cancel := context.WithTimeout(r.halt, mapTimeout)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, e.Request.Method, target, bytes.NewReader(body))
 	if err != nil {

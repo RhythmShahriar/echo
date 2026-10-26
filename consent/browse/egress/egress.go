@@ -135,6 +135,7 @@ type Proxy struct {
 
 	mu      sync.Mutex
 	reasons map[string]string // host:port -> reason
+	dialErr map[string]string // host:port -> why the last dial failed, masked
 	tunnels map[net.Conn]struct{}
 	closed  bool
 }
@@ -157,7 +158,7 @@ func start(opts Options, refuseAll bool) (*Proxy, error) {
 	if opts.IdleTimeout <= 0 {
 		opts.IdleTimeout = DefaultIdleTimeout
 	}
-	p := &Proxy{opts: opts, refuseAll: refuseAll, reasons: map[string]string{}, tunnels: map[net.Conn]struct{}{},
+	p := &Proxy{opts: opts, refuseAll: refuseAll, reasons: map[string]string{}, dialErr: map[string]string{}, tunnels: map[net.Conn]struct{}{},
 		sem: make(chan struct{}, opts.MaxTunnels)}
 	if !refuseAll {
 		p.guard = httpx.NewGuard(opts.Target)
@@ -208,6 +209,27 @@ func (p *Proxy) Reason(host, port string) string {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	return p.reasons[net.JoinHostPort(strings.ToLower(host), port)]
+}
+
+// DialError says why the proxy last failed to connect to host:port
+// ("dial tcp 127.0.0.1:443: connect: connection refused", masked), or ""
+// when it never did. Chrome only sees a failed tunnel or a 502; this is
+// the reason a check names when the site didn't answer.
+func (p *Proxy) DialError(host, port string) string {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.dialErr[net.JoinHostPort(strings.ToLower(host), port)]
+}
+
+// noteDialError remembers why a connection to host:port failed, for at
+// most maxReasons pairs.
+func (p *Proxy) noteDialError(host, port string, err error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	key := net.JoinHostPort(strings.ToLower(host), port)
+	if _, ok := p.dialErr[key]; ok || len(p.dialErr) < maxReasons {
+		p.dialErr[key] = consent.MaskURL(err.Error(), false)
+	}
 }
 
 // Close stops the listener and closes every open tunnel.
@@ -370,6 +392,7 @@ func (p *Proxy) tunnel(w http.ResponseWriter, r *http.Request, host, port string
 			p.refuse(w, r.Method, host, port, ReasonPrivate)
 			return
 		}
+		p.noteDialError(host, port, err)
 		http.Error(w, "can't connect", http.StatusBadGateway)
 		return
 	}
@@ -471,6 +494,11 @@ func (p *Proxy) forwardError(w http.ResponseWriter, r *http.Request, err error) 
 		p.refuse(w, r.Method, strings.ToLower(r.URL.Hostname()), port, ReasonPrivate)
 		return
 	}
+	port := r.URL.Port()
+	if port == "" {
+		port = "80"
+	}
+	p.noteDialError(r.URL.Hostname(), port, err)
 	http.Error(w, "can't connect", http.StatusBadGateway)
 }
 
