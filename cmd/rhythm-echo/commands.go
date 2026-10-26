@@ -849,7 +849,8 @@ Flags:
                              folder's files)
       --consent              add a commented consent: block to .echo/config.yaml, or
                              write a config with only that block
-      --force                replace an existing .echo/config.yaml
+      --force                replace an existing .echo/config.yaml; with --consent,
+                             replace only its consent: block
 
 Exit codes: 0 ok, 2 usage error or the config exists, 3 couldn't write it.
 ` + flagtext.Footer
