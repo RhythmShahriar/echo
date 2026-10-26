@@ -179,7 +179,10 @@ func interruptProbe(ctx context.Context, p *ProbeEnv, broken bool) ([]Step, erro
 		env := p.env("TMPDIR="+tmp, "TMP="+tmp, "TEMP="+tmp)
 		ctx, cancel := context.WithTimeout(ctx, p.Timeout)
 		defer cancel()
-		cmd := p.command(ctx, "check", env, append([]string{"consent", siteURL("g01"), "--fail-on", "none", "--parallel", "1"}, site.mapArgs()...)...)
+		// The probe's own store, where it watches for the Reject run's
+		// events file: the default is the nearest .echo above.
+		store := filepath.Join(p.Work, ".echo")
+		cmd := p.command(ctx, "check", env, append([]string{"consent", siteURL("g01"), "--fail-on", "none", "--parallel", "1", "--store", store}, site.mapArgs()...)...)
 		newGroup(cmd)
 		var s Step
 		if !broken {
@@ -194,7 +197,7 @@ func interruptProbe(ctx context.Context, p *ProbeEnv, broken bool) ([]Step, erro
 			// press in another phase proves nothing about this one, so
 			// the probe then lets the run end on its own and the "seen"
 			// line it asks for is false.
-			sawReject, ended := waitForReject(filepath.Join(p.Work, ".echo", "consent"), done, p.Timeout/2)
+			sawReject, ended := waitForReject(filepath.Join(store, "consent"), done, p.Timeout/2)
 			if ended == nil && sawReject && cmd.Process != nil {
 				_ = interrupt(cmd)
 			}
@@ -205,7 +208,7 @@ func interruptProbe(ctx context.Context, p *ProbeEnv, broken bool) ([]Step, erro
 			s = p.finish("check", *ended)
 			s.note("reject run seen before the interrupt: %v", sawReject)
 			if s.Complete == nil {
-				s.Complete = completeFromStore(filepath.Join(p.Work, ".echo", "consent"))
+				s.Complete = completeFromStore(filepath.Join(store, "consent"))
 			}
 		}
 		left, err := processesWith(ctx, tmp)

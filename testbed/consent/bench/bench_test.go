@@ -4,10 +4,13 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/RhythmShahriar/echo/config"
 	"github.com/RhythmShahriar/echo/consent"
 	"github.com/RhythmShahriar/echo/model"
 	"github.com/RhythmShahriar/echo/testbed/consent/judge"
@@ -99,5 +102,36 @@ func TestEchoArgIsJoined(t *testing.T) {
 				t.Errorf("%s: --echo %s is a page URL to rhythm-echo; write --echo=%s", s.ID, s.Args[i+1], s.Args[i+1])
 			}
 		}
+	}
+}
+
+// TestFenceSettings: a run under the work folder finds the fence, not a
+// .echo further up (testbed/.echo is Echo's own testbed's), and the
+// fence loads as Echo's defaults.
+func TestFenceSettings(t *testing.T) {
+	outer := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(outer, ".echo"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(outer, ".echo", "config.yaml"), []byte("site: https://shop.example.com\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	work := filepath.Join(outer, "consent", "bench", "work")
+	run := filepath.Join(work, "c01", "good")
+	if err := os.MkdirAll(run, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := config.Find(run); err != nil || got != filepath.Join(outer, ".echo", "config.yaml") {
+		t.Fatalf("before the fence: %q, %v", got, err)
+	}
+	if err := fenceSettings(work); err != nil {
+		t.Fatal(err)
+	}
+	got, err := config.Find(run)
+	if err != nil || got != filepath.Join(work, ".echo", "config.yaml") {
+		t.Fatalf("with the fence: %q, %v", got, err)
+	}
+	if _, err := config.Load(got); err != nil {
+		t.Errorf("the fence doesn't load: %v", err)
 	}
 }

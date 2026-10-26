@@ -218,6 +218,9 @@ func benchmark(ctx context.Context, o options, stderr io.Writer) (*Results, erro
 	if err := os.MkdirAll(o.work, 0o750); err != nil {
 		return nil, err
 	}
+	if err := fenceSettings(o.work); err != nil {
+		return nil, err
+	}
 	var logMu sync.Mutex
 	logf := func(s string) {
 		logMu.Lock()
@@ -540,3 +543,20 @@ func failures(r *Results) []string {
 	}
 	return out
 }
+
+// fenceSettings writes an empty .echo/config.yaml at the top of work.
+// rhythm-echo looks for its settings and store in the nearest .echo up
+// from where it runs, as git finds .git; the default work folder sits
+// under testbed/, whose .echo belongs to Echo's own testbed, so without
+// the fence every run read that config and filled that store.
+func fenceSettings(work string) error {
+	dir := filepath.Join(work, ".echo")
+	if err := os.MkdirAll(dir, 0o750); err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(dir, "config.yaml"), []byte(fenceConfig), 0o600)
+}
+
+// fenceConfig is the fence's whole config: defaults only.
+const fenceConfig = "# The consent benchmark's own settings: Echo's defaults. This file stops\n" +
+	"# rhythm-echo from reading a .echo above the benchmark's work folder.\n"
