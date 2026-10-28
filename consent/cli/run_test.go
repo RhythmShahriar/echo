@@ -770,3 +770,22 @@ func TestSitesPlansNumberOn(t *testing.T) {
 		}
 	}
 }
+
+// TestBrowserLineOnlyVerbose keeps browse's "Browser: ..." line off
+// stderr without -v (the view names the browser on the first run) and
+// lets the download lines through either way.
+func TestBrowserLineOnlyVerbose(t *testing.T) {
+	for _, verbose := range []bool{false, true} {
+		var buf bytes.Buffer
+		w := browserLog(&buf, verbose)
+		fmt.Fprintln(w, "Downloading Chrome for Testing 156.0.8078.47 (172 MB) once")
+		fmt.Fprintln(w, "Browser: Chrome 153.0.8010.52 (/usr/bin/google-chrome)")
+		want := "Downloading Chrome for Testing 156.0.8078.47 (172 MB) once\n"
+		if verbose {
+			want += "Browser: Chrome 153.0.8010.52 (/usr/bin/google-chrome)\n"
+		}
+		if buf.String() != want {
+			t.Errorf("verbose %v: %q, want %q", verbose, buf.String(), want)
+		}
+	}
+}

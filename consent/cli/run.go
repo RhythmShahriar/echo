@@ -154,7 +154,7 @@ func (c *cmd) runCheck(ctx context.Context, pos []string) int {
 		// Every plan writes into the one folder: page numbers go on
 		// from the earlier plans' so no file is written twice.
 		p.PageBase, pages = pages, pages+len(p.Targets)
-		p.Browser.Log = env.Stderr
+		p.Browser.Log = browserLog(env.Stderr, o.verbose)
 		p.Live = live
 		r, err := consent.RunPlan(ctx, p)
 		if r != nil {
@@ -467,4 +467,25 @@ func anyRun(r *consent.Result, f func(consent.Run) bool) bool {
 		}
 	}
 	return false
+}
+
+// browserLog is where browse writes its Chrome lines: the download lines
+// always, its "Browser: ..." line only with -v. Without -v the view names
+// the browser on the first run, so the line isn't printed twice.
+func browserLog(w io.Writer, verbose bool) io.Writer {
+	if verbose || w == nil {
+		return w
+	}
+	return quietBrowser{w}
+}
+
+// quietBrowser drops the "Browser: ..." line browse writes once Chrome
+// starts. Browse writes each line in one call.
+type quietBrowser struct{ w io.Writer }
+
+func (q quietBrowser) Write(b []byte) (int, error) {
+	if bytes.HasPrefix(b, []byte("Browser: ")) {
+		return len(b), nil
+	}
+	return q.w.Write(b)
 }

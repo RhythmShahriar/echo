@@ -67,7 +67,7 @@ func (c *cmd) detect(pos []string) int {
 	}
 	st.store.ExcludeFromGit()
 	p.Dir, p.ID = dir, store.Stamp(env.now())+"-"+randomHex()
-	p.Browser.Log = env.Stderr
+	p.Browser.Log = browserLog(env.Stderr, false) // PRD 6.1: detect prints no browser line
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
