@@ -4,6 +4,7 @@
 package action
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"slices"
@@ -385,4 +386,56 @@ func TestConsentSignUpload(t *testing.T) {
 		t.Fatalf("retention-days 365: exit-code %q\n%s", res.outputs["exit-code"], res.log)
 	}
 	contains(t, "summary", res.summary, `retention-days "365": want a number of days from 1 to 90`)
+}
+
+// TestConsentSummaryHeldFooter: the summary's last line says whether the
+// tracker hits were held, from data.held: a check run with --send-hits
+// must never tell a pull request that no hit was sent. The counts are
+// named as trackers, which is what before_choice and after_reject count.
+func TestConsentSummaryHeldFooter(t *testing.T) {
+	needBash(t, "jq")
+	sh := filepath.Join(root(t), "integrations", "action", "summary.sh")
+	b, err := os.ReadFile(filepath.Join("testdata", "consent.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var env map[string]any
+	if err := json.Unmarshal(b, &env); err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []struct {
+		held any // nil leaves data.held out
+		want string
+	}{
+		{true, "_Evidence, not legal advice. Hits held in the browser._"},
+		{nil, "_Evidence, not legal advice. Hits held in the browser._"},
+		{false, "_Evidence, not legal advice. Tracker hits were sent for real (--send-hits)._"},
+	} {
+		data, _ := env["data"].(map[string]any)
+		delete(data, "held")
+		if c.held != nil {
+			data["held"] = c.held
+		}
+		out, err := json.Marshal(env)
+		if err != nil {
+			t.Fatal(err)
+		}
+		path := filepath.Join(t.TempDir(), "consent.json")
+		if err := os.WriteFile(path, out, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		got, errOut, code := script(t, sh, nil, "consent", path)
+		if code != 0 {
+			t.Fatalf("held %v: exit %d: %s", c.held, code, errOut)
+		}
+		if !strings.Contains(got, c.want) {
+			t.Errorf("held %v: summary lacks %q:\n%s", c.held, c.want, got)
+		}
+		if c.held == false && strings.Contains(got, "Hits held in the browser") {
+			t.Errorf("held false: the summary says the hits were held:\n%s", got)
+		}
+		if !strings.Contains(got, "Trackers before the choice: 1. Trackers after Reject: 2.") {
+			t.Errorf("counts not named as trackers:\n%s", got)
+		}
+	}
 }

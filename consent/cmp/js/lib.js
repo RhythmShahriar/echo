@@ -177,7 +177,7 @@ function label(el) {
 
 function box(el) {
   const r = el.getBoundingClientRect();
-  return { X: r.left, Y: r.top, W: r.width, H: r.height };
+  return { x: r.left, y: r.top, w: r.width, h: r.height };
 }
 
 // cssPath is a selector for el from root: its id when unique, else

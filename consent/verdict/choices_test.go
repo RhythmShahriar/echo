@@ -328,9 +328,32 @@ func TestInconclusiveGolden(t *testing.T) {
 	}
 }
 
+// rulesCMP is a fake CMP stage that lists the given rules, for the
+// --click button,api hint.
+type rulesCMP struct {
+	*consenttest.FakeCMP
+	rules []consent.CMPRuleInfo
+}
+
+func (c rulesCMP) Rules() []consent.CMPRuleInfo { return c.rules }
+
+// useRules links a CMP stage whose rules are Cookiebot (an API for both
+// choices), Complianz and the generic rule (no API).
+func useRules(t *testing.T) {
+	consenttest.Use(t, consent.Stages{CMP: rulesCMP{FakeCMP: &consenttest.FakeCMP{}, rules: []consent.CMPRuleInfo{
+		{ID: "cookiebot", Name: "Cookiebot", Accept: "button, api", Reject: "first layer or settings, api"},
+		{ID: "complianz", Name: "Complianz", Accept: "button", Reject: "first layer or settings"},
+		{ID: "generic", Name: "Generic banner", Accept: "button", Reject: "first layer or settings"},
+	}}})
+}
+
 func TestInconclusiveTexts(t *testing.T) {
+	useRules(t)
 	onetrust := consent.CMPInfo{ID: "onetrust", Name: "OneTrust", Found: true, Present: true}
 	cookiebot := consent.CMPInfo{ID: "cookiebot", Name: "Cookiebot", Found: true, Present: true}
+	complianz := consent.CMPInfo{ID: "complianz", Name: "Complianz", Found: true, Present: true}
+	generic := consent.CMPInfo{ID: "generic", Name: "Generic banner", Found: true}
+	reject := []consent.Locator{{CSS: "###"}}
 	click := &consent.Choice{How: "button", Text: "Accept all", Selector: "#onetrust-accept-btn-handler", Clicks: 3}
 	unchanged := &consent.Choice{How: "button", Text: "Reject all", Selector: "#onetrust-reject-all-handler", Clicks: 1,
 		State: &consent.CMPState{CMP: "onetrust", Source: "cookie:OptanonConsent"}}
@@ -351,6 +374,16 @@ func TestInconclusiveTexts(t *testing.T) {
 			"Reject: Cookiebot's banner showed but Echo found no Reject on it or in its settings. Set --reject-selector (rhythm echo consent detect shows what Echo sees), or --click button,api to use Cookiebot's API"},
 		{"no_button accept", cookiebot, consent.Run{Kind: consent.RunAccept, Reason: consent.ReasonNoButton}, nil,
 			"Accept: Cookiebot's banner showed but Echo found no Accept on it or in its settings. Set --accept-selector (rhythm echo consent detect shows what Echo sees), or --click button,api to use Cookiebot's API"},
+		{"no_button no api", complianz, consent.Run{Kind: consent.RunReject, Reason: consent.ReasonNoButton}, nil,
+			"Reject: Complianz's banner showed but Echo found no Reject on it or in its settings. Set --reject-selector (rhythm echo consent detect shows what Echo sees)"},
+		{"no_button generic", generic, consent.Run{Kind: consent.RunReject, Reason: consent.ReasonNoButton}, nil,
+			"Reject: the banner showed but Echo found no Reject on it or in its settings. Set --reject-selector (rhythm echo consent detect shows what Echo sees)"},
+		{"no_button api already", cookiebot, consent.Run{Kind: consent.RunReject, Reason: consent.ReasonNoButton}, func(p *consent.Plan) { p.Click = consent.ClickButtonAPI },
+			"Reject: Cookiebot's banner showed but Echo found no Reject on it or in its settings. Set --reject-selector (rhythm echo consent detect shows what Echo sees)"},
+		{"no_button selector given", complianz, consent.Run{Kind: consent.RunReject, Reason: consent.ReasonNoButton}, func(p *consent.Plan) { p.RejectSelector = reject },
+			"Reject: Complianz's banner showed but --reject-selector matched no visible Reject button: check that it is valid CSS and that it finds the button (rhythm echo consent detect shows what Echo sees)"},
+		{"no_button withdraw selector given", generic, consent.Run{Kind: consent.RunWithdraw, Reason: consent.ReasonNoButton}, func(p *consent.Plan) { p.RejectSelector = reject },
+			"Withdraw: the banner showed but --reject-selector matched no visible Reject button: check that it is valid CSS and that it finds the button (rhythm echo consent detect shows what Echo sees)"},
 		{"click_missed", onetrust, consent.Run{Kind: consent.RunAccept, Reason: consent.ReasonClickMissed, Choice: click}, nil,
 			`Accept: clicked "Accept all" (#onetrust-accept-btn-handler) 3 times and the banner stayed. Something may cover it (a chat bubble, a newsletter popup); --show-browser shows the page`},
 		{"state_unchanged", onetrust, consent.Run{Kind: consent.RunReject, Reason: consent.ReasonStateUnchanged, Choice: unchanged}, nil,

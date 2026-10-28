@@ -7,7 +7,9 @@ import (
 	"fmt"
 	"net/url"
 	"regexp"
+	"slices"
 	"strings"
+	"sync"
 	"unicode/utf8"
 
 	"github.com/RhythmShahriar/echo/mask"
@@ -31,7 +33,95 @@ var personalParams = map[string]bool{"em": true, "ph": true, "fn": true, "ln": t
 // characters. showIDs keeps the ones in shownIDs whole.
 var idParams = map[string]bool{"cid": true, "tid": true, "id": true, "sid": true, "uid": true, "user_id": true, "external_id": true,
 	"_ga": true, "_gid": true, "_fbp": true, "_fbc": true, "fbp": true, "fbc": true, "ecid": true, "_p": true, "gclid": true,
-	"dclid": true, "fbclid": true, "msclkid": true, "ttclid": true, "li_fat_id": true}
+	"dclid": true, "fbclid": true, "msclkid": true, "ttclid": true, "li_fat_id": true,
+	// The built-in catalog's ID params whose names say so on any host
+	// (TikTok, Matomo and Piwik PRO, Outbrain, Klaviyo, X). Short ones
+	// (a, pid, ti) are masked on their trackers' hosts only: AddIDRule.
+	"sdkid": true, "pixel_code": true, "idsite": true, "marketerid": true, "company_id": true, "txn_id": true}
+
+// IDRule names IDs a tracker sends: Params (any case) and group 1 of Path
+// in the URL path are masked to their last 4 characters on the hosts
+// listed (Hosts exact, Suffixes like ".tiktok.com" for subdomains), or
+// on every host with AnyHost. A tracker catalog adds one per entry with
+// params: id: or id_path:, so a custom tracker's ID is masked too.
+type IDRule struct {
+	Hosts    []string
+	Suffixes []string
+	AnyHost  bool
+	Params   []string
+	Path     *regexp.Regexp
+}
+
+// idRules are the rules AddIDRule added, at most maxIDRules.
+var idRules = struct {
+	sync.RWMutex
+	list []IDRule
+	seen map[string]bool
+}{seen: map[string]bool{}}
+
+// maxIDRules bounds how many rules masking tries on a URL.
+const maxIDRules = 1024
+
+// AddIDRule makes MaskURL mask the IDs r names. Rules are only ever
+// added; one already added, one with no params, path or host, a Path
+// without exactly one group and any past the 1024th are ignored.
+func AddIDRule(r IDRule) {
+	if r.Path != nil && r.Path.NumSubexp() != 1 {
+		r.Path = nil
+	}
+	if (len(r.Params) == 0 && r.Path == nil) || (len(r.Hosts) == 0 && len(r.Suffixes) == 0 && !r.AnyHost) {
+		return
+	}
+	r = IDRule{Hosts: slices.Clone(r.Hosts), Suffixes: slices.Clone(r.Suffixes), AnyHost: r.AnyHost, Params: slices.Clone(r.Params), Path: r.Path}
+	for i, p := range r.Params {
+		r.Params[i] = strings.ToLower(p)
+	}
+	path := ""
+	if r.Path != nil {
+		path = r.Path.String()
+	}
+	key := fmt.Sprintf("%q %q %v %q %q", r.Hosts, r.Suffixes, r.AnyHost, r.Params, path)
+	idRules.Lock()
+	defer idRules.Unlock()
+	if !idRules.seen[key] && len(idRules.list) < maxIDRules {
+		idRules.seen[key] = true
+		idRules.list = append(idRules.list, r)
+	}
+}
+
+// idsFor returns the ID params and path patterns the rules give host
+// (lower-case, no port).
+func idsFor(host string) (params map[string]bool, paths []*regexp.Regexp) {
+	idRules.RLock()
+	defer idRules.RUnlock()
+	for _, r := range idRules.list {
+		if !r.AnyHost && !slices.Contains(r.Hosts, host) && !slices.ContainsFunc(r.Suffixes, func(s string) bool { return strings.HasSuffix(host, s) }) {
+			continue
+		}
+		for _, p := range r.Params {
+			if params == nil {
+				params = map[string]bool{}
+			}
+			params[p] = true
+		}
+		if r.Path != nil {
+			paths = append(paths, r.Path)
+		}
+	}
+	return params, paths
+}
+
+// maskPathIDs masks group 1 of each pattern where it matches path.
+func maskPathIDs(path string, res []*regexp.Regexp) string {
+	for _, re := range res {
+		m := re.FindStringSubmatchIndex(path)
+		if m == nil || m[2] < 0 || m[3] <= m[2] {
+			continue
+		}
+		path = path[:m[2]] + MaskID(path[m[2]:m[3]]) + path[m[3]:]
+	}
+	return path
+}
 
 // shownIDs are the IDs --show-ids keeps: they name the property or the
 // pixel and the browser, never the person (uid and external_id do).
@@ -92,14 +182,15 @@ func maskURL(raw string, showIDs bool, depth int) string {
 	// Path credentials first (a Telegram bot token, /key/<x>): RedactURL
 	// on the bare path keeps the rest as it was written.
 	path := recognize.RedactURL(recognize.Recognizer{}, u.Scheme+"://"+u.Host+u.EscapedPath())
-	out = out + u.Host + strings.TrimPrefix(path, u.Scheme+"://"+u.Host)
+	ids, idPaths := idsFor(strings.ToLower(u.Hostname()))
+	out = out + u.Host + maskPathIDs(strings.TrimPrefix(path, u.Scheme+"://"+u.Host), idPaths)
 	if u.ForceQuery || u.RawQuery != "" {
-		out += "?" + maskQuery(u.RawQuery, showIDs, depth)
+		out += "?" + maskQuery(u.RawQuery, showIDs, depth, ids)
 	}
 	if u.Fragment != "" {
 		frag := u.EscapedFragment()
 		if strings.Contains(frag, "=") {
-			frag = maskQuery(frag, showIDs, depth)
+			frag = maskQuery(frag, showIDs, depth, ids)
 		}
 		out += "#" + frag
 	}
@@ -108,7 +199,8 @@ func maskURL(raw string, showIDs bool, depth int) string {
 
 // maskQuery masks each key=value pair of a query (or a fragment written
 // like one), keeping the order and the encoding of the pairs it leaves.
-func maskQuery(q string, showIDs bool, depth int) string {
+// ids are the ID params the tracker rules add on this URL's host.
+func maskQuery(q string, showIDs bool, depth int, ids map[string]bool) string {
 	pairs := strings.Split(q, "&")
 	for i, p := range pairs {
 		k, v, ok := strings.Cut(p, "=")
@@ -127,7 +219,7 @@ func maskQuery(q string, showIDs bool, depth int) string {
 		switch {
 		case personalParams[lk] || strings.HasPrefix(lk, "ud["):
 			pairs[i] = k + "=" + Hashed
-		case idParams[lk]:
+		case idParams[lk] || ids[lk]:
 			if !showIDs || !shownIDs[lk] {
 				pairs[i] = k + "=" + MaskID(val)
 			}

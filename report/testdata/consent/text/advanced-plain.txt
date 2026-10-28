@@ -12,6 +12,6 @@ https://g02.consent.test/
 
 All clear - 0 errors, 0 warnings, 1 notice - 3 runs, 3 trackers, policy advanced
 
-  notice  consent/cookieless-ping  Google Analytics 4 sent 2 cookieless pings before the choice (allowed under --consent-mode advanced)
+  notice  consent/cookieless-ping  Google Analytics 4 sent 2 cookieless pings before the choice (allowed under --consent-mode advanced) (No choice)
 
 Evidence, not legal advice.

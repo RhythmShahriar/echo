@@ -506,7 +506,30 @@ func newCatalog(entries []*entry) (*Catalog, error) {
 	if err := checkOverlap(entries); err != nil {
 		return nil, err
 	}
+	// Every ID a catalog names is masked wherever a URL is shown, not
+	// only in the hit's id field (PRD 14.7).
+	for _, e := range entries {
+		e.addIDRule()
+	}
 	return c, nil
+}
+
+// addIDRule hands the entry's ID params and id_path to consent masking,
+// on the hosts of its rules.
+func (e *entry) addIDRule() {
+	if len(e.ids) == 0 && e.idPath == nil {
+		return
+	}
+	r := consent.IDRule{Params: e.ids, Path: e.idPath}
+	for _, x := range e.rules {
+		r.Hosts = append(r.Hosts, x.exact...)
+		r.Suffixes = append(r.Suffixes, x.suffix...)
+		r.AnyHost = r.AnyHost || x.anyHost
+	}
+	slices.Sort(r.Hosts)
+	slices.Sort(r.Suffixes)
+	r.Hosts, r.Suffixes = slices.Compact(r.Hosts), slices.Compact(r.Suffixes)
+	consent.AddIDRule(r)
 }
 
 // decodeStrict decodes one YAML document into v, refusing unknown keys,

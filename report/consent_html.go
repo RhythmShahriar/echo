@@ -941,7 +941,7 @@ func (h *consentHTML) details() []chFact {
 	}
 	facts := []chFact{
 		{"Echo", Safe(cmp.Or(r.Echo, ToolVersion))},
-		{"Browser", Safe(r.Browser)},
+		{"Browser", Safe(browserName(r.Browser))},
 		{"OS", Safe(r.OS)},
 		{"User agent", Safe(r.UserAgent)},
 		{"Geo", Safe(cmp.Or(r.Geo, "none"))},

@@ -189,10 +189,10 @@
             "clicks": 1,
             "at_ms": 2010,
             "box": {
-              "X": 912,
-              "Y": 790,
-              "W": 120,
-              "H": 40
+              "x": 912,
+              "y": 790,
+              "w": 120,
+              "h": 40
             },
             "verified": true,
             "verified_by": "cookie:cmplz_marketing",
@@ -760,10 +760,10 @@
             "clicks": 1,
             "at_ms": 1980,
             "box": {
-              "X": 912,
-              "Y": 790,
-              "W": 120,
-              "H": 40
+              "x": 912,
+              "y": 790,
+              "w": 120,
+              "h": 40
             },
             "verified": true,
             "verified_by": "cookie:cmplz_marketing",

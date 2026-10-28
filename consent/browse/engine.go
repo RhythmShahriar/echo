@@ -63,9 +63,10 @@ func Start(ctx context.Context, p *consent.Plan) (*Engine, error) {
 	return e, nil
 }
 
-// Browser names the running browser, e.g. "Chrome 153.0.8010.52
-// (/usr/bin/google-chrome)".
-func (e *Engine) Browser() string { return e.b.Describe() }
+// Browser names the running browser without its path, e.g. "Chrome
+// 153.0.8010.52": results and reports are shared, the path can name the
+// user. The -v Browser line has the path.
+func (e *Engine) Browser() string { return e.b.Name() }
 
 // Close ends every run still open, stops the listeners, closes Chrome
 // and removes its profile.

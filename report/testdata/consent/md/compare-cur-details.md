@@ -8,10 +8,10 @@
 
 ### Errors (2)
 
-| Check | Page | What | Fix |
-|---|---|---|---|
-| consent/before-choice | / | TikTok Pixel fired before the visitor chose \(analytics.tiktok.com/api/v2/pixel?sdkid=••••9KQ1&event=Pageview at 0.91s; cookie \_ttp written\) | Load the tracker only after the visitor accepts: let the consent banner block its script, or start it with consent denied and grant it on Accept. |
-| consent/before-choice | / | TikTok Pixel fired before the visitor chose \(analytics.tiktok.com/api/v2/pixel?sdkid=••••9KQ1&event=Pageview at 0.91s\) | as above |
+| Check | Page | Run | What | Fix |
+|---|---|---|---|---|
+| consent/before-choice | / | No choice | TikTok Pixel fired before the visitor chose \(analytics.tiktok.com/api/v2/pixel?sdkid=••••9KQ1&event=Pageview at 0.91s; cookie \_ttp written\) | Load the tracker only after the visitor accepts: let the consent banner block its script, or start it with consent denied and grant it on Accept. |
+| consent/before-choice | / | Reject | TikTok Pixel fired before the visitor chose \(analytics.tiktok.com/api/v2/pixel?sdkid=••••9KQ1&event=Pageview at 0.91s\) | as above |
 
 ### Runs
 

@@ -24,6 +24,7 @@ const (
 	FatalImage        FatalCode = "no-browser-image" // message 16 (RHYTHM_ECHO_IMAGE=1 and no browser)
 	FatalRedirectLoop FatalCode = "redirect-loop"
 	FatalWrite        FatalCode = "write"
+	FatalSelector     FatalCode = "selector" // a usage error: Detail names the flag and the CSS the browser refused
 )
 
 // FatalError stops a whole check: no browser, the site didn't answer, a

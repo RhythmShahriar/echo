@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"net/url"
 	"os"
 	"os/signal"
@@ -137,6 +138,10 @@ func (c *cmd) runCheck(ctx context.Context, pos []string) int {
 	}
 
 	started := env.now()
+	// PRD 6: the store is made when the first run starts. Its folders
+	// go again when no run could (the site didn't answer, a selector
+	// the browser refuses): only the empty ones this check made.
+	made := missingDirs(st.store.Root, filepath.Join(st.store.Root, store.Consent))
 	dir, err := st.store.NewDir(store.Consent, store.Stamp(started))
 	if err != nil {
 		return fail(env, &writeError{filepath.Join(st.store.Root, store.Consent), err})
@@ -170,10 +175,13 @@ func (c *cmd) runCheck(ctx context.Context, pos []string) int {
 			// sites left in it) would be a result without a result
 			// file: verify and report would only trip over it.
 			_ = os.RemoveAll(dir) //nolint:gosec // the folder this check made
+			if len(results) == 0 {
+				removeEmpty(made)
+			}
 			var fe *consent.FatalError
 			if errors.As(err, &fe) {
 				fmt.Fprintln(env.Stderr, "rhythm echo:", fatalMessage(fe))
-				return exitUnavailable
+				return fatalExit(fe)
 			}
 			return fail(env, err)
 		}
@@ -488,4 +496,23 @@ func (q quietBrowser) Write(b []byte) (int, error) {
 		return len(b), nil
 	}
 	return q.w.Write(b)
+}
+
+// missingDirs lists the folders of dirs that don't exist yet, in order.
+func missingDirs(dirs ...string) []string {
+	var out []string
+	for _, d := range dirs {
+		if _, err := os.Stat(d); errors.Is(err, fs.ErrNotExist) {
+			out = append(out, d)
+		}
+	}
+	return out
+}
+
+// removeEmpty removes dirs, the last first, where they are empty: a
+// folder something else wrote into in the meantime stays.
+func removeEmpty(dirs []string) {
+	for i := len(dirs) - 1; i >= 0; i-- {
+		_ = os.Remove(dirs[i])
+	}
 }

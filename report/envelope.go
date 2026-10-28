@@ -99,8 +99,8 @@ type ConsentSummary struct {
 	FailedRuns       int `json:"failed_runs"`
 	InconclusiveRuns int `json:"inconclusive_runs"`
 	Trackers         int `json:"trackers"`
-	BeforeChoice     int `json:"before_choice"`
-	AfterReject      int `json:"after_reject"`
+	BeforeChoice     int `json:"before_choice" desc:"How many different consent-needing trackers sent a hit before the visitor chose (trackers, not hits)."`
+	AfterReject      int `json:"after_reject" desc:"How many different consent-needing trackers sent a hit after Reject (trackers, not hits)."`
 	Held             int `json:"held"`
 }
 

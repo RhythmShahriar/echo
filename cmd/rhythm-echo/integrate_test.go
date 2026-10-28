@@ -110,6 +110,15 @@ func TestDoctorChromeLine(t *testing.T) {
 			if !strings.Contains(out, tc.want+"\n") {
 				t.Errorf("doctor:\n%s\nwant %q", out, tc.want)
 			}
+			// A Chrome found counts as a passed check; a note counts as
+			// neither (the unreachable Echo is the one failure).
+			tally := "0 checks passed, 1 failed."
+			if strings.HasPrefix(tc.want, "ok ") {
+				tally = "1 check passed, 1 failed."
+			}
+			if !strings.Contains(out, tally) {
+				t.Errorf("doctor tally:\n%s\nwant %q", out, tally)
+			}
 		})
 	}
 	// --json gains the item; it never counts as a failure.

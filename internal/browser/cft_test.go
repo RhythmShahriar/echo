@@ -382,6 +382,18 @@ func TestDescribe(t *testing.T) {
 	}
 }
 
+// Name is what results keep: never the path, which can name the user.
+func TestName(t *testing.T) {
+	b := &Browser{Version: "153.0.8010.52", Bin: "/home/someone/chrome/chrome"}
+	if got := b.Name(); got != "Chrome 153.0.8010.52" {
+		t.Errorf("Name = %q", got)
+	}
+	b = &Browser{Version: "153.0.1.2", Bin: "/home/someone/.cache/x/chrome", Downloaded: true}
+	if got := b.Name(); got != "Chrome for Testing 153.0.1.2" {
+		t.Errorf("Name = %q", got)
+	}
+}
+
 // Prune leaves hidden entries alone: another process may be unpacking a
 // download into a .unpack-* folder. With no pin every folder would
 // otherwise go.

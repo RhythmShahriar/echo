@@ -4,6 +4,7 @@
 package main
 
 import (
+	"errors"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -127,6 +128,10 @@ func TestInstallWordPressEnvironmentHint(t *testing.T) {
 
 func TestDoctorChecksEchoAndSMTP(t *testing.T) {
 	t.Chdir(t.TempDir())
+	// No Chrome here, offline: its line is a note and the tallies below
+	// count Echo's own checks only (a Chrome found counts as passed).
+	t.Setenv("RHYTHM_OFFLINE", "1")
+	fakeChrome(t, "", false, errors.New("no Chrome"), "")
 	s := catcher.NewServer(catcher.NewInbox(100), catcher.Config{Version: "test"})
 	api := httptest.NewServer(s)
 	defer api.Close()

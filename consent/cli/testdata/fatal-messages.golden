@@ -11,5 +11,6 @@ tls: rhythm echo: https://shop.example/ uses a certificate this machine doesn't 
 no-browser-image: rhythm echo: this image has no browser; run rhythm echo consent on the host, or pass --browser
 redirect-loop: rhythm echo: https://shop.test/ redirects in a loop or through more than 10 hops; check the site's redirects
 write: rhythm echo: couldn't write .echo/consent/x/events/page-1-none.ndjson: no space left on device
+selector: rhythm echo: --reject-selector: "###" isn't CSS the browser accepts; fix the selector (rhythm echo consent detect shows the buttons Echo sees)
 something-new: rhythm echo: consent: something-new: https://shop.test/: what happened
 no-browser in the image: rhythm echo: this image has no browser; run rhythm echo consent on the host, or pass --browser

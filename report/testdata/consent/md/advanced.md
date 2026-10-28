@@ -8,9 +8,9 @@
 
 ### Notices (1)
 
-| Check | Page | What | Fix |
-|---|---|---|---|
-| consent/cookieless-ping | / | Google Analytics 4 sent 2 cookieless pings before the choice \(allowed under --consent-mode advanced\) | These are Consent Mode advanced pings without cookies; switch to basic mode if your policy counts them as tracking. |
+| Check | Page | Run | What | Fix |
+|---|---|---|---|---|
+| consent/cookieless-ping | / | No choice | Google Analytics 4 sent 2 cookieless pings before the choice \(allowed under --consent-mode advanced\) | These are Consent Mode advanced pings without cookies; switch to basic mode if your policy counts them as tracking. |
 
 ### Consent Mode
 

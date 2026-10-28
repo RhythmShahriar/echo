@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/RhythmShahriar/echo/consent"
 	"github.com/RhythmShahriar/echo/consent/evidence"
@@ -20,12 +21,28 @@ const msgSigstore = "Sigstore bundle present: check it with cosign verify-blob -
 	"--certificate-identity-regexp '^https://github.com/<owner>/<repo>/' " +
 	"--certificate-oidc-issuer https://token.actions.githubusercontent.com consent.json"
 
-// msgSignatureScope says what a good signature vouches for: consent.json
+// signatureScope says what a good signature vouches for: consent.json
 // and the attachments it lists by hash. The reports and manifest.json
-// are written after it, so only their manifest hashes check them: whoever
-// rewrites a report can rewrite the manifest too.
-const msgSignatureScope = "The signature covers consent.json and the files it lists; " +
-	"report.html, report.md and manifest.json are checked against manifest.json only."
+// are written after it, so only their manifest hashes check them and
+// nothing checks the manifest: whoever rewrites a report can rewrite
+// the manifest too. It names the reports the folder has.
+func signatureScope(folder string) string {
+	var reports []string
+	for _, name := range []string{reportHTML, reportMD, reportJUnit} {
+		if _, err := os.Lstat(filepath.Join(folder, name)); err == nil {
+			reports = append(reports, name)
+		}
+	}
+	s := "The signature covers consent.json and the files it lists; "
+	switch len(reports) {
+	case 0:
+		return s + "manifest.json is not signed."
+	case 1:
+		return s + reports[0] + " is checked against manifest.json, which is not signed."
+	}
+	return s + strings.Join(reports[:len(reports)-1], ", ") + " and " + reports[len(reports)-1] +
+		" are checked against manifest.json, which is not signed."
+}
 
 // verify is rhythm echo consent verify <folder|file> [--key <file>]:
 // it checks an evidence folder's hashes and signature and exits 0 when
@@ -57,7 +74,7 @@ func (c *cmd) verify(pos []string) int {
 		fmt.Fprintln(view, "not in the manifest  "+consent.SafeText(rel, 200))
 	}
 	if v.Signature.Key != "" && v.Signature.OK && !c.o.quiet {
-		fmt.Fprintln(view, msgSignatureScope)
+		fmt.Fprintln(view, signatureScope(evidence.Folder(pos[0])))
 	}
 	if _, err := os.Lstat(filepath.Join(evidence.Folder(pos[0]), evidence.SigstoreFile)); err == nil && !c.o.quiet {
 		fmt.Fprintln(view, msgSigstore)

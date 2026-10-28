@@ -26,7 +26,9 @@ with the exact texts.
 - Any other start failure is a plain error:
   `consent: starting Chrome: <masked error>`.
 - The plan's log writer gets `Browser: Chrome <version> (<path>)` (or
-  `Browser: Chrome for Testing <version> (downloaded)`) and, without the
+  `Browser: Chrome for Testing <version> (downloaded)`; `consent.json`
+  `browser`, the detect result and the reports keep only `Chrome <version>`
+  or `Chrome for Testing <version>`, never the path) and, without the
   sandbox, `WARNING: Chrome is running without its sandbox. A page that
   exploits a browser bug could take over this machine; only check sites
   you trust.` Control characters in these lines are escaped.
@@ -197,7 +199,8 @@ with the exact texts.
   `bad selector`, `no frame matches <frame>`, `not visible`,
   `has no size`, `outside the viewport`, `covered by another element`
   (with `Covered` set). `Text` is safe text of at most 120 characters;
-  `Box` is in top-frame CSS pixels. A click waits 1 s after the press:
+  `Box` is in top-frame CSS pixels, written as `{"x", "y", "w", "h"}` (results
+  with the upper-case keys of earlier builds still read). A click waits 1 s after the press:
   `NavigatedAway` is set when the top frame went to, or started loading,
   another host.
 - Screenshots: `evidence/page-<n>/<run>-<name>.png` (0600, folders

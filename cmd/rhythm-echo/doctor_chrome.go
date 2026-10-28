@@ -76,12 +76,12 @@ func (d *doctor) chrome() {
 	bin, downloaded, err := chromeFinder()
 	switch {
 	case err == nil && downloaded:
-		d.add(doctorOK, chromeLabel, fmt.Sprintf("found (Chrome for Testing %s at %s)", majorVersion(browser.PinnedVersion()), bin))
+		d.pass(chromeLabel, fmt.Sprintf("found (Chrome for Testing %s at %s)", majorVersion(browser.PinnedVersion()), bin))
 	case err == nil:
 		if v := chromeVersion(bin); v != "" {
-			d.add(doctorOK, chromeLabel, fmt.Sprintf("found (Chrome %s at %s)", v, bin))
+			d.pass(chromeLabel, fmt.Sprintf("found (Chrome %s at %s)", v, bin))
 		} else {
-			d.add(doctorOK, chromeLabel, fmt.Sprintf("found (%s)", bin))
+			d.pass(chromeLabel, fmt.Sprintf("found (%s)", bin))
 		}
 	case downloadRefused():
 		d.add(doctorNote, chromeLabel, "missing (--no-download)")

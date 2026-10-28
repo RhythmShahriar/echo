@@ -4,6 +4,7 @@
 package consent_test
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/RhythmShahriar/echo/consent"
@@ -163,5 +164,21 @@ func TestTruncatedIsIncomplete(t *testing.T) {
 	r.Pages[0].Runs[2].Status = consent.StatusCanceled
 	if got := r.Summary(); got.FailedRuns != 1 || got.InconclusiveRuns != 1 {
 		t.Errorf("canceled: %+v", got)
+	}
+}
+
+// A box is written with lower-case keys like every other consent key; a
+// result with the upper-case keys of earlier builds still reads.
+func TestBoxKeys(t *testing.T) {
+	b, err := json.Marshal(consent.Box{X: 1, Y: 2, W: 3, H: 4})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := string(b); got != `{"x":1,"y":2,"w":3,"h":4}` {
+		t.Errorf("box = %s", got)
+	}
+	var old consent.Box
+	if err := json.Unmarshal([]byte(`{"X":5,"Y":6,"W":7,"H":8}`), &old); err != nil || old != (consent.Box{X: 5, Y: 6, W: 7, H: 8}) {
+		t.Errorf("old keys: %+v %v", old, err)
 	}
 }

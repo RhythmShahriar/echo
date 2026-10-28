@@ -450,6 +450,8 @@ func fatalText(f *consent.FatalError) string {
 		s = f.URL + " uses a certificate this machine doesn't trust (" + f.Detail + ")"
 	case consent.FatalRedirectLoop:
 		s = f.URL + ": " + f.Detail
+	case consent.FatalSelector:
+		s = f.Detail
 	default:
 		s = strings.TrimPrefix(f.Error(), "consent: ")
 	}

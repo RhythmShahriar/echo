@@ -275,6 +275,31 @@ func TestConsentMasksEverywhere(t *testing.T) {
 			})
 		}
 	}
+	// The IDs the catalog names keep only their last 4 characters in
+	// every output too: TikTok's sdkid (c08) and the Google Ads
+	// conversion ID in the viewthroughconversion path (c01).
+	ids := map[string]string{"TikTok sdkid": "TESTBEDTT0001", "Google Ads conversion ID": "100000001"}
+	for _, id := range []string{"c08", "c01"} {
+		t.Run(id+" catalog IDs", func(t *testing.T) {
+			if err := b.srv.SetBroken(id, true); err != nil {
+				t.Fatal(err)
+			}
+			dir := t.TempDir()
+			args := slices.Concat([]string{"consent", "https://" + id + server.SiteSuffix + "/", "--fail-on", "none", "-v", "--live", "--har",
+				"-o", "result.json", "-o", "report.md", "-o", "report.xml", "-o", "report.html"}, server.MapArgs(b.addr))
+			stdout, stderr, _ := runEcho(t, bin, dir, echoEnv(), 4*time.Minute, args...)
+			res, err := os.ReadFile(filepath.Join(dir, "result.json")) //nolint:gosec // the test's own result folder
+			if err != nil {
+				t.Fatalf("no result: %v\n%s", err, stderr)
+			}
+			if !strings.Contains(string(res), "••••0001") {
+				t.Errorf("no masked ID in result.json; did the tag fire?\n%.2000s", stderr)
+			}
+			for _, l := range scanSecrets(t, dir, map[string]string{"stdout": stdout, "stderr": stderr}, ids, 4) {
+				t.Error(l)
+			}
+		})
+	}
 	t.Run("password in the URL", func(t *testing.T) {
 		dir := t.TempDir()
 		target := "https://shop:" + url.QueryEscape(password) + "@secret-url" + server.SiteSuffix + "/"

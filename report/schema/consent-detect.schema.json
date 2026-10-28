@@ -101,24 +101,24 @@
   "$defs": {
     "box": {
       "properties": {
-        "H": {
+        "h": {
           "type": "number"
         },
-        "W": {
+        "w": {
           "type": "number"
         },
-        "X": {
+        "x": {
           "type": "number"
         },
-        "Y": {
+        "y": {
           "type": "number"
         }
       },
       "required": [
-        "X",
-        "Y",
-        "W",
-        "H"
+        "x",
+        "y",
+        "w",
+        "h"
       ],
       "type": "object"
     },

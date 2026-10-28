@@ -354,6 +354,59 @@ func durationText(d time.Duration) string {
 	return d.String()
 }
 
+// noButtonDetail is the no_button message. A --accept-selector or
+// --reject-selector that was given matched nothing (or isn't CSS the
+// browser takes), so the message names it instead of asking for it.
+// The --click button,api hint is only there when the CMP's rule has an
+// API call for this choice and --click doesn't use it already. The
+// generic rule's banner is "the banner".
+func (j *judge) noButtonDetail(pg *consent.Page, k consent.RunKind, label, word string) string {
+	banner := cmpName(pg) + "'s banner"
+	if pg.CMP.ID == genericRule || pg.CMP.ID == "" && pg.CMP.Name == "" {
+		banner = "the banner"
+	}
+	flag := "--" + strings.ToLower(word) + "-selector"
+	given := j.p != nil && len(j.p.AcceptSelector) > 0
+	if k != consent.RunAccept {
+		given = j.p != nil && len(j.p.RejectSelector) > 0
+	}
+	if given {
+		return fmt.Sprintf("%s: %s showed but %s matched no visible %s button: check that it is valid CSS and "+
+			"that it finds the button (rhythm echo consent detect shows what Echo sees)", label, banner, flag, word)
+	}
+	s := fmt.Sprintf("%s: %s showed but Echo found no %s on it or in its settings. Set %s "+
+		"(rhythm echo consent detect shows what Echo sees)", label, banner, word, flag)
+	if ruleHasAPI(pg.CMP.ID, k) && (j.p == nil || j.p.Click == "" || j.p.Click == consent.ClickButton) {
+		s += fmt.Sprintf(", or --click button,api to use %s's API", cmpName(pg))
+	}
+	return s
+}
+
+// genericRule is the id of the CMP rule that finds banners by their
+// button words.
+const genericRule = "generic"
+
+// ruleHasAPI reports whether the linked CMP rule id has an API call for
+// k's choice (its listing reads "..., api"). Without the CMP stage it
+// is false: the hint is only given when it is known to work.
+func ruleHasAPI(id string, k consent.RunKind) bool {
+	d := consent.Linked().CMP
+	if d == nil || id == "" {
+		return false
+	}
+	for _, r := range d.Rules() {
+		if r.ID != id {
+			continue
+		}
+		how := r.Reject
+		if k == consent.RunAccept {
+			how = r.Accept
+		}
+		return strings.HasSuffix(how, ", api") || how == "api"
+	}
+	return false
+}
+
 // inconclusiveDetail is the message an inconclusive run is listed with
 // (PRD 10.2 messages 18 to 21 and the texts of the other reasons).
 func (j *judge) inconclusiveDetail(pg *consent.Page, run *consent.Run) string {
@@ -365,9 +418,7 @@ func (j *judge) inconclusiveDetail(pg *consent.Page, run *consent.Run) string {
 	}
 	switch run.Reason {
 	case consent.ReasonNoButton:
-		return fmt.Sprintf("%s: %s's banner showed but Echo found no %s on it or in its settings. Set --%s-selector "+
-			"(rhythm echo consent detect shows what Echo sees), or --click button,api to use %s's API",
-			label, cmp, word, strings.ToLower(word), cmp)
+		return j.noButtonDetail(pg, run.Kind, label, word)
 	case consent.ReasonClickMissed:
 		return fmt.Sprintf("%s: clicked %s %s and the banner stayed. Something may cover it (a chat bubble, a newsletter popup); "+
 			"--show-browser shows the page", label, buttonName(c), times(c.Clicks))

@@ -57,6 +57,11 @@ func (Runner) Detect(ctx context.Context, p *consent.Plan) (*consent.DetectResul
 	a := &attempt{c: newCheck(e, p, stages), e: e, plan: p, target: t, page: 1, kind: consent.RunNone, run: run, tab: run.Tab(1), out: &out}
 	start := *t.URL
 	a.startURL = start.String()
+	if f, err := a.checkSelectors(ctx); err != nil {
+		return nil, err
+	} else if f != nil {
+		return nil, f
+	}
 	if cmp := p.CMP; cmp != "" && cmp != "auto" {
 		a.addGeo(cmp, "")
 	}

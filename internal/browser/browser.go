@@ -125,8 +125,19 @@ type Browser struct {
 	NoSandbox bool
 }
 
-// Describe names the browser for the run's log, e.g. "Chrome for
-// Testing 153.0.8010.52 (downloaded)".
+// Name names the browser without its path, e.g. "Chrome 153.0.8010.52"
+// or "Chrome for Testing 153.0.8010.52": what results and reports keep,
+// as the path can name the user and their folders. Describe adds it.
+func (b *Browser) Name() string {
+	if b.Downloaded {
+		return "Chrome for Testing " + b.Version
+	}
+	return "Chrome " + b.Version
+}
+
+// Describe names the browser for the run's log and doctor, with its
+// path, e.g. "Chrome 153.0.8010.52 (/usr/bin/google-chrome)" or "Chrome
+// for Testing 153.0.8010.52 (downloaded)".
 func (b *Browser) Describe() string {
 	if b.Downloaded {
 		return "Chrome for Testing " + b.Version + " (downloaded)"

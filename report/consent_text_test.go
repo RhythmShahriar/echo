@@ -53,8 +53,8 @@ func TestConsentTextLines(t *testing.T) {
 		"\n  [1/3] No choice   ✗ Meta Pixel fired before the choice\n",
 		"\n  [3/3] Reject      ✗ Meta Pixel fired after Reject on 3 of 3 pages",
 		"\nFindings - 2 errors, 0 warnings, 1 notice - 3 runs, 3 trackers, policy advanced\n",
-		"\n  error   consent/before-choice   Meta Pixel fired before the visitor chose\n          3 hits (PageView on /, /shop/, /); cookie _fbp written\n          fix: ",
-		"\n  notice  consent/meta-no-consent-api  Meta Pixel never received fbq('consent', ...)\n",
+		"\n  error   consent/before-choice   Meta Pixel fired before the visitor chose (No choice)\n          3 hits (PageView on /, /shop/, /); cookie _fbp written\n          fix: ",
+		"\n  notice  consent/meta-no-consent-api  Meta Pixel never received fbq('consent', ...) (No choice)\n",
 		"\n\nEvidence, not legal advice.\nfull report: r.html\n",
 	} {
 		if !strings.Contains(out, want) {
@@ -69,7 +69,7 @@ func TestConsentTextLines(t *testing.T) {
 		"\nBrowser: Chrome for Testing 156.0.8078.47\n",
 		"[1/3] No choice   Google Analytics 4: 2 cookieless pings (gcs G100); no tracker cookies; Meta Pixel held back\n",
 		"\nAll clear - 0 errors, 0 warnings, 1 notice - 3 runs, 3 trackers, policy advanced\n",
-		"\n  notice  consent/cookieless-ping  Google Analytics 4 sent 2 cookieless pings before the choice (allowed under --consent-mode advanced)\n",
+		"\n  notice  consent/cookieless-ping  Google Analytics 4 sent 2 cookieless pings before the choice (allowed under --consent-mode advanced) (No choice)\n",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("advanced: missing %q in\n%s", want, out)

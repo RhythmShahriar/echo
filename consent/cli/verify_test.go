@@ -52,6 +52,26 @@ func signedCheck(t *testing.T) string {
 	return resultDir(t)
 }
 
+// scopeHTML is the scope line of a folder whose only report is
+// report.html.
+const scopeHTML = "The signature covers consent.json and the files it lists; report.html is checked against manifest.json, which is not signed."
+
+// The scope line names the reports the folder has (report.xml too) and
+// says manifest.json itself isn't signed.
+func TestSignatureScopeNamesReports(t *testing.T) {
+	dir := t.TempDir()
+	if got, want := signatureScope(dir), "The signature covers consent.json and the files it lists; manifest.json is not signed."; got != want {
+		t.Errorf("no reports:\n got %q\nwant %q", got, want)
+	}
+	for _, n := range []string{"report.html", "report.md", "report.xml"} {
+		putFile(t, filepath.Join(dir, n), "x")
+	}
+	want := "The signature covers consent.json and the files it lists; report.html, report.md and report.xml are checked against manifest.json, which is not signed."
+	if got := signatureScope(dir); got != want {
+		t.Errorf("three reports:\n got %q\nwant %q", got, want)
+	}
+}
+
 // A signed check verifies with its public key: the signature is in the
 // manifest, every file matches and the exit is 0.
 func TestVerifySignedCheck(t *testing.T) {
@@ -62,7 +82,7 @@ func TestVerifySignedCheck(t *testing.T) {
 	}
 	code, out, errOut := runMain(t, "verify", dir, "--key", "team.pub")
 	want := "ok  consent.json\nok  consent.json.sig\nok  events/page-1-none.ndjson\nok  evidence/page-1/none-banner.png\nok  report.html\n" +
-		"signature present=true ok=true key=team.pub\n" + msgSignatureScope + "\n"
+		"signature present=true ok=true key=team.pub\n" + scopeHTML + "\n"
 	if code != exitOK || out != want || errOut != "" {
 		t.Errorf("exit %d\n%s%s", code, out, errOut)
 	}
@@ -120,7 +140,7 @@ func TestVerifySignatureScope(t *testing.T) {
 	}
 	putFile(t, filepath.Join(dir, "extra.png"), "x")
 	code, out, _ := runMain(t, "verify", dir, "--key", "team.pub")
-	if code != exitOK || !strings.Contains(out, "not in the manifest  extra.png\n") || !strings.HasSuffix(out, msgSignatureScope+"\n") {
+	if code != exitOK || !strings.Contains(out, "not in the manifest  extra.png\n") || !strings.HasSuffix(out, scopeHTML+"\n") {
 		t.Errorf("exit %d\n%s", code, out)
 	}
 	if strings.Contains(out, "not in the manifest  notes.txt") {

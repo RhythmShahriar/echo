@@ -57,6 +57,9 @@ func (c *cmd) detect(pos []string) int {
 		fmt.Fprintln(env.Stderr, "rhythm echo:", msgNoSandbox)
 	}
 	dir := filepath.Join(st.store.Root, store.Consent, detectDir)
+	// Folders this detect made go again, where empty, when it stops
+	// before looking (PRD 6: the store is made when a run starts).
+	made := missingDirs(st.store.Root, filepath.Join(st.store.Root, store.Consent), dir)
 	for _, d := range []string{st.store.Root, filepath.Join(st.store.Root, store.Consent), dir} {
 		if err := os.MkdirAll(d, 0o700); err != nil {
 			return fail(env, &writeError{d, err})
@@ -77,10 +80,11 @@ func (c *cmd) detect(pos []string) int {
 		return exitInterrupted
 	}
 	if err != nil {
+		removeEmpty(made)
 		var fe *consent.FatalError
 		if errors.As(err, &fe) {
 			fmt.Fprintln(env.Stderr, "rhythm echo:", fatalMessage(fe))
-			return exitUnavailable
+			return fatalExit(fe)
 		}
 		return fail(env, err)
 	}

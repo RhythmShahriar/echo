@@ -318,7 +318,9 @@ func TestTipsOnce(t *testing.T) {
 }
 
 // TestFatalMessages pins every message a stopped check prints (PRD
-// 10.2 messages 9 to 16): exit 3 and no result folder left behind.
+// 10.2 messages 9 to 16): exit 3 (2 for a selector the browser refuses,
+// a usage error) and no result folder left behind. A check that started
+// no run leaves no .echo either (PRD 6).
 func TestFatalMessages(t *testing.T) {
 	// CI keeps the first-run notice out, which would otherwise lead the
 	// first message when this test runs on its own.
@@ -337,6 +339,7 @@ func TestFatalMessages(t *testing.T) {
 		{Code: consent.FatalImage},
 		{Code: consent.FatalRedirectLoop, URL: "https://shop.test/"},
 		{Code: consent.FatalWrite, Detail: ".echo/consent/x/events/page-1-none.ndjson", Err: errors.New("no space left on device")},
+		{Code: consent.FatalSelector, Detail: `--reject-selector: "###" isn't CSS the browser accepts`},
 		{Code: "something-new", URL: "https://shop.test/", Detail: "what happened"},
 	}
 	var b strings.Builder
@@ -344,11 +347,18 @@ func TestFatalMessages(t *testing.T) {
 		inDir(t, "")
 		useRunner(t, nil, fe)
 		code, out, errOut := runMain(t, "https://shop.test/")
-		if code != exitUnavailable || out != "" {
+		want := exitUnavailable
+		if fe.Code == consent.FatalSelector {
+			want = exitUsage
+		}
+		if code != want || out != "" {
 			t.Errorf("%s: exit %d stdout %q", fe.Code, code, out)
 		}
 		if entries, _ := os.ReadDir(filepath.Join(".echo", "consent")); len(entries) != 0 {
 			t.Errorf("%s left %d folders", fe.Code, len(entries))
+		}
+		if _, err := os.Stat(".echo"); err == nil {
+			t.Errorf("%s left .echo behind", fe.Code)
 		}
 		b.WriteString(string(fe.Code) + ": " + errOut)
 	}
@@ -359,6 +369,23 @@ func TestFatalMessages(t *testing.T) {
 	_, _, errOut := runMain(t, "https://shop.test/")
 	b.WriteString("no-browser in the image: " + errOut)
 	golden(t, "fatal-messages", b.String())
+}
+
+// A store that was there before a check that stopped keeps everything
+// it had: only the folders the check made go.
+func TestFatalKeepsAStoreThatWasThere(t *testing.T) {
+	t.Setenv("CI", "true")
+	inDir(t, "consent:\n  banner_wait: 5s\n")
+	putFile(t, filepath.Join(".echo", "consent", "baselines", "main", "consent.json"), "{}")
+	useRunner(t, nil, &consent.FatalError{Code: consent.FatalUnreachable, URL: "https://shop.test/", Detail: "refused"})
+	if code, _, _ := runMain(t, "https://shop.test/"); code != exitUnavailable {
+		t.Fatalf("exit %d", code)
+	}
+	for _, p := range []string{filepath.Join(".echo", "config.yaml"), filepath.Join(".echo", "consent", "baselines", "main", "consent.json")} {
+		if _, err := os.Stat(p); err != nil {
+			t.Errorf("%s is gone: %v", p, err)
+		}
+	}
 }
 
 // TestSaveAgainst: a saved baseline, then a check against it that

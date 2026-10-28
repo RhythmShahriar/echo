@@ -790,7 +790,7 @@ const (
 )
 
 // issues writes every issue: `  error   consent/before-choice   Meta
-// Pixel fired before the visitor chose`, then for errors and warnings
+// Pixel fired before the visitor chose (No choice)`, then for errors and warnings
 // the detail and the fix ("as above." when it repeats the one before),
 // wrapped at the width. Ignored issues say until when.
 func (t *consentText) issues() {
@@ -802,10 +802,14 @@ func (t *consentText) issues() {
 	}
 	lastFix := ""
 	pad := strings.Repeat(" ", textIndent)
+	where := t.issueWhere()
 	for _, is := range t.r.Issues {
 		lvl := padRight(string(is.Level), levelWidth)
 		check := padRight(Safe(is.Check), checkWidth)
 		title := Safe(is.Title)
+		if w := where(is); w != "" {
+			title += " (" + w + ")"
+		}
 		if ig := is.Ignored; ig != nil {
 			why := "ignored"
 			if ig.Until != "" {
@@ -834,6 +838,38 @@ func (t *consentText) issues() {
 			t.wrapped(pad+"fix: ", pad, fix)
 			lastFix = is.Fix
 		}
+	}
+}
+
+// issueWhere returns what an issue line says about where the issue is:
+// the run's label, then the --sites name and the page when the result
+// has more than one site or page ("Reject, charlie /checkout"). An
+// issue of the page as a whole names no run.
+func (t *consentText) issueWhere() func(consent.Issue) string {
+	sites := map[string]bool{}
+	for _, pg := range t.r.Pages {
+		sites[pg.Site] = true
+	}
+	for _, is := range t.r.Issues {
+		sites[is.Site] = true
+	}
+	showPage, showSite := len(t.r.Pages) > 1, len(sites) > 1
+	return func(is consent.Issue) string {
+		var parts []string
+		if is.Run != "" {
+			parts = append(parts, is.Run.Label())
+		}
+		var at []string
+		if showSite && is.Site != "" {
+			at = append(at, Safe(is.Site))
+		}
+		if (showPage || showSite) && is.Page != "" {
+			at = append(at, Safe(is.Page))
+		}
+		if len(at) > 0 {
+			parts = append(parts, strings.Join(at, " "))
+		}
+		return strings.Join(parts, ", ")
 	}
 }
 

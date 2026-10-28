@@ -6,6 +6,7 @@ package browse
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/url"
 	"strings"
 	"time"
@@ -48,6 +49,9 @@ func (a *attempt) steps(ctx context.Context) (*consent.FatalError, error) {
 	p, out := a.plan, a.out
 	start := *a.target.URL
 	a.startURL = start.String()
+	if f, err := a.checkSelectors(ctx); f != nil || err != nil {
+		return f, err
+	}
 	if cmp := p.CMP; cmp != "" && cmp != "auto" {
 		a.addGeo(cmp, "")
 	}
@@ -433,4 +437,60 @@ func (a *attempt) visit(ctx context.Context, raw, step string, info consent.CMPI
 	a.snapshot(ctx)
 	a.out.Visits = append(a.out.Visits, v)
 	return ctx.Err()
+}
+
+// selectorCheckJS lists the strings of its array that the browser's own
+// selector parser refuses. Nothing is looked for: the fragment is empty.
+const selectorCheckJS = `((list) => list.filter((s) => {
+  try { document.createDocumentFragment().querySelector(s); return false; } catch (e) { return true; }
+}))(%s)`
+
+// checkSelectors asks the browser whether every CSS part of
+// --accept-selector and --reject-selector parses, before the start page
+// loads. ParseSelector checks only the shape (balanced quotes and
+// brackets, the >> and ::shadow steps); "###" gets this far. A part the
+// browser refuses is a usage error (PRD 10.1): consent.FatalSelector.
+func (a *attempt) checkSelectors(ctx context.Context) (*consent.FatalError, error) {
+	type part struct{ flag, css string }
+	var parts []part
+	for _, f := range []struct {
+		flag string
+		locs []consent.Locator
+	}{{"--accept-selector", a.plan.AcceptSelector}, {"--reject-selector", a.plan.RejectSelector}} {
+		for _, l := range f.locs {
+			for _, h := range l.Shadow {
+				parts = append(parts, part{f.flag, h})
+			}
+			parts = append(parts, part{f.flag, l.CSS})
+		}
+	}
+	if len(parts) == 0 {
+		return nil, nil
+	}
+	css := make([]string, len(parts))
+	for i, p := range parts {
+		css[i] = p.css
+	}
+	arg, err := json.Marshal(css)
+	if err != nil {
+		return nil, err
+	}
+	raw, err := a.run.EvalMain(ctx, fmt.Sprintf(selectorCheckJS, arg))
+	if err != nil {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		return nil, nil // the click step says what it can't find
+	}
+	var bad []string
+	if json.Unmarshal(raw, &bad) != nil || len(bad) == 0 {
+		return nil, nil
+	}
+	for _, p := range parts {
+		if p.css == bad[0] {
+			return &consent.FatalError{Code: consent.FatalSelector,
+				Detail: fmt.Sprintf("%s: %q isn't CSS the browser accepts", p.flag, consent.SafeText(p.css, 120))}, nil
+		}
+	}
+	return nil, nil
 }

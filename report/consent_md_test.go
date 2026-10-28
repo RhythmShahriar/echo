@@ -41,7 +41,7 @@ func TestConsentMarkdownLines(t *testing.T) {
 		"**Findings.** 1 page, 3 runs, 3 trackers, policy advanced: Meta Pixel fired before the choice and after Reject.\n",
 		"| Page | Banner | No choice | Accept | Reject |\n|---|---|---|---|---|\n",
 		"| / | Complianz | ✗ Meta Pixel | Google Analytics 4, Google Ads, Meta Pixel | ✗ Meta Pixel (3 pages) |\n",
-		"### Errors (2)\n\n| Check | Page | What | Fix |\n|---|---|---|---|\n| consent/before-choice | / | Meta Pixel fired before the visitor chose |",
+		"### Errors (2)\n\n| Check | Page | Run | What | Fix |\n|---|---|---|---|---|\n| consent/before-choice | / | No choice | Meta Pixel fired before the visitor chose |",
 		"### Notices (1)\n",
 		"### Consent Mode\n\nDefault: v2, all four signals denied at 0.12s. Accept: update granted at 2.0s. Reject: update denied at 2.0s. gcd decoded with an unofficial mapping.\n",
 		"_Evidence, not legal advice. Echo 1.2.0, Chrome 156.0.8078.47, 2026-10-26 09:20 UTC. Hits held in the browser. Hosts mapped with --map-host. consent.json sha256 e3b0c44298fc..._\n",

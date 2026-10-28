@@ -30,10 +30,12 @@
     "summary": {
       "properties": {
         "after_reject": {
+          "description": "How many different consent-needing trackers sent a hit after Reject (trackers, not hits).",
           "minimum": 0,
           "type": "integer"
         },
         "before_choice": {
+          "description": "How many different consent-needing trackers sent a hit before the visitor chose (trackers, not hits).",
           "minimum": 0,
           "type": "integer"
         },
@@ -126,24 +128,24 @@
   "$defs": {
     "box": {
       "properties": {
-        "H": {
+        "h": {
           "type": "number"
         },
-        "W": {
+        "w": {
           "type": "number"
         },
-        "X": {
+        "x": {
           "type": "number"
         },
-        "Y": {
+        "y": {
           "type": "number"
         }
       },
       "required": [
-        "X",
-        "Y",
-        "W",
-        "H"
+        "x",
+        "y",
+        "w",
+        "h"
       ],
       "type": "object"
     },

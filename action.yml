@@ -163,10 +163,10 @@ outputs:
     description: For mode consent, the path of consent.json in the evidence folder.
     value: ${{ steps.consent.outputs.json }}
   before-choice:
-    description: For mode consent, how many tracker hits came before the visitor chose.
+    description: For mode consent, how many different trackers sent hits before the visitor chose (trackers, not hits).
     value: ${{ steps.consent.outputs.before-choice }}
   after-reject:
-    description: For mode consent, how many tracker hits came after Reject.
+    description: For mode consent, how many different trackers sent hits after Reject (trackers, not hits).
     value: ${{ steps.consent.outputs.after-reject }}
   inconclusive:
     description: For mode consent, how many runs couldn't make or confirm their choice.

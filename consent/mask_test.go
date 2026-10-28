@@ -5,6 +5,7 @@ package consent_test
 
 import (
 	"net/url"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -134,4 +135,32 @@ func FuzzMask(f *testing.F) {
 			t.Fatalf("token survived: %s", got)
 		}
 	})
+}
+
+// The catalog's own ID params mask on any host; a rule's short params
+// and path IDs mask only on its hosts, so a site's own ?a=1 is kept.
+func TestMaskURLCatalogIDs(t *testing.T) {
+	consent.AddIDRule(consent.IDRule{Hosts: []string{"px.masktest.test"}, Suffixes: []string{".cdn.masktest.test"},
+		Params: []string{"Acct"}, Path: regexp.MustCompile(`^/conv/([0-9]+)`)})
+	for _, c := range []struct{ name, in, want string }{
+		{"TikTok sdkid anywhere", "https://analytics.tiktok.com/i18n/pixel/events.js?sdkid=TESTBEDTT0001&lib=ttq",
+			"https://analytics.tiktok.com/i18n/pixel/events.js?sdkid=••••0001&lib=ttq"},
+		{"named ID params", "https://x.test/?pixel_code=PX12345678&idsite=1234567&marketerId=00ab12cd34&company_id=AbCdEf&txn_id=o1x2y3",
+			"https://x.test/?pixel_code=••••5678&idsite=••••4567&marketerId=••••cd34&company_id=••••CdEf&txn_id=••••x2y3"},
+		{"rule param on its host", "https://px.masktest.test/c?acct=987654321&e=1", "https://px.masktest.test/c?acct=••••4321&e=1"},
+		{"rule param on a subdomain", "https://a.cdn.masktest.test/c?ACCT=987654321", "https://a.cdn.masktest.test/c?ACCT=••••4321"},
+		{"rule param elsewhere kept", "https://shop.test/?acct=987654321", "https://shop.test/?acct=987654321"},
+		{"rule path ID", "https://px.masktest.test/conv/100000001/?x=1", "https://px.masktest.test/conv/••••0001/?x=1"},
+		{"rule path elsewhere kept", "https://shop.test/conv/100000001/", "https://shop.test/conv/100000001/"},
+	} {
+		if got := consent.MaskURL(c.in, false); got != c.want {
+			t.Errorf("%s:\n got %s\nwant %s", c.name, got, c.want)
+		}
+	}
+	// A path without exactly one group, or a rule without hosts, adds nothing.
+	consent.AddIDRule(consent.IDRule{AnyHost: true, Path: regexp.MustCompile(`^/(a)/(b)`)})
+	consent.AddIDRule(consent.IDRule{Params: []string{"zzq"}})
+	if got := consent.MaskURL("https://y.test/a/b?zzq=123456789", false); got != "https://y.test/a/b?zzq=123456789" {
+		t.Errorf("an ignored rule masked: %s", got)
+	}
 }

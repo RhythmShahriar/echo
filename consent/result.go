@@ -49,8 +49,14 @@ type Locator struct {
 }
 
 // Box is an element's place on the page in CSS pixels, for the outline
-// on the screenshot.
-type Box struct{ X, Y, W, H float64 }
+// on the screenshot. Results written before 1.2.0 shipped used X, Y, W
+// and H; encoding/json reads those keys too (it matches any case).
+type Box struct {
+	X float64 `json:"x"`
+	Y float64 `json:"y"`
+	W float64 `json:"w"`
+	H float64 `json:"h"`
+}
 
 // Choice is how a run made its choice (Accept or Reject) and whether the
 // CMP confirmed it.

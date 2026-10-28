@@ -163,7 +163,7 @@ def uniq: reduce .[] as $x ([]; if any(.[]; . == $x) then . else . + [$x] end);
 | (["none", "accept", "reject", "gpc", "withdraw"] as $order
    | [($d.pages // [])[].runs[]?.run] | uniq | (($order - ($order - .)) + (. - $order))) as $kinds
 | "## ♪ Echo consent\n",
-  "**\($verdict).** \(plural($s.pages // 0; "page"; "pages")), \(plural($s.runs // 0; "run"; "runs")), \(plural($s.trackers // 0; "tracker"; "trackers")), policy \(($d.policy // "advanced") | md). Hits before the choice: \($s.before_choice // 0). After Reject: \($s.after_reject // 0).\(if $inc > 0 then " Couldn\u0027t check \(plural($inc; "run"; "runs"))." else "" end)\n",
+  "**\($verdict).** \(plural($s.pages // 0; "page"; "pages")), \(plural($s.runs // 0; "run"; "runs")), \(plural($s.trackers // 0; "tracker"; "trackers")), policy \(($d.policy // "advanced") | md). Trackers before the choice: \($s.before_choice // 0). Trackers after Reject: \($s.after_reject // 0).\(if $inc > 0 then " Couldn\u0027t check \(plural($inc; "run"; "runs"))." else "" end)\n",
   (if ($d.pages // []) | length > 0 then
      "| Page | Banner | \($kinds | map(runname) | join(" | ")) |\n|---|---|\($kinds | map("---|") | join(""))",
      (($d.pages // [])[] as $p
@@ -189,7 +189,7 @@ def uniq: reduce .[] as $x ([]; if any(.[]; . == $x) then . else . + [$x] end);
      "### Couldn\u0027t check (\($d.inconclusive | length))\n\n| Page | Run | Why |\n|---|---|---|",
      ($d.inconclusive[] | "| \(.page | path | md) | \(.run | runname | md) | \(.reason | md) |"), ""
    else empty end),
-  "_Evidence, not legal advice. Hits held in the browser._\n"
+  "_Evidence, not legal advice. \(if $d.held == false then "Tracker hits were sent for real (--send-hits)." else "Hits held in the browser." end)_\n"
 '
 
 # shellcheck disable=SC2016 # Markdown backticks, not shell

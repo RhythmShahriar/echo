@@ -416,8 +416,8 @@ var mdLevels = []struct {
 	head  string
 }{{model.Error, "Errors"}, {model.Warning, "Warnings"}, {model.Notice, "Notices"}}
 
-// issueTables writes one table per level, Check | Page | What | Fix,
-// then the ignored issues. A fix that repeats the one above reads "as
+// issueTables writes one table per level, Check | Page | Run | What |
+// Fix, then the ignored issues. A fix that repeats the one above reads "as
 // above".
 func (m *consentMD) issueTables() {
 	for _, lv := range mdLevels {
@@ -432,8 +432,8 @@ func (m *consentMD) issueTables() {
 		}
 		m.line("### %s (%d)", lv.head, len(rows))
 		m.line("")
-		m.line("| Check | Page | What | Fix |")
-		m.line("|---|---|---|---|")
+		m.line("| Check | Page | Run | What | Fix |")
+		m.line("|---|---|---|---|---|")
 		lastFix := ""
 		for _, is := range rows {
 			what := md(is.Title)
@@ -445,7 +445,7 @@ func (m *consentMD) issueTables() {
 				fix = "as above"
 			}
 			lastFix = is.Fix
-			m.line("| %s | %s | %s | %s |", md(is.Check), m.page(is.Site, is.Page), what, fix)
+			m.line("| %s | %s | %s | %s | %s |", md(is.Check), m.page(is.Site, is.Page), issueRun(is), what, fix)
 		}
 		m.line("")
 	}
@@ -460,12 +460,21 @@ func (m *consentMD) issueTables() {
 	}
 	m.line("### Ignored (%d)", len(ignored))
 	m.line("")
-	m.line("| Check | Page | What | Until | Reason |")
-	m.line("|---|---|---|---|---|")
+	m.line("| Check | Page | Run | What | Until | Reason |")
+	m.line("|---|---|---|---|---|---|")
 	for _, is := range ignored {
-		m.line("| %s | %s | %s | %s | %s |", md(is.Check), m.page(is.Site, is.Page), md(is.Title), md(is.Ignored.Until), md(is.Ignored.Reason))
+		m.line("| %s | %s | %s | %s | %s | %s |", md(is.Check), m.page(is.Site, is.Page), issueRun(is), md(is.Title), md(is.Ignored.Until), md(is.Ignored.Reason))
 	}
 	m.line("")
+}
+
+// issueRun is an issue's Run cell: the run's label, "" for an issue of
+// the page as a whole.
+func issueRun(is consent.Issue) string {
+	if is.Run == "" {
+		return ""
+	}
+	return md(is.Run.Label())
 }
 
 // runDetails writes, with Details, a collapsed timeline per run: the
@@ -622,7 +631,7 @@ func (m *consentMD) footer() {
 	var who []string
 	who = append(who, "Echo "+md(cmp.Or(m.r.Echo, ToolVersion)))
 	if m.r.Browser != "" {
-		who = append(who, md(strings.Replace(m.r.Browser, "Chrome for Testing ", "Chrome ", 1)))
+		who = append(who, md(strings.Replace(browserName(m.r.Browser), "Chrome for Testing ", "Chrome ", 1)))
 	}
 	if !m.r.Started.IsZero() {
 		who = append(who, m.r.Started.UTC().Format("2006-01-02 15:04")+" UTC")
@@ -663,4 +672,14 @@ func cutMarkdown(s string, limit int) string {
 		head += "</details>\n"
 	}
 	return head + tail
+}
+
+// browserName is a result's browser without a path in parentheses, as
+// an older result may have it ("Chrome 153.0.8010.52 (/usr/bin/chrome)"):
+// a shared report never names the user's folders.
+func browserName(s string) string {
+	if i := strings.LastIndex(s, " ("); i > 0 && strings.HasSuffix(s, ")") && strings.ContainsAny(s[i:], `/\`) {
+		return s[:i]
+	}
+	return s
 }

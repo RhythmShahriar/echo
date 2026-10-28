@@ -179,8 +179,13 @@ func envelopeSchema(kind Kind, title, description string, summaryType, dataType 
 	g := &schemaGen{defs: map[string]any{}}
 	sumProps, sumReq := map[string]any{}, []any{}
 	for i := range summaryType.NumField() {
-		name, _, _ := strings.Cut(summaryType.Field(i).Tag.Get("json"), ",")
-		sumProps[name] = map[string]any{"type": "integer", "minimum": 0}
+		f := summaryType.Field(i)
+		name, _, _ := strings.Cut(f.Tag.Get("json"), ",")
+		prop := map[string]any{"type": "integer", "minimum": 0}
+		if d := f.Tag.Get("desc"); d != "" {
+			prop["description"] = d
+		}
+		sumProps[name] = prop
 		sumReq = append(sumReq, name)
 	}
 	data := g.of(dataType, false)

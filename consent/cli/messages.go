@@ -72,10 +72,22 @@ func fatalMessage(e *consent.FatalError) string {
 		return "this image has no browser; run rhythm echo consent on the host, or pass --browser"
 	case consent.FatalRedirectLoop:
 		return fmt.Sprintf("%s redirects in a loop or through more than 10 hops; check the site's redirects", url)
+	case consent.FatalSelector:
+		return cmp.Or(detail, "a selector isn't CSS the browser accepts") + "; fix the selector (rhythm echo consent detect shows the buttons Echo sees)"
 	case consent.FatalWrite:
 		return fmt.Sprintf("couldn't write %s: %s", cmp.Or(e.Detail, e.URL, "the evidence"), errText(e.Err))
 	}
 	return consent.SafeText(e.Error(), 500)
+}
+
+// fatalExit is the exit code of a check that stopped with e: a selector
+// the browser refused is a usage error (PRD 10.1), the rest mean the
+// site or the browser couldn't be used.
+func fatalExit(e *consent.FatalError) int {
+	if e.Code == consent.FatalSelector {
+		return exitUsage
+	}
+	return exitUnavailable
 }
 
 // errText is err's message, or "unknown error" for none.

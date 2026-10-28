@@ -1,10 +1,10 @@
 Findings - 2 errors, 0 warnings, 1 notice - 3 runs, 3 trackers, policy advanced
-  error   consent/before-choice   Meta Pixel fired before the visitor chose
+  error   consent/before-choice   Meta Pixel fired before the visitor chose (No choice)
           3 hits (PageView on /, /shop/, /); cookie _fbp written
           fix: Load the tracker only after the visitor accepts: let the consent banner block its
           script, or start it with consent denied and grant it on Accept.
-  error   consent/after-reject    Meta Pixel fired after Reject
+  error   consent/after-reject    Meta Pixel fired after Reject (Reject)
           3 hits (PageView on /, /shop/, /); cookie _fbp written
           fix: Make Reject stop the tracker: block its script while consent is denied and keep it
           blocked on every page after the choice.
-  notice  consent/meta-no-consent-api  Meta Pixel never received fbq('consent', ...)
+  notice  consent/meta-no-consent-api  Meta Pixel never received fbq('consent', ...) (No choice)
