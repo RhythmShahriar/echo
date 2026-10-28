@@ -48,7 +48,8 @@ func TestConsentSummaryJSON(t *testing.T) {
 }
 
 // ConsentEnvelope has Envelope's exported fields with the same JSON
-// keys in the same order; only the summary type differs.
+// keys in the same order, then the error of a check that stopped; only
+// the summary type differs.
 func TestConsentEnvelopeMatchesEnvelope(t *testing.T) {
 	keys := func(typ reflect.Type) []string {
 		var out []string
@@ -59,7 +60,7 @@ func TestConsentEnvelopeMatchesEnvelope(t *testing.T) {
 		}
 		return out
 	}
-	got, want := keys(reflect.TypeFor[ConsentEnvelope]()), keys(reflect.TypeFor[Envelope]())
+	got, want := keys(reflect.TypeFor[ConsentEnvelope]()), append(keys(reflect.TypeFor[Envelope]()), "error,omitempty")
 	if strings.Join(got, " ") != strings.Join(want, " ") {
 		t.Errorf("ConsentEnvelope keys %v; Envelope keys %v", got, want)
 	}

@@ -69,7 +69,7 @@ func (c *cmd) detect(pos []string) int {
 		dir = abs
 	}
 	st.store.ExcludeFromGit()
-	p.Dir, p.ID = dir, store.Stamp(env.now())+"-"+randomHex()
+	p.Dir, p.ID = dir, store.StampUTC(env.now())+"-"+randomHex()
 	p.Browser.Log = browserLog(env.Stderr, false) // PRD 6.1: detect prints no browser line
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -314,9 +314,10 @@ func (c *cmd) trackers(pos []string) int {
 // defaultKeep is how many results prune keeps without --keep.
 const defaultKeep = 20
 
-// resultName is a result folder's name: its start time and 6 hex
-// digits. prune removes only folders named so.
-var resultName = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-[0-9a-f]{6}$`)
+// resultName is a result folder's name: its start time in UTC with a Z
+// (a build before 1.2.0 used local time and no Z) and 6 hex digits.
+// prune removes only folders named so.
+var resultName = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}Z?-[0-9a-f]{6}$`)
 
 // prune is rhythm echo consent prune [--keep n]: it deletes the result
 // folders beyond the newest n, never baselines/ or detect/.

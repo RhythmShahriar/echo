@@ -665,7 +665,7 @@ func (m *consentMD) footer() {
 	} else {
 		parts = append(parts, md(noteSent))
 	}
-	for _, n := range m.r.Notes {
+	for _, n := range shownNotes(m.r.Notes) {
 		switch n {
 		case noteNotLegalAdvice, noteHeld, noteSent, noteGCD:
 		default:

@@ -438,6 +438,9 @@ func parse(s sub, args []string) (*options, []string, error) {
 // first.
 func flagError(err error, fs *flag.FlagSet, s sub) error {
 	if m := unknownFlag.FindStringSubmatch(err.Error()); m != nil {
+		if msg := quotedFlag(m[1]); msg != "" {
+			return kitcli.UsageError{Msg: msg}
+		}
 		var own, all []string
 		for _, d := range flagDefs {
 			all = append(all, d.name)
@@ -457,6 +460,26 @@ func flagError(err error, fs *flag.FlagSet, s sub) error {
 }
 
 var unknownFlag = regexp.MustCompile(`^flag provided but not defined: -+(.+)$`)
+
+// msgUseEval is how to pass a line of flags kept in a variable, such
+// as the testbed's make map output, which quotes '*.shop.test=...'.
+const msgUseEval = `use eval, as the testbed section shows: eval "rhythm-echo consent <url> $map"`
+
+// quotedFlag is the error for an unknown flag that is a known one
+// followed by a space and a quote ("map-host '*.shop.test"): a line of
+// flags that reached Echo as one argument, quotes and all, because it
+// came from a variable without eval. It is "" for any other name.
+func quotedFlag(name string) string {
+	known, rest, ok := strings.Cut(name, " ")
+	rest = strings.TrimSpace(rest)
+	if !ok || rest == "" || !strings.ContainsAny(rest[:1], `'"`) {
+		return ""
+	}
+	if _, ok := lookupDef(known); !ok {
+		return ""
+	}
+	return fmt.Sprintf("%s %s=...%s kept its quotes; %s", flagtext.Dash(known), rest, rest[:1], msgUseEval)
+}
 
 // noEffect is Echo's error for flags a command doesn't read.
 func noEffect(s sub, names []string) error {

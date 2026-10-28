@@ -226,10 +226,21 @@ type envelopeDoc struct {
 // consentSchemas are the four consent schemas as the types say.
 func consentSchemas() map[Kind]envelopeDoc {
 	sum := reflect.TypeFor[Summary]()
+	check := envelopeSchema(KindConsent, "consent",
+		"What `consent --json` writes; data is also consent.json. Generated from the Go types (report/consent_schema_test.go). New optional fields may be added without a new schema name.",
+		reflect.TypeFor[ConsentSummary](), reflect.TypeFor[consent.Result]())
+	// A check that stopped before it had a result says why in error,
+	// with data null.
+	check.Properties["data"] = map[string]any{"anyOf": []any{check.Properties["data"], map[string]any{"type": "null"}}}
+	check.Properties["error"] = map[string]any{
+		"type": "object", "required": []any{"exit", "message"},
+		"properties": map[string]any{
+			"exit":    map[string]any{"description": "2 usage error, 3 couldn't check", "type": "integer"},
+			"message": map[string]any{"type": "string"},
+		},
+	}
 	return map[Kind]envelopeDoc{
-		KindConsent: envelopeSchema(KindConsent, "consent",
-			"What `consent --json` writes; data is also consent.json. Generated from the Go types (report/consent_schema_test.go). New optional fields may be added without a new schema name.",
-			reflect.TypeFor[ConsentSummary](), reflect.TypeFor[consent.Result]()),
+		KindConsent: check,
 		KindConsentCatalog: envelopeSchema(KindConsentCatalog, "consent-catalog",
 			"What `consent cmps --json` and `consent trackers --json` write. Generated from the Go types (report/consent_schema_test.go).",
 			sum, reflect.TypeFor[ConsentCatalog]()),

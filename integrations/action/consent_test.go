@@ -489,6 +489,41 @@ func TestConsentSummaryDisclosures(t *testing.T) {
 	}
 }
 
+// A check --map-host answered over plain http has one footer note for
+// what would otherwise be three.
+func TestConsentSummaryMappedHTTP(t *testing.T) {
+	needBash(t, "jq")
+	sh := filepath.Join(root(t), "integrations", "action", "summary.sh")
+	b, err := os.ReadFile(filepath.Join("testdata", "consent.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var env map[string]any
+	if err := json.Unmarshal(b, &env); err != nil {
+		t.Fatal(err)
+	}
+	data, _ := env["data"].(map[string]any)
+	data["tls_verified"], data["mapped"], data["sandbox"] = false, true, true
+	data["notes"] = []any{"Evidence, not legal advice.", "Hits held in the browser.", "TLS not verified.", "Hosts mapped with --map-host.",
+		"--map-host answered https pages over plain http, so TLS wasn't checked."}
+	out, err := json.Marshal(env)
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(t.TempDir(), "consent.json")
+	if err := os.WriteFile(path, out, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	got, errOut, code := script(t, sh, nil, "consent", path)
+	if code != 0 {
+		t.Fatalf("exit %d: %s", code, errOut)
+	}
+	if !strings.Contains(got, "Hits held in the browser. Hosts mapped with --map-host; https pages were answered over plain http, so TLS wasn't checked._") ||
+		strings.Contains(got, "TLS not verified.") {
+		t.Errorf("footer:\n%s", got)
+	}
+}
+
 // TestConsentSummaryHeldFooter: the summary's last line says whether the
 // tracker hits were held, from data.held: a check run with --send-hits
 // must never tell a pull request that no hit was sent. The counts are

@@ -7,6 +7,12 @@ ROOT := $(CURDIR)
 REPO := $(abspath $(CURDIR)/../..)
 GO ?= go
 SERVER := $(GO) run ./testbed/consent/server/cmd/consent-testbed
+# Where Go mode serves the sites and stand-in tags (LISTEN) and the admin
+# and sink endpoints (ADMIN). Move both when 23400 and 23401 are taken,
+# and give map the same LISTEN: make serve LISTEN=127.0.0.1:39130
+# ADMIN=127.0.0.1:39131, then make -s map LISTEN=127.0.0.1:39130.
+LISTEN ?= 127.0.0.1:23400
+ADMIN ?= 127.0.0.1:23401
 
 BIN ?= $(REPO)/bin/rhythm-echo
 # The benchmark of record runs in the sealed Docker testbed (make up);
@@ -25,12 +31,12 @@ export TESTBED_GID := $(shell id -g)
 ca: ## make the testbed CA in ca/ (git-ignored; delete the folder for a new one)
 	cd $(REPO) && $(SERVER) -make-ca $(ROOT)/ca
 
-serve: ## serve every scenario in Go mode on 127.0.0.1:23400 (http and https) and 23401 (admin)
+serve: ## serve every scenario in Go mode on LISTEN (http and https, default 127.0.0.1:23400) and ADMIN (default 127.0.0.1:23401)
 	@test -f ca/ca.pem || $(MAKE) ca
-	cd $(REPO) && $(SERVER) -root $(ROOT) -tls
+	cd $(REPO) && $(SERVER) -root $(ROOT) -tls -listen $(LISTEN) -admin $(ADMIN)
 
-map: ## print the --map-host flags rhythm-echo needs for Go mode
-	@cd $(REPO) && $(SERVER) -print-map
+map: ## print the --map-host flags rhythm-echo needs for Go mode (pass the LISTEN serve uses)
+	@cd $(REPO) && $(SERVER) -print-map -listen $(LISTEN)
 
 toggle: ## switch a scenario: make toggle ID=c01 STATE=broken
 	./toggle.sh $(ID) $(STATE)

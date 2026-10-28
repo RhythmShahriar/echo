@@ -14,8 +14,10 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 	"time"
 
+	"github.com/RhythmShahriar/echo/report"
 	kitcli "github.com/RhythmShahriar/rhythm/kit/cli"
 )
 
@@ -73,7 +75,11 @@ func Main(args []string, env Env) int {
 		return exitOK
 	}
 	if err != nil {
-		return fail(env, err)
+		code := fail(env, err)
+		if s == subCheck && jsonArgs(args) {
+			_ = report.WriteConsentError(env.Stdout, env.Version, code, err.Error())
+		}
+		return code
 	}
 	c := &cmd{env: env, o: o, sub: s}
 	switch s {
@@ -98,6 +104,47 @@ type cmd struct {
 	env Env
 	o   *options
 	sub sub
+	// jsonOut says the check writes its result to stdout as JSON, so
+	// a check that stops first writes an error envelope there.
+	jsonOut bool
+}
+
+// fail is the package's fail for the check: under --json it also
+// writes the error envelope to stdout.
+func (c *cmd) fail(err error) int {
+	return c.jsonError(fail(c.env, err), errText(err))
+}
+
+// jsonError returns code. When the check's result goes to stdout as
+// JSON it first writes there the error envelope of a check that
+// stopped with code and msg.
+func (c *cmd) jsonError(code int, msg string) int {
+	if c.jsonOut {
+		_ = report.WriteConsentError(c.env.Stdout, c.env.Version, code, msg)
+	}
+	return code
+}
+
+// jsonArgs reports whether a command line that didn't parse asked for
+// JSON on stdout: --json and no -o, which could have taken it.
+func jsonArgs(args []string) bool {
+	json := false
+	for _, a := range args {
+		if a == "--" {
+			break
+		}
+		name, _, _ := strings.Cut(strings.TrimLeft(a, "-"), "=")
+		if !strings.HasPrefix(a, "-") {
+			continue
+		}
+		switch name {
+		case "json":
+			json = !strings.HasSuffix(a, "=false")
+		case "o", "output":
+			return false
+		}
+	}
+	return json
 }
 
 // fail prints err as Echo does and returns its exit code: 2 for a

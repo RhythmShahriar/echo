@@ -1,1 +1,5 @@
 Couldn't check - 0 errors, 0 warnings, 0 notices - 3 runs, 0 trackers, policy advanced
+  ? /  Accept: no banner showed within 10s (Cookiebot's script loaded)
+  ? /  Reject: no banner showed within 10s (Cookiebot's script loaded)
+  Many banners show only to visitors in some countries: try --geo de, or an EU --proxy.
+  A banner Echo doesn't know: --accept-selector and --reject-selector (consent detect helps).

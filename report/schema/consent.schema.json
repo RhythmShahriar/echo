@@ -19,7 +19,30 @@
       "type": "boolean"
     },
     "data": {
-      "$ref": "#/$defs/result"
+      "anyOf": [
+        {
+          "$ref": "#/$defs/result"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "error": {
+      "properties": {
+        "exit": {
+          "description": "2 usage error, 3 couldn't check",
+          "type": "integer"
+        },
+        "message": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "exit",
+        "message"
+      ],
+      "type": "object"
     },
     "kind": {
       "const": "consent"

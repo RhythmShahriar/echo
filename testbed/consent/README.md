@@ -47,7 +47,20 @@ testbed/consent/toggle.sh c01 broken
 eval "bin/rhythm-echo consent https://c01.shop.test/ $map"
 ```
 
+`--map-only` at the end makes Echo answer only the mapped hosts and refuse every other name, so nothing the page asks for reaches the internet. Without `eval` the quotes stay in the arguments and Echo stops with `--map-host '*.shop.test=...' kept its quotes`.
+
 The good state passes; the broken one reports GA4 before the choice and no Consent Mode default. No `-k` is needed: `make map` maps every host to the server's plain http port, so Echo answers the `https://` pages from it over http and never checks a certificate. The result says so (`tls_verified` is false, with the notes `TLS not verified.` and `--map-host answered https pages over plain http, so TLS wasn't checked.`). The server also answers TLS on the same port with the testbed CA (`ca/ca.pem`, git-ignored, name-constrained to `.test`, `localhost` and the stand-in hosts); Chrome doesn't trust that CA. Echo never meets it through `make map`. What the sink counted: `curl -s '127.0.0.1:23401/_sink/count?scenario=c01'`.
+
+Ports 23400 and 23401 taken? Move both and give `map` the same `LISTEN`:
+
+```sh
+make -C testbed/consent serve LISTEN=127.0.0.1:39130 ADMIN=127.0.0.1:39131
+map=$(make -s -C testbed/consent map LISTEN=127.0.0.1:39130)
+```
+
+The testbed writes into the checkout only what git ignores: the CA in `ca/` (made on the first `make serve`) and the scenario switches in `state/`. `toggle.sh all good` puts every scenario back. To leave the checkout untouched, copy `testbed/consent` elsewhere and point the server at the copy with `-root <dir>` (`go run ./testbed/consent/server/cmd/consent-testbed -root /tmp/consent -tls`); the copy's own `toggle.sh` switches its scenarios.
+
+A build from source calls itself `dev`: the header reads `rhythm echo dev` and the User-Agent ends in `rhythm-echo-consent/dev`. It has every 1.2 consent check; release builds print their version.
 
 For the sealed mode: `make -C testbed/consent up` (a few minutes the first time), `make -C testbed/consent bench`, `make -C testbed/consent down` (deletes every volume).
 

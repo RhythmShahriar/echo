@@ -177,6 +177,12 @@ func parseMapHosts(cfg map[string]string, flags []string) (map[string]string, er
 		out[strings.ToLower(strings.TrimSpace(host))] = strings.TrimSpace(addr)
 	}
 	for _, m := range flags {
+		if t := strings.TrimSpace(m); t != "" && strings.ContainsAny(t[:1], `'"`) {
+			// A line of flags split by the shell without eval: the
+			// quotes around '*.shop.test=...' are still there.
+			host, _, _ := strings.Cut(t, "=")
+			return nil, usagef("--map-host %s=...%s kept its quotes; %s", host, t[:1], msgUseEval)
+		}
 		host, addr, ok := strings.Cut(m, "=")
 		if !ok || config.ParseMapHost(host, addr) != nil {
 			return nil, usagef("--map-host %q: want host=address, e.g. *.shop.test=127.0.0.1:18950", m)

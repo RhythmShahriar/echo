@@ -31,6 +31,17 @@ func WriteConsentJSON(w io.Writer, r *consent.Result, failOn string) error {
 	return encodeJSON(w, NewConsentEnvelope(r, failOn))
 }
 
+// WriteConsentError writes the envelope of a consent check that stopped
+// before it had a result, so a script reading --json always gets one
+// shape: verdict error, complete false, every count 0, data null and
+// the exit code and message in error.
+func WriteConsentError(w io.Writer, version string, exit int, msg string) error {
+	return encodeJSON(w, ConsentEnvelope{
+		Schema: model.Schema, Kind: KindConsent, Tool: "rhythm-echo", Version: cmp.Or(version, ToolVersion),
+		Verdict: VerdictError, Data: nil, Error: &ConsentError{Exit: exit, Message: msg},
+	})
+}
+
 // encodeJSON writes v indented with HTML left unescaped, as WriteJSON
 // does, so captured URLs read as sent.
 func encodeJSON(w io.Writer, v any) error {

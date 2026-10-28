@@ -4,6 +4,7 @@
 package cli
 
 import (
+	"net"
 	"net/url"
 	"regexp"
 	"strings"
@@ -30,6 +31,7 @@ func target(raw, site string) (*url.URL, error) {
 	s := strings.TrimSpace(raw)
 	shown := consent.MaskURL(s, false)
 	bad := func() error { return usagef("consent %q: want an http or https URL", shown) }
+	assumed := false // https:// was put in front
 	switch {
 	case s == "":
 		return nil, usagef("consent: an empty URL; give a page like https://staging.shop.test/")
@@ -58,6 +60,7 @@ func target(raw, site string) (*url.URL, error) {
 		return nil, bad()
 	default:
 		s = "https://" + s
+		assumed = true
 	}
 	u, err := url.Parse(s)
 	if err != nil {
@@ -67,6 +70,12 @@ func target(raw, site string) (*url.URL, error) {
 	if u.Scheme != "http" && u.Scheme != "https" || u.Host == "" || u.Opaque != "" {
 		return nil, bad()
 	}
+	if assumed && bareWord(u) {
+		// A word with no dot, no port and no scheme is a typo or a
+		// placeholder far more often than an intranet host.
+		h := u.Hostname()
+		return nil, usagef("consent %q: %s isn't a URL; did you mean https://%s.example/? A host without a dot needs its scheme: https://%s/", shown, h, h, h)
+	}
 	if u.User != nil {
 		return nil, usagef("consent %q: a URL with a login in it isn't allowed; pass it with -H \"Authorization: env:RHYTHM_ECHO_NAME\"", shown)
 	}
@@ -74,4 +83,11 @@ func target(raw, site string) (*url.URL, error) {
 		u.Path = "/"
 	}
 	return u, nil
+}
+
+// bareWord reports whether u's host is one word: no dot, no port, not
+// localhost and not an IP address.
+func bareWord(u *url.URL) bool {
+	h := u.Hostname()
+	return u.Port() == "" && !strings.Contains(h, ".") && !strings.EqualFold(h, "localhost") && net.ParseIP(h) == nil
 }

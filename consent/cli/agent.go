@@ -6,9 +6,12 @@ package cli
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
+
+	"github.com/RhythmShahriar/echo/report"
 )
 
 // AgentCheck runs a consent check for a coding agent (the MCP tool
@@ -43,7 +46,12 @@ func AgentCheck(ctx context.Context, args []string, env Env) ([]byte, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	if out.Len() == 0 {
+	// A check that stopped before it had a result writes the error
+	// envelope: the agent gets the message as the tool's error instead.
+	var stopped struct {
+		Error *report.ConsentError `json:"error"`
+	}
+	if out.Len() == 0 || json.Unmarshal(out.Bytes(), &stopped) == nil && stopped.Error != nil {
 		return nil, errors.New(agentMessage(errOut.String(), code))
 	}
 	return out.Bytes(), nil

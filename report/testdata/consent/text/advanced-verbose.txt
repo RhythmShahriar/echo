@@ -1,5 +1,6 @@
 rhythm echo 1.2.0 - consent check of https://g02.consent.test/
 
+Browser: Chrome for Testing 156.0.8078.47
 Hits held: tracking hits are recorded and stopped in the browser. Nothing reached Google, Meta or any other tracker.
 Hosts mapped with --map-host.
 gcd decoded with an unofficial, community-documented mapping.

@@ -127,6 +127,18 @@ type ConsentEnvelope struct {
 	Summary  ConsentSummary `json:"summary"`
 	Verdict  string         `json:"verdict"` // VerdictOK, VerdictFindings or VerdictError
 	Data     any            `json:"data"`    // the *consent.Result
+	// Error says why a check stopped before it had a result (a usage
+	// error, a site that didn't answer); the verdict is then error,
+	// complete false and data null.
+	Error *ConsentError `json:"error,omitempty"`
+}
+
+// ConsentError is why a consent check stopped before it had a result:
+// the exit code (2 usage error, 3 couldn't check) and the message Echo
+// printed on stderr.
+type ConsentError struct {
+	Exit    int    `json:"exit"`
+	Message string `json:"message"`
 }
 
 // Snapshot is one entry of the snapshots kind.

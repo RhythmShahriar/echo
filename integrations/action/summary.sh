@@ -202,8 +202,10 @@ def uniq: reduce .[] as $x ([]; if any(.[]; . == $x) then . else . + [$x] end);
      ($d.inconclusive[] | "| \(where(.site; .page)) | \(.run | runname | md) | \(.reason | md) |"), ""
    else empty end),
   "_Evidence, not legal advice. \(if $d.held == false then "Tracker hits were sent for real (--send-hits)." else "Hits held in the browser." end)\(
-     if $d.tls_verified == false then " TLS not verified." else "" end)\(
-     if $d.mapped == true then " Hosts mapped with --map-host." else "" end)\(
+     if $d.mapped == true and (($d.notes // []) | any(. == "--map-host answered https pages over plain http, so TLS wasn\u0027t checked."))
+     then " Hosts mapped with --map-host; https pages were answered over plain http, so TLS wasn\u0027t checked."
+     else "\(if $d.tls_verified == false then " TLS not verified." else "" end)\(
+       if $d.mapped == true then " Hosts mapped with --map-host." else "" end)" end)\(
      if $d.sandbox == false then " Chrome ran without its sandbox." else "" end)_\n"
 '
 

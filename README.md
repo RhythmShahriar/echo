@@ -209,35 +209,11 @@ SPF (including the 10-lookup limit), DKIM keys, DMARC policy and alignment for t
 
 Hits are held in the browser: checking production adds nothing to anyone's analytics.
 
-```
-$ rhythm echo consent https://staging.shop.test
-Note: use Echo on sites you own or are authorised to test. Consent checks load the site like
-one new visitor: they never log in or submit forms and every tracking hit is recorded and
-stopped in the browser. Results stay on this machine with IDs masked. This notice is shown once.
-Downloading Chrome for Testing 156.0.8078.47 (191 MB) once, into ~/.cache/rhythm/soundcheck/browser …
+<p align="center">
+  <img alt="A consent check of the testbed's c02 shop: the Meta Pixel fires before the choice in all three runs and after Reject, four errors with the fix" src="docs/assets/consent.svg" width="720">
+</p>
 
-rhythm echo 1.2.0 - consent check of https://staging.shop.test/
-
-Browser: Chrome for Testing 156.0.8078.47
-Hits held: tracking hits are recorded and stopped in the browser. Nothing reached Google, Meta or any other tracker.
-
-https://staging.shop.test/
-  Banner: Complianz, found after 3.6s, Reject on the banner
-  Consent Mode: v2 default, all four signals denied at 0.05s, before the first Google hit
-  [1/3] No choice   Google Analytics 4: 3 cookieless pings (gcs G100); no tracker cookies; Meta Pixel held back
-  [2/3] Accept      Meta Pixel, Google Ads, Google Analytics 4 fired; update granted at 3.7s; kept on 1 more page
-  [3/3] Reject      Google Analytics 4: 2 cookieless pings (gcs G100); no tracker cookies; Meta Pixel held back; update denied at 3.7s; kept on 1 more page
-
-All clear - 0 errors, 0 warnings, 3 notices - 3 runs, 3 trackers, policy advanced
-
-  notice  consent/cookieless-ping  Google Analytics 4 sent 3 cookieless pings before the choice (allowed under --consent-mode advanced) (No choice)
-  notice  consent/cookieless-ping  Google Analytics 4 sent 1 cookieless ping before the choice (allowed under --consent-mode advanced) (Accept)
-  notice  consent/cookieless-ping  Google Analytics 4 sent 3 cookieless pings before the choice and after Reject (allowed under --consent-mode advanced) (Reject)
-
-Evidence, not legal advice.
-full report: .echo/consent/2026-10-28T19-31-20-545ec9/report.html
-Tip: --save baseline keeps this as the baseline for the next check.
-```
+A real run against the consent testbed's `c02` shop, whose Meta Pixel ignores Consent Mode. The `Hosts mapped` line is there because the testbed answers every host through `--map-host`; a check of your own site over https doesn't print it.
 
 Every result is an evidence folder in `.echo/consent/`: `consent.json`, screenshots, every event of every run, a manifest with the SHA-256 of each file and `report.html`. `rhythm echo consent verify <folder>` checks that nothing in it changed since.
 
@@ -251,7 +227,7 @@ Every result is an evidence folder in `.echo/consent/`: `consent.json`, screensh
 | Fail CI only when something got worse | `--save baseline` once, then `--against baseline --fail-on broke` |
 | Check many sites | `--sites sites.yaml`, the same file Soundcheck fleet reads |
 | Sign the evidence | `--sign-key team.key`, then `rhythm echo consent verify <folder> --key team.pub` |
-| Read the result in a script | `--json`: the `rhythm-echo/v1` envelope with `kind: consent` |
+| Read the result in a script | `--json`: the `rhythm-echo/v1` envelope with `kind: consent`, also when the check stops early (`verdict: error` and an `error` with the exit code and message) |
 
 Echo knows Cookiebot, Complianz, CookieYes, OneTrust, Usercentrics, Didomi, iubenda and Borlabs Cookie. Other banners are found by their cookie words and buttons in 30 languages (`rhythm echo consent cmps` lists the rules). Trackers come from an MIT catalogue with fixtures: GA4, Google Ads, Meta Pixel, TikTok, Microsoft Clarity, LinkedIn, Hotjar and more (`rhythm echo consent trackers`).
 
@@ -267,6 +243,28 @@ In CI:
 ```
 
 The job summary and the pull request comment show tracker names, counts, check titles and page paths, never query strings, cookie values or IDs. `upload: true` keeps the evidence folder as the `echo-consent` artifact; `sign: true` signs `consent.json` with keyless cosign.
+
+### Try it on the testbed
+
+No staging site needed and nothing leaves the machine: the repository has 40 small shops (25 broken in one way each, 15 correct) on one local Go server, with stand-ins for every tracker and CMP host. You need Go and Chrome:
+
+```sh
+git clone https://github.com/RhythmShahriar/echo && cd echo
+make build                                   # bin/rhythm-echo
+make -C testbed/consent serve                # leave it running: 127.0.0.1:23400 and :23401
+```
+
+In a second terminal:
+
+```sh
+map=$(make -s -C testbed/consent map)        # the --map-host flags for every stand-in host
+eval "bin/rhythm-echo consent https://c01.shop.test/ $map"     # all clear
+testbed/consent/toggle.sh c01 broken
+eval "bin/rhythm-echo consent https://c01.shop.test/ $map"     # GA4 before the choice
+testbed/consent/toggle.sh all good
+```
+
+`eval` keeps the quotes around `'*.shop.test=...'` working. Ports taken? `make -C testbed/consent serve LISTEN=127.0.0.1:39130 ADMIN=127.0.0.1:39131`, then `make -s -C testbed/consent map LISTEN=127.0.0.1:39130`. A build from source calls itself `dev`. More in [Try it on the testbed](https://github.com/RhythmShahriar/rhythm/wiki/Echo-Consent#try-it-on-the-testbed).
 
 ### Honest limits
 
@@ -334,7 +332,7 @@ make hooks   # Conventional Commits check
 make check   # lint + tests
 ```
 
-The connectors have their own tests: `make -C connectors/laravel check` (Docker), `cd connectors/node && npm test`. See [CONTRIBUTING](https://github.com/RhythmShahriar/.github/blob/master/CONTRIBUTING.md).
+The connectors have their own tests: `make -C connectors/laravel check` (Docker), `cd connectors/node && npm test`. See [CONTRIBUTING.md](CONTRIBUTING.md) for Echo's layout, tests and the consent testbed. Setup, commits and reviews are in the [shared CONTRIBUTING](https://github.com/RhythmShahriar/.github/blob/master/CONTRIBUTING.md).
 
 ## Responsible use & disclaimer
 

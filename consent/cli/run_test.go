@@ -136,7 +136,7 @@ func useRunner(t *testing.T, r *consent.Result, err error) (*consenttest.FakeRun
 // resultDir is the one result folder a check made.
 func resultDir(t *testing.T) string {
 	t.Helper()
-	dirs, err := filepath.Glob(filepath.Join(".echo", "consent", "2026-10-26T09-20-41-*"))
+	dirs, err := filepath.Glob(filepath.Join(".echo", "consent", "2026-10-26T09-20-41Z-*"))
 	if err != nil || len(dirs) != 1 {
 		t.Fatalf("result folders: %v %v", dirs, err)
 	}
@@ -193,7 +193,7 @@ func TestInterrupted(t *testing.T) {
 	inDir(t, "")
 	_, got := useRunner(t, consenttest.GoldenResult("meta-ignores"), context.Canceled)
 	code, _, errOut := runMain(t, "-o", "r.json", "https://shop.test/")
-	if code != exitInterrupted || !strings.Contains(errOut, "rhythm echo: interrupted; the runs that finished are kept in .echo/consent/2026-10-26T09-20-41-") {
+	if code != exitInterrupted || !strings.Contains(errOut, "rhythm echo: interrupted; the runs that finished are kept in .echo/consent/2026-10-26T09-20-41Z-") {
 		t.Fatalf("exit %d\n%s", code, errOut)
 	}
 	r := readResultFile(t, resultDir(t))
@@ -228,7 +228,7 @@ func TestJSONOnlyOnStdout(t *testing.T) {
 	if code != exitOK || out != "{\"kind\":\"consent\",\"verdict\":\"ok\",\"complete\":true}\n" {
 		t.Errorf("exit %d stdout %q", code, out)
 	}
-	if !strings.Contains(errOut, "VIEW ok report=.echo/consent/2026-10-26T09-20-41-") || strings.Contains(errOut, "Note:") || strings.Contains(errOut, "Tip:") {
+	if !strings.Contains(errOut, "VIEW ok report=.echo/consent/2026-10-26T09-20-41Z-") || strings.Contains(errOut, "Note:") || strings.Contains(errOut, "Tip:") {
 		t.Errorf("stderr %q", errOut)
 	}
 	// Without a format the view is on stdout.
@@ -247,7 +247,7 @@ func TestFirstRunNoticeOnce(t *testing.T) {
 	t.Setenv("RHYTHM_CONFIG_DIR", t.TempDir())
 	t.Setenv("CI", "")
 	inDir(t, "")
-	_, got := useRunner(t, consenttest.GoldenResult("clean"), nil)
+	_, _ = useRunner(t, consenttest.GoldenResult("clean"), nil)
 	// --json and -q never show it (nor use it up).
 	for _, args := range [][]string{{"--json"}, {"-q"}} {
 		if _, _, errOut := runMain(t, append(args, "https://shop.test/")...); strings.Contains(errOut, "Note:") {
@@ -257,9 +257,6 @@ func TestFirstRunNoticeOnce(t *testing.T) {
 	_, _, errOut := runMain(t, "https://shop.test/")
 	if !strings.HasPrefix(errOut, notice) {
 		t.Errorf("first run: %q", errOut)
-	}
-	if !got.text[len(got.text)-1].FirstRun {
-		t.Error("the view wasn't told it's the first run")
 	}
 	golden(t, "first-run-notice", notice)
 	if _, _, errOut := runMain(t, "https://shop.test/"); strings.Contains(errOut, "Note:") {
@@ -716,7 +713,7 @@ func TestWriteFailure(t *testing.T) {
 	useRunner(t, consenttest.GoldenResult("clean"), nil)
 	writers.html = func(io.Writer, *consent.Result, report.ConsentHTMLOptions) error { return errors.New("boom") }
 	code, _, errOut := runMain(t, "https://shop.test/")
-	if code != exitUnavailable || !strings.HasPrefix(errOut, "rhythm echo: couldn't write .echo/consent/2026-10-26T09-20-41-") || !strings.HasSuffix(errOut, "/report.html: boom\n") {
+	if code != exitUnavailable || !strings.HasPrefix(errOut, "rhythm echo: couldn't write .echo/consent/2026-10-26T09-20-41Z-") || !strings.HasSuffix(errOut, "/report.html: boom\n") {
 		t.Errorf("exit %d %q", code, errOut)
 	}
 	fakeWriters(t)

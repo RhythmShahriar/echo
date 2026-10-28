@@ -17,6 +17,9 @@ Have an idea or a service Echo should recognize? Start a thread in [Discussions:
 - **Late mail with no Date header.** A capture time in the wire format so it is attributed to the right action.
 - **Attachment changes.** An opt-in to report an attachment whose content changed but whose size barely moved.
 - **Outside benchmark.** A rerunnable comparison with other catchers on the same scenarios, run by someone other than us.
+- **Consent: the rest of the testbed.** A scenario that makes Reject itself fail (`consent/reject-broken` is caught today only by unit fixtures), the Docker variants of c15 and c18 and a sealed Docker benchmark run to stand next to the Go-mode numbers.
+- **Consent: clearer counts.** With `--against`, the verdict counts each page, run and tracker while the lines group them; the verdict should count what it lists.
+- **Consent: a version in source builds.** `make build` stamps `dev`; a version from the nearest tag would let a source build say which release it matches.
 
 ## Later
 

@@ -6,12 +6,14 @@ package report
 import (
 	"bytes"
 	"encoding/json"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 	"unicode"
 
 	"github.com/RhythmShahriar/echo/consent"
+	"github.com/RhythmShahriar/echo/consent/browse"
 	"github.com/RhythmShahriar/echo/consent/consenttest"
 	consentverdict "github.com/RhythmShahriar/echo/consent/verdict"
 	"github.com/RhythmShahriar/echo/model"
@@ -33,7 +35,6 @@ var textModes = map[string]ConsentTextOptions{
 	"plain":   {Plain: true},
 	"quiet":   {Quiet: true},
 	"verbose": {Verbose: true},
-	"first":   {FirstRun: true, ReportPath: ".echo/consent/2026-10-26T09-20-41-c4d5e6/report.html"},
 }
 
 func TestConsentTextGoldens(t *testing.T) {
@@ -63,10 +64,11 @@ func TestConsentTextLines(t *testing.T) {
 			t.Errorf("missing %q in\n%s", want, out)
 		}
 	}
-	if strings.Contains(out, "Browser:") || strings.Contains(out, noteGCD) {
-		t.Errorf("browser line or gcd note without -v or a first run:\n%s", out)
+	// The browser is named on every run; the gcd note only with -v.
+	if !strings.Contains(out, "\n\nBrowser: Chrome for Testing 156.0.8078.47\nHits held") || strings.Contains(out, noteGCD) {
+		t.Errorf("no browser line, or a gcd note without -v:\n%s", out)
 	}
-	out = consentTextOf(t, judgedResult(t, "advanced"), ConsentTextOptions{FirstRun: true})
+	out = consentTextOf(t, judgedResult(t, "advanced"), ConsentTextOptions{})
 	for _, want := range []string{
 		"\nBrowser: Chrome for Testing 156.0.8078.47\n",
 		"[1/3] No choice   Google Analytics 4: 2 cookieless pings (gcs G100); no tracker cookies; Meta Pixel held back\n",
@@ -425,5 +427,55 @@ func TestConsentVerifyQuiet(t *testing.T) {
 	want := "changed  report.html  want abababab... got cdcdcdcd...\nSignature: none\nNot verified: 1 changed; 1 file match.\n"
 	if quiet.String() != want {
 		t.Errorf("quiet:\n%s\nwant\n%s", quiet.String(), want)
+	}
+}
+
+// The three notes of a check --map-host answered over plain http are
+// one line; the copies here are the verdict's and browse's notes.
+func TestShownNotes(t *testing.T) {
+	if noteTLS != consentverdict.NoteTLS || noteMapped != consentverdict.NoteMapped || noteMappedHTTP != browse.NoteMappedHTTP {
+		t.Fatal("report's copies of the notes differ from verdict's and browse's")
+	}
+	in := []string{noteNotLegalAdvice, noteHeld, noteTLS, noteMapped, "--geo de set the language and time zone, not the IP address.", noteMappedHTTP}
+	want := []string{noteNotLegalAdvice, noteHeld, noteMappedPlain, "--geo de set the language and time zone, not the IP address."}
+	if got := shownNotes(in); !slices.Equal(got, want) {
+		t.Errorf("shownNotes = %q", got)
+	}
+	// -k without --map-host: TLS not verified stays.
+	if got := shownNotes([]string{noteTLS, noteMapped}); !slices.Equal(got, []string{noteTLS, noteMapped}) {
+		t.Errorf("without the plain-http note: %q", got)
+	}
+}
+
+// A check that stopped writes an envelope the schema accepts.
+func TestWriteConsentError(t *testing.T) {
+	var b strings.Builder
+	if err := WriteConsentError(&b, "1.2.0", 3, "https://shop.test/ didn't answer"); err != nil {
+		t.Fatal(err)
+	}
+	var e map[string]any
+	if err := json.Unmarshal([]byte(b.String()), &e); err != nil {
+		t.Fatal(err)
+	}
+	if e["kind"] != "consent" || e["verdict"] != "error" || e["complete"] != false || e["version"] != "1.2.0" {
+		t.Errorf("envelope %v", e)
+	}
+	if e["data"] != nil {
+		t.Errorf("data %v", e["data"])
+	}
+	if got, ok := e["error"].(map[string]any); !ok || got["exit"] != float64(3) || got["message"] != "https://shop.test/ didn't answer" {
+		t.Errorf("error %v", e["error"])
+	}
+}
+
+// The envelope of a check that stopped matches the consent schema.
+func TestConsentErrorValidates(t *testing.T) {
+	var b bytes.Buffer
+	if err := WriteConsentError(&b, "1.2.0", 2, "unknown flag --zzz"); err != nil {
+		t.Fatal(err)
+	}
+	schema := schemaOf(t, KindConsent)
+	if got := validate(schema, schema, decoded(t, b.Bytes()), "$"); len(got) > 0 {
+		t.Errorf("error envelope: %q", got)
 	}
 }

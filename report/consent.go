@@ -17,7 +17,6 @@ type ConsentTextOptions struct {
 	Verbose    bool          // -v: the timeline of every run and the issue keys
 	Width      int           // terminal width; 0 is 100
 	FailOn     string        // --fail-on, for the verdict line
-	FirstRun   bool          // the first consent run on this machine: say where the evidence is
 	ReportPath string        // the HTML report, for the "full report:" line; "" when none
 	BannerWait time.Duration // --banner-wait, for "none found within"; 0 is the 10s default
 }

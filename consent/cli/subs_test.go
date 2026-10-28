@@ -65,7 +65,7 @@ func TestDetectExitCodes(t *testing.T) {
 				t.Fatalf("plans: %d", len(runner.Plans))
 			}
 			p := runner.Plans[0]
-			if filepath.Base(p.Dir) != "detect" || !strings.HasPrefix(p.ID, "2026-10-26T09-20-41-") || len(p.ID) != len("2026-10-26T09-20-41-a1b2c3") ||
+			if filepath.Base(p.Dir) != "detect" || !strings.HasPrefix(p.ID, "2026-10-26T09-20-41Z-") || len(p.ID) != len("2026-10-26T09-20-41Z-a1b2c3") ||
 				p.Geo != "de" || p.CMP != "cookiebot" || !p.Hold || p.Targets[0].URL.String() != "https://shop.test/" {
 				t.Errorf("plan: dir %s id %s geo %s cmp %s hold %v", p.Dir, p.ID, p.Geo, p.CMP, p.Hold)
 			}

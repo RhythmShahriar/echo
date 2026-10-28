@@ -189,8 +189,22 @@ func TestComparisonEnvelopeKeepsFullTexts(t *testing.T) {
 
 // validate checks doc against a JSON Schema, for the keywords Echo's
 // schemas use: type, required, properties, items, additionalProperties,
-// enum, const and $ref to #/$defs. It returns one line per problem.
+// enum, const, anyOf and $ref to #/$defs. It returns one line per
+// problem; a doc that matches no anyOf branch gets the first branch's.
 func validate(root, schema map[string]any, doc any, at string) []string {
+	if branches, ok := schema["anyOf"].([]any); ok {
+		var first []string
+		for i, b := range branches {
+			got := validate(root, b.(map[string]any), doc, at)
+			if len(got) == 0 {
+				return nil
+			}
+			if i == 0 {
+				first = got
+			}
+		}
+		return first
+	}
 	if ref, ok := schema["$ref"].(string); ok {
 		name := strings.TrimPrefix(ref, "#/$defs/")
 		def, _ := root["$defs"].(map[string]any)[name].(map[string]any)

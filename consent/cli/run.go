@@ -89,9 +89,12 @@ func (c *cmd) check(pos []string) int {
 // then judged and written as an interrupted check.
 func (c *cmd) runCheck(ctx context.Context, pos []string) int {
 	o, env := c.o, c.env
+	if outs, err := o.reports(); err == nil && stdoutFormat(outs) == fmtJSON {
+		c.jsonOut = true
+	}
 	st, err := c.prepare(pos)
 	if err != nil {
-		return fail(env, err)
+		return c.fail(err)
 	}
 	for _, n := range st.notes {
 		fmt.Fprintln(env.Stderr, "rhythm echo:", n)
@@ -99,12 +102,12 @@ func (c *cmd) runCheck(ctx context.Context, pos []string) int {
 	var base *consent.Result
 	if o.against != "" {
 		if base, err = loadAgainst(st.store, o.against); err != nil {
-			return fail(env, err)
+			return c.fail(err)
 		}
 	}
 	if o.save != "" {
 		if err := store.CheckName(o.save); err != nil {
-			return fail(env, usagef("--save: %v", err))
+			return c.fail(usagef("--save: %v", err))
 		}
 	}
 	stages := consent.RunStages
@@ -112,15 +115,13 @@ func (c *cmd) runCheck(ctx context.Context, pos []string) int {
 		stages = append(slices.Clone(stages), consent.StageComparer)
 	}
 	if err := consent.Need(stages...); err != nil {
-		return fail(env, err)
+		return c.fail(err)
 	}
 
 	jsonOut := stdoutFormat(st.outs) == fmtJSON
 	machine := isCI() || o.quiet || jsonOut
-	firstRun := false
 	if !machine && kitconfig.FirstRun("echo-consent-notice") {
 		fmt.Fprint(env.Stderr, notice)
-		firstRun = true
 	}
 	for _, w := range st.warn {
 		fmt.Fprintln(env.Stderr, "rhythm echo:", w)
@@ -142,9 +143,9 @@ func (c *cmd) runCheck(ctx context.Context, pos []string) int {
 	// go again when no run could (the site didn't answer, a selector
 	// the browser refuses): only the empty ones this check made.
 	made := missingDirs(st.store.Root, filepath.Join(st.store.Root, store.Consent))
-	dir, err := st.store.NewDir(store.Consent, store.Stamp(started))
+	dir, err := st.store.NewDir(store.Consent, store.StampUTC(started))
 	if err != nil {
-		return fail(env, &writeError{filepath.Join(st.store.Root, store.Consent), err})
+		return c.fail(&writeError{filepath.Join(st.store.Root, store.Consent), err})
 	}
 	if abs, err := filepath.Abs(dir); err == nil {
 		dir = abs
@@ -182,10 +183,11 @@ func (c *cmd) runCheck(ctx context.Context, pos []string) int {
 			removeEmpty(made)
 			var fe *consent.FatalError
 			if errors.As(err, &fe) {
-				fmt.Fprintln(env.Stderr, "rhythm echo:", fatalMessage(fe))
-				return fatalExit(fe)
+				msg := fatalMessage(fe)
+				fmt.Fprintln(env.Stderr, "rhythm echo:", msg)
+				return c.jsonError(fatalExit(fe), msg)
 			}
-			return fail(env, err)
+			return c.fail(err)
 		}
 	}
 	r := merge(results, consent.Result{ID: filepath.Base(dir), Started: started.UTC(), Echo: env.Version, OS: runtime.GOOS + "/" + runtime.GOARCH})
@@ -204,14 +206,14 @@ func (c *cmd) runCheck(ctx context.Context, pos []string) int {
 	r.Evidence.Folder = shown(dir)
 
 	if err := c.writeEvidence(st, dir, r); err != nil {
-		return fail(env, err)
+		return c.fail(err)
 	}
 	view := env.Stdout
 	if stdoutFormat(st.outs) != "" {
 		view = env.Stderr
 	}
 	opts := c.textOptions(view)
-	opts.FailOn, opts.FirstRun, opts.ReportPath = st.failOn, firstRun, shown(filepath.Join(dir, reportHTML))
+	opts.FailOn, opts.ReportPath = st.failOn, shown(filepath.Join(dir, reportHTML))
 	// "none found within" names the wait the check used (the first
 	// plan's: a --sites site may set its own).
 	opts.BannerWait = st.plans[0].BannerWait
@@ -222,7 +224,7 @@ func (c *cmd) runCheck(ctx context.Context, pos []string) int {
 		if !r.Complete {
 			fmt.Fprintf(env.Stderr, "rhythm echo: --save %s: not saved: a baseline needs a complete check and some runs couldn't be checked\n", o.save)
 		} else if line, err := saveBaseline(st.store, o.save, dir); err != nil {
-			return fail(env, &writeError{filepath.Join(baselinesDir(st.store), o.save), err})
+			return c.fail(&writeError{filepath.Join(baselinesDir(st.store), o.save), err})
 		} else if !o.quiet {
 			fmt.Fprintln(view, line)
 		}
@@ -519,10 +521,10 @@ func anyRun(r *consent.Result, f func(consent.Run) bool) bool {
 }
 
 // browserLog is where browse writes its Chrome lines: the download lines
-// always, its "Browser: ..." line only with -v and then once per
-// command, however many --sites plans start Chrome. Without -v the view
-// names the browser on the first run, so the line isn't printed twice.
-// One writer serves every plan of a command.
+// always, its "Browser: <name> (<path>)" line only with -v and then
+// once per command, however many --sites plans start Chrome. The view
+// names the browser on every run; this line adds where it is. One
+// writer serves every plan of a command.
 func browserLog(w io.Writer, verbose bool) io.Writer {
 	if w == nil {
 		return nil

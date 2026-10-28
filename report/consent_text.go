@@ -29,6 +29,38 @@ const (
 	noteGCD            = "gcd decoded with an unofficial, community-documented mapping."
 )
 
+// The notes a check on hosts --map-host answers over plain http gets:
+// three that say one thing, shown as noteMappedPlain.
+const (
+	noteTLS         = "TLS not verified."
+	noteMapped      = "Hosts mapped with --map-host."
+	noteMappedHTTP  = "--map-host answered https pages over plain http, so TLS wasn't checked."
+	noteMappedPlain = "Hosts mapped with --map-host; https pages were answered over plain http, so TLS wasn't checked."
+)
+
+// shownNotes is notes as the text and Markdown reports show them: the
+// three notes of a check answered over plain http by --map-host become
+// one line in the place of the first. Any other note is kept as is.
+func shownNotes(notes []string) []string {
+	if !slices.Contains(notes, noteMappedHTTP) {
+		return notes
+	}
+	var out []string
+	folded := false
+	for _, n := range notes {
+		switch n {
+		case noteTLS, noteMapped, noteMappedHTTP:
+			if !folded {
+				out = append(out, noteMappedPlain)
+				folded = true
+			}
+		default:
+			out = append(out, n)
+		}
+	}
+	return out
+}
+
 // The Hits lines of the consent header.
 const (
 	hitsHeldLine = "Hits held: tracking hits are recorded and stopped in the browser. Nothing reached Google, Meta or any other tracker."
@@ -61,7 +93,8 @@ type consentText struct {
 // WriteConsentText writes the terminal output of a consent check (PRD
 // 9.1): the header, each page with its runs, the verdict line, the
 // issues (or, comparing, the changes), the runs that couldn't choose
-// and the closing lines. Quiet keeps the verdict line and the issues;
+// and the closing lines. Quiet keeps the verdict line, the issues and
+// the runs that couldn't choose, which say why a check exits 3;
 // Verbose adds each run's timeline and the issue and change keys. Every
 // string from the page passes Safe.
 func WriteConsentText(w io.Writer, r *consent.Result, o ConsentTextOptions) error {
@@ -85,8 +118,8 @@ func WriteConsentText(w io.Writer, r *consent.Result, o ConsentTextOptions) erro
 	} else {
 		t.issues()
 	}
+	t.inconclusive()
 	if !o.Quiet {
-		t.inconclusive()
 		t.footer()
 	}
 	_, err := io.WriteString(w, t.w.String())
@@ -162,9 +195,8 @@ func consentTarget(r *consent.Result) string {
 	return what
 }
 
-// header writes the first lines: what was checked, the browser on a
-// first run, whether hits were held and the notes that change what the
-// result means.
+// header writes the first lines: what was checked, the browser, whether
+// hits were held and the notes that change what the result means.
 func (t *consentText) header() {
 	r := t.r
 	what := "consent check of " + consentTarget(r)
@@ -176,7 +208,7 @@ func (t *consentText) header() {
 	}
 	t.line("rhythm echo %s - %s", Safe(cmp.Or(r.Echo, ToolVersion)), what)
 	t.line("")
-	if t.o.FirstRun && r.Browser != "" {
+	if r.Browser != "" {
 		t.line("Browser: %s", Safe(r.Browser))
 	}
 	if r.Held {
@@ -184,7 +216,7 @@ func (t *consentText) header() {
 	} else {
 		t.line("%s", hitsSentLine)
 	}
-	for i, n := range r.Notes {
+	for i, n := range shownNotes(r.Notes) {
 		if i == 0 && n == noteNotLegalAdvice || n == noteHeld || n == noteSent || n == noteGCD && !t.o.Verbose {
 			continue
 		}
@@ -1041,7 +1073,9 @@ func (t *consentText) inconclusive() {
 	if len(t.r.Inconclusive) == 0 {
 		return
 	}
-	t.line("")
+	if !t.o.Quiet {
+		t.line("")
+	}
 	mark := t.paint(lipgloss.Color(ui.High), "?")
 	if t.o.Plain {
 		mark = "INCONCLUSIVE"
