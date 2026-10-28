@@ -30,7 +30,8 @@ const (
 
 // detectTimes runs consent detect on the good state of every scenario
 // in list that has a banner and returns each wall time. A detect that
-// fails or finds no banner is noted.
+// fails or finds no banner is noted and not timed; one that finds the
+// banner but not both buttons is noted and timed.
 func (b *Bench) detectTimes(ctx context.Context, list []scenarios.Scenario) ([]time.Duration, []string) {
 	var times []time.Duration
 	var notes []string
@@ -53,7 +54,13 @@ func (b *Bench) detectTimes(ctx context.Context, list []scenarios.Scenario) ([]t
 		b.mu.Lock()
 		b.rssMax = max(b.rssMax, ex.MaxRSS)
 		b.mu.Unlock()
-		if ex.Exit != 0 {
+		switch ex.Exit {
+		case 0:
+		case 1:
+			// The banner showed and a button didn't (c11's closed shadow
+			// root): detect did its job, so its time counts.
+			notes = append(notes, s.ID+": banner found, a button not (exit 1)")
+		default:
 			notes = append(notes, fmt.Sprintf("%s: detect exited %d: %s", s.ID, ex.Exit, judge.Tail(ex.Stderr, 160)))
 			continue
 		}
