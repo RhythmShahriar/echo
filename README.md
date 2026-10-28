@@ -20,6 +20,7 @@
 
 <p align="center">
   <a href="#install">Install</a> ·
+  <a href="#quick-start">Quick start</a> ·
   <a href="#seal-a-site">Seal a site</a> ·
   <a href="#check-a-change">Check a change</a> ·
   <a href="#what-it-catches">What it catches</a> ·
@@ -40,11 +41,22 @@
 
 | | Asks | Checks |
 |---|---|---|
+| [rhythm](https://github.com/RhythmShahriar/rhythm) | Which tools do I have? | installs, updates and runs the set as `rhythm <tool>` |
 | [Tuner](https://github.com/RhythmShahriar/tuner) | Is my site safe? | what an attacker can find |
 | [Soundcheck](https://github.com/RhythmShahriar/soundcheck) | Did my change break anything? | what visitors see and do |
-| **Echo** | **Is my site still saying what it should?** | **everything the site sends** |
+| **Echo** | **Is my site still saying what it should?** | **everything the site sends and what fires before consent** |
+| [Roadie](https://github.com/RhythmShahriar/roadie) | Is my staging a safe copy of production? | real people, live keys and side effects in the copy |
+| [Sightread](https://github.com/RhythmShahriar/sightread) | What will this update really change? | the code an update brings |
+
+They work on the same change: Tuner finds the plugin to update, Sightread reads the update, Roadie gives you a staging copy to try it on, Soundcheck shows what it did to the pages and Echo what it did to the messages and the cookie banner.
 
 ## Install
+
+```sh
+rhythm install echo                                    # or rhythm update echo for the latest
+```
+
+That needs rhythm 0.5.0 or later. No `rhythm` yet? The installer sets it up with its default tools, Echo among them:
 
 ```sh
 curl -fsSL https://rythm.sh/install | sh               # macOS · Linux
@@ -52,9 +64,30 @@ irm https://rythm.sh/install.ps1 | iex                 # Windows (PowerShell)
 go install github.com/RhythmShahriar/echo/cmd/rhythm-echo@latest
 ```
 
-Every download is checked against the release checksums, which are [signed with cosign](https://github.com/RhythmShahriar/rhythm/wiki/Verifying-Releases).
+Every download is checked against the release checksums, which are [signed with cosign](https://github.com/RhythmShahriar/rhythm/wiki/Verifying-Releases). Cookie consent checks also need Chrome: Echo uses yours, or downloads Chrome for Testing once ([Install](https://github.com/RhythmShahriar/rhythm/wiki/Echo-Consent#install)).
 
 `rhythm echo` and `rhythm-echo` are the same command: the `rhythm` CLI runs the `rhythm-echo` binary for you. Use either; the examples here use `rhythm echo`.
+
+## Quick start
+
+No site needed. Start Echo:
+
+```sh
+rhythm echo up                                   # sealed: API and live view on :8025, SMTP on :1025
+```
+
+In a second terminal, send it an email through Echo's `sendmail` stand-in and list what it caught:
+
+```sh
+printf 'To: ann@shop.test\nSubject: Hello from Echo\n\nIt works.\n' | rhythm echo sendmail -t -i
+rhythm echo ls
+```
+
+```text
+25c6a3f7349b  02:40:07 email to ann@shop.test: Hello from Echo [faked]
+```
+
+`[faked]` means Echo answered in the mail server's place: nothing was delivered. Open http://127.0.0.1:8025 to see it in Echo Inbox. Then connect a real site ([below](#seal-a-site)), or check the cookie banner of one you own: `rhythm echo consent https://staging.yoursite.example` ([Cookie consent checks](#cookie-consent-checks)).
 
 ## Seal a site
 
@@ -285,6 +318,10 @@ Or start Echo for Soundcheck: `mode: up`, then `rhythm soundcheck compare … --
 | [Sealing staging](https://github.com/RhythmShahriar/rhythm/wiki/Echo-Sealing-Staging) | what's caught, what's faked, hard seals |
 | [Actions and compare](https://github.com/RhythmShahriar/rhythm/wiki/Echo-Actions-And-Compare) | `.echo/config.yaml`, snapshots, classes |
 | [With Soundcheck](https://github.com/RhythmShahriar/rhythm/wiki/Echo-With-Soundcheck) | forms and flows, with their messages |
+| [Cookie consent](https://github.com/RhythmShahriar/rhythm/wiki/Echo-Consent) | does Reject really reject: a first check, reading the result, honest limits |
+| [Consent checks](https://github.com/RhythmShahriar/rhythm/wiki/Echo-Consent-Checks) | every consent check, with an example and the fix |
+| [Consent in CI](https://github.com/RhythmShahriar/rhythm/wiki/Echo-Consent-CI) | the Action's `mode: consent`, sites files, baselines, signing |
+| [CI](https://github.com/RhythmShahriar/rhythm/wiki/Echo-CI) | the GitHub Action and other CI systems |
 | [CLI reference](https://github.com/RhythmShahriar/rhythm/wiki/Echo-CLI-Reference) | every command, flag and exit code |
 
 All of it lives in the **[Rhythm documentation wiki](https://github.com/RhythmShahriar/rhythm/wiki)**.
