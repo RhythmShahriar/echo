@@ -236,6 +236,22 @@ func TestExemptTrackers(t *testing.T) {
 	if r.Pages[0].Runs[0].Cookies[0].Need != consent.NeedExempt || r.Pages[0].Runs[0].Hits[1].Need != consent.NeedExempt {
 		t.Error("exempt entries keep need needed")
 	}
+
+	// Judged again without --exempt, hotjar's entries take the catalog's
+	// need back and its issue returns; Plausible stays exempt.
+	Evaluator{}.Evaluate(r, consenttest.NewPlan(t))
+	sameKeys(t, keysOf(r, v2Checks), "consent/before-choice|/|none|hotjar")
+	if r.Pages[0].Runs[0].Cookies[0].Need != consent.NeedNeeded || r.Pages[0].Runs[0].Hits[0].Need == consent.NeedNeeded {
+		t.Errorf("needs after dropping --exempt: cookie %q, plausible %q", r.Pages[0].Runs[0].Cookies[0].Need, r.Pages[0].Runs[0].Hits[0].Need)
+	}
+	// Judged with no plan, the stored needs stay exempt.
+	p = consenttest.NewPlan(t)
+	p.Exempt = []string{"hotjar"}
+	Evaluator{}.Evaluate(r, p)
+	Evaluator{}.Evaluate(r, nil)
+	if keys := keysOf(r, nil); len(keys) != 0 {
+		t.Errorf("judged again with no plan: %v", keys)
+	}
 }
 
 func TestStorageOnlyDetail(t *testing.T) {

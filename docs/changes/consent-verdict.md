@@ -12,7 +12,7 @@ result. Exact texts are in backticks.
 
 ## V2 Tracker checks
 
-- What counts: request and frame hits, tracker cookies the browser stored and tracker storage keys whose tracker needs consent. `--exempt` trackers (and `consent.exempt`) count as exempt and their entries get `need: exempt` in the result. In the none run everything counts as before the choice; in the accept run only the before phase counts; reject adds after-reject, withdraw adds after-withdraw; the gpc run is read only for `consent/gpc-ignored`.
+- What counts: request and frame hits, tracker cookies the browser stored and tracker storage keys whose tracker needs consent. `--exempt` trackers (and `consent.exempt`) count as exempt and their entries get `need: exempt` in the result. A stored result judged again under a plan without that `--exempt` gets the catalog's need back on those entries (judged with no plan, the stored needs stay). In the none run everything counts as before the choice; in the accept run only the before phase counts; reject adds after-reject, withdraw adds after-withdraw; the gpc run is read only for `consent/gpc-ignored`.
 - One issue per check, page, run and tracker. `evidence` lists the event numbers of the hits, cookies, storage keys and scripts behind it, at most 50; past that the detail ends with `; 50 of <n> events listed`.
 - Titles:
   - `consent/before-choice`: `<Name> fired before the visitor chose`
@@ -36,7 +36,7 @@ result. Exact texts are in backticks.
 
 Only on pages with Google hits. These issues name no tracker: their key ends in `|`.
 
-- `consent/no-default` (no Consent Mode default in any run and the first Google hit has no gcs): title `Google tags ran with no Consent Mode default`, detail `<Name> sent <host><path>?<params> at <s.ss>s with no gcs; no gtag('consent', 'default', ...) was seen in any run`.
+- `consent/no-default` (no Consent Mode default in the run of the first Google hit and that hit has no gcs): title `Google tags ran with no Consent Mode default`, detail `<Name> sent <host><path>?<params> at <s.ss>s with no gcs; no gtag('consent', 'default', ...) was seen in any run`. When another run saw a default, the detail ends `was seen in this run (the <Run> run saw one)` instead: a default in the Accept run doesn't cover a hit the No choice run sent without one.
 - `consent/default-late` (the none run's default came after its first Google hit; never with no-default): title `The Consent Mode default came <n> ms after the first Google hit`, detail `first Google hit <Name> (<host><path>?<params>) at <s.ss>s; default at <s.ss>s`.
 - `consent/v2-signals`: title `Consent Mode v2 signals ad_user_data and ad_personalization were never set`, detail `the default at <s.ss>s doesn't set ad_user_data and ad_personalization` (or one of them) and/or `gcd <raw> on <Name> at <s.ss>s shows <signals> unset (l)`, joined with `; `.
 - `consent/accept-not-granted` (Accept confirmed, no update granted ad_storage or analytics_storage and every Google hit after the click has a known gcs with both denied; at least one such hit): title `After Accept, Google was never told storage is granted`, detail `<n> Google hits after Accept, the first at <s.ss>s, carried gcs <gcs>; no Consent Mode update granted ad_storage or analytics_storage`.
