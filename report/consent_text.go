@@ -171,7 +171,7 @@ func (t *consentText) header() {
 	if c := r.Comparison; c != nil {
 		what += " against " + Safe(cmp.Or(c.Against, "a baseline"))
 		if !c.BaseAt.IsZero() {
-			what += " from " + c.BaseAt.UTC().Format("2006-01-02 15:04")
+			what += " from " + c.BaseAt.UTC().Format("2006-01-02 15:04 UTC")
 		}
 	}
 	t.line("rhythm echo %s - %s", Safe(cmp.Or(r.Echo, ToolVersion)), what)

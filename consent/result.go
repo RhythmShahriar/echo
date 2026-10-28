@@ -292,6 +292,10 @@ type Result struct {
 	Evidence     Evidence       `json:"evidence"`
 	Notes        []string       `json:"notes"`
 	Complete     bool           `json:"complete"` // false when a run was inconclusive, cut short or canceled; consent.json says it too
+	// ShowIDs is set when the check ran with --show-ids: its URLs, cookie
+	// names and details keep tracking IDs unmasked, so consent report
+	// refuses Markdown and JUnit for it as the check did.
+	ShowIDs bool `json:"show_ids,omitempty"`
 }
 
 // Summary is the envelope summary (PRD 9.3), computed from a Result.

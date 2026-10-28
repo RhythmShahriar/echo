@@ -122,7 +122,7 @@ func TestConsentOutputs(t *testing.T) {
 			t.Errorf("output %s = %q, want %q", k, res.outputs[k], v)
 		}
 	}
-	wantArgs := []string{"consent", "-o", filepath.Join(r.temp, "echo-consent.json"), "-o", filepath.Join(r.temp, "echo-consent.md"),
+	wantArgs := []string{"consent", "-o", filepath.Join(r.temp, "echo-consent.json"),
 		"--fail-on", "error", "--plain", "--", "https://shop.test/account/", "https://shop.test/"}
 	if got := f.called(t); !slices.Equal(got, wantArgs) {
 		t.Errorf("rhythm-echo got %q\nwant %q", got, wantArgs)
@@ -164,11 +164,20 @@ func TestConsentOutputs(t *testing.T) {
 	contains(t, "summary", res.summary, "**All clear.** 1 page, 0 runs")
 }
 
+// consentShared is what Echo's own Markdown (testdata/consent.md, shaped
+// like the real report) carries that the masked summary leaves out:
+// query strings, hosts, ID tails, cookie names and the timeline.
+var consentShared = []string{"token=", "api_key", "q=hello", "google-analytics.com", "facebook.com", "tid=", "D001",
+	"_ga_", "Timeline", "PageView"}
+
 // TestConsentSummaryMasked: the summary, the step log and the pull
 // request comment of a result full of personal and hostile values show
-// none of them; summary-details puts the check's own output in the log.
+// none of them, nor anything only Echo's own Markdown has, though Echo
+// could write it; summary-details puts the check's own output and its
+// Markdown in the log and the summary.
 func TestConsentSummaryMasked(t *testing.T) {
-	r, _ := consentRunner(t, 1, filepath.Join("testdata", "consent.json"), "")
+	md := filepath.Join("testdata", "consent.md")
+	r, f := consentRunner(t, 1, filepath.Join("testdata", "consent.json"), md)
 	gh := fakeGH(t, `[]`, "201")
 	r.path = append([]string{gh.bin}, r.path...)
 	r.github["event_name"] = "pull_request"
@@ -185,13 +194,60 @@ func TestConsentSummaryMasked(t *testing.T) {
 	for what, s := range map[string]string{"summary": res.summary, "comment": comment, "step log": res.log} {
 		contains(t, what, s, "## ♪ Echo consent", "| /account/ |", "✗ Meta Pixel", "Meta Pixel fired before the visitor chose", "? no&#95;banner")
 		lacks(t, what, s, consentPrivate...)
+		lacks(t, what, s, consentShared...)
 	}
 	// The ignored issue is left out.
 	lacks(t, "summary", res.summary, "Hotjar")
+	// Echo isn't asked for its Markdown at all.
+	if args := f.called(t); slices.Contains(args, filepath.Join(r.temp, "echo-consent.md")) {
+		t.Errorf("rhythm-echo was asked for Markdown without summary-details: %q", args)
+	}
 
-	details, _ := consentRunner(t, 0, filepath.Join("testdata", "consent.json"), "")
+	details, df := consentRunner(t, 0, filepath.Join("testdata", "consent.json"), md)
 	got := details.use(map[string]string{"mode": "consent", "site": "https://shop.test/", "summary-details": "true"})
 	contains(t, "detailed step log", got.log, "hit for jane.doe@customer.example")
+	contains(t, "detailed summary", got.summary, "Timeline: No choice", "q=hello")
+	if args := df.called(t); !slices.Contains(args, filepath.Join(details.temp, "echo-consent.md")) {
+		t.Errorf("rhythm-echo wasn't asked for Markdown with summary-details: %q", args)
+	}
+}
+
+// TestConsentSummaryTitles: check titles keep their quoted code in the
+// masked table (fbq('consent', ...) isn't a page value), while addresses
+// in them are still masked and quoted text elsewhere still is.
+func TestConsentSummaryTitles(t *testing.T) {
+	needBash(t, "jq")
+	sh := filepath.Join(root(t), "integrations", "action", "summary.sh")
+	b, err := os.ReadFile(filepath.Join("testdata", "consent.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var env map[string]any
+	if err := json.Unmarshal(b, &env); err != nil {
+		t.Fatal(err)
+	}
+	data := env["data"].(map[string]any)
+	data["issues"] = []any{
+		map[string]any{"check": "consent/meta-no-consent-api", "level": "warning", "page": "/", "run": "none",
+			"title": "Meta Pixel never received fbq('consent', ...)"},
+		map[string]any{"check": "consent/before-choice", "level": "error", "page": "/", "run": "none",
+			"title": "Sent for ann" + "@shop.example"},
+	}
+	data["inconclusive"] = []any{map[string]any{"page": "/", "run": "accept", "reason": "the button said 'Ann Secret'"}}
+	in := filepath.Join(t.TempDir(), "consent.json")
+	b, err = json.Marshal(env)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(in, b, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	out, errOut, code := script(t, sh, nil, "consent", in)
+	if code != 0 {
+		t.Fatalf("exit %d: %s", code, errOut)
+	}
+	contains(t, "summary", out, "Meta Pixel never received fbq('consent', &#46;&#46;&#46;)", "&#42;&#42;&#42;&#64;shop&#46;example", "'&#42;&#42;&#42;'")
+	lacks(t, "summary", out, "fbq('&#42;&#42;&#42;'", "ann&#64;", "Ann Secret")
 }
 
 // TestConsentSummaryMarkdown: Echo's own Markdown is the summary when it

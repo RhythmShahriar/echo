@@ -1220,6 +1220,9 @@
         "sandbox": {
           "type": "boolean"
         },
+        "show_ids": {
+          "type": "boolean"
+        },
         "started": {
           "format": "date-time",
           "type": "string"

@@ -165,6 +165,9 @@ func (c *cmd) report(pos []string) int {
 		// readResult words its errors for --against.
 		return fail(env, usagef("consent report %s", trimAgainst(err.Error(), which)))
 	}
+	if r.ShowIDs && (wants(st.outs, fmtMD) || wants(st.outs, fmtJUnit)) {
+		return fail(env, usagef("consent report %s: %s", which, msgReportShowIDs))
+	}
 	// consent.json says whether the check was complete; the interrupted
 	// note and an inconclusive exit say it too, so a file edited by hand
 	// can't claim more than its runs show.

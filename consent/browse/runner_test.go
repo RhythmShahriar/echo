@@ -198,6 +198,8 @@ func TestFatalText(t *testing.T) {
 		{consent.FatalError{Code: consent.FatalTLS, URL: "https://shop.test/", Detail: "net::ERR_CERT_AUTHORITY_INVALID"}, "https://shop.test/ uses a certificate this machine doesn't trust (net::ERR_CERT_AUTHORITY_INVALID)"},
 		{consent.FatalError{Code: consent.FatalRedirectLoop, URL: "https://shop.test/", Detail: "a redirect loop"}, "https://shop.test/: a redirect loop"},
 		{consent.FatalError{Code: consent.FatalWrite, Detail: "disk full"}, "write: disk full"},
+		{consent.FatalError{Code: consent.FatalRefused, URL: "http://169.254.169.254/", Detail: consent.RefusedMetadata}, "169.254.169.254 is a cloud metadata address; Echo never loads it"},
+		{consent.FatalError{Code: consent.FatalRefused, URL: "https://other.test/", Detail: consent.RefusedNotMapped}, "https://other.test/ isn't covered by --map-host and --map-only refuses it; add a --map-host for other.test"},
 	} {
 		if got := fatalText(&c.f); got != c.want {
 			t.Errorf("fatalText(%s) = %q; want %q", c.f.Code, got, c.want)
@@ -261,5 +263,37 @@ func TestCatalogInfoCountsCustom(t *testing.T) {
 	got := catalogInfo(&customCatalog{})
 	if want := plain.Info(); got.Count != want.Count+1 || got.SHA256 != want.SHA256 || got.Version != want.Version {
 		t.Errorf("with a custom tracker: %+v", got)
+	}
+}
+
+// TestStartRefusal: a start page Echo's own guard refuses is named as
+// Echo's refusal, before Chrome's 403 or ERR_BLOCKED_BY_CLIENT can read
+// as the site's failure; one it may load isn't.
+func TestStartRefusal(t *testing.T) {
+	mapped := map[string]string{"*.shop.test": "127.0.0.1:39110", "cdn.test": "127.0.0.1:39110"}
+	for _, c := range []struct {
+		url     string
+		mapOnly bool
+		want    string
+	}{
+		{"http://169.254.169.254/latest/", false, consent.RefusedMetadata},
+		{"http://169.254.169.254/latest/", true, consent.RefusedMetadata},
+		{"http://[::ffff:169.254.169.254]/", false, consent.RefusedMetadata},
+		{"http://metadata.google.internal./", false, consent.RefusedMetadata},
+		{"https://other.test/", true, consent.RefusedNotMapped},
+		{"https://shop.test/", true, consent.RefusedNotMapped},
+		{"https://g02.shop.test/", true, ""},
+		{"https://CDN.test/", true, ""},
+		{"https://other.test/", false, ""},
+		{"http://127.0.0.1:39110/", false, ""},
+	} {
+		u, err := url.Parse(c.url)
+		if err != nil {
+			t.Fatal(err)
+		}
+		a := &attempt{plan: &consent.Plan{MapHosts: mapped, MapOnly: c.mapOnly}}
+		if got := a.refusal(u); got != c.want {
+			t.Errorf("refusal(%s, map-only %v) = %q; want %q", c.url, c.mapOnly, got, c.want)
+		}
 	}
 }

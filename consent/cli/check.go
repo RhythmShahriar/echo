@@ -29,6 +29,9 @@ const msgNoPage = "consent needs a page: rhythm echo consent https://staging.sho
 // The messages of the plan's own refusals (PRD 10.2 and the lane spec).
 const (
 	msgShowIDs = "--show-ids keeps tracking IDs unmasked; it can't be used with Markdown or JUnit output, which are meant to be shared"
+	// msgReportShowIDs refuses the same output for a result made with
+	// --show-ids, so a re-render can't share what the check refused to.
+	msgReportShowIDs = "this result was made with --show-ids and keeps tracking IDs unmasked; it can't be written as Markdown or JUnit, which are meant to be shared"
 	// defaultEcho is Echo's API when neither --echo=<url> nor
 	// RHYTHM_ECHO_URL says where it is.
 	defaultEcho = "http://127.0.0.1:8025"

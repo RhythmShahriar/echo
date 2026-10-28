@@ -16,6 +16,7 @@ import (
 	"github.com/RhythmShahriar/rhythm/kit/httpx"
 
 	"github.com/RhythmShahriar/echo/consent"
+	"github.com/RhythmShahriar/echo/consent/browse/egress"
 )
 
 // maxRedirects is the most redirects a start page may take: one more
@@ -224,6 +225,11 @@ srcs: Array.from(document.querySelectorAll("script[src], iframe[src]"), (e) => S
 func (a *attempt) startFatal(ctx context.Context, start *url.URL, l loaded) *consent.FatalError {
 	show := func(raw string) string { return consent.MaskURL(raw, a.plan.ShowIDs) }
 	startShown := show(start.String())
+	if why := a.refusal(start); why != "" {
+		// Echo's own guard answered, not the site: its 403 or Chrome's
+		// ERR_BLOCKED_BY_CLIENT would read as the site's failure.
+		return &consent.FatalError{Code: consent.FatalRefused, URL: startShown, Detail: why}
+	}
 	switch {
 	case l.doc.looping() || strings.Contains(l.err, "ERR_TOO_MANY_REDIRECTS"):
 		return &consent.FatalError{Code: consent.FatalRedirectLoop, URL: startShown,
@@ -252,6 +258,20 @@ func (a *attempt) startFatal(ctx context.Context, start *url.URL, l loaded) *con
 		return &consent.FatalError{Code: consent.FatalHTTPStatus, URL: startShown, Status: l.doc.status}
 	}
 	return nil
+}
+
+// refusal says why Echo itself never loads start, or "" when it may:
+// a cloud metadata address, or a host --map-only refuses because no
+// --map-host covers it.
+func (a *attempt) refusal(start *url.URL) string {
+	host := start.Hostname()
+	switch {
+	case egress.IsMetadata(host):
+		return consent.RefusedMetadata
+	case a.plan.MapOnly && !egress.MatchHost(mapKeys(a.plan.MapHosts), host):
+		return consent.RefusedNotMapped
+	}
+	return ""
 }
 
 // redirectDetail names how many redirects a looping load took and the

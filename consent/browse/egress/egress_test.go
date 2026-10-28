@@ -562,3 +562,17 @@ func TestDialErrorRemembered(t *testing.T) {
 		t.Errorf("DialError for a port that answered = %q", got)
 	}
 }
+
+// TestIsMetadata names the cloud metadata addresses in every spelling
+// and nothing else.
+func TestIsMetadata(t *testing.T) {
+	for host, want := range map[string]bool{
+		"169.254.169.254": true, "[fd00:ec2::254]": true, "::ffff:169.254.169.254": true,
+		"Metadata.Google.Internal.": true, "169.254.169.253": false, "127.0.0.1": false,
+		"metadata.google.internal.example": false, "": false,
+	} {
+		if got := IsMetadata(host); got != want {
+			t.Errorf("IsMetadata(%q) = %v; want %v", host, got, want)
+		}
+	}
+}

@@ -577,7 +577,12 @@ runs:
         [ ${#sites[@]} -eq 0 ] || end=(-- "${sites[@]}")
         # stdout names every page and hit; the step log is as public as
         # the summary, so it goes there only with summary-details: true.
-        rhythm-echo consent -o "$json" -o "$report" ${config[@]+"${config[@]}"} ${verbose[@]+"${verbose[@]}"} \
+        # Echo's own Markdown has query strings, hosts, ID tails and every
+        # event, so it is written and shown only then too; otherwise the
+        # summary is the masked table from the JSON.
+        mdout=()
+        [ "$DETAILS" = true ] && mdout=(-o "$report")
+        rhythm-echo consent -o "$json" ${mdout[@]+"${mdout[@]}"} ${config[@]+"${config[@]}"} ${verbose[@]+"${verbose[@]}"} \
           ${extra[@]+"${extra[@]}"} --fail-on "$level" --plain ${end[@]+"${end[@]}"} > "$outf" 2> "$errf"
         code=$?
         [ "$DETAILS" = true ] && cat "$outf"
@@ -589,7 +594,11 @@ runs:
         fi
         echo "exit-code=$code" >> "$GITHUB_OUTPUT"
         if [ -s "$json" ]; then
-          bash "$SUMMARY" consent "$json" "$report" > "$md" || true
+          if [ "$DETAILS" = true ]; then
+            bash "$SUMMARY" consent "$json" "$report" > "$md" || true
+          else
+            bash "$SUMMARY" consent "$json" > "$md" || true
+          fi
           # before-choice, after-reject, inconclusive, folder; a count the
           # summary leaves out reads as 0.
           counts=$(bash "$SUMMARY" consent-outputs "$json") || counts=""

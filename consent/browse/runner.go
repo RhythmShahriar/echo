@@ -452,6 +452,8 @@ func fatalText(f *consent.FatalError) string {
 		s = f.URL + ": " + f.Detail
 	case consent.FatalSelector:
 		s = f.Detail
+	case consent.FatalRefused:
+		s = consent.RefusedText(f)
 	default:
 		s = strings.TrimPrefix(f.Error(), "consent: ")
 	}
@@ -493,6 +495,7 @@ func (c *check) result(started time.Time) *consent.Result {
 		Issues:       []consent.Issue{},
 		Inconclusive: []consent.Inconclusive{},
 		Notes:        []string{},
+		ShowIDs:      p.ShowIDs,
 	}
 	if cl := c.stages.Classifier; cl != nil {
 		res.Catalog = catalogInfo(cl)

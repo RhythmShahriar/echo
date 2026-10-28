@@ -63,8 +63,8 @@ Only on pages with Google hits. These issues name no tracker: their key ends in 
   - `no_banner`: `<Run>: no banner showed within <banner-wait>` plus ` (<CMP>'s script loaded)` when the CMP is on the page
   - `cmp_not_found`: `<Run>: --cmp <name> was named but its banner wasn't found`
   - `navigation_failed`: the load error as browse recorded it, else `<Run>: the page didn't load`
-  - `limit`: `stopped after 20000 requests` (the plan's request limit)
-  - `canceled`: `interrupted`
+  - `limit`: `<Run>: stopped after 20000 requests` (the plan's request limit)
+  - `canceled`: `<Run>: interrupted`
   - Durations read as the flags take them: `10s`, `90s`, `2m`.
 
 ## V5 Levels, ignores and notes

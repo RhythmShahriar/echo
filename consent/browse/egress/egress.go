@@ -77,6 +77,17 @@ var metadataHosts = map[string]bool{
 	"metadata.google.internal": true,
 }
 
+// IsMetadata reports whether host is a cloud metadata address or name,
+// which a guard refuses for every target, ignoring case, brackets, a
+// trailing dot and an IPv4 address written as IPv6.
+func IsMetadata(host string) bool {
+	host = strings.TrimSuffix(strings.ToLower(strings.Trim(host, "[]")), ".")
+	if ip, err := netip.ParseAddr(host); err == nil {
+		host = ip.Unmap().String()
+	}
+	return metadataHosts[host]
+}
+
 // BrowserServiceHosts are the hosts Chrome's own services call
 // (updates, Safe Browsing, optimization hints, autofill). A page never
 // needs them, so a guard refuses them and counts them as browser

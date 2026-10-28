@@ -33,7 +33,7 @@ set -euo pipefail
 # text, for error messages that quote what was wrong.
 # shellcheck disable=SC2016 # jq source, not shell
 jqlib='
-def mask:
+def maskq($kq):
   gsub("\u001b\\[[0-9;]*[A-Za-z]"; "")
   | (if $tok != "" then gsub($tok; "***") else . end)
   | if $raw then . else
@@ -41,7 +41,7 @@ def mask:
       | gsub("\\+[0-9][0-9 ().-]{6,}[0-9]"; "+***")
       | gsub("(?<p>(?:\\bto|,) )(?<n>\\(?[0-9][0-9 ().-]{5,}[0-9])";
           "\(.p)\(if (.n | gsub("[^0-9]"; "") | length) >= 7 and (.n | test("^[0-9]{4}-[0-9]{2}-[0-9]{2}$") | not) then "***" else .n end)")
-      | (if $keepq then . else
+      | (if $kq then . else
           gsub("\"[^\"]*\""; "\"***\"")
           | gsub("(?<![A-Za-z0-9])\u0027(?:[^\u0027]|\u0027(?=[A-Za-z]))*\u0027(?![A-Za-z0-9])"; "\u0027***\u0027")
           | gsub("\u2018(?:[^\u2019]|\u2019(?=[A-Za-z]))*\u2019"; "\u2018***\u2019")
@@ -49,6 +49,7 @@ def mask:
         end)
       | sub("^(?<h>[0-9]{2}:[0-9]{2}:[0-9]{2} .+? to [^:]*: ).*(?<s> \\[[a-z_ -]+\\])$"; "\(.h)***\(.s)")
     end;
+def mask: maskq($keepq);
 # unwrap takes the run or comparison out of the JSON envelope Echo writes
 # (schema, kind, summary, data). A comparison envelope holds the compared
 # actions as a list with their count in summary, so the count goes back
@@ -147,8 +148,13 @@ def list($head; $items): if ($items | length) > 0 then "**\($head) (\($items | l
 # it can't mention anyone, link anywhere or add HTML.
 # shellcheck disable=SC2016 # jq source, not shell
 consent='
-def md: tostring | mask | gsub("[\r\n\t]+"; " ")
+def esc: gsub("[\r\n\t]+"; " ")
   | gsub("(?<c>[&<>|`\\[\\]@!*_#\\\\~:.])"; "&#\(.c | explode[0]);");
+def md: tostring | mask | esc;
+# title is a check title: words compiled into Echo, with no query
+# strings, cookie values or IDs, so the code it quotes (a Meta Pixel
+# consent call) stays. Addresses and phone numbers are masked all the same.
+def title: tostring | maskq(true) | esc;
 # path keeps the path of a URL: no scheme, host, query or fragment.
 def path: tostring | sub("^[A-Za-z][A-Za-z0-9+.-]*://[^/?#]*"; "") | sub("[?#].*$"; "") | if . == "" then "/" else . end;
 def runname: {"none": "No choice", "accept": "Accept", "reject": "Reject", "gpc": "GPC", "withdraw": "Withdraw"}[.] // .;
@@ -180,10 +186,10 @@ def uniq: reduce .[] as $x ([]; if any(.[]; . == $x) then . else . + [$x] end);
   (["error", "warning", "notice"][] as $l
    | [$issues[] | select(.level == $l)] | select(length > 0)
    | "### \({"error": "Errors", "warning": "Warnings", "notice": "Notices"}[$l]) (\(length))\n\n| Check | Page | Run | What |\n|---|---|---|---|",
-     (.[] | "| \(.check | md) | \(.page | path | md) | \(.run | runname | md) | \(.title | md) |"), ""),
+     (.[] | "| \(.check | md) | \(.page | path | md) | \(.run | runname | md) | \(.title | title) |"), ""),
   (if ($changes | length) > 0 then
      "### Against the baseline (\($changes | length))\n\n| Change | Page | Run | What |\n|---|---|---|---|",
-     ($changes[] | "| \(.class | ascii_upcase | md) | \(.page | path | md) | \(.run | runname | md) | \(.title | md) |"), ""
+     ($changes[] | "| \(.class | ascii_upcase | md) | \(.page | path | md) | \(.run | runname | md) | \(.title | title) |"), ""
    else empty end),
   (if ($d.inconclusive // []) | length > 0 then
      "### Couldn\u0027t check (\($d.inconclusive | length))\n\n| Page | Run | Why |\n|---|---|---|",

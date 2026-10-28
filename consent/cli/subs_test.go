@@ -237,6 +237,40 @@ func TestReportLatest(t *testing.T) {
 	}
 }
 
+// TestReportShowIDs: a result made with --show-ids can't be re-rendered
+// as Markdown or JUnit, which the check refused for it; the view, JSON
+// and a result without show_ids are unaffected.
+func TestReportShowIDs(t *testing.T) {
+	inDir(t, "")
+	fakeWriters(t)
+	dir := putResult(t, "2026-10-26T08-00-00-bbbbbb", "clean")
+	r := consenttest.GoldenResult("clean")
+	r.ShowIDs = true
+	data, err := jsonIndent(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	putFile(t, filepath.Join(dir, "consent.json"), data)
+	want := "rhythm echo: consent report latest: " + msgReportShowIDs + "\n"
+	for _, args := range [][]string{{"report", "--junit"}, {"report", "--md"}, {"report", "-o", "out.xml"}, {"report", "-o", "out.md"}} {
+		if code, out, errOut := runMain(t, args...); code != exitUsage || out != "" || errOut != want {
+			t.Errorf("%v: exit %d %q %q", args, code, out, errOut)
+		}
+	}
+	for _, f := range []string{"out.xml", "out.md"} {
+		if _, err := os.Stat(f); err == nil {
+			t.Errorf("%s was written", f)
+		}
+	}
+	if code, _, _ := runMain(t, "report", "--json"); code != exitOK {
+		t.Errorf("--json: exit %d", code)
+	}
+	putResult(t, "2026-10-27T08-00-00-cccccc", "clean")
+	if code, _, errOut := runMain(t, "report", "--junit"); code != exitOK {
+		t.Errorf("--junit without show_ids: exit %d %q", code, errOut)
+	}
+}
+
 // report --against compares the saved result with a baseline and fails
 // on the change.
 func TestReportAgainst(t *testing.T) {

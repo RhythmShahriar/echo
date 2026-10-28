@@ -402,8 +402,8 @@ func TestInconclusiveTexts(t *testing.T) {
 			`net::ERR_CONNECTION_RESET\x1b[2J`},
 		{"navigation_failed bare", onetrust, consent.Run{Kind: consent.RunAccept, Reason: consent.ReasonNavigation}, nil,
 			"Accept: the page didn't load"},
-		{"limit", onetrust, consent.Run{Kind: consent.RunNone, Reason: consent.ReasonLimit}, nil, "stopped after 20000 requests"},
-		{"canceled", onetrust, consent.Run{Kind: consent.RunGPC, Reason: consent.ReasonCanceled}, nil, "interrupted"},
+		{"limit", onetrust, consent.Run{Kind: consent.RunNone, Reason: consent.ReasonLimit}, nil, "No choice: stopped after 20000 requests"},
+		{"canceled", onetrust, consent.Run{Kind: consent.RunGPC, Reason: consent.ReasonCanceled}, nil, "GPC: interrupted"},
 		{"unknown reason", onetrust, consent.Run{Kind: consent.RunGPC, Reason: "odd"}, nil, "GPC: odd"},
 	}
 	for _, c := range cases {

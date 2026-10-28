@@ -44,3 +44,23 @@ func TestCustomIDsMaskedInURLs(t *testing.T) {
 		t.Errorf("got %s\nwant %s", got, want)
 	}
 }
+
+// --show-ids keeps the IDs a path carries, as it keeps tid and the GA4
+// cookie name: the Google Ads conversion ID shows whole. A credential in
+// the same URL stays masked.
+func TestShowIDsKeepsPathIDs(t *testing.T) {
+	for _, c := range []struct{ in, want string }{
+		{"https://googleads.g.doubleclick.net/pagead/viewthroughconversion/100000001/?random=1",
+			"https://googleads.g.doubleclick.net/pagead/viewthroughconversion/100000001/?random=1"},
+		{"https://www.google.com/pagead/1p-user-list/100000001/?random=1",
+			"https://www.google.com/pagead/1p-user-list/100000001/?random=1"},
+		{"https://www.google-analytics.com/g/collect?v=2&tid=G-TESTBED001", "https://www.google-analytics.com/g/collect?v=2&tid=G-TESTBED001"},
+	} {
+		if got := consent.MaskURL(c.in, true); got != c.want {
+			t.Errorf("MaskURL(%s, show IDs)\n got %s\nwant %s", c.in, got, c.want)
+		}
+	}
+	if got := consent.MaskCookieNames("_ga_TESTBED001", true); got != "_ga_TESTBED001" {
+		t.Errorf("cookie name with show IDs: %s", got)
+	}
+}

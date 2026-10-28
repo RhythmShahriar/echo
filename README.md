@@ -185,7 +185,7 @@ Downloading Chrome for Testing 156.0.8078.47 (191 MB) once, into ~/.cache/rhythm
 
 rhythm echo 1.2.0 - consent check of https://staging.shop.test/
 
-Browser: Chrome for Testing 156.0.8078.47 (downloaded)
+Browser: Chrome for Testing 156.0.8078.47
 Hits held: tracking hits are recorded and stopped in the browser. Nothing reached Google, Meta or any other tracker.
 
 https://staging.shop.test/
@@ -197,12 +197,13 @@ https://staging.shop.test/
 
 All clear - 0 errors, 0 warnings, 3 notices - 3 runs, 3 trackers, policy advanced
 
-  notice  consent/cookieless-ping  Google Analytics 4 sent 3 cookieless pings before the choice (allowed under --consent-mode advanced)
-  notice  consent/cookieless-ping  Google Analytics 4 sent 1 cookieless ping before the choice (allowed under --consent-mode advanced)
-  notice  consent/cookieless-ping  Google Analytics 4 sent 3 cookieless pings before the choice and after Reject (allowed under --consent-mode advanced)
+  notice  consent/cookieless-ping  Google Analytics 4 sent 3 cookieless pings before the choice (allowed under --consent-mode advanced) (No choice)
+  notice  consent/cookieless-ping  Google Analytics 4 sent 1 cookieless ping before the choice (allowed under --consent-mode advanced) (Accept)
+  notice  consent/cookieless-ping  Google Analytics 4 sent 3 cookieless pings before the choice and after Reject (allowed under --consent-mode advanced) (Reject)
 
 Evidence, not legal advice.
 full report: .echo/consent/2026-10-28T19-31-20-545ec9/report.html
+Tip: --save baseline keeps this as the baseline for the next check.
 ```
 
 Every result is an evidence folder in `.echo/consent/`: `consent.json`, screenshots, every event of every run, a manifest with the SHA-256 of each file and `report.html`. `rhythm echo consent verify <folder>` checks that nothing in it changed since.

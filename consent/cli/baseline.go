@@ -148,7 +148,7 @@ func saveBaseline(st store.Store, name, dir string) (string, error) {
 	dest := filepath.Join(baselinesDir(st), name)
 	line := fmt.Sprintf("Saved baseline %s.", name)
 	if old, err := readResult(name, filepath.Join(dest, evidence.ResultFile)); err == nil {
-		line = fmt.Sprintf("Saved baseline %s (replaced the one from %s).", name, old.Started.UTC().Format("2006-01-02 15:04"))
+		line = fmt.Sprintf("Saved baseline %s (replaced the one from %s).", name, old.Started.UTC().Format("2006-01-02 15:04 UTC"))
 	}
 	// The parents get the store's 0700 like every consent folder.
 	for _, d := range []string{filepath.Join(st.Root, store.Consent), baselinesDir(st), dest} {

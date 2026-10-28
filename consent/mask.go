@@ -145,7 +145,8 @@ const maxNesting = 3
 // personal parameters masked, including URLs nested and double-encoded
 // in dl, dr, dt, ref, rl, url, u, page_location. IDs keep their last 4
 // characters; em, ph, fn, ln, ud[*] and 64-hex hashes become ••••(sha256).
-// showIDs keeps cid/tid/id values (never credentials or personal data).
+// showIDs keeps cid/tid/id values and the IDs a tracker rule finds in a
+// path (never credentials or personal data).
 // A login in the URL (user:pass@) is masked whole. Text that isn't a URL
 // is masked as text.
 //
@@ -183,7 +184,13 @@ func maskURL(raw string, showIDs bool, depth int) string {
 	// on the bare path keeps the rest as it was written.
 	path := recognize.RedactURL(recognize.Recognizer{}, u.Scheme+"://"+u.Host+u.EscapedPath())
 	ids, idPaths := idsFor(strings.ToLower(u.Hostname()))
-	out = out + u.Host + maskPathIDs(strings.TrimPrefix(path, u.Scheme+"://"+u.Host), idPaths)
+	path = strings.TrimPrefix(path, u.Scheme+"://"+u.Host)
+	if !showIDs {
+		// The IDs a path carries name the property or the conversion,
+		// like the tid and id --show-ids keeps.
+		path = maskPathIDs(path, idPaths)
+	}
+	out = out + u.Host + path
 	if u.ForceQuery || u.RawQuery != "" {
 		out += "?" + maskQuery(u.RawQuery, showIDs, depth, ids)
 	}

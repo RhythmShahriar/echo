@@ -96,7 +96,7 @@ func TestConsentTextLines(t *testing.T) {
 func TestConsentTextComparison(t *testing.T) {
 	out := consentTextOf(t, judgedResult(t, "compare-cur"), ConsentTextOptions{})
 	for _, want := range []string{
-		"rhythm echo 1.2.0 - consent check of https://c08.consent.test/ against baseline from 2026-10-19 08:02\n",
+		"rhythm echo 1.2.0 - consent check of https://c08.consent.test/ against baseline from 2026-10-19 08:02 UTC\n",
 		"\nBroke - 2 broke, 1 new, 0 changed, 0 fixed - 3 runs, 4 trackers\n",
 		"\n  BROKE   TikTok Pixel now fires before the choice            / (No choice, Reject)\n",
 		"\n  NEW     TikTok Pixel fires after Accept                     /\n",

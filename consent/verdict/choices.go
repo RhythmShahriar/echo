@@ -471,9 +471,9 @@ func (j *judge) inconclusiveDetail(pg *consent.Page, run *consent.Run) string {
 		if j.p != nil && j.p.Limits.Requests > 0 {
 			n = j.p.Limits.Requests
 		}
-		return fmt.Sprintf("stopped after %d requests", n)
+		return fmt.Sprintf("%s: stopped after %d requests", label, n)
 	case consent.ReasonCanceled:
-		return "interrupted"
+		return label + ": interrupted"
 	}
 	if d := consent.SafeText(run.Detail, 300); d != "" {
 		return d

@@ -318,8 +318,8 @@ func TestTipsOnce(t *testing.T) {
 }
 
 // TestFatalMessages pins every message a stopped check prints (PRD
-// 10.2 messages 9 to 16): exit 3 (2 for a selector the browser refuses,
-// a usage error) and no result folder left behind. A check that started
+// 10.2 messages 9 to 16): exit 3 (2 for a selector the browser refuses
+// or a page Echo never loads, usage errors) and no result folder left behind. A check that started
 // no run leaves no .echo either (PRD 6).
 func TestFatalMessages(t *testing.T) {
 	// CI keeps the first-run notice out, which would otherwise lead the
@@ -340,6 +340,8 @@ func TestFatalMessages(t *testing.T) {
 		{Code: consent.FatalRedirectLoop, URL: "https://shop.test/"},
 		{Code: consent.FatalWrite, Detail: ".echo/consent/x/events/page-1-none.ndjson", Err: errors.New("no space left on device")},
 		{Code: consent.FatalSelector, Detail: `--reject-selector: "###" isn't CSS the browser accepts`},
+		{Code: consent.FatalRefused, URL: "http://169.254.169.254/", Detail: consent.RefusedMetadata},
+		{Code: consent.FatalRefused, URL: "https://other.test/", Detail: consent.RefusedNotMapped},
 		{Code: "something-new", URL: "https://shop.test/", Detail: "what happened"},
 	}
 	var b strings.Builder
@@ -350,7 +352,7 @@ func TestFatalMessages(t *testing.T) {
 		useRunner(t, &consent.Result{ID: "partial", Pages: []consent.Page{}}, fe)
 		code, out, errOut := runMain(t, "https://shop.test/")
 		want := exitUnavailable
-		if fe.Code == consent.FatalSelector {
+		if fe.Code == consent.FatalSelector || fe.Code == consent.FatalRefused {
 			want = exitUsage
 		}
 		if code != want || out != "" {
@@ -404,7 +406,7 @@ func TestSaveAgainst(t *testing.T) {
 	}
 	_, out, _ = runMain(t, "--save", "baseline", "https://shop.test/")
 	started := consenttest.GoldenResult("compare-base").Started.UTC().Format("2006-01-02 15:04")
-	if !strings.Contains(out, "Saved baseline baseline (replaced the one from "+started+").\n") {
+	if !strings.Contains(out, "Saved baseline baseline (replaced the one from "+started+" UTC).\n") {
 		t.Errorf("--save again: %q", out)
 	}
 	_, got := useRunner(t, consenttest.GoldenResult("compare-cur"), nil)

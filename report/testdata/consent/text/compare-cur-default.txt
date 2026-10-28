@@ -1,4 +1,4 @@
-rhythm echo 1.2.0 - consent check of https://c08.consent.test/ against baseline from 2026-10-19 08:02
+rhythm echo 1.2.0 - consent check of https://c08.consent.test/ against baseline from 2026-10-19 08:02 UTC
 
 Hits held: tracking hits are recorded and stopped in the browser. Nothing reached Google, Meta or any other tracker.
 Hosts mapped with --map-host.
