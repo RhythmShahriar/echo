@@ -51,7 +51,7 @@ type Request struct {
 	Status      int    `json:"status,omitempty"`
 	Held        bool   `json:"held,omitempty"`    // answered in the browser, never sent
 	Mapped      bool   `json:"mapped,omitempty"`  // answered by a --map-host address
-	Refused     string `json:"refused,omitempty"` // "private address", "browser traffic", "not mapped", "limit"
+	Refused     string `json:"refused,omitempty"` // "private address", "browser traffic", "not mapped", "mapped host outside the tab", "limit"
 	BodyBytes   int    `json:"body_bytes,omitempty"`
 	BodySHA256  string `json:"body_sha256,omitempty"`
 	BodyPartial bool   `json:"body_partial,omitempty"`
