@@ -488,3 +488,24 @@ func TestEvaluateTwiceSame(t *testing.T) {
 		t.Errorf("second judgement differs:\n%v\n%v", first, keysOf(r, nil))
 	}
 }
+
+// TestCookielessBeforeAndAfterReject names both phases when a reject
+// run's cookieless pings come before the choice and after Reject: one
+// issue (its key), a title that counts and names them all.
+func TestCookielessBeforeAndAfterReject(t *testing.T) {
+	ping := func(seq, at int64, ph consent.Phase) consent.HitRef {
+		h := hit(seq, at, ph, "ga4", 0, "https://region1.google-analytics.com/g/collect?v=2&tid=G-1&gcs=G100")
+		h.Cookieless = true
+		h.Google = &consent.GoogleConsent{GCS: "G100", GCSDecoded: &consent.GCS{Known: true, AdStorage: consent.Denied, AnalyticsStorage: consent.Denied}}
+		return h
+	}
+	r := result(consent.Run{Kind: consent.RunReject, Choice: &consent.Choice{Verified: true, AtMS: 2000},
+		Hits: []consent.HitRef{ping(1, 600, consent.PhaseBefore), ping(2, 2500, consent.PhaseAfterReject), ping(3, 9200, consent.PhaseAfterReject)}})
+	consenttest.Use(t, consent.Stages{Classifier: &catalog{}})
+	Evaluator{}.Evaluate(r, nil)
+	sameKeys(t, keysOf(r, v2Checks), "consent/cookieless-ping|/|reject|ga4")
+	if is := issue(t, r, "consent/cookieless-ping|/|reject|ga4"); is.Title !=
+		"Google Analytics 4 sent 3 cookieless pings before the choice and after Reject (allowed under --consent-mode advanced)" {
+		t.Errorf("title %q", is.Title)
+	}
+}

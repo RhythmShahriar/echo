@@ -56,7 +56,8 @@ const metaPixel = "meta-pixel"
 // tracker on one page.
 type group struct {
 	check, tracker string
-	b              bucket
+	b              bucket   // the bucket the group was first seen in
+	also           []bucket // later buckets of the same run, in order
 	hits           []*consent.HitRef
 	cookies        []*consent.Cookie
 	storage        []*consent.StorageKey
@@ -76,6 +77,12 @@ func (gs *groups) get(check, tracker string, b bucket) *group {
 	}
 	k := check + "|" + tracker
 	if g := gs.by[k]; g != nil {
+		// One issue per check and tracker in a run (its key): a reject
+		// run's cookieless pings before the choice and after Reject are
+		// one group whose title names both.
+		if !slices.Contains(g.also, b) && b != g.b {
+			g.also = append(g.also, b)
+		}
 		return g
 	}
 	g := &group{check: check, tracker: tracker, b: b}
@@ -259,7 +266,6 @@ func grantedGCS(g *consent.GoogleConsent) bool {
 // addGroup turns one group into its issue.
 func (j *judge) addGroup(pg *consent.Page, run *consent.Run, g *group) {
 	name := j.name(g.tracker)
-	after := g.b == inAfterReject || g.b == inAfterWithdraw
 	var title, fix string
 	detail := entriesDetail(run, g)
 	switch g.check {
@@ -270,24 +276,11 @@ func (j *judge) addGroup(pg *consent.Page, run *consent.Run, g *group) {
 	case consent.CheckAfterWithdraw:
 		title = name + " fired after consent was withdrawn"
 	case consent.CheckEmbed:
-		title = name + " loaded before the visitor chose"
-		if after {
-			title = name + " loaded after Reject"
-		}
+		title = name + " loaded " + g.when("before the visitor chose")
 	case consent.CheckScriptBefore:
-		title = name + " script loaded before the visitor chose (strict policy)"
-		if after {
-			title = name + " script loaded after Reject (strict policy)"
-		}
+		title = name + " script loaded " + g.when("before the visitor chose") + " (strict policy)"
 	case consent.CheckCookielessPing:
-		when := "before the choice"
-		switch g.b {
-		case inAfterReject:
-			when = "after Reject"
-		case inAfterWithdraw:
-			when = "after consent was withdrawn"
-		}
-		title = fmt.Sprintf("%s sent %s %s (allowed under --consent-mode advanced)", name, plural(len(g.hits), "cookieless ping"), when)
+		title = fmt.Sprintf("%s sent %s %s (allowed under --consent-mode advanced)", name, plural(len(g.hits), "cookieless ping"), g.when("before the choice"))
 		detail = cookielessDetail(g)
 	case consent.CheckGPCIgnored:
 		title = name + " fired with Global Privacy Control on"
@@ -299,6 +292,23 @@ func (j *judge) addGroup(pg *consent.Page, run *consent.Run, g *group) {
 		fix = checkFix(g.check)
 	}
 	j.add(pg, g.check, run.Kind, g.tracker, title, detail, fix, groupEvidence(run, g))
+}
+
+// when says when the group's entries happened, every bucket in the order
+// seen: before names the before-the-choice bucket.
+func (g *group) when(before string) string {
+	var out []string
+	for _, b := range append([]bucket{g.b}, g.also...) {
+		switch b {
+		case inAfterReject:
+			out = append(out, "after Reject")
+		case inAfterWithdraw:
+			out = append(out, "after consent was withdrawn")
+		default:
+			out = append(out, before)
+		}
+	}
+	return strings.Join(slices.Compact(out), " and ")
 }
 
 // plural writes n and a noun, with an s when n isn't 1.
