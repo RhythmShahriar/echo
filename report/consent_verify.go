@@ -24,6 +24,9 @@ const maxVerifyPathWidth = 48
 //	Signature: good (ed25519, key team.pub)
 //	Verified: 14 files match, signed by team.pub.
 //
+// -q (o.Quiet) leaves out the ok lines: only what failed, the signature
+// and the verdict are printed.
+//
 // When something doesn't match the last line is `Not verified: <n>
 // changed, <m> missing, the signature doesn't match; <k> files match.`
 // (only the parts that apply).
@@ -47,7 +50,9 @@ func WriteConsentVerify(w io.Writer, v *ConsentVerify, asJSON bool, o ConsentTex
 		switch {
 		case f.OK:
 			ok++
-			fmt.Fprintf(&b, "ok  %s  sha256 %s\n", pad, shortHash(f.Got, true))
+			if !o.Quiet {
+				fmt.Fprintf(&b, "ok  %s  sha256 %s\n", pad, shortHash(f.Got, true))
+			}
 		case f.Got == "":
 			missing++
 			fmt.Fprintf(&b, "missing  %s\n", path)

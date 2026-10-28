@@ -330,7 +330,7 @@ func (t *consentText) matrixCell(pg *consent.Page, run *consent.Run) matrixCell 
 		return matrixCell{state: cellSkipped}
 	}
 	if run.Inconclusive() {
-		return matrixCell{state: cellInconclusive, why: cmp.Or(reasonWords[run.Reason], Safe(string(run.Reason)))}
+		return matrixCell{state: cellInconclusive, why: cmp.Or(runReasonWords(run), Safe(string(run.Reason)))}
 	}
 	var c matrixCell
 	var checks, ids []string
@@ -510,6 +510,23 @@ func (m *consentMD) runDetails() {
 	}
 }
 
+// entryReasonWords is reasonWords for an inconclusive entry, read from
+// its run when the result still has it.
+func (m *consentMD) entryReasonWords(in consent.Inconclusive) string {
+	for i := range m.r.Pages {
+		pg := &m.r.Pages[i]
+		if pg.Site != in.Site || consent.PageName(m.r, pg) != in.Page {
+			continue
+		}
+		for j := range pg.Runs {
+			if pg.Runs[j].Kind == in.Run {
+				return runReasonWords(&pg.Runs[j])
+			}
+		}
+	}
+	return reasonWords[in.Reason]
+}
+
 // inconclusive writes the runs that couldn't be checked: Page | Run |
 // Why, the why in a few words (the full detail with Details), then the
 // hints when a banner didn't show.
@@ -523,11 +540,11 @@ func (m *consentMD) inconclusive() {
 	m.line("|---|---|---|")
 	hint := false
 	for _, in := range m.r.Inconclusive {
-		why := cmp.Or(reasonWords[in.Reason], md(string(in.Reason)))
+		why := cmp.Or(m.entryReasonWords(in), md(string(in.Reason)))
 		if m.o.Details && in.Detail != "" {
 			why = md(in.Detail)
 		}
-		m.line("| %s | %s | %s |", m.page("", in.Page), md(in.Run.Label()), why)
+		m.line("| %s | %s | %s |", m.page(in.Site, in.Page), md(in.Run.Label()), why)
 		hint = hint || in.Reason == consent.ReasonNoBanner || in.Reason == consent.ReasonCMPNotFound
 	}
 	m.line("")

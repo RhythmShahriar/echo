@@ -296,6 +296,35 @@ func TestReportAgainst(t *testing.T) {
 	}
 }
 
+// report --against last compares the shown result with the one before
+// it, never with itself, so a re-read in CI fails on a change.
+func TestReportAgainstLast(t *testing.T) {
+	inDir(t, "")
+	consenttest.Use(t, consenttest.Fakes())
+	got := fakeWriters(t)
+	putResult(t, "2026-10-26T08-00-00-aaaaaa", "compare-base")
+	putResult(t, "2026-10-27T08-00-00-bbbbbb", "compare-cur")
+	for _, args := range [][]string{
+		{"report", "--against", "last", "--json"},
+		{"report", "latest", "--against", "last", "--json"},
+		{"report", "2026-10-27T08-00-00-bbbbbb", "--against", "last", "--json"},
+	} {
+		got.json = nil
+		code, _, errOut := runMain(t, args...)
+		if code != exitFindings || !strings.Contains(errOut, "BROKE  TikTok Pixel now fires before the choice") {
+			t.Errorf("%v: exit %d\n%s", args, code, errOut)
+		}
+		if len(got.json) == 0 || got.json[0].Comparison == nil || got.json[0].Comparison.BaseID == got.json[0].ID {
+			t.Errorf("%v: compared with itself: %+v", args, got.json)
+		}
+	}
+	// The oldest result has nothing before it.
+	code, _, errOut := runMain(t, "report", "2026-10-26T08-00-00-aaaaaa", "--against", "last")
+	if code != exitUsage || !strings.HasPrefix(errOut, "rhythm echo: --against last: no consent result older than 2026-10-26T08-00-00-aaaaaa") {
+		t.Errorf("oldest: exit %d %q", code, errOut)
+	}
+}
+
 // customClassifier lists a config tracker after AddCustom, as the real
 // catalog does, with its source "config".
 type customClassifier struct{ consenttest.FakeClassifier }

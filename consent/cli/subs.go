@@ -177,7 +177,7 @@ func (c *cmd) report(pos []string) int {
 		if err := consent.Need(consent.StageComparer); err != nil {
 			return fail(env, err)
 		}
-		base, err := loadAgainst(st.store, o.against)
+		base, err := loadAgainstBefore(st.store, o.against, dir)
 		if err != nil {
 			return fail(env, err)
 		}

@@ -66,3 +66,15 @@ func TestEchoNames(t *testing.T) {
 		t.Errorf("the note would show the login: %s", l.url)
 	}
 }
+
+// TestEchoDownNoteOnce: Echo not answering adds one note, ending in a
+// period like the other header notes.
+func TestEchoDownNoteOnce(t *testing.T) {
+	c := &check{echo: &echoLink{url: "http://127.0.0.1:39103"}}
+	c.echoDown()
+	c.echoDown()
+	want := "Echo at http://127.0.0.1:39103 didn't answer; server-side tracking wasn't checked."
+	if len(c.notes) != 1 || c.notes[0] != want {
+		t.Errorf("notes %q", c.notes)
+	}
+}

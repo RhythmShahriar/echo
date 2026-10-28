@@ -384,6 +384,9 @@ func TestInconclusiveTexts(t *testing.T) {
 			"Reject: Complianz's banner showed but --reject-selector matched no visible Reject button: check that it is valid CSS and that it finds the button (rhythm echo consent detect shows what Echo sees)"},
 		{"no_button withdraw selector given", generic, consent.Run{Kind: consent.RunWithdraw, Reason: consent.ReasonNoButton}, func(p *consent.Plan) { p.RejectSelector = reject },
 			"Withdraw: the banner showed but --reject-selector matched no visible Reject button: check that it is valid CSS and that it finds the button (rhythm echo consent detect shows what Echo sees)"},
+		{"withdraw reopen failed", cookiebot, consent.Run{Kind: consent.RunWithdraw, Reason: consent.ReasonNoButton, Choice: &consent.Choice{Verified: true},
+			Detail: "consent: Cookiebot has no way to reopen the banner without its API; --click button,api allows it"}, nil,
+			"Withdraw: Accept worked but the banner couldn't be reopened to withdraw: Cookiebot has no way to reopen the banner without its API; --click button,api allows it"},
 		{"click_missed", onetrust, consent.Run{Kind: consent.RunAccept, Reason: consent.ReasonClickMissed, Choice: click}, nil,
 			`Accept: clicked "Accept all" (#onetrust-accept-btn-handler) 3 times and the banner stayed. Something may cover it (a chat bubble, a newsletter popup); --show-browser shows the page`},
 		{"state_unchanged", onetrust, consent.Run{Kind: consent.RunReject, Reason: consent.ReasonStateUnchanged, Choice: unchanged}, nil,
@@ -410,6 +413,7 @@ func TestInconclusiveTexts(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			r := result(c.run)
 			r.Pages[0].CMP = c.cmp
+			r.Pages[0].Site = "brew"
 			p := consenttest.NewPlan(t)
 			if c.plan != nil {
 				c.plan(p)
@@ -419,7 +423,7 @@ func TestInconclusiveTexts(t *testing.T) {
 				t.Fatalf("inconclusive %+v", r.Inconclusive)
 			}
 			got := r.Inconclusive[0]
-			if got.Detail != c.want || got.Page != "/" || got.Run != c.run.Kind || got.Reason != c.run.Reason {
+			if got.Detail != c.want || got.Page != "/" || got.Site != "brew" || got.Run != c.run.Kind || got.Reason != c.run.Reason {
 				t.Errorf("got  %+v\nwant %q", got, c.want)
 			}
 		})

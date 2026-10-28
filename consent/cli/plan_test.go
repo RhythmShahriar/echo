@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -449,6 +450,15 @@ func TestConsentPagesCap(t *testing.T) {
 	code, _, errOut := runMain(t, "--sites", "sites.yaml")
 	if code != exitUsage || errOut != "rhythm echo: 63 pages is more than 50 for one check; split the sites file\n" {
 		t.Errorf("63 pages: %d %q", code, errOut)
+	}
+	// Without --sites there is no sites file to split.
+	args := []string{}
+	for i := range 51 {
+		args = append(args, "https://shop.test/p"+strconv.Itoa(i))
+	}
+	code, _, errOut = runMain(t, args...)
+	if code != exitUsage || errOut != "rhythm echo: 51 pages is more than 50 for one check; split the pages over several checks\n" {
+		t.Errorf("51 URLs: %d %q", code, errOut)
 	}
 }
 

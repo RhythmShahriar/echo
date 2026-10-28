@@ -135,6 +135,14 @@ type Run struct {
 // it has a Reason.
 func (r Run) Inconclusive() bool { return r.Reason != ReasonNone }
 
+// ReopenFailed reports whether a withdraw run stopped because the banner
+// couldn't be reopened after Accept: its reason is no_button, Accept
+// was chosen, nothing was withdrawn and Detail holds why the reopen
+// failed (a missing Accept button leaves Detail empty).
+func (r Run) ReopenFailed() bool {
+	return r.Kind == RunWithdraw && r.Reason == ReasonNoButton && r.Choice != nil && r.Withdraw == nil && r.Detail != ""
+}
+
 // ConsentMode is what a page's Google Consent Mode setup looked like in
 // the none run.
 type ConsentMode struct {
@@ -199,6 +207,7 @@ type Ignore struct {
 // result lists it.
 type Inconclusive struct {
 	Page   string  `json:"page"`
+	Site   string  `json:"site,omitempty"` // --sites name, "" otherwise
 	Run    RunKind `json:"run"`
 	Reason Reason  `json:"reason"`
 	Detail string  `json:"detail"`

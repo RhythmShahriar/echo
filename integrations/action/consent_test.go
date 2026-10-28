@@ -444,6 +444,51 @@ func TestConsentSignUpload(t *testing.T) {
 	contains(t, "summary", res.summary, `retention-days "365": want a number of days from 1 to 90`)
 }
 
+// TestConsentSummaryDisclosures: the footer names an unverified TLS
+// check, mapped hosts and a Chrome without its sandbox, as every other
+// output does (PRD 14.1, 14.4); an inconclusive run names its site.
+func TestConsentSummaryDisclosures(t *testing.T) {
+	needBash(t, "jq")
+	sh := filepath.Join(root(t), "integrations", "action", "summary.sh")
+	b, err := os.ReadFile(filepath.Join("testdata", "consent.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	notes := []string{"TLS not verified.", "Hosts mapped with --map-host.", "Chrome ran without its sandbox."}
+	for _, risky := range []bool{false, true} {
+		var env map[string]any
+		if err := json.Unmarshal(b, &env); err != nil {
+			t.Fatal(err)
+		}
+		data, _ := env["data"].(map[string]any)
+		data["tls_verified"], data["mapped"], data["sandbox"] = !risky, risky, !risky
+		data["inconclusive"] = []any{map[string]any{"page": "/", "site": "brew", "run": "withdraw", "reason": "no_button", "detail": "x"}}
+		out, err := json.Marshal(env)
+		if err != nil {
+			t.Fatal(err)
+		}
+		path := filepath.Join(t.TempDir(), "consent.json")
+		if err := os.WriteFile(path, out, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		got, errOut, code := script(t, sh, nil, "consent", path)
+		if code != 0 {
+			t.Fatalf("exit %d: %s", code, errOut)
+		}
+		for _, n := range notes {
+			if strings.Contains(got, n) != risky {
+				t.Errorf("risky %v: %q shown %v:\n%s", risky, n, !risky, got)
+			}
+		}
+		if risky && !strings.Contains(got, "Hits held in the browser. TLS not verified. Hosts mapped with --map-host. Chrome ran without its sandbox._") {
+			t.Errorf("footer:\n%s", got)
+		}
+		if !strings.Contains(got, "| brew / | Withdraw |") {
+			t.Errorf("inconclusive without its site:\n%s", got)
+		}
+	}
+}
+
 // TestConsentSummaryHeldFooter: the summary's last line says whether the
 // tracker hits were held, from data.held: a check run with --send-hits
 // must never tell a pull request that no hit was sent. The counts are

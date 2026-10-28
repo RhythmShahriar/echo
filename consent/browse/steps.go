@@ -175,6 +175,9 @@ func (a *attempt) banner(ctx context.Context) (consent.CMPInfo, error) {
 	a.run.AddVisit(at)
 	l, err := a.load(ctx, a.startURL)
 	if err != nil {
+		// The load started: keep it as a visit, so the signals it sent
+		// before the run ended belong to it, not to the first page.
+		a.out.Visits = append(a.out.Visits, consent.Visit{URL: a.mask(a.startURL), Step: "load", AtMS: at})
 		return info, err
 	}
 	a.snapshot(ctx)
@@ -422,6 +425,9 @@ func (a *attempt) visit(ctx context.Context, raw, step string, info consent.CMPI
 	a.run.AddVisit(at)
 	l, err := a.load(ctx, raw)
 	if err != nil {
+		// The load started: keep it as a visit, so the signals it sent
+		// before the run ended belong to it, not to the first page.
+		a.out.Visits = append(a.out.Visits, consent.Visit{URL: a.mask(raw), Step: step, AtMS: at})
 		return err
 	}
 	shown := raw

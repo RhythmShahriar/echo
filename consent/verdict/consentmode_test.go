@@ -121,6 +121,30 @@ func TestDefaultLate(t *testing.T) { // c05
 	}
 }
 
+// A run interrupted while it loaded its second page holds that page's
+// default but only one visit: the first page's default is still the
+// one read, so the check isn't late (g02, Ctrl-C after 7s).
+func TestDefaultOfAnInterruptedRun(t *testing.T) {
+	r := result(consent.Run{Kind: consent.RunNone, Reason: consent.ReasonCanceled, Status: consent.StatusCanceled,
+		Visits:  []consent.Visit{{Step: "load", AtMS: 0}},
+		Hits:    []consent.HitRef{ga4(5, 568, consent.PhaseBefore, "G100", &g100)},
+		Signals: []consent.Signal{defaultCmd(34, true), defaultCmd(4280, true)},
+	})
+	Evaluator{}.Evaluate(r, nil)
+	if keys := keysOf(r, v3Checks); len(keys) != 0 {
+		t.Errorf("an interrupted run's later default: %v", keys)
+	}
+	if cm := r.Pages[0].ConsentMode; cm == nil || cm.DefaultAtMS != 34 || !cm.DefaultBeforeFirstHit {
+		t.Errorf("consent mode %+v", cm)
+	}
+	// A run that finished keeps the last default of its one page.
+	r.Pages[0].Runs[0].Reason, r.Pages[0].Runs[0].Status = consent.ReasonNone, consent.StatusOK
+	Evaluator{}.Evaluate(r, nil)
+	if cm := r.Pages[0].ConsentMode; cm == nil || cm.DefaultAtMS != 4280 {
+		t.Errorf("finished run: %+v", cm)
+	}
+}
+
 // A later page of the run (--pages) sends the default again: the
 // page's default is the first visit's, never late because of it.
 func TestDefaultOfTheFirstVisit(t *testing.T) {

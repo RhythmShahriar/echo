@@ -463,6 +463,15 @@ var reasonWords = map[consent.Reason]string{
 	consent.ReasonCanceled:       "interrupted",
 }
 
+// runReasonWords is reasonWords for run: a withdraw run whose banner
+// couldn't be reopened says so rather than "no button found".
+func runReasonWords(run *consent.Run) string {
+	if run.ReopenFailed() {
+		return "the banner couldn't be reopened"
+	}
+	return reasonWords[run.Reason]
+}
+
 // issuePhrase is how a tracker check reads in a run line, after the
 // tracker names.
 func issuePhrase(is consent.Issue) string {
@@ -512,7 +521,7 @@ func (t *consentText) runSummary(pg *consent.Page, run *consent.Run) (int, strin
 		if run.Kind == consent.RunAccept || run.Kind == consent.RunReject || run.Kind == consent.RunWithdraw {
 			verb = "couldn't choose"
 		}
-		return markInconclusive, verb + ": " + cmp.Or(reasonWords[run.Reason], Safe(string(run.Reason)))
+		return markInconclusive, verb + ": " + cmp.Or(runReasonWords(run), Safe(string(run.Reason)))
 	}
 	mark := markNone
 	var parts []string
@@ -999,7 +1008,11 @@ func (t *consentText) inconclusive() {
 	}
 	hint := false
 	for _, in := range t.r.Inconclusive {
-		t.line("  %s %s  %s", mark, Safe(in.Page), Safe(in.Detail))
+		at := Safe(in.Page)
+		if in.Site != "" {
+			at = Safe(in.Site) + " " + at
+		}
+		t.line("  %s %s  %s", mark, at, Safe(in.Detail))
 		hint = hint || in.Reason == consent.ReasonNoBanner || in.Reason == consent.ReasonCMPNotFound
 	}
 	if hint {

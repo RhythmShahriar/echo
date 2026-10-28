@@ -236,8 +236,9 @@ func TestConsentMasksEverywhere(t *testing.T) {
 	bearer := fakeSecret("bearer")
 	cookie := fakeSecret("sess")
 	basic := base64.StdEncoding.EncodeToString([]byte("shop:" + password))
+	phone := "1555" + "7014" + "29"
 	secrets := map[string]string{"URL token": token, "basic-auth password": password, "basic-auth header": basic,
-		"bearer token": bearer, "cookie": cookie}
+		"bearer token": bearer, "cookie": cookie, "phone number": phone}
 	for _, id := range []string{"secret-url", "pii-beacons"} {
 		for _, c := range []struct {
 			broken bool
@@ -249,7 +250,9 @@ func TestConsentMasksEverywhere(t *testing.T) {
 					t.Fatal(err)
 				}
 				dir := t.TempDir()
-				target := "https://" + id + server.SiteSuffix + "/?token=" + url.QueryEscape(token) + "&email=buyer%40shop.test"
+				// The phone number comes with a '+' (as %2B): it reaches the
+				// beacons' dl and the HAR with its '+' read as a space.
+				target := "https://" + id + server.SiteSuffix + "/?token=" + url.QueryEscape(token) + "&email=buyer%40shop.test&phone=%2B" + phone
 				// A format flag that an -o of its format uses writes no
 				// stdout of its own, so the --json case has no -o .json.
 				jsonOut := []string{"-o", "result.json"}

@@ -448,8 +448,12 @@ func eventAnchor(page int, k consent.RunKind, seq int64) string {
 func (h *consentHTML) inconclusive() []chInconclusive {
 	var out []chInconclusive
 	for _, in := range h.r.Inconclusive {
-		ci := chInconclusive{Page: Safe(in.Page), Run: Safe(in.Run.Label()), Detail: Safe(in.Detail)}
-		if idx := h.pageIndex("", in.Page); idx >= 0 {
+		page := Safe(in.Page)
+		if in.Site != "" {
+			page = Safe(in.Site) + " " + page
+		}
+		ci := chInconclusive{Page: page, Run: Safe(in.Run.Label()), Detail: Safe(in.Detail)}
+		if idx := h.pageIndex(in.Site, in.Page); idx >= 0 {
 			ci.Anchor = runAnchor(idx, in.Run)
 		}
 		out = append(out, ci)
@@ -505,7 +509,7 @@ func (h *consentHTML) pages() []chPage {
 // cookie:cmplz_marketing`.
 func choiceWords(pg *consent.Page, run *consent.Run) string {
 	if run.Inconclusive() {
-		return "Couldn't choose: " + cmp.Or(reasonWords[run.Reason], Safe(string(run.Reason)))
+		return "Couldn't choose: " + cmp.Or(runReasonWords(run), Safe(string(run.Reason)))
 	}
 	c := run.Choice
 	if run.Kind == consent.RunWithdraw && run.Withdraw != nil {

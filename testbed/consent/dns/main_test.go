@@ -29,15 +29,18 @@ func TestEveryNameIsTheGate(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = pc.Close() })
-	l, err := net.Listen("tcp", pc.LocalAddr().String())
+	// Each protocol gets its own free port: the UDP port's number may be
+	// taken on TCP.
+	l, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = l.Close() })
 	go serveUDP(pc, ip)
 	go serveTCP(l, ip)
+	addrs := map[string]string{"udp": pc.LocalAddr().String(), "tcp": l.Addr().String()}
 	for _, network := range []string{"udp", "tcp"} {
-		r := resolver(network, pc.LocalAddr().String())
+		r := resolver(network, addrs[network])
 		for _, name := range []string{"example.com", "www.google-analytics.com", "c01.shop.test", "metadata.google.internal"} {
 			addrs, err := r.LookupHost(t.Context(), name)
 			if err != nil || len(addrs) != 1 || addrs[0] != "10.254.250.10" {

@@ -452,7 +452,7 @@ func phaseLabel(p consent.Phase) string {
 // this machine.
 func showTip(w io.Writer, r *consent.Result, st *setup, o *options) {
 	fits := map[string]bool{
-		"echo-consent-tip-reject": anyRun(r, func(run consent.Run) bool { return run.Reason == consent.ReasonNoButton }),
+		"echo-consent-tip-reject": anyRun(r, func(run consent.Run) bool { return run.Reason == consent.ReasonNoButton && !run.ReopenFailed() }),
 		"echo-consent-tip-geo": anyRun(r, func(run consent.Run) bool { return run.Reason == consent.ReasonNoBanner }) ||
 			slices.ContainsFunc(r.Issues, func(is consent.Issue) bool { return is.Check == consent.CheckNoBanner }),
 		"echo-consent-tip-gpc": !slices.ContainsFunc(st.plans, func(p *consent.Plan) bool { return slices.Contains(p.Runs, consent.RunGPC) }) &&

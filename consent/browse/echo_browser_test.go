@@ -214,7 +214,7 @@ func TestEchoDownIsANote(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := "Echo at " + down + " didn't answer; server-side tracking wasn't checked"
+	want := "Echo at " + down + " didn't answer; server-side tracking wasn't checked."
 	if !slices.Equal(res.Notes, []string{want, NoteMappedHTTP}) {
 		t.Errorf("notes %q; want %q", res.Notes, want)
 	}

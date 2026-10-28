@@ -8,10 +8,12 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"time"
 	"unicode"
 
 	"github.com/RhythmShahriar/echo/consent"
 	"github.com/RhythmShahriar/echo/consent/consenttest"
+	consentverdict "github.com/RhythmShahriar/echo/consent/verdict"
 	"github.com/RhythmShahriar/echo/model"
 )
 
@@ -375,5 +377,53 @@ func TestConsentIssuePathDropsQuery(t *testing.T) {
 	h := &consentHTML{t: ct, r: r}
 	if h.pageIndex("", "/shop/") != 0 || h.pageIndex("", "/shop/?utm_source=mail") != -1 {
 		t.Error("pageIndex doesn't match on the path alone")
+	}
+}
+
+// With --sites an inconclusive run names its site as issues do. A
+// withdraw run whose banner couldn't be reopened says so, not "no
+// button found" with a --reject-selector hint.
+func TestInconclusiveSiteAndReopen(t *testing.T) {
+	r := consenttest.GoldenResult("clean")
+	r.Pages[0].Site = "brew"
+	r.Pages[0].Runs = append(r.Pages[0].Runs, consent.Run{Kind: consent.RunWithdraw, Status: consent.StatusNoButton,
+		Reason: consent.ReasonNoButton, Choice: &consent.Choice{How: "button", Verified: true},
+		Detail: "consent: Cookiebot has no way to reopen the banner without its API; --click button,api allows it"})
+	p := consenttest.NewPlan(t, r.Pages[0].URL)
+	consentverdict.Evaluator{NowFunc: func() time.Time { return consentNow }}.Evaluate(r, p)
+	if len(r.Inconclusive) != 1 || r.Inconclusive[0].Site != "brew" {
+		t.Fatalf("inconclusive %+v", r.Inconclusive)
+	}
+	text := consentTextOf(t, r, ConsentTextOptions{Plain: true})
+	if !strings.Contains(text, "INCONCLUSIVE brew /  Withdraw: Accept worked but the banner couldn't be reopened to withdraw: Cookiebot has no way") ||
+		strings.Contains(text, "--reject-selector") {
+		t.Errorf("text:\n%s", text)
+	}
+	md := consentMDOf(t, r, ConsentMarkdownOptions{})
+	if !strings.Contains(md, "| brew / | Withdraw | the banner couldn't be reopened |") {
+		t.Errorf("markdown:\n%s", md)
+	}
+}
+
+// verify -q prints only what failed, the signature and the verdict.
+func TestConsentVerifyQuiet(t *testing.T) {
+	h := strings.Repeat("ab", 32)
+	v := &ConsentVerify{Files: []VerifyFile{
+		{Path: "consent.json", OK: true, Want: h, Got: h},
+		{Path: "report.html", Want: h, Got: strings.Repeat("cd", 32)},
+	}}
+	var full, quiet bytes.Buffer
+	if err := WriteConsentVerify(&full, v, false, ConsentTextOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := WriteConsentVerify(&quiet, v, false, ConsentTextOptions{Quiet: true}); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(full.String(), "ok  consent.json") {
+		t.Errorf("full:\n%s", full.String())
+	}
+	want := "changed  report.html  want abababab... got cdcdcdcd...\nSignature: none\nNot verified: 1 changed; 1 file match.\n"
+	if quiet.String() != want {
+		t.Errorf("quiet:\n%s\nwant\n%s", quiet.String(), want)
 	}
 }

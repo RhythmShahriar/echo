@@ -189,6 +189,18 @@ func TestConsentVerifyRewrittenManifest(t *testing.T) {
 	if bad := failed(v); len(bad) != 1 || bad[0] != "evidence/page-1/reject-banner.png" {
 		t.Errorf("mismatched: %v", bad)
 	}
+	// One entry per file, the failed check winning, so the counts add
+	// up to the files in the folder.
+	seen := map[string]bool{}
+	for _, f := range v.Files {
+		if seen[f.Path] {
+			t.Errorf("%s listed twice: %+v", f.Path, v.Files)
+		}
+		seen[f.Path] = true
+	}
+	if len(v.Files) != 4 {
+		t.Errorf("%d entries: %+v", len(v.Files), v.Files)
+	}
 }
 
 // A missing file has no hash; a folder without a manifest or with one

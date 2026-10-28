@@ -86,14 +86,30 @@ func Verify(dir, pubKeyPath string) (*report.ConsentVerify, error) {
 		return h
 	}
 	listed := map[string]string{}
+	at := map[string]int{} // path: its entry in v.Files
+	// add checks rel against want: one entry per path, where a failed
+	// check replaces a passed one (the manifest and consent.json can
+	// hold different hashes for a file; either not matching is a change).
+	add := func(rel, want string) {
+		g := hash(rel)
+		f := report.VerifyFile{Path: rel, OK: g != "" && g == want, Want: want, Got: g}
+		if i, ok := at[rel]; ok {
+			if v.Files[i].OK && !f.OK {
+				v.Files[i] = f
+			}
+			return
+		}
+		at[rel] = len(v.Files)
+		v.Files = append(v.Files, f)
+	}
 	for _, f := range m.Files {
 		listed[f.Path] = f.SHA256
-		g := hash(f.Path)
-		v.Files = append(v.Files, report.VerifyFile{Path: f.Path, OK: g != "" && g == f.SHA256, Want: f.SHA256, Got: g})
+		add(f.Path, f.SHA256)
 	}
 	if _, ok := listed[ResultFile]; !ok {
 		// A manifest without consent.json covers none of the evidence of
 		// record: consent.json is checked anyway, against nothing.
+		at[ResultFile] = len(v.Files)
 		v.Files = append(v.Files, report.VerifyFile{Path: ResultFile, Want: "", Got: hash(ResultFile)})
 	}
 	data, readErr := readCapped(filepath.Join(dir, ResultFile), maxManifest*4)
@@ -107,8 +123,7 @@ func Verify(dir, pubKeyPath string) (*report.ConsentVerify, error) {
 				if want, ok := listed[f.Path]; ok && want == f.SHA256 {
 					continue // checked above with the same hash
 				}
-				g := hash(f.Path)
-				v.Files = append(v.Files, report.VerifyFile{Path: f.Path, OK: g != "" && g == f.SHA256, Want: f.SHA256, Got: g})
+				add(f.Path, f.SHA256)
 			}
 		}
 	}

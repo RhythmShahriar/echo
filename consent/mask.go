@@ -135,7 +135,9 @@ var nestedParams = map[string]bool{"dl": true, "dr": true, "dt": true, "ref": tr
 var (
 	hex64 = regexp.MustCompile(`(?i)\b[0-9a-f]{64}\b`)
 	email = regexp.MustCompile(`[A-Za-z0-9._%+-]+@([A-Za-z0-9-]+\.[A-Za-z0-9.-]+)`)
-	phone = regexp.MustCompile(`^\+[0-9][0-9 ().-]{6,20}$`)
+	// A phone number starts with '+'; a '+' a query decodes as a space
+	// counts too, so "phone=+4917..." is masked like "phone=%2B4917...".
+	phone = regexp.MustCompile(`^[+ ][0-9][0-9 ().-]{6,20}$`)
 )
 
 // maxNesting bounds how deep MaskURL follows URLs inside parameters.
@@ -232,7 +234,7 @@ func maskQuery(q string, showIDs bool, depth int, ids map[string]bool) string {
 			}
 		case nestedParams[lk] && depth < maxNesting:
 			inner := unescapeAll(val)
-			if strings.HasPrefix(strings.ToLower(inner), "http://") || strings.HasPrefix(strings.ToLower(inner), "https://") {
+			if isHTTP(inner) {
 				pairs[i] = k + "=" + url.QueryEscape(maskURL(inner, showIDs, depth+1))
 			} else {
 				pairs[i] = k + "=" + url.QueryEscape(maskValue(mask.Text(inner)))
@@ -240,6 +242,8 @@ func maskQuery(q string, showIDs bool, depth int, ids map[string]bool) string {
 		default:
 			if m := maskValue(val); m != val {
 				pairs[i] = k + "=" + url.QueryEscape(m)
+			} else if raw, err := url.PathUnescape(v); err == nil && phone.MatchString(raw) {
+				pairs[i] = k + "=" + url.QueryEscape(maskValue(raw))
 			}
 		}
 	}
@@ -247,9 +251,14 @@ func maskQuery(q string, showIDs bool, depth int, ids map[string]bool) string {
 }
 
 // unescapeAll decodes a value encoded more than once, as a page URL
-// inside a beacon inside another beacon is.
+// inside a beacon inside another beacon is. It stops at the first level
+// that reads as a URL, so the URL's own query keeps its encoding (a
+// %2B stays a '+' rather than turning into a space).
 func unescapeAll(s string) string {
 	for range maxNesting {
+		if isHTTP(s) {
+			break
+		}
 		d, err := url.QueryUnescape(s)
 		if err != nil || d == s {
 			break
@@ -257,6 +266,12 @@ func unescapeAll(s string) string {
 		s = d
 	}
 	return s
+}
+
+// isHTTP reports whether s starts with http:// or https:// in any case.
+func isHTTP(s string) bool {
+	l := strings.ToLower(s)
+	return strings.HasPrefix(l, "http://") || strings.HasPrefix(l, "https://")
 }
 
 // maskValue masks personal data in one value by its shape: 64-hex

@@ -83,6 +83,36 @@ func TestMaskURLNested(t *testing.T) {
 	}
 }
 
+// A phone number is masked however it arrives: %2B-encoded, with a
+// literal '+' (which a query reads as a space) or nested in a beacon's
+// page URL once or twice.
+func TestMaskURLPhone(t *testing.T) {
+	num := "4917" + "012345678"
+	page := "https://shop.test/?phone=%2B" + num
+	literal := "https://shop.test/?phone=+" + num
+	for _, raw := range []string{
+		"https://shop.test/?phone=%2B" + num,
+		"https://shop.test/?phone=+" + num,
+		"https://shop.test/?phone=%20" + num,
+		"https://region1.google-analytics.com/g/collect?v=2&dl=" + url.QueryEscape(page),
+		"https://region1.google-analytics.com/g/collect?v=2&dl=" + url.QueryEscape(url.QueryEscape(page)),
+		"https://region1.google-analytics.com/g/collect?v=2&dl=" + url.QueryEscape(literal),
+		"https://region1.google-analytics.com/g/collect?v=2&page_location=" + url.QueryEscape(url.QueryEscape(literal)),
+	} {
+		got := consent.MaskURL(raw, false)
+		if strings.Contains(got, num) || strings.Contains(got, num[4:]) {
+			t.Errorf("phone kept:\n in %s\nout %s", raw, got)
+		}
+		if !strings.Contains(got, "phone") {
+			t.Errorf("the phone param went missing: %s", got)
+		}
+	}
+	// Numbers that aren't phone shaped stay.
+	if got := consent.MaskURL("https://shop.test/?page=+2&qty=12", false); got != "https://shop.test/?page=+2&qty=12" {
+		t.Errorf("short numbers masked: %s", got)
+	}
+}
+
 func TestMaskURLShowIDs(t *testing.T) {
 	raw := "https://region1.google-analytics.com/g/collect?tid=G-AB12CD7Q2X&cid=1234.5678&uid=user-991&em=x&token=" + fakeToken
 	got := consent.MaskURL(raw, true)

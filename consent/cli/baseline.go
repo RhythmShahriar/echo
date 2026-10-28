@@ -101,6 +101,44 @@ func readResult(what, path string) (*consent.Result, error) {
 	return &r, nil
 }
 
+// loadAgainstBefore is loadAgainst for consent report showing the
+// result in dir: last is the newest result older than that one, never
+// the result itself, so a re-read compares with what came before it.
+func loadAgainstBefore(st store.Store, against, dir string) (*consent.Result, error) {
+	if against != lastWord {
+		return loadAgainst(st, against)
+	}
+	prev, err := previousResult(st, dir)
+	if err != nil {
+		return nil, err
+	}
+	if prev == "" {
+		return nil, usagef("--against last: no consent result older than %s in %s; pass an earlier result folder or a baseline name",
+			filepath.Base(dir), shown(filepath.Join(st.Root, store.Consent)))
+	}
+	return readResult(against, filepath.Join(prev, evidence.ResultFile))
+}
+
+// previousResult is the newest result folder in the store whose name
+// sorts before dir's (names start with their time) and that isn't dir
+// itself, or "" when there is none.
+func previousResult(st store.Store, dir string) (string, error) {
+	dirs, err := resultDirs(st)
+	if err != nil {
+		return "", err
+	}
+	self, _ := filepath.Abs(dir)
+	base := filepath.Base(dir)
+	for i := len(dirs) - 1; i >= 0; i-- {
+		d := dirs[i]
+		if abs, _ := filepath.Abs(d); abs == self || filepath.Base(d) >= base {
+			continue
+		}
+		return d, nil
+	}
+	return "", nil
+}
+
 // latestResult is the newest result folder in the store that holds a
 // consent.json (folder names start with their time, so the newest
 // sorts last), or "" when there is none.

@@ -98,7 +98,7 @@ func TestInitConsentAppends(t *testing.T) {
 		t.Errorf("the config doesn't load after init --consent: %v", err)
 	}
 	code, _, errOut = runCLI(t, "init", "--consent")
-	if code != exitUsage || errOut != "rhythm echo: .echo/config.yaml already has consent:\n" {
+	if code != exitUsage || errOut != "rhythm echo: .echo/config.yaml already has a consent: block; pass --force to replace only that block\n" {
 		t.Errorf("a second init --consent: %d %q", code, errOut)
 	}
 	if after, _ := os.ReadFile(config.Path()); string(after) != string(data) {

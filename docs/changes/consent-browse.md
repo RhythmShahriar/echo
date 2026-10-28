@@ -395,7 +395,7 @@ with the exact texts.
 - Each call to Echo waits at most 5 s. When Echo doesn't answer (or
   answers with an error) the result gets the note
   `Echo at <masked url> didn't answer; server-side tracking wasn't
-  checked` once, Echo isn't asked again in that command, no run sends
+  checked.` once, Echo isn't asked again in that command, no run sends
   `X-Echo-Run` after that and the runs go on.
 - A canceled run ends its action and asks for no messages.
 

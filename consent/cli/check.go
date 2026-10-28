@@ -163,7 +163,11 @@ func (c *cmd) prepare(pos []string) (*setup, error) {
 	}
 	st.warn = sec.warn
 	if n := st.pages(); n > consent.DefaultLimits.TotalPages {
-		return nil, usagef("%d pages is more than %d for one check; split the sites file", n, consent.DefaultLimits.TotalPages)
+		split := "split the pages over several checks"
+		if o.sites != "" {
+			split = "split the sites file"
+		}
+		return nil, usagef("%d pages is more than %d for one check; %s", n, consent.DefaultLimits.TotalPages, split)
 	}
 	for _, p := range st.plans {
 		if err := st.check(p); err != nil {

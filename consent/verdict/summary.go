@@ -131,9 +131,29 @@ func (j *judge) consentModeSummary(pg *consent.Page) *consent.ConsentMode {
 // replace an earlier page's: Google's "the last default wins" holds
 // within one page, so taking it across visits would put the default
 // seconds after the first Google hit.
+//
+// A run interrupted while it loaded a second page may hold that page's
+// signals without its visit: with one visit, a canceled run takes the
+// earliest default and what came with it, so a later load's default
+// isn't read as the first page's, seconds late.
 func pageDefault(run *consent.Run, region string) (map[string]consent.Value, int64, bool) {
 	if len(run.Visits) < 2 {
-		return consent.EffectiveDefault(run.Signals, region)
+		if run.Reason != consent.ReasonCanceled {
+			return consent.EffectiveDefault(run.Signals, region)
+		}
+		first := int64(math.MaxInt64)
+		for i := range run.Signals {
+			if s := &run.Signals[i]; consentModeCommand(s, "default") && s.AtMS < first {
+				first = s.AtMS
+			}
+		}
+		var sigs []consent.Signal
+		for _, s := range run.Signals {
+			if s.AtMS <= first {
+				sigs = append(sigs, s)
+			}
+		}
+		return consent.EffectiveDefault(sigs, region)
 	}
 	for i, v := range run.Visits {
 		end := int64(math.MaxInt64)

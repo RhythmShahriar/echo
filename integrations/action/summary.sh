@@ -193,9 +193,12 @@ def uniq: reduce .[] as $x ([]; if any(.[]; . == $x) then . else . + [$x] end);
    else empty end),
   (if ($d.inconclusive // []) | length > 0 then
      "### Couldn\u0027t check (\($d.inconclusive | length))\n\n| Page | Run | Why |\n|---|---|---|",
-     ($d.inconclusive[] | "| \(.page | path | md) | \(.run | runname | md) | \(.reason | md) |"), ""
+     ($d.inconclusive[] | "| \(if (.site // "") != "" then "\(.site | md) " else "" end)\(.page | path | md) | \(.run | runname | md) | \(.reason | md) |"), ""
    else empty end),
-  "_Evidence, not legal advice. \(if $d.held == false then "Tracker hits were sent for real (--send-hits)." else "Hits held in the browser." end)_\n"
+  "_Evidence, not legal advice. \(if $d.held == false then "Tracker hits were sent for real (--send-hits)." else "Hits held in the browser." end)\(
+     if $d.tls_verified == false then " TLS not verified." else "" end)\(
+     if $d.mapped == true then " Hosts mapped with --map-host." else "" end)\(
+     if $d.sandbox == false then " Chrome ran without its sandbox." else "" end)_\n"
 '
 
 # shellcheck disable=SC2016 # Markdown backticks, not shell

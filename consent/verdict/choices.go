@@ -34,7 +34,7 @@ func (j *judge) choices(pg *consent.Page) {
 		run := &pg.Runs[i]
 		if run.Inconclusive() {
 			j.r.Inconclusive = append(j.r.Inconclusive, consent.Inconclusive{
-				Page: j.pageName(pg), Run: run.Kind, Reason: run.Reason, Detail: j.inconclusiveDetail(pg, run),
+				Page: j.pageName(pg), Site: pg.Site, Run: run.Kind, Reason: run.Reason, Detail: j.inconclusiveDetail(pg, run),
 			})
 		}
 	}
@@ -382,6 +382,14 @@ func (j *judge) noButtonDetail(pg *consent.Page, k consent.RunKind, label, word 
 	return s
 }
 
+// reopenDetail is the message of a withdraw run whose banner couldn't
+// be reopened after Accept: the reopen error (with its --click
+// button,api hint when it has one), not the missing-button text.
+func reopenDetail(label, detail string) string {
+	why := strings.TrimPrefix(consent.SafeText(detail, 300), "consent: ")
+	return fmt.Sprintf("%s: Accept worked but the banner couldn't be reopened to withdraw: %s", label, why)
+}
+
 // genericRule is the id of the CMP rule that finds banners by their
 // button words.
 const genericRule = "generic"
@@ -418,6 +426,9 @@ func (j *judge) inconclusiveDetail(pg *consent.Page, run *consent.Run) string {
 	}
 	switch run.Reason {
 	case consent.ReasonNoButton:
+		if run.ReopenFailed() {
+			return reopenDetail(label, run.Detail)
+		}
 		return j.noButtonDetail(pg, run.Kind, label, word)
 	case consent.ReasonClickMissed:
 		return fmt.Sprintf("%s: clicked %s %s and the banner stayed. Something may cover it (a chat bubble, a newsletter popup); "+

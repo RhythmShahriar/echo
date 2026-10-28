@@ -119,7 +119,8 @@ func TestConsentMasksUserData(t *testing.T) {
 	phone := "49170" + "7654321"
 	ext := "cust-" + "4471"
 	city := "ham" + "burg"
-	secrets := []string{email, plain, phone, ext, city}
+	mobile := "1555" + "0100"
+	secrets := []string{email, plain, phone, ext, city, mobile}
 	meta := url.Values{}
 	meta.Set("id", "1234567890")
 	meta.Set("ev", "Lead")
@@ -137,6 +138,14 @@ func TestConsentMasksUserData(t *testing.T) {
 	ga.Set("dl", "https://shop.test/thanks?em="+plain+"&ph="+phone)
 	ga.Set("dr", "https://mail.example.test/?to="+plain)
 	ga.Set("ep.email", plain)
+	// The page URL encoded twice, then one with a literal '+'.
+	ga.Set("page_location", url.QueryEscape("https://shop.test/?phone=%2B"+mobile))
+	ga.Set("dt", "x")
+	pii := url.Values{}
+	pii.Set("v", "2")
+	pii.Set("tid", "G-TESTBED001")
+	pii.Set("en", "page_view")
+	pii.Set("dl", "https://shop.test/?email="+url.QueryEscape(plain)+"&phone=+"+mobile)
 	for _, c := range []struct {
 		name, url, body string
 		personal        string
@@ -145,6 +154,8 @@ func TestConsentMasksUserData(t *testing.T) {
 		{"meta POST", "https://www.facebook.com/tr/", meta.Encode(), "ud[em],ud[ph],ud[ct],external_id"},
 		{"ga4 GET", "https://www.google-analytics.com/g/collect?" + ga.Encode(), "", ""},
 		{"ga4 batch", "https://www.google-analytics.com/g/collect?v=2&tid=G-TESTBED001", ga.Encode() + "\n" + ga.Encode(), ""},
+		{"ga4 literal plus", "https://www.google-analytics.com/g/collect?" + pii.Encode(), "", ""},
+		{"ga4 raw plus", "https://www.google-analytics.com/g/collect?v=2&tid=G-TESTBED001&en=page_view&ep.phone=+" + mobile, "", ""},
 	} {
 		method := "GET"
 		if c.body != "" {

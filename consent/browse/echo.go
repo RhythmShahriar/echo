@@ -76,7 +76,7 @@ func (c *check) echoBegin(ctx context.Context, page int, kind consent.RunKind) (
 // echoDown notes once that Echo didn't answer; Echo isn't asked again.
 func (c *check) echoDown() {
 	if c.echo.down.CompareAndSwap(false, true) {
-		c.note("Echo at " + c.echo.url + " didn't answer; server-side tracking wasn't checked")
+		c.note("Echo at " + c.echo.url + " didn't answer; server-side tracking wasn't checked.")
 	}
 }
 

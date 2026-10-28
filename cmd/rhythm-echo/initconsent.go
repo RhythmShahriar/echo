@@ -209,7 +209,7 @@ func cmdInitConsent(force bool, stdout, stderr io.Writer) int {
 	appended, replaced, err := initConsent(path, force)
 	switch {
 	case errors.Is(err, errHasConsent):
-		fmt.Fprintf(stderr, "rhythm echo: %s already has consent:\n", path)
+		fmt.Fprintf(stderr, "rhythm echo: %s already has a consent: block; pass --force to replace only that block\n", path)
 		return exitUsage
 	case err != nil:
 		fmt.Fprintln(stderr, "rhythm echo:", err)
