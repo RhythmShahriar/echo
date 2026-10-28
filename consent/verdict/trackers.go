@@ -85,38 +85,45 @@ func (gs *groups) get(check, tracker string, b bucket) *group {
 }
 
 // markExempt makes every hit, cookie and storage key of an --exempt
-// tracker exempt, so the checks, the summary and the reports agree.
+// tracker exempt, so the checks, the summary and the reports agree. A
+// result judged again under a plan without that --exempt gets the
+// catalog's need back, so dropping the flag brings the issues back;
+// judged without a plan (nil), the stored needs stay as they are.
 func (j *judge) markExempt() {
-	if len(j.exempt) == 0 {
+	if len(j.exempt) == 0 && j.p == nil {
 		return
+	}
+	fix := func(id string, n *consent.ConsentNeed) {
+		switch {
+		case j.exempt[id]:
+			*n = consent.NeedExempt
+		case *n == consent.NeedExempt && j.p != nil:
+			if t, ok := j.info[id]; ok && t.Need != "" {
+				*n = t.Need
+			}
+		}
 	}
 	for i := range j.r.Pages {
 		for k := range j.r.Pages[i].Runs {
 			run := &j.r.Pages[i].Runs[k]
 			for n := range run.Hits {
-				if j.exempt[run.Hits[n].Tracker] {
-					run.Hits[n].Need = consent.NeedExempt
-				}
+				fix(run.Hits[n].Tracker, &run.Hits[n].Need)
 			}
 			for n := range run.Cookies {
-				if j.exempt[run.Cookies[n].Tracker] {
-					run.Cookies[n].Need = consent.NeedExempt
-				}
+				fix(run.Cookies[n].Tracker, &run.Cookies[n].Need)
 			}
 			for n := range run.Storage {
-				if j.exempt[run.Storage[n].Tracker] {
-					run.Storage[n].Need = consent.NeedExempt
-				}
+				fix(run.Storage[n].Tracker, &run.Storage[n].Need)
 			}
 			for n := range run.Events {
 				ev := &run.Events[n]
 				switch {
-				case ev.Hit != nil && j.exempt[ev.Hit.Tracker]:
-					ev.Hit.Need = consent.NeedExempt
-				case ev.Cookie != nil && j.exempt[ev.Cookie.Tracker]:
-					ev.Cookie.Need = consent.NeedExempt
-				case ev.Storage != nil && j.exempt[ev.Storage.Tracker]:
-					ev.Storage.Need = consent.NeedExempt
+				case ev.Hit != nil:
+					fix(ev.Hit.Tracker, &ev.Hit.Need)
+				case ev.Cookie != nil:
+					fix(ev.Cookie.Tracker, &ev.Cookie.Need)
+				case ev.Storage != nil:
+					fix(ev.Storage.Tracker, &ev.Storage.Need)
 				}
 			}
 		}

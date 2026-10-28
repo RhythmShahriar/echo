@@ -12,7 +12,7 @@ result. Exact texts are in backticks.
 
 ## V2 Tracker checks
 
-- What counts: request and frame hits, tracker cookies the browser stored and tracker storage keys whose tracker needs consent. `--exempt` trackers (and `consent.exempt`) count as exempt and their entries get `need: exempt` in the result. In the none run everything counts as before the choice; in the accept run only the before phase counts; reject adds after-reject, withdraw adds after-withdraw; the gpc run is read only for `consent/gpc-ignored`.
+- What counts: request and frame hits, tracker cookies the browser stored and tracker storage keys whose tracker needs consent. `--exempt` trackers (and `consent.exempt`) count as exempt and their entries get `need: exempt` in the result. A stored result judged again under a plan without that `--exempt` gets the catalog's need back on those entries (judged with no plan, the stored needs stay). In the none run everything counts as before the choice; in the accept run only the before phase counts; reject adds after-reject, withdraw adds after-withdraw; the gpc run is read only for `consent/gpc-ignored`.
 - One issue per check, page, run and tracker. `evidence` lists the event numbers of the hits, cookies, storage keys and scripts behind it, at most 50; past that the detail ends with `; 50 of <n> events listed`.
 - Titles:
   - `consent/before-choice`: `<Name> fired before the visitor chose`
