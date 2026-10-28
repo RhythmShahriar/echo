@@ -276,9 +276,10 @@ func TestConsentMasksEverywhere(t *testing.T) {
 		}
 	}
 	// The IDs the catalog names keep only their last 4 characters in
-	// every output too: TikTok's sdkid (c08) and the Google Ads
-	// conversion ID in the viewthroughconversion path (c01).
-	ids := map[string]string{"TikTok sdkid": "TESTBEDTT0001", "Google Ads conversion ID": "100000001"}
+	// every output too: TikTok's sdkid (c08), the Google Ads conversion
+	// ID in the viewthroughconversion path and the GA4 measurement ID in
+	// the _ga_<id> cookie name (c01).
+	ids := map[string]string{"TikTok sdkid": "TESTBEDTT0001", "Google Ads conversion ID": "100000001", "GA4 cookie name": "_ga_TESTBED001"}
 	for _, id := range []string{"c08", "c01"} {
 		t.Run(id+" catalog IDs", func(t *testing.T) {
 			if err := b.srv.SetBroken(id, true); err != nil {

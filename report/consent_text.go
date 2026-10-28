@@ -138,18 +138,36 @@ func (t *consentText) paint(c lipgloss.Color, s string) string {
 	return lipgloss.NewStyle().Foreground(c).Render(s)
 }
 
+// consentTarget names what a check covered: the page URL, the first
+// one with the count when there are several ("https://shop.test/ (3
+// pages)"), or with --sites the count of sites ("2 sites (5 pages)").
+// It is "" for a result with no page.
+func consentTarget(r *consent.Result) string {
+	if len(r.Pages) == 0 {
+		return ""
+	}
+	var sites []string
+	for _, pg := range r.Pages {
+		if pg.Site != "" && !slices.Contains(sites, pg.Site) {
+			sites = append(sites, pg.Site)
+		}
+	}
+	if len(sites) > 1 {
+		return fmt.Sprintf("%d sites (%d pages)", len(sites), len(r.Pages))
+	}
+	what := Safe(r.Pages[0].URL)
+	if len(r.Pages) > 1 {
+		what += fmt.Sprintf(" (%d pages)", len(r.Pages))
+	}
+	return what
+}
+
 // header writes the first lines: what was checked, the browser on a
 // first run, whether hits were held and the notes that change what the
 // result means.
 func (t *consentText) header() {
 	r := t.r
-	what := "consent check of "
-	if len(r.Pages) > 0 {
-		what += Safe(r.Pages[0].URL)
-	}
-	if len(r.Pages) > 1 {
-		what += fmt.Sprintf(" (%d pages)", len(r.Pages))
-	}
+	what := "consent check of " + consentTarget(r)
 	if c := r.Comparison; c != nil {
 		what += " against " + Safe(cmp.Or(c.Against, "a baseline"))
 		if !c.BaseAt.IsZero() {
@@ -405,7 +423,7 @@ func twoDecimals(ms int64) string {
 
 // runIssues are the counted issues of one run of pg.
 func (t *consentText) runIssues(pg *consent.Page, run *consent.Run) []consent.Issue {
-	path := consentIssuePath(pg.URL)
+	path := consent.PageName(t.r, pg)
 	var out []consent.Issue
 	for _, is := range t.r.Issues {
 		if is.Ignored == nil && is.Run == run.Kind && is.Page == path && is.Site == pg.Site {
@@ -416,7 +434,7 @@ func (t *consentText) runIssues(pg *consent.Page, run *consent.Run) []consent.Is
 }
 
 // consentPagePath is the path (and query) of a page URL, the way the
-// reports show pages; consentIssuePath is the form issues name them by.
+// reports show pages; consent.PageName is the form issues name them by.
 func consentPagePath(raw string) string {
 	u, err := url.Parse(raw)
 	if err != nil || u.Host == "" {
@@ -429,13 +447,6 @@ func consentPagePath(raw string) string {
 	if u.RawQuery != "" {
 		p += "?" + u.RawQuery
 	}
-	return p
-}
-
-// consentIssuePath is the path of a page URL without its query, the
-// way issues and inconclusive runs name pages.
-func consentIssuePath(raw string) string {
-	p, _, _ := strings.Cut(consentPagePath(raw), "?")
 	return p
 }
 
@@ -931,7 +942,11 @@ func (t *consentText) changes() {
 			g = &group{class: c.Class, title: c.Title, key: c.Key, before: c.Before, after: c.After, accepted: c.Accepted}
 			groups = append(groups, g)
 		}
-		if p := Safe(c.Page); p != "" && !slices.Contains(g.pages, p) {
+		p := Safe(c.Page)
+		if c.Site != "" && p != "" {
+			p = Safe(c.Site) + " " + p
+		}
+		if p != "" && !slices.Contains(g.pages, p) {
 			g.pages = append(g.pages, p)
 		}
 		if c.Run != "" && !strings.HasPrefix(c.Key, "tracker|") && !slices.Contains(g.runs, c.Run.Label()) {
@@ -945,7 +960,7 @@ func (t *consentText) changes() {
 			where += " (" + strings.Join(g.runs, ", ") + ")"
 		}
 		title := Safe(g.title)
-		if g.class == consent.ClassChanged && (g.before != "" || g.after != "") {
+		if g.class == consent.ClassChanged && showBeforeAfter(g.key, g.before, g.after) {
 			title += ": was " + Safe(g.before) + ", now " + Safe(g.after)
 		}
 		if g.accepted {
@@ -959,6 +974,16 @@ func (t *consentText) changes() {
 			}
 		}
 	}
+}
+
+// showBeforeAfter reports whether a changed line adds "was x, now y":
+// not when there are no values, nor for a CMP change, whose title
+// already names both CMPs.
+func showBeforeAfter(key, before, after string) bool {
+	if strings.HasPrefix(key, "cmp|") {
+		return false
+	}
+	return before != "" || after != ""
 }
 
 // inconclusive writes the runs that couldn't choose, with the hints for

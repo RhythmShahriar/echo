@@ -321,7 +321,9 @@ with the exact texts.
 - Result fields filled by browse: `started`, `duration_ms`, `echo`
   (Plan.Version), `browser`, `user_agent` (desktop or mobile as
   `--viewport`, without a run's GPC), `os` (`linux/amd64`), `sandbox`,
-  `tls_verified` (not `-k`), `held`, `mapped`, `geo`, `locale`,
+  `tls_verified` (not `-k`; also false when `--map-host` answers an
+  https page from a plain http address, with the note `--map-host
+  answered https pages over plain http, so TLS wasn't checked.`), `held`, `mapped`, `geo`, `locale`,
   `timezone` (as resolved), `viewport` (`desktop` when empty),
   `catalog`, `cmp_rules`, `network` (`requests` and `held` summed over
   every attempt; `refused` and `browser_internal` from the guards) and

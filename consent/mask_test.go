@@ -164,3 +164,21 @@ func TestMaskURLCatalogIDs(t *testing.T) {
 		t.Errorf("an ignored rule masked: %s", got)
 	}
 }
+
+func TestMaskCookieNames(t *testing.T) {
+	id := "TESTBED" + "001"
+	for in, want := range map[string]string{
+		"_ga_" + id:                         "_ga_••••D001",
+		"_ga":                               "_ga",
+		"_gac_x":                            "_gac_x",
+		"_ga_" + id + "=GS1.1; _ga=GA1.1.1": "_ga_••••D001=GS1.1; _ga=GA1.1.1",
+		"_ga_••••D001":                      "_ga_••••D001",
+	} {
+		if got := consent.MaskCookieNames(in, false); got != want {
+			t.Errorf("MaskCookieNames(%q) = %q, want %q", in, got, want)
+		}
+	}
+	if got := consent.MaskCookieNames("_ga_"+id, true); got != "_ga_"+id {
+		t.Errorf("--show-ids: %q", got)
+	}
+}

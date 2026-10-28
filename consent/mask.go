@@ -316,3 +316,29 @@ func SafeText(s string, max int) string {
 func bidiControl(r rune) bool {
 	return (r >= 0x202a && r <= 0x202e) || (r >= 0x2066 && r <= 0x2069) || r == 0x200e || r == 0x200f || r == 0x061c
 }
+
+// escapedMask is the mask bullets as URL encoding writes them.
+var escapedMask = url.PathEscape("•")
+
+// ShownPath is a URL's escaped path for output, with the mask bullets
+// of a masked id_path back as bullets: ".../viewthroughconversion/••••0001/"
+// rather than "%E2%80%A2%E2%80%A2...". Everything else stays escaped.
+func ShownPath(u *url.URL) string {
+	return strings.ReplaceAll(u.EscapedPath(), escapedMask, "•")
+}
+
+// gaCookie is a GA4 cookie name, _ga_ and the measurement ID without
+// its G- (the cookie of property G-ABC123 is _ga_ABC123).
+var gaCookie = regexp.MustCompile(`\b_ga_([A-Za-z0-9]{5,})\b`)
+
+// MaskCookieNames masks the measurement ID in GA4 cookie names in s, a
+// cookie name or a Cookie or Set-Cookie header, to its last 4
+// characters the way a tid is masked: _ga_••••D001. showIDs keeps it.
+func MaskCookieNames(s string, showIDs bool) string {
+	if showIDs || !strings.Contains(s, "_ga_") {
+		return s
+	}
+	return gaCookie.ReplaceAllStringFunc(s, func(m string) string {
+		return "_ga_" + MaskID(m[len("_ga_"):])
+	})
+}

@@ -458,7 +458,11 @@ func TestPlanUsageMessages(t *testing.T) {
 	inDir(t, "production: [shop.example.com]\n")
 	useRunner(t, consenttest.GoldenResult("clean"), nil)
 	putFile(t, "two.yaml", "- {name: a, url: a.test, consent: {args: [--send-hits]}}\n")
+	putFile(t, "three.yaml", "- {name: a, url: a.test, consent: {args: [--exempt, meta-pixl]}}\n")
 	cases := [][]string{
+		{"--exempt", "nope", "https://shop.test/"},
+		{"--exempt", "ga4", "--exempt", "ga5", "https://shop.test/"},
+		{"--sites", "three.yaml"},
 		{"--against", "baseline", "https://shop.test/"},
 		{"--against", "last", "https://shop.test/"},
 		{"--send-hits", "https://shop.example.com/"},
@@ -482,6 +486,9 @@ func TestPlanUsageMessages(t *testing.T) {
 	putFile(t, filepath.Join(".echo", "config.yaml"), "consent:\n  headers:\n    Authorization: Basic abc\n")
 	_, _, errOut := runMain(t, "https://shop.test/")
 	b.WriteString("$ consent https://shop.test/ (a literal header in the config)\n" + strings.Replace(filepath.ToSlash(errOut), filepath.ToSlash(mustWd(t))+"/.echo", "<dir>/.echo", 1))
+	putFile(t, filepath.Join(".echo", "config.yaml"), "consent:\n  exempt: [ga4, nope]\n")
+	_, _, errOut = runMain(t, "https://shop.test/")
+	b.WriteString("$ consent https://shop.test/ (exempt: [ga4, nope] in the config)\n" + errOut)
 	golden(t, "plan-usage-messages", b.String())
 }
 

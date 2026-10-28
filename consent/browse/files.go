@@ -346,6 +346,9 @@ func maskHeader(lower, v string, showIDs bool) string {
 	if urlHeaders[lower] {
 		return consent.SafeText(consent.MaskURL(v, showIDs), maxHeaderValue)
 	}
+	if lower == "cookie" || lower == "set-cookie" {
+		v = consent.MaskCookieNames(v, showIDs)
+	}
 	return consent.SafeText(secrets.RedactHeader(lower, v), maxHeaderValue)
 }
 

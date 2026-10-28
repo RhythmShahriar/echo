@@ -293,9 +293,14 @@ func TestRunSequence(t *testing.T) {
 	if none := runOf(t, pg, consent.RunNone); none.Choice != nil || none.FinalState != nil || len(none.Hits) != 0 {
 		t.Errorf("none run %+v", none)
 	}
-	if res.Browser == "" || !strings.Contains(res.UserAgent, UASuffix+"1.2.0") || res.OS == "" || !res.Sandbox || !res.TLSVerified ||
+	if res.Browser == "" || !strings.Contains(res.UserAgent, UASuffix+"1.2.0") || res.OS == "" || !res.Sandbox || res.TLSVerified ||
 		!res.Held || !res.Mapped || res.Viewport != "desktop" || res.Locale != "en-US" || res.Catalog.Count != 2 || res.CMPRules.SHA256 != "page" {
 		t.Errorf("result setup %+v", res)
+	}
+	// https://shop.test/ is answered from the fixture's plain http
+	// address: no TLS was verified and the result says so.
+	if !slices.Contains(res.Notes, NoteMappedHTTP) {
+		t.Errorf("notes %q", res.Notes)
 	}
 	if res.Network.Requests == 0 || res.Network.Held == 0 {
 		t.Errorf("network %+v", res.Network)

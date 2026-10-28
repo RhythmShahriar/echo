@@ -151,6 +151,7 @@ func (c *cmd) runCheck(ctx context.Context, pos []string) int {
 	}
 	st.store.ExcludeFromGit()
 	live := liveWriter(env.Stderr, o.live)
+	blog := browserLog(env.Stderr, o.verbose)
 	var results []*consent.Result
 	interrupted := false
 	pages := 0
@@ -159,7 +160,7 @@ func (c *cmd) runCheck(ctx context.Context, pos []string) int {
 		// Every plan writes into the one folder: page numbers go on
 		// from the earlier plans' so no file is written twice.
 		p.PageBase, pages = pages, pages+len(p.Targets)
-		p.Browser.Log = browserLog(env.Stderr, o.verbose)
+		p.Browser.Log = blog
 		p.Live = live
 		r, err := consent.RunPlan(ctx, p)
 		if r != nil {
@@ -173,11 +174,12 @@ func (c *cmd) runCheck(ctx context.Context, pos []string) int {
 			// A fatal error stops the whole check before consent.json
 			// is written, so the folder (with what earlier --sites
 			// sites left in it) would be a result without a result
-			// file: verify and report would only trip over it.
+			// file: verify and report would only trip over it. The
+			// store folders this check made go too where nothing else
+			// is in them. RunPlan returns its partial result with the
+			// error, so results is never a sign that a run finished.
 			_ = os.RemoveAll(dir) //nolint:gosec // the folder this check made
-			if len(results) == 0 {
-				removeEmpty(made)
-			}
+			removeEmpty(made)
 			var fe *consent.FatalError
 			if errors.As(err, &fe) {
 				fmt.Fprintln(env.Stderr, "rhythm echo:", fatalMessage(fe))
@@ -406,7 +408,7 @@ func liveLine(ev consent.Event) string {
 	}
 	where := ev.Request.Host
 	if u, err := url.Parse(ev.Request.URL); err == nil && u.Host != "" {
-		where = u.Host + u.EscapedPath()
+		where = u.Host + consent.ShownPath(u)
 	}
 	held := ""
 	if ev.Request.Held {
@@ -478,24 +480,37 @@ func anyRun(r *consent.Result, f func(consent.Run) bool) bool {
 }
 
 // browserLog is where browse writes its Chrome lines: the download lines
-// always, its "Browser: ..." line only with -v. Without -v the view names
-// the browser on the first run, so the line isn't printed twice.
+// always, its "Browser: ..." line only with -v and then once per
+// command, however many --sites plans start Chrome. Without -v the view
+// names the browser on the first run, so the line isn't printed twice.
+// One writer serves every plan of a command.
 func browserLog(w io.Writer, verbose bool) io.Writer {
-	if verbose || w == nil {
-		return w
+	if w == nil {
+		return nil
 	}
-	return quietBrowser{w}
+	return &browserLines{w: w, verbose: verbose}
 }
 
-// quietBrowser drops the "Browser: ..." line browse writes once Chrome
-// starts. Browse writes each line in one call.
-type quietBrowser struct{ w io.Writer }
+// browserLines filters browse's "Browser: ..." line. Browse writes each
+// line in one call.
+type browserLines struct {
+	w       io.Writer
+	verbose bool
+	mu      sync.Mutex
+	shown   bool
+}
 
-func (q quietBrowser) Write(b []byte) (int, error) {
-	if bytes.HasPrefix(b, []byte("Browser: ")) {
-		return len(b), nil
+func (b *browserLines) Write(p []byte) (int, error) {
+	if bytes.HasPrefix(p, []byte("Browser: ")) {
+		b.mu.Lock()
+		show := b.verbose && !b.shown
+		b.shown = b.shown || show
+		b.mu.Unlock()
+		if !show {
+			return len(p), nil
+		}
 	}
-	return q.w.Write(b)
+	return b.w.Write(p)
 }
 
 // missingDirs lists the folders of dirs that don't exist yet, in order.

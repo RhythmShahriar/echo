@@ -42,12 +42,12 @@ make -C testbed/consent map             # prints the --map-host line
 
 ```sh
 map=$(make -s -C testbed/consent map)
-eval "bin/rhythm-echo consent https://c01.shop.test/ -k $map"
+eval "bin/rhythm-echo consent https://c01.shop.test/ $map"
 testbed/consent/toggle.sh c01 broken
-eval "bin/rhythm-echo consent https://c01.shop.test/ -k $map"
+eval "bin/rhythm-echo consent https://c01.shop.test/ $map"
 ```
 
-The good state passes; the broken one reports GA4 before the choice and no Consent Mode default. `-k` is there because Chrome doesn't trust the testbed CA (`ca/ca.pem`, git-ignored, name-constrained to `.test`, `localhost` and the stand-in hosts); use `http://` instead to skip TLS. What the sink counted: `curl -s '127.0.0.1:23401/_sink/count?scenario=c01'`.
+The good state passes; the broken one reports GA4 before the choice and no Consent Mode default. No `-k` is needed: `make map` maps every host to the server's plain http port, so Echo answers the `https://` pages from it over http and never checks a certificate. The result says so (`tls_verified` is false, with the notes `TLS not verified.` and `--map-host answered https pages over plain http, so TLS wasn't checked.`). The server also answers TLS on the same port with the testbed CA (`ca/ca.pem`, git-ignored, name-constrained to `.test`, `localhost` and the stand-in hosts); Chrome doesn't trust that CA. Echo never meets it through `make map`. What the sink counted: `curl -s '127.0.0.1:23401/_sink/count?scenario=c01'`.
 
 For the sealed mode: `make -C testbed/consent up` (a few minutes the first time), `make -C testbed/consent bench`, `make -C testbed/consent down` (deletes every volume).
 

@@ -191,7 +191,8 @@ func TestEchoMessagesMapped(t *testing.T) {
 	if len(ga4) == 0 || ga4[0].Phase != consent.PhaseBefore || ga4[0].Event != "page_view" {
 		t.Errorf("ga4 %+v", ga4)
 	}
-	if len(res.Notes) != 0 {
+	// The shop is https answered from plain http: that is the only note.
+	if !slices.Equal(res.Notes, []string{NoteMappedHTTP}) {
 		t.Errorf("notes %q", res.Notes)
 	}
 }
@@ -214,7 +215,7 @@ func TestEchoDownIsANote(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := "Echo at " + down + " didn't answer; server-side tracking wasn't checked"
-	if !slices.Equal(res.Notes, []string{want}) {
+	if !slices.Equal(res.Notes, []string{want, NoteMappedHTTP}) {
 		t.Errorf("notes %q; want %q", res.Notes, want)
 	}
 	for _, r := range res.Pages[0].Runs {

@@ -353,3 +353,83 @@ func FuzzConsentJSON(f *testing.F) {
 		_, _ = ReadBaseline(b)
 	})
 }
+
+// twoHosts judges a check of two pages on two hosts that share the path
+// "/": a.shop.test from compare-cur (TikTok fires) and b.shop.test from
+// the golden named second.
+func twoHosts(t *testing.T, second string) *consent.Result {
+	t.Helper()
+	r := consenttest.GoldenResult("compare-cur")
+	a, b := r.Pages[0], consenttest.GoldenResult(second).Pages[0]
+	a.URL, a.FinalURL = "https://a.shop.test/", "https://a.shop.test/"
+	b.URL, b.FinalURL = "https://b.shop.test/", "https://b.shop.test/"
+	r.Pages = []consent.Page{a, b}
+	for i := range r.Pages {
+		r.Pages[i].ConsentMode, r.Pages[i].NeedsNone = nil, false
+	}
+	r.Issues, r.Inconclusive, r.Comparison = nil, nil, nil
+	Evaluator{}.Evaluate(r, consenttest.NewPlan(t))
+	return r
+}
+
+func TestTwoHostsSharePath(t *testing.T) {
+	base := twoHosts(t, "compare-cur")
+	keys := map[string]bool{}
+	for _, is := range base.Issues {
+		if keys[is.Key] {
+			t.Errorf("key %s twice", is.Key)
+		}
+		keys[is.Key] = true
+		if is.Page != "a.shop.test/" && is.Page != "b.shop.test/" {
+			t.Errorf("issue page %q doesn't name the host", is.Page)
+		}
+	}
+	for _, k := range []string{"consent/before-choice|a.shop.test/|none|tiktok-pixel", "consent/before-choice|b.shop.test/|none|tiktok-pixel"} {
+		if !keys[k] {
+			t.Errorf("no issue %s in %v", k, keys)
+		}
+	}
+	// b.shop.test is fixed; a.shop.test still has the same issues, which
+	// must neither hide the fix nor add changes of their own.
+	cur := twoHosts(t, "compare-base")
+	got := Comparer{}.Compare(base, cur, nil)
+	want := []string{
+		"fixed consent/before-choice|b.shop.test/|none|tiktok-pixel TikTok Pixel no longer fires before the choice",
+		"fixed consent/before-choice|b.shop.test/|reject|tiktok-pixel TikTok Pixel no longer fires before the choice",
+	}
+	if !slices.Equal(changeLines(got.Changes), want) {
+		t.Errorf("changes\n got %q\nwant %q", changeLines(got.Changes), want)
+	}
+	for _, c := range got.Changes {
+		if c.Page != "b.shop.test/" {
+			t.Errorf("change page %q", c.Page)
+		}
+	}
+	// One host keeps the path alone, the way keys always read.
+	one := judged(t, "compare-cur", "", "")
+	if is := one.Issues[0]; is.Page != "/" || !strings.Contains(is.Key, "|/|") {
+		t.Errorf("one host: page %q key %q", is.Page, is.Key)
+	}
+}
+
+func TestSitesKeyNamesSite(t *testing.T) {
+	r := consenttest.GoldenResult("compare-cur")
+	a, b := r.Pages[0], r.Pages[0]
+	a.Site, b.Site = "shop", "blog"
+	b.URL = "https://blog.shop.test/"
+	r.Pages = []consent.Page{a, b}
+	r.Issues, r.Inconclusive = nil, nil
+	Evaluator{}.Evaluate(r, consenttest.NewPlan(t))
+	keys := map[string]bool{}
+	for _, is := range r.Issues {
+		if keys[is.Key] {
+			t.Errorf("key %s twice", is.Key)
+		}
+		keys[is.Key] = true
+	}
+	for _, k := range []string{"consent/before-choice|shop:/|none|tiktok-pixel", "consent/before-choice|blog:/|none|tiktok-pixel"} {
+		if !keys[k] {
+			t.Errorf("no issue %s in %v", k, keys)
+		}
+	}
+}

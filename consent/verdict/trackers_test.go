@@ -433,6 +433,9 @@ func TestShortURL(t *testing.T) {
 		"https://js.stripe.com/v3/":   "js.stripe.com/v3/",
 		"not a url\x1b[31m":           `not a url\x1b[31m`,
 		"https://x.test/p?a&b=1&=2&c": "x.test/p?a=&b=1",
+		// A masked id_path keeps its bullets; other escapes stay.
+		"https://googleads.g.doubleclick.net/pagead/viewthroughconversion/••••0001/?cv=11": "googleads.g.doubleclick.net/pagead/viewthroughconversion/••••0001/?cv=11",
+		"https://x.test/a%20b/%E2%80%A2%E2%80%A2%E2%80%A2%E2%80%A21234/":                   "x.test/a%20b/••••1234/",
 	}
 	for in, want := range cases {
 		if got := shortURL(in); got != want {

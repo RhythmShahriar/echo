@@ -334,7 +334,7 @@ func TestPruneKeepsBaselines(t *testing.T) {
 	if code, out, _ := runMain(t, "prune", "-q"); code != exitOK || out != "" {
 		t.Errorf("-q: exit %d %q", code, out)
 	}
-	if code, out, _ := runMain(t, "prune", "--keep", "0"); code != exitOK || out != "Removed 1 consent results, kept 0.\n" {
+	if code, out, _ := runMain(t, "prune", "--keep", "0"); code != exitOK || out != "Removed 1 consent result, kept 0.\n" {
 		t.Errorf("--keep 0: exit %d %q", code, out)
 	}
 	if code, _, errOut := runMain(t, "prune", "--keep", "-1"); code != exitUsage || errOut != "rhythm echo: --keep -1: want 0 or more\n" {

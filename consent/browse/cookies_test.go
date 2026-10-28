@@ -111,6 +111,26 @@ func TestDiffCookies(t *testing.T) {
 	}
 }
 
+// A GA4 cookie is named after the measurement ID: it is classified by
+// its real name and recorded with the ID cut to its last 4 characters,
+// unless --show-ids.
+func TestGA4CookieNameMasked(t *testing.T) {
+	id := "TESTBED" + "001" // assembled at runtime
+	for _, show := range []bool{false, true} {
+		r := cookieRecorder(t)
+		r.plan.ShowIDs = show
+		r.diffCookies([]*proto.NetworkCookie{{Name: "_ga_" + id, Value: "GS1.1", Domain: ".shop.test", Path: "/"}}, 100)
+		c := kindsOf(r.finish().Events, consent.EvCookie)
+		want := "_ga_••••D001"
+		if show {
+			want = "_ga_" + id
+		}
+		if len(c) != 1 || c[0].Cookie.Name != want || c[0].Cookie.Tracker != "ga4" {
+			t.Errorf("show-ids %v: %+v", show, c)
+		}
+	}
+}
+
 // A blocked cookie is recorded at once with Chrome's reasons, once.
 func TestBlockedCookie(t *testing.T) {
 	r := cookieRecorder(t)

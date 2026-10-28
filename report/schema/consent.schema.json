@@ -185,6 +185,9 @@
           ],
           "type": "string"
         },
+        "site": {
+          "type": "string"
+        },
         "title": {
           "type": "string"
         }

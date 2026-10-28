@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -115,6 +116,14 @@ func (c *cmd) prepare(pos []string) (*setup, error) {
 	if err := st.customTrackers(base, block); err != nil {
 		return nil, err
 	}
+	// The catalog (custom trackers included) is known only now: a typo
+	// in an exempt id would silently exempt nothing.
+	if err := checkExempt("consent: exempt", block.Exempt); err != nil {
+		return nil, err
+	}
+	if err := checkExempt("--exempt", o.exempt); err != nil {
+		return nil, err
+	}
 
 	switch {
 	case o.sites != "" && len(pos) > 0:
@@ -196,6 +205,9 @@ func sitePlan(base *consent.Plan, s site, sec *secrets) (*consent.Plan, error) {
 	}
 	if err := applyFlags(p, so); err != nil {
 		return nil, usagef("site %q: consent: args: %v", s.Name, err)
+	}
+	if err := checkExempt(fmt.Sprintf("site %q: consent: args: --exempt", s.Name), so.exempt); err != nil {
+		return nil, err
 	}
 	if len(so.headers) > 0 || len(so.cookies) > 0 {
 		var own secrets
@@ -325,6 +337,32 @@ func (st *setup) customTrackers(p *consent.Plan, block *config.Consent) error {
 			}
 			return usagef("%s", msg)
 		}
+	}
+	return nil
+}
+
+// checkExempt refuses an exempt id (from what: a flag or a config key)
+// that names no tracker of the catalog or the config's own trackers,
+// with the closest id when one is near. Without a linked catalog there
+// is nothing to check against.
+func checkExempt(what string, ids []string) error {
+	cl := consent.Linked().Classifier
+	if cl == nil || len(ids) == 0 {
+		return nil
+	}
+	var known []string
+	for _, t := range cl.Trackers() {
+		known = append(known, strings.ToLower(t.ID))
+	}
+	for _, id := range ids {
+		v := strings.ToLower(strings.TrimSpace(id))
+		if v == "" || slices.Contains(known, v) {
+			continue
+		}
+		if s := closestWord(v, known); s != "" {
+			return usagef("%s %q: no tracker by that id; did you mean %s? rhythm echo consent trackers lists them", what, id, s)
+		}
+		return usagef("%s %q: no tracker by that id; rhythm echo consent trackers lists them", what, id)
 	}
 	return nil
 }

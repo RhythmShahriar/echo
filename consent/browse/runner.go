@@ -482,7 +482,7 @@ func (c *check) result(started time.Time) *consent.Result {
 		UserAgent:    newEmulation(p, consent.RunNone, e.ua, e.b.Version).ua,
 		OS:           runtime.GOOS + "/" + runtime.GOARCH,
 		Sandbox:      !e.b.NoSandbox,
-		TLSVerified:  !p.Insecure,
+		TLSVerified:  !p.Insecure && !e.PlainMapped(),
 		Held:         p.Hold,
 		Mapped:       e.Mapped(),
 		Geo:          p.Geo,
@@ -504,6 +504,9 @@ func (c *check) result(started time.Time) *consent.Result {
 	c.mu.Lock()
 	res.Network.Requests, res.Network.Held = c.requests, c.held
 	res.Notes = append(res.Notes, c.notes...)
+	if e.PlainMapped() && !slices.Contains(res.Notes, NoteMappedHTTP) {
+		res.Notes = append(res.Notes, NoteMappedHTTP)
+	}
 	c.mu.Unlock()
 	return res
 }

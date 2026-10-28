@@ -51,10 +51,14 @@ func changeKey(kind, page string, run consent.RunKind, id string) string {
 	return strings.Join([]string{kind, page, string(run), id}, "|")
 }
 
-// pageID names a page across two results: its --sites name and path.
+// pageID names a page across two results: its --sites name and its
+// name in its result (the path, or host and path when the result's
+// pages span more than one host).
 type pageID struct{ site, path string }
 
-func idOf(pg *consent.Page) pageID { return pageID{pg.Site, pagePath(pg.URL)} }
+func idOf(r *consent.Result, pg *consent.Page) pageID {
+	return pageID{pg.Site, consent.PageName(r, pg)}
+}
 
 // Compare lists what changed from base to cur. Issues are matched by key
 // (and site); a page is matched by its site and path. accept holds the
@@ -101,7 +105,7 @@ type issueID struct{ site, key string }
 func idOfIssue(is *consent.Issue) issueID {
 	k := is.Key
 	if k == "" {
-		k = consent.IssueKey(is.Check, is.Page, is.Run, is.Tracker)
+		k = consent.SiteIssueKey(is.Site, is.Check, is.Page, is.Run, is.Tracker)
 	}
 	return issueID{is.Site, k}
 }
@@ -128,7 +132,7 @@ func (c *comparison) issues() {
 		if is.Level == model.Error {
 			class, title = consent.ClassBroke, c.brokeTitle(is)
 		}
-		c.add(class, id.key, is.Page, is.Run, title, "", string(is.Level))
+		c.add(class, id.key, is.Site, is.Page, is.Run, title, "", string(is.Level))
 	}
 	for i := range c.base.Issues {
 		is := &c.base.Issues[i]
@@ -136,7 +140,7 @@ func (c *comparison) issues() {
 		if inCur[id] || !c.checked(is.Site, is.Page, is.Run) {
 			continue
 		}
-		c.add(consent.ClassFixed, id.key, is.Page, is.Run, c.fixedTitle(is), string(is.Level), "")
+		c.add(consent.ClassFixed, id.key, is.Site, is.Page, is.Run, c.fixedTitle(is), string(is.Level), "")
 	}
 }
 
@@ -155,7 +159,7 @@ func (c *comparison) checked(site, path string, run consent.RunKind) bool {
 // findPage returns r's page with id, or nil.
 func findPage(r *consent.Result, id pageID) *consent.Page {
 	for i := range r.Pages {
-		if idOf(&r.Pages[i]) == id {
+		if idOf(r, &r.Pages[i]) == id {
 			return &r.Pages[i]
 		}
 	}
@@ -163,8 +167,8 @@ func findPage(r *consent.Result, id pageID) *consent.Page {
 }
 
 // add appends one change.
-func (c *comparison) add(class, key, page string, run consent.RunKind, title, before, after string) {
-	c.changes = append(c.changes, consent.Change{Class: class, Key: key, Page: page, Run: run,
+func (c *comparison) add(class, key, site, page string, run consent.RunKind, title, before, after string) {
+	c.changes = append(c.changes, consent.Change{Class: class, Key: key, Site: site, Page: page, Run: run,
 		Title: title, Before: capValue(before), After: capValue(after)})
 }
 
@@ -248,14 +252,14 @@ func (c *comparison) fixedTitle(is *consent.Issue) string {
 func (c *comparison) pages() {
 	for i := range c.base.Pages {
 		bp := &c.base.Pages[i]
-		if findPage(c.cur, idOf(bp)) == nil {
-			path := idOf(bp).path
-			c.add(consent.ClassChanged, changeKey(keyPage, path, "", ""), path, "", pageNotChecked, "checked", "not checked")
+		if id := idOf(c.base, bp); findPage(c.cur, id) == nil {
+			c.add(consent.ClassChanged, changeKey(keyPage, consent.SitePage(id.site, id.path), "", ""), id.site, id.path, "",
+				pageNotChecked, "checked", "not checked")
 		}
 	}
 	for i := range c.cur.Pages {
 		cp := &c.cur.Pages[i]
-		bp := findPage(c.base, idOf(cp))
+		bp := findPage(c.base, idOf(c.cur, cp))
 		if bp == nil {
 			// A page the baseline didn't check has nothing to compare
 			// with; its issues are already broke or new.
@@ -275,17 +279,18 @@ func (c *comparison) pages() {
 // cmp compares the CMP of one page: a CMP where there was none is new,
 // another one (or none where there was one) changed.
 func (c *comparison) cmp(bp, cp *consent.Page) {
-	path := idOf(cp).path
+	site, path := cp.Site, idOf(c.cur, cp).path
+	kp := consent.SitePage(site, path)
 	switch b, n := bp.CMP.ID, cp.CMP.ID; {
 	case b == n:
 	case n == "":
-		c.add(consent.ClassChanged, changeKey(keyCMP, path, "", ""), path, "",
+		c.add(consent.ClassChanged, changeKey(keyCMP, kp, "", ""), site, path, "",
 			"The CMP "+cmp.Or(bp.CMP.Name, b)+" is no longer found", b, noValue)
 	case b == "":
 		name := cmp.Or(cp.CMP.Name, n)
-		c.add(consent.ClassNew, changeKey(keyCMP, path, "", n), path, "", name+" banner is new on the page", "", n)
+		c.add(consent.ClassNew, changeKey(keyCMP, kp, "", n), site, path, "", name+" banner is new on the page", "", n)
 	default:
-		c.add(consent.ClassChanged, changeKey(keyCMP, path, "", ""), path, "",
+		c.add(consent.ClassChanged, changeKey(keyCMP, kp, "", ""), site, path, "",
 			"The CMP changed from "+cmp.Or(bp.CMP.Name, b)+" to "+cmp.Or(cp.CMP.Name, n), b, n)
 	}
 }
@@ -333,13 +338,14 @@ func pageTrackers(pg *consent.Page) map[string]bool {
 // run it shows in. A run where a new issue already names the tracker is
 // left out: the broke or new issue says it better.
 func (c *comparison) newTrackers(bp, cp *consent.Page) {
-	path, had := idOf(cp).path, pageTrackers(bp)
+	site, path, had := cp.Site, idOf(c.cur, cp).path, pageTrackers(bp)
+	kp := consent.SitePage(site, path)
 	told := map[string]bool{}
 	for _, ch := range c.changes {
 		if ch.Class != consent.ClassBroke && ch.Class != consent.ClassNew {
 			continue
 		}
-		if parts := strings.Split(ch.Key, "|"); len(parts) == 4 && parts[1] == path {
+		if parts := strings.Split(ch.Key, "|"); len(parts) == 4 && parts[1] == kp {
 			told[parts[2]+"|"+parts[3]] = true
 		}
 	}
@@ -355,7 +361,7 @@ func (c *comparison) newTrackers(bp, cp *consent.Page) {
 			if !p.hit {
 				verb = " stores cookies "
 			}
-			c.add(consent.ClassNew, changeKey(keyTracker, path, run.Kind, id), path, run.Kind,
+			c.add(consent.ClassNew, changeKey(keyTracker, kp, run.Kind, id), site, path, run.Kind,
 				c.jc.name(id)+verb+phaseWords(run.Kind, p.phase), "", id)
 		}
 	}
@@ -384,19 +390,20 @@ func phaseWords(k consent.RunKind, ph consent.Phase) string {
 // Consent Mode default, gcd on the first Google hit, the TCF purposes
 // and, for Reject, the layer the button was on.
 func (c *comparison) signals(cp *consent.Page, br, cr *consent.Run) {
-	path := idOf(cp).path
+	site, path := cp.Site, idOf(c.cur, cp).path
+	kp := consent.SitePage(site, path)
 	if b, n := defaultText(br, c.base.Geo), defaultText(cr, c.cur.Geo); b != n {
-		c.add(consent.ClassChanged, changeKey(keyDefault, path, cr.Kind, ""), path, cr.Kind, "The Consent Mode default changed", b, n)
+		c.add(consent.ClassChanged, changeKey(keyDefault, kp, cr.Kind, ""), site, path, cr.Kind, "The Consent Mode default changed", b, n)
 	}
 	if b, n := firstGCD(br), firstGCD(cr); b != n && b != "" && n != "" {
-		c.add(consent.ClassChanged, changeKey(keyGCD, path, cr.Kind, ""), path, cr.Kind, "gcd on the first Google hit changed", b, n)
+		c.add(consent.ClassChanged, changeKey(keyGCD, kp, cr.Kind, ""), site, path, cr.Kind, "gcd on the first Google hit changed", b, n)
 	}
 	if b, n := tcfPurposes(br), tcfPurposes(cr); b != n && b != "" && n != "" {
-		c.add(consent.ClassChanged, changeKey(keyTCF, path, cr.Kind, ""), path, cr.Kind, "The TCF purposes with consent changed", b, n)
+		c.add(consent.ClassChanged, changeKey(keyTCF, kp, cr.Kind, ""), site, path, cr.Kind, "The TCF purposes with consent changed", b, n)
 	}
 	if cr.Kind == consent.RunReject && br.Choice != nil && cr.Choice != nil && br.Choice.Layer != cr.Choice.Layer &&
 		br.Choice.Layer > 0 && cr.Choice.Layer > 0 {
-		c.add(consent.ClassChanged, changeKey(keyRejectLayer, path, cr.Kind, ""), path, cr.Kind,
+		c.add(consent.ClassChanged, changeKey(keyRejectLayer, kp, cr.Kind, ""), site, path, cr.Kind,
 			fmt.Sprintf("Reject moved from layer %d to layer %d", br.Choice.Layer, cr.Choice.Layer),
 			"layer "+strconv.Itoa(br.Choice.Layer), "layer "+strconv.Itoa(cr.Choice.Layer))
 	}
@@ -460,9 +467,9 @@ var classRank = map[string]int{consent.ClassBroke: 0, consent.ClassNew: 1, conse
 // baseline had go last), run order (a change of the whole page first)
 // and key.
 func (c *comparison) sort(changes []consent.Change) {
-	pageRank := func(path string) int {
+	pageRank := func(site, path string) int {
 		for i := range c.cur.Pages {
-			if pagePath(c.cur.Pages[i].URL) == path {
+			if idOf(c.cur, &c.cur.Pages[i]) == (pageID{site, path}) {
 				return i
 			}
 		}
@@ -471,7 +478,7 @@ func (c *comparison) sort(changes []consent.Change) {
 	slices.SortStableFunc(changes, func(a, b consent.Change) int {
 		return cmp.Or(
 			cmp.Compare(classRank[a.Class], classRank[b.Class]),
-			cmp.Compare(pageRank(a.Page), pageRank(b.Page)),
+			cmp.Compare(pageRank(a.Site, a.Page), pageRank(b.Site, b.Page)),
 			cmp.Compare(changeRunRank(a.Run), changeRunRank(b.Run)),
 			cmp.Compare(a.Key, b.Key),
 		)

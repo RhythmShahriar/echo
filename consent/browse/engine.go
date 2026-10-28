@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -106,6 +107,29 @@ func (e *Engine) Network() consent.Network {
 // Mapped reports whether --map-host maps any host, so every writer can
 // say the result came from mapped hosts rather than the real ones.
 func (e *Engine) Mapped() bool { return newMapper(e.plan.MapHosts).any() }
+
+// PlainMapped reports whether --map-host answers an https target from a
+// plain http address: the page reached Echo unencrypted, so its TLS was
+// never verified whatever -k says.
+func (e *Engine) PlainMapped() bool { return plainMapped(e.plan) }
+
+// plainMapped is PlainMapped for a plan.
+func plainMapped(p *consent.Plan) bool {
+	m := newMapper(p.MapHosts)
+	for _, t := range p.Targets {
+		if t.URL == nil || t.URL.Scheme != "https" {
+			continue
+		}
+		if ok, base := m.lookup(strings.ToLower(t.URL.Hostname())); ok && base != nil && base.Scheme == "http" {
+			return true
+		}
+	}
+	return false
+}
+
+// NoteMappedHTTP is the note of a check whose https pages --map-host
+// answered over plain http.
+const NoteMappedHTTP = "--map-host answered https pages over plain http, so TLS wasn't checked."
 
 // guard returns the target's guard, starting it on first use: every
 // run of a target goes through the same one. A target --map-host

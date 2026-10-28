@@ -1,3 +1,9 @@
+$ consent --exempt nope https://shop.test/
+rhythm echo: --exempt "nope": no tracker by that id; rhythm echo consent trackers lists them
+$ consent --exempt ga4 --exempt ga5 https://shop.test/
+rhythm echo: --exempt "ga5": no tracker by that id; did you mean ga4? rhythm echo consent trackers lists them
+$ consent --sites three.yaml
+rhythm echo: site "a": consent: args: --exempt "meta-pixl": no tracker by that id; did you mean meta-pixel? rhythm echo consent trackers lists them
 $ consent --against baseline https://shop.test/
 rhythm echo: --against "baseline": no saved consent result by that name in .echo/consent/baselines; rhythm echo consent <url> --save baseline makes one
 $ consent --against last https://shop.test/
@@ -22,3 +28,5 @@ $ consent /shop/
 rhythm echo: consent "/shop/": a path needs site: in .echo/config.yaml; give the whole URL, e.g. https://staging.shop.test/shop/
 $ consent https://shop.test/ (a literal header in the config)
 rhythm echo: <dir>/.echo/config.yaml: line 3: consent: headers: Authorization: use ${env:RHYTHM_ECHO_NAME}, not the value itself; secrets never sit in the config
+$ consent https://shop.test/ (exempt: [ga4, nope] in the config)
+rhythm echo: consent: exempt "nope": no tracker by that id; rhythm echo consent trackers lists them

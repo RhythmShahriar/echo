@@ -515,7 +515,7 @@ func shortPath(raw string) string {
 	if err != nil || u.Host == "" {
 		return consent.SafeText(raw, 200)
 	}
-	return consent.SafeText(strings.TrimPrefix(u.Host, "www.")+u.EscapedPath(), 200)
+	return consent.SafeText(strings.TrimPrefix(u.Host, "www.")+consent.ShownPath(u), 200)
 }
 
 // trackerChecks are the checks a Meta Pixel finding explains.
@@ -525,7 +525,7 @@ var trackerChecks = []string{consent.CheckBeforeChoice, consent.CheckAfterReject
 // the first run with a Meta Pixel error where no fbq('consent', ...)
 // came before the pixel's first hit.
 func (j *judge) metaNoConsentAPI(pg *consent.Page) {
-	path := pagePath(pg.URL)
+	path := j.pageName(pg)
 	for i := range pg.Runs {
 		run := &pg.Runs[i]
 		raised := slices.ContainsFunc(j.r.Issues, func(is consent.Issue) bool {

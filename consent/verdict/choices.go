@@ -34,7 +34,7 @@ func (j *judge) choices(pg *consent.Page) {
 		run := &pg.Runs[i]
 		if run.Inconclusive() {
 			j.r.Inconclusive = append(j.r.Inconclusive, consent.Inconclusive{
-				Page: pagePath(pg.URL), Run: run.Kind, Reason: run.Reason, Detail: j.inconclusiveDetail(pg, run),
+				Page: j.pageName(pg), Run: run.Kind, Reason: run.Reason, Detail: j.inconclusiveDetail(pg, run),
 			})
 		}
 	}
@@ -150,7 +150,7 @@ func (j *judge) noBanner(pg *consent.Page) {
 	if bannerShown(pg) {
 		return
 	}
-	path := pagePath(pg.URL)
+	path := j.pageName(pg)
 	var names []string
 	var ev []int64
 	for _, is := range j.r.Issues {
@@ -211,7 +211,7 @@ func (j *judge) tcfMismatch(pg *consent.Page, run *consent.Run) {
 		return
 	}
 	if last.TCF == nil || !last.TCF.Valid {
-		note := fmt.Sprintf("%s on %s: the TCF string after the choice couldn't be read, so consent/tcf-mismatch wasn't checked", run.Kind.Label(), pagePath(pg.URL))
+		note := fmt.Sprintf("%s on %s: the TCF string after the choice couldn't be read, so consent/tcf-mismatch wasn't checked", run.Kind.Label(), j.pageName(pg))
 		if !slices.Contains(j.r.Notes, note) {
 			j.r.Notes = append(j.r.Notes, note)
 		}

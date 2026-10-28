@@ -358,7 +358,11 @@ func (c *cmd) prune(pos []string) int {
 		}
 	}
 	if !o.quiet {
-		fmt.Fprintf(env.Stdout, "Removed %d consent results, kept %d.\n", removed, len(dirs)-removed)
+		word := "results"
+		if removed == 1 {
+			word = "result"
+		}
+		fmt.Fprintf(env.Stdout, "Removed %d consent %s, kept %d.\n", removed, word, len(dirs)-removed)
 	}
 	return exitOK
 }

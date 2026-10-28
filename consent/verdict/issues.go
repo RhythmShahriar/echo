@@ -5,7 +5,6 @@ package verdict
 
 import (
 	"fmt"
-	"net/url"
 	"strings"
 
 	"github.com/RhythmShahriar/echo/consent"
@@ -54,29 +53,21 @@ func (j *judge) add(pg *consent.Page, check string, run consent.RunKind, tracker
 	if evidence == nil {
 		evidence = []int64{}
 	}
-	path := pagePath(pg.URL)
+	path := j.pageName(pg)
 	j.r.Issues = append(j.r.Issues, consent.Issue{
-		Check: check, Level: c.Level, Key: consent.IssueKey(check, path, run, tracker),
+		Check: check, Level: c.Level, Key: consent.SiteIssueKey(pg.Site, check, path, run, tracker),
 		Page: path, Site: pg.Site, Run: run, Tracker: tracker, Policy: j.policy,
 		Title: title, Detail: detail, Fix: fix, Evidence: evidence,
 	})
 }
 
-// pagePath is the path of a page URL, the way issues name and compare
-// match pages. The query is dropped: it often changes between runs
-// (campaign tags, cache busters) and may carry values the summary
-// mustn't show. Text that isn't a URL with a host is kept whole.
-func pagePath(raw string) string {
-	u, err := url.Parse(raw)
-	if err != nil || u.Host == "" {
-		return raw
-	}
-	p := u.EscapedPath()
-	if p == "" {
-		p = "/"
-	}
-	return p
-}
+// pagePath is the path of a page URL without its query, see
+// consent.PagePath.
+func pagePath(raw string) string { return consent.PagePath(raw) }
+
+// pageName is how issues name pg: its path, or host and path when the
+// check's pages span more than one host (consent.PageName).
+func (j *judge) pageName(pg *consent.Page) string { return consent.PageName(j.r, pg) }
 
 // visitPath is the path of the run's visit i, or "" when there is none.
 func visitPath(run *consent.Run, i int) string {

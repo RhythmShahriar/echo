@@ -37,7 +37,8 @@ func TestConsentIssueWhere(t *testing.T) {
 		{Check: consent.CheckNoBanner, Level: model.Warning, Site: "bravo", Page: "/checkout", Title: "Meta Pixel is on the page but no consent banner showed"},
 	}
 	out = consentTextOf(t, &two, ConsentTextOptions{Plain: true})
-	for _, want := range []string{"(No choice, alpha /)\n", "(No choice, bravo /checkout)\n", "no consent banner showed (bravo /checkout)\n"} {
+	for _, want := range []string{"(No choice, alpha /)\n", "(No choice, bravo /checkout)\n", "no consent banner showed (bravo /checkout)\n",
+		"consent check of 2 sites (2 pages)\n"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("missing %q in\n%s", want, out)
 		}
@@ -48,6 +49,51 @@ func TestConsentIssueWhere(t *testing.T) {
 		"| consent/no-banner | bravo /checkout |  | Meta Pixel is on the page"} {
 		if !strings.Contains(md, want) {
 			t.Errorf("Markdown lacks %q:\n%s", want, md)
+		}
+	}
+}
+
+// Pages on two hosts that share a path are named by host and path in
+// the issue lines and the Markdown, the way the verdict names them.
+func TestConsentIssueWhereTwoHosts(t *testing.T) {
+	r := judgedResult(t, "meta-ignores")
+	two := *r
+	two.Pages = []consent.Page{r.Pages[0], r.Pages[0]}
+	two.Pages[0].URL, two.Pages[1].URL = "https://a.shop.test/", "https://b.shop.test/"
+	two.Issues = []consent.Issue{
+		{Check: consent.CheckBeforeChoice, Level: model.Error, Page: "a.shop.test/", Run: consent.RunReject, Title: "Meta Pixel fired after Reject"},
+		{Check: consent.CheckBeforeChoice, Level: model.Error, Page: "b.shop.test/", Run: consent.RunReject, Title: "Meta Pixel fired after Reject"},
+	}
+	out := consentTextOf(t, &two, ConsentTextOptions{Plain: true})
+	for _, want := range []string{"(Reject, a.shop.test/)\n", "(Reject, b.shop.test/)\n"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("missing %q in\n%s", want, out)
+		}
+	}
+	md := consentMDOf(t, &two, ConsentMarkdownOptions{})
+	for _, want := range []string{"| consent/before-choice | a.shop.test/ | Reject |", "| consent/before-choice | b.shop.test/ | Reject |"} {
+		if !strings.Contains(md, want) {
+			t.Errorf("Markdown lacks %q:\n%s", want, md)
+		}
+	}
+}
+
+// A CMP change names both CMPs in its title; the line doesn't repeat
+// them as "was x, now y". Other changes keep their values.
+func TestConsentCMPChangeOnce(t *testing.T) {
+	r := judgedResult(t, "meta-ignores")
+	r.Comparison = &consent.Comparison{Against: "base", Changes: []consent.Change{
+		{Class: consent.ClassChanged, Key: "cmp|/||", Page: "/", Title: "The CMP changed from Complianz to Generic banner", Before: "complianz", After: "generic"},
+		{Class: consent.ClassChanged, Key: "gcd|/|accept|", Page: "/", Run: consent.RunAccept, Title: "gcd on the first Google hit changed", Before: "13r3r3r3r5", After: "13p3p3p3p5"},
+	}}
+	out := consentTextOf(t, r, ConsentTextOptions{Plain: true})
+	md := consentMDOf(t, r, ConsentMarkdownOptions{})
+	for name, text := range map[string]string{"text": out, "Markdown": md} {
+		if strings.Contains(text, "was complianz") || !strings.Contains(text, "The CMP changed from Complianz to Generic banner") {
+			t.Errorf("%s: CMP change\n%s", name, text)
+		}
+		if !strings.Contains(text, "was 13r3r3r3r5, now 13p3p3p3p5") {
+			t.Errorf("%s: gcd change lost its values\n%s", name, text)
 		}
 	}
 }

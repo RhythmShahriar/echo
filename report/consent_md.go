@@ -610,14 +610,14 @@ func (m *consentMD) comparison() {
 			title += " \\(accepted\\)"
 		}
 		ba := ""
-		if ch.Class == consent.ClassChanged && (ch.Before != "" || ch.After != "") {
+		if ch.Class == consent.ClassChanged && showBeforeAfter(ch.Key, ch.Before, ch.After) {
 			ba = "was " + md(ch.Before) + ", now " + md(ch.After)
 		}
 		run := ""
 		if ch.Run != "" {
 			run = md(ch.Run.Label())
 		}
-		m.line("| %s | %s | %s | %s | %s |", classWords[ch.Class], title, m.page("", ch.Page), run, ba)
+		m.line("| %s | %s | %s | %s | %s |", classWords[ch.Class], title, m.page(ch.Site, ch.Page), run, ba)
 	}
 	m.line("")
 }

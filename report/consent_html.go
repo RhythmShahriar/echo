@@ -207,12 +207,7 @@ func (h *consentHTML) docsURL(tracker string) string {
 func (h *consentHTML) data() consentHTMLData {
 	r := h.r
 	d := consentHTMLData{CSP: consentCSP, Version: Safe(cmp.Or(r.Echo, ToolVersion)), Hash: Safe(h.o.ConsentSHA256)}
-	if len(r.Pages) > 0 {
-		d.Target = Safe(r.Pages[0].URL)
-		if len(r.Pages) > 1 {
-			d.Target += fmt.Sprintf(" (%d pages)", len(r.Pages))
-		}
-	}
+	d.Target = consentTarget(r)
 	d.Title = "Echo consent check of " + cmp.Or(d.Target, "no page")
 	if !r.Started.IsZero() {
 		d.Started = r.Started.UTC().Format("2006-01-02 15:04 UTC")
@@ -312,13 +307,13 @@ func anchorPart(s string) string {
 // pageIndex is the index of the page an issue or inconclusive run names,
 // or -1.
 func (h *consentHTML) pageIndex(site, path string) int {
-	for i, pg := range h.r.Pages {
-		if pg.Site == site && consentIssuePath(pg.URL) == path {
+	for i := range h.r.Pages {
+		if pg := &h.r.Pages[i]; pg.Site == site && consent.PageName(h.r, pg) == path {
 			return i
 		}
 	}
-	for i, pg := range h.r.Pages {
-		if consentIssuePath(pg.URL) == path {
+	for i := range h.r.Pages {
+		if consent.PageName(h.r, &h.r.Pages[i]) == path {
 			return i
 		}
 	}
@@ -993,13 +988,16 @@ func (h *consentHTML) comparison() *chComparison {
 	}
 	for _, ch := range c.Changes {
 		cc := chChange{Class: Safe(ch.Class), Word: classWords[ch.Class], Title: Safe(ch.Title), Page: Safe(ch.Page)}
+		if ch.Site != "" {
+			cc.Page = Safe(ch.Site) + " " + cc.Page
+		}
 		if ch.Run != "" {
 			cc.Run = ch.Run.Label()
 		}
 		if ch.Accepted {
 			cc.Title += " (accepted)"
 		}
-		if ch.Before != "" || ch.After != "" {
+		if showBeforeAfter(ch.Key, ch.Before, ch.After) {
 			cc.BeforeAfter = "was " + Safe(cmp.Or(ch.Before, "none")) + ", now " + Safe(cmp.Or(ch.After, "none"))
 		}
 		out.Changes = append(out.Changes, cc)

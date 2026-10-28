@@ -164,8 +164,8 @@ type Page struct {
 type Issue struct {
 	Check    string      `json:"check"`
 	Level    model.Level `json:"level"`
-	Key      string      `json:"key"`  // check|page|run|tracker
-	Page     string      `json:"page"` // path of the page, or the URL when off-site
+	Key      string      `json:"key"`  // check|page|run|tracker, page as site:page with --sites
+	Page     string      `json:"page"` // path of the page (host and path when the pages span hosts), or the URL when off-site
 	Site     string      `json:"site,omitempty"`
 	Run      RunKind     `json:"run"`
 	Tracker  string      `json:"tracker,omitempty"`
@@ -216,6 +216,7 @@ const (
 type Change struct {
 	Class    string  `json:"class"` // broke, new, changed, fixed
 	Key      string  `json:"key"`
+	Site     string  `json:"site,omitempty"` // --sites name, "" otherwise
 	Page     string  `json:"page"`
 	Run      RunKind `json:"run"`
 	Title    string  `json:"title"`

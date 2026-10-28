@@ -345,7 +345,9 @@ func TestFatalMessages(t *testing.T) {
 	var b strings.Builder
 	for _, fe := range cases {
 		inDir(t, "")
-		useRunner(t, nil, fe)
+		// The engine returns its partial result (no finished run) with
+		// the error, as consent.RunPlan does.
+		useRunner(t, &consent.Result{ID: "partial", Pages: []consent.Page{}}, fe)
 		code, out, errOut := runMain(t, "https://shop.test/")
 		want := exitUnavailable
 		if fe.Code == consent.FatalSelector {
@@ -511,6 +513,12 @@ func TestLiveLines(t *testing.T) {
 		if got := liveLine(*ev); got != want {
 			t.Errorf("got  %q\nwant %q", got, want)
 		}
+	}
+	// A masked id_path shows its bullets, not their URL encoding.
+	ads := hit(consent.PhaseBefore, false)
+	ads.Request.URL, ads.Hit.Name = "https://googleads.g.doubleclick.net/pagead/viewthroughconversion/••••0001/?cv=11", "Google Ads"
+	if got, want := liveLine(ads), "hit  0.84s  before the choice  Google Ads  googleads.g.doubleclick.net/pagead/viewthroughconversion/••••0001/"; got != want {
+		t.Errorf("masked id_path\n got %q\nwant %q", got, want)
 	}
 	script := hit(consent.PhaseBefore, false)
 	script.Hit.Kind = consent.HitScript
@@ -795,12 +803,17 @@ func TestSitesPlansNumberOn(t *testing.T) {
 		if got := runner.Plans[i].PageBase; got != want {
 			t.Errorf("plan %d: PageBase %d, want %d", i, got, want)
 		}
+		// One browser log for the command, so -v prints the Browser
+		// line once, not once per site.
+		if runner.Plans[i].Browser.Log != runner.Plans[0].Browser.Log {
+			t.Errorf("plan %d has its own browser log", i)
+		}
 	}
 }
 
 // TestBrowserLineOnlyVerbose keeps browse's "Browser: ..." line off
-// stderr without -v (the view names the browser on the first run) and
-// lets the download lines through either way.
+// stderr without -v (the view names the browser on the first run),
+// prints it once with -v and lets the download lines through either way.
 func TestBrowserLineOnlyVerbose(t *testing.T) {
 	for _, verbose := range []bool{false, true} {
 		var buf bytes.Buffer
@@ -811,6 +824,9 @@ func TestBrowserLineOnlyVerbose(t *testing.T) {
 		if verbose {
 			want += "Browser: Chrome 153.0.8010.52 (/usr/bin/google-chrome)\n"
 		}
+		// A second plan (--sites) starts Chrome again: the line is
+		// printed once per command.
+		fmt.Fprintln(w, "Browser: Chrome 153.0.8010.52 (/usr/bin/google-chrome)")
 		if buf.String() != want {
 			t.Errorf("verbose %v: %q, want %q", verbose, buf.String(), want)
 		}

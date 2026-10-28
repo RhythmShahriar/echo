@@ -218,6 +218,7 @@ func (r *recorder) blockedCookie(b *proto.NetworkBlockedSetCookieWithReason, hos
 		ck.SetBy = "response:" + host
 	}
 	r.classifyCookie(ck)
+	ck.Name = consent.MaskCookieNames(ck.Name, r.plan.ShowIDs)
 	r.emit(consent.Event{Kind: consent.EvCookie, AtMS: at, Cookie: ck})
 }
 
@@ -335,6 +336,8 @@ func (r *recorder) diffCookies(cookies []*proto.NetworkCookie, at int64) {
 	r.mu.Unlock()
 	for _, e := range events {
 		r.classifyCookie(e.Cookie)
+		// Classified by its real name, written with its ID masked.
+		e.Cookie.Name = consent.MaskCookieNames(e.Cookie.Name, r.plan.ShowIDs)
 		r.emit(e)
 	}
 }

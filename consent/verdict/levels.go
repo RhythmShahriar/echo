@@ -127,8 +127,9 @@ func (j *judge) ignoreExpired() {
 
 // matches reports whether ignore: entry ig names issue is: the same
 // check plus the same tracker, page and run where the entry sets them. A
-// page given as a whole URL matches by its path, the way issues name
-// pages.
+// page given as a path matches that path on any host; one given as a
+// whole URL or host and path also matches the host when issues name it
+// (consent.PageMatches).
 func matches(ig consent.Ignore, is consent.Issue) bool {
 	if ig.Check != is.Check {
 		return false
@@ -136,7 +137,7 @@ func matches(ig consent.Ignore, is consent.Issue) bool {
 	if ig.Tracker != "" && !strings.EqualFold(ig.Tracker, is.Tracker) {
 		return false
 	}
-	if ig.Page != "" && pagePath(ig.Page) != is.Page {
+	if !consent.PageMatches(ig.Page, is.Page) {
 		return false
 	}
 	return ig.Run == "" || ig.Run == is.Run
@@ -182,7 +183,7 @@ func checkRank(id string) int {
 func (j *judge) sortIssues() {
 	pageRank := func(is consent.Issue) int {
 		for i, pg := range j.r.Pages {
-			if pg.Site == is.Site && pagePath(pg.URL) == is.Page {
+			if pg.Site == is.Site && j.pageName(&j.r.Pages[i]) == is.Page {
 				return i
 			}
 		}
