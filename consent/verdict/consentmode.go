@@ -81,7 +81,7 @@ func hasGCS(h *consent.HitRef) bool { return h.Google != nil && h.Google.GCS != 
 // else consent/default-late when the none run's default came after its
 // first Google hit. The two never come together. A default seen only in
 // another run doesn't help: the hit was sent in a run that never had
-// one, and default-late can't fire without a default in that run.
+// one. Default-late can't fire without a default in that run either.
 func (j *judge) noDefaultOrLate(pg *consent.Page, firstRun *consent.Run, first *consent.HitRef) {
 	if !hasDefault(firstRun) {
 		if hasGCS(first) {
