@@ -176,13 +176,12 @@ SPF (including the 10-lookup limit), DKIM keys, DMARC policy and alignment for t
 
 Hits are held in the browser: checking production adds nothing to anyone's analytics.
 
-<!-- consent first run: the PRD 9.1 text until the integration build prints the real output; replace it then. -->
 ```
 $ rhythm echo consent https://staging.shop.test
 Note: use Echo on sites you own or are authorised to test. Consent checks load the site like
 one new visitor: they never log in or submit forms and every tracking hit is recorded and
 stopped in the browser. Results stay on this machine with IDs masked. This notice is shown once.
-Downloading Chrome for Testing 156.0.8078.47 (172 MB) once, into ~/.cache/rhythm/soundcheck/browser ...
+Downloading Chrome for Testing 156.0.8078.47 (191 MB) once, into ~/.cache/rhythm/soundcheck/browser …
 
 rhythm echo 1.2.0 - consent check of https://staging.shop.test/
 
@@ -190,18 +189,20 @@ Browser: Chrome for Testing 156.0.8078.47 (downloaded)
 Hits held: tracking hits are recorded and stopped in the browser. Nothing reached Google, Meta or any other tracker.
 
 https://staging.shop.test/
-  Banner: Cookiebot, found after 0.8s, Reject on the banner
-  Consent Mode: v2 default, all four signals denied at 0.18s, before the first Google hit
-  [1/3] No choice   GA4: 2 cookieless pings (gcs G100); no tracker cookies
-  [2/3] Accept      GA4, Google Ads, Meta Pixel fired; update granted at 2.3s; kept on 1 more page
-  [3/3] Reject      nothing fired; update denied at 2.1s; kept on 1 more page
+  Banner: Complianz, found after 3.6s, Reject on the banner
+  Consent Mode: v2 default, all four signals denied at 0.05s, before the first Google hit
+  [1/3] No choice   Google Analytics 4: 3 cookieless pings (gcs G100); no tracker cookies; Meta Pixel held back
+  [2/3] Accept      Meta Pixel, Google Ads, Google Analytics 4 fired; update granted at 3.7s; kept on 1 more page
+  [3/3] Reject      Google Analytics 4: 2 cookieless pings (gcs G100); no tracker cookies; Meta Pixel held back; update denied at 3.7s; kept on 1 more page
 
-All clear - 0 errors, 0 warnings, 1 notice - 3 runs, 3 trackers, policy advanced
-  notice  consent/cookieless-ping  GA4 sent 2 cookieless pings before the choice (allowed under --consent-mode advanced)
+All clear - 0 errors, 0 warnings, 3 notices - 3 runs, 3 trackers, policy advanced
+
+  notice  consent/cookieless-ping  Google Analytics 4 sent 3 cookieless pings before the choice (allowed under --consent-mode advanced)
+  notice  consent/cookieless-ping  Google Analytics 4 sent 1 cookieless ping before the choice (allowed under --consent-mode advanced)
+  notice  consent/cookieless-ping  Google Analytics 4 sent 3 cookieless pings before the choice and after Reject (allowed under --consent-mode advanced)
 
 Evidence, not legal advice.
-full report: .echo/consent/2026-10-26T09-14-03-a1b2c3/report.html
-Tip: --save baseline keeps this as the baseline for the next check.
+full report: .echo/consent/2026-10-28T19-31-20-545ec9/report.html
 ```
 
 Every result is an evidence folder in `.echo/consent/`: `consent.json`, screenshots, every event of every run, a manifest with the SHA-256 of each file and `report.html`. `rhythm echo consent verify <folder>` checks that nothing in it changed since.
