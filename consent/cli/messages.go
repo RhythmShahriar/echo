@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
 
 	"github.com/RhythmShahriar/echo/consent"
 )
@@ -48,10 +49,23 @@ func fatalMessage(e *consent.FatalError) string {
 		if os.Getenv("RHYTHM_ECHO_IMAGE") == "1" {
 			return fatalMessage(&consent.FatalError{Code: consent.FatalImage})
 		}
+		if e.URL != "" {
+			// --browser named it: the way out is that path, not --browser.
+			return fmt.Sprintf("no browser at %s (%s); check the --browser path, or leave --browser out to use an installed Chrome or the one-time Chrome for Testing download",
+				e.URL, cmp.Or(detail, "not found"))
+		}
 		return "no Chrome or Chromium found; install Chrome, pass --browser /path/to/chrome, or allow the one-time Chrome for Testing download"
+	case consent.FatalBrowserStart:
+		return fmt.Sprintf("Chrome at %s didn't start: %s; check that it runs on this machine (%s --version), or pass --browser with another Chrome or Chromium",
+			cmp.Or(e.URL, "the browser path"), cmp.Or(detail, "it exited at once"), cmp.Or(e.URL, "chrome"))
 	case consent.FatalSandboxRoot:
 		return "Chrome won't start without its sandbox as root; run as another user, or pass --no-sandbox (only for sites you trust)"
 	case consent.FatalUnreachable:
+		if strings.Contains(detail, "(--map-host)") {
+			// The address --map-host names didn't answer: a certificate
+			// would be a TLS error, so -k isn't the way out.
+			return fmt.Sprintf("%s didn't answer: %s. Is the site at the --map-host address running?", url, detail)
+		}
 		return fmt.Sprintf("%s didn't answer: %s. Is the site running? A local site with a self-signed certificate needs -k", url, cmp.Or(detail, "no answer"))
 	case consent.FatalHTTPStatus:
 		status := fmt.Sprintf("%d %s", e.Status, http.StatusText(e.Status))

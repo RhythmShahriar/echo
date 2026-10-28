@@ -215,7 +215,7 @@ func (j *judge) trackerStored(run *consent.Run, gs *groups) {
 	}
 	for i := range run.Cookies {
 		c := &run.Cookies[i]
-		if c.Tracker == "" || c.Blocked != "" || !j.needed(c.Tracker, c.Need) {
+		if c.Tracker == "" || c.Blocked != "" || c.SetBy == consent.SetByEcho || !j.needed(c.Tracker, c.Need) {
 			continue
 		}
 		if b, ok := bucketOf(run.Kind, c.Phase); ok {

@@ -180,17 +180,16 @@ func TestBrowserSmoke(t *testing.T) {
 	}
 }
 
-// freePort returns a free port in 20400-20419 for Chrome's DevTools.
+// freePort returns a free loopback port the system picks for Chrome's
+// DevTools, outside the fixed ranges other packages' tests use.
 func freePort(t *testing.T) string {
 	t.Helper()
-	for port := 20419; port >= 20400; port-- {
-		if l, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", port)); err == nil {
-			_ = l.Close()
-			return fmt.Sprint(port)
-		}
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Skip("no free loopback port:", err)
 	}
-	t.Skip("no free port in 20400-20419")
-	return ""
+	defer func() { _ = l.Close() }()
+	return fmt.Sprint(l.Addr().(*net.TCPAddr).Port)
 }
 
 // devtools connects to the first page target of the Chrome on port.

@@ -3,8 +3,8 @@
 Echo's testbed serves a stand-in for `gtag.js`, so the testbed checks Echo
 against our model of Google. The gcd letter table is unofficial and
 community-documented. This capture checks both against what the real
-`gtag.js` sends. The maintainer runs it by hand. It is not run in CI and
-not in the testbed, and nothing in `go test` contacts Google.
+`gtag.js` sends. The maintainer runs it by hand. It is not run in CI or
+in the testbed. Nothing in `go test` contacts Google.
 
 ## Rules
 

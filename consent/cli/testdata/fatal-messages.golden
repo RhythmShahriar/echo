@@ -1,7 +1,10 @@
 no-browser: rhythm echo: no Chrome or Chromium found; install Chrome, pass --browser /path/to/chrome, or allow the one-time Chrome for Testing download
+no-browser: rhythm echo: no browser at /nonexistent/chrome (there is no such file); check the --browser path, or leave --browser out to use an installed Chrome or the one-time Chrome for Testing download
+browser-start: rhythm echo: Chrome at /bin/true didn't start: it exited before it opened DevTools; check that it runs on this machine (/bin/true --version), or pass --browser with another Chrome or Chromium
 sandbox-root: rhythm echo: Chrome won't start without its sandbox as root; run as another user, or pass --no-sandbox (only for sites you trust)
 unreachable: rhythm echo: https://staging.shop.test/ didn't answer: dial tcp 127.0.0.1:443: connection refused. Is the site running? A local site with a self-signed certificate needs -k
 unreachable: rhythm echo: https://staging.shop.test/ didn't answer: dial tcp: lookup staging.shop.test: no such host. Is the site running? A local site with a self-signed certificate needs -k
+unreachable: rhythm echo: https://g01.shop.test/ didn't answer: http://127.0.0.1:39102 (--map-host): dial tcp 127.0.0.1:39102: connect: connection refused. Is the site at the --map-host address running?
 http-status: rhythm echo: https://staging.shop.test/ answered 401 Unauthorized; pass the login with -H "Authorization: env:RHYTHM_ECHO_STAGING_AUTH" or consent: headers:
 http-status: rhythm echo: https://staging.shop.test/ answered 503 Service Unavailable; check that the site serves its pages, then run the check again
 bot-wall: rhythm echo: https://shop.example.com/ showed a bot check (Cloudflare) instead of the page; allow this machine in the firewall for the check, or check staging

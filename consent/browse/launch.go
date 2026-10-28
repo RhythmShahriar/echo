@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"regexp"
 	"strings"
@@ -96,22 +97,32 @@ func Launch(ctx context.Context, p *consent.Plan, internalAddr string) (*browser
 	}
 	b, err := launchBrowser(ctx, opts)
 	if err != nil {
-		return nil, launchError(err)
+		return nil, launchError(err, opts.Bin)
 	}
 	return b, nil
 }
 
 // launchError maps internal/browser's errors to the fatal codes the CLI
-// turns into PRD 10.2 messages 9 and 10. Anything else stays as it is,
-// masked: Chrome's own output can carry the command line.
-func launchError(err error) error {
+// turns into PRD 10.2 messages: no browser (at the --browser path bin
+// when one was given), root without the sandbox or a browser that was
+// found but didn't start. Anything else stays as it is, masked: Chrome's
+// own output can carry the command line.
+func launchError(err error, bin string) error {
+	var se *browser.StartError
 	switch {
 	case errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
 		return err
 	case errors.Is(err, browser.ErrSandboxRoot):
 		return &consent.FatalError{Code: consent.FatalSandboxRoot, Detail: consent.MaskURL(err.Error(), false), Err: err}
 	case errors.Is(err, browser.ErrNoBrowser):
-		return &consent.FatalError{Code: consent.FatalNoBrowser, Detail: consent.MaskURL(err.Error(), false), Err: err}
+		detail := consent.MaskURL(err.Error(), false)
+		if bin != "" && errors.Is(err, fs.ErrNotExist) {
+			detail = "there is no such file"
+		}
+		return &consent.FatalError{Code: consent.FatalNoBrowser, URL: consent.SafeText(bin, 300), Detail: detail, Err: err}
+	case errors.As(err, &se):
+		return &consent.FatalError{Code: consent.FatalBrowserStart, URL: consent.SafeText(se.Bin, 300),
+			Detail: consent.SafeText(consent.MaskURL(browser.StartReason(se.Err)+se.Hint, false), 500), Err: err}
 	}
 	return fmt.Errorf("consent: starting Chrome: %s", consent.MaskURL(err.Error(), false))
 }

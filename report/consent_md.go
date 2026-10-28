@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"html"
 	"io"
+	"net/url"
 	"regexp"
 	"slices"
 	"strings"
@@ -125,8 +126,7 @@ func (m *consentMD) page(site, path string) string {
 // and after Reject.`
 func (m *consentMD) verdict() {
 	s := m.r.Summary()
-	head := "All clear"
-	var tail string
+	var head, tail string
 	if c := m.r.Comparison; c != nil {
 		head = "No changes"
 		switch {
@@ -139,12 +139,7 @@ func (m *consentMD) verdict() {
 		}
 		tail = fmt.Sprintf("%d broke, %d new, %d changed, %d fixed against %s", s.Broke, s.New, s.Changed, s.Fixed, md(cmp.Or(c.Against, "a baseline")))
 	} else {
-		switch m.r.ExitCode(m.o.FailOn) {
-		case 1:
-			head = "Findings"
-		case 3:
-			head = "Couldn't check"
-		}
+		head = m.r.Head(m.o.FailOn)
 		tail = m.findings()
 		if tail == "" && s.InconclusiveRuns > 0 {
 			tail = m.unchecked()
@@ -268,7 +263,7 @@ func (m *consentMD) matrices() {
 		m.line("%s", head)
 		m.line("%s", rule)
 		for _, pg := range g.pages {
-			row := "| " + m.page("", consentPagePath(pg.URL)) + " | " + m.banner(pg) + " |"
+			row := "| " + m.page("", matrixPage(m.r, pg)) + " | " + m.banner(pg) + " |"
 			for _, k := range kinds {
 				row += " " + m.cell(pg, pageRun(pg, k)) + " |"
 			}
@@ -276,6 +271,17 @@ func (m *consentMD) matrices() {
 		}
 		m.line("")
 	}
+}
+
+// matrixPage is a matrix row's page: the name issues use (host and
+// path when the pages span hosts) with the page's query after it, which
+// page drops unless Details. The --sites name heads the matrix.
+func matrixPage(r *consent.Result, pg *consent.Page) string {
+	name := consent.PageName(r, pg)
+	if u, err := url.Parse(pg.URL); err == nil && u.Host != "" && u.RawQuery != "" {
+		name += "?" + u.RawQuery
+	}
+	return name
 }
 
 // runKinds are the run kinds any page ran, in run order: the matrix
@@ -568,7 +574,7 @@ func (m *consentMD) consentMode() {
 		}
 		var s string
 		if len(cm.Default) == 0 {
-			s = "No default; Google hits carry consent state."
+			s = "No default; " + googleHitState(pg) + "."
 		} else {
 			s = "Default: "
 			if cm.V2 {
@@ -592,7 +598,7 @@ func (m *consentMD) consentMode() {
 			}
 		}
 		if len(m.r.Pages) > 1 {
-			s = m.page(pg.Site, consentPagePath(pg.URL)) + ": " + s
+			s = m.page(pg.Site, matrixPage(m.r, pg)) + ": " + s
 		}
 		paras = append(paras, s)
 	}

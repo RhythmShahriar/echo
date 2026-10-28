@@ -540,3 +540,60 @@ func TestConsentSummaryHeldFooter(t *testing.T) {
 		}
 	}
 }
+
+// consentSummaryOf writes data as a consent.json envelope and returns
+// the masked summary summary.sh makes of it.
+func consentSummaryOf(t *testing.T, data map[string]any) string {
+	t.Helper()
+	needBash(t, "jq")
+	sh := filepath.Join(root(t), "integrations", "action", "summary.sh")
+	env := map[string]any{"schema": "rhythm-echo/v1", "kind": "consent",
+		"summary": map[string]any{"errors": 1, "pages": 2, "runs": 2, "trackers": 2}, "data": data}
+	b, err := json.Marshal(env)
+	if err != nil {
+		t.Fatal(err)
+	}
+	in := filepath.Join(t.TempDir(), "consent.json")
+	if err := os.WriteFile(in, b, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	out, errOut, code := script(t, sh, nil, "consent", in)
+	if code != 0 {
+		t.Fatalf("exit %d: %s", code, errOut)
+	}
+	return out
+}
+
+// consentPage is a page of a consent.json with one No choice run that
+// sent tracker's hit.
+func consentPage(site, url, tracker string) map[string]any {
+	return map[string]any{"site": site, "url": url, "cmp": map[string]any{"name": "Complianz", "found": true},
+		"runs": []any{map[string]any{"run": "none", "status": "ok", "hits": []any{map[string]any{"name": tracker}}}}}
+}
+
+// TestConsentSummarySites: with --sites, ✗ marks only the runs of the
+// site whose issue it is. Every row names its site. A clean site
+// sharing the path stays unmarked.
+func TestConsentSummarySites(t *testing.T) {
+	out := consentSummaryOf(t, map[string]any{
+		"pages": []any{consentPage("bad", "https://c01.shop.test/", "Meta Pixel"), consentPage("good", "https://g02.shop.test/", "Google Analytics 4")},
+		"issues": []any{map[string]any{"check": "consent/before-choice", "level": "error", "site": "bad", "page": "/", "run": "none",
+			"title": "Meta Pixel fired before the visitor chose"}},
+	})
+	contains(t, "summary", out, "| bad / | Complianz | ✗ Meta Pixel |", "| good / | Complianz | Google Analytics 4 |",
+		"| consent/before-choice | bad / | No choice |")
+	lacks(t, "summary", out, "✗ Google Analytics 4")
+}
+
+// TestConsentSummaryHosts: when the pages span hosts, issues name the
+// page by host and path. ✗ marks the run of the host that failed.
+func TestConsentSummaryHosts(t *testing.T) {
+	out := consentSummaryOf(t, map[string]any{
+		"pages": []any{consentPage("", "https://secret-url.shop.test/?token=x", "Meta Pixel"), consentPage("", "https://pii-beacons.shop.test/", "TikTok Pixel")},
+		"issues": []any{map[string]any{"check": "consent/before-choice", "level": "error", "page": "secret-url.shop.test/", "run": "none",
+			"title": "Meta Pixel fired before the visitor chose"}},
+	})
+	contains(t, "summary", out, "| secret-url&#46;shop&#46;test/ | Complianz | ✗ Meta Pixel |",
+		"| pii-beacons&#46;shop&#46;test/ | Complianz | TikTok Pixel |")
+	lacks(t, "summary", out, "✗ TikTok Pixel", "token")
+}

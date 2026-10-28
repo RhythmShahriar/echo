@@ -12,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -327,9 +328,12 @@ func TestFatalMessages(t *testing.T) {
 	t.Setenv("CI", "true")
 	cases := []*consent.FatalError{
 		{Code: consent.FatalNoBrowser},
+		{Code: consent.FatalNoBrowser, URL: "/nonexistent/chrome", Detail: "there is no such file"},
+		{Code: consent.FatalBrowserStart, URL: "/bin/true", Detail: "it exited before it opened DevTools"},
 		{Code: consent.FatalSandboxRoot},
 		{Code: consent.FatalUnreachable, URL: "https://staging.shop.test/", Detail: "dial tcp 127.0.0.1:443: connection refused"},
 		{Code: consent.FatalUnreachable, URL: "https://staging.shop.test/", Err: errors.New("dial tcp: lookup staging.shop.test: no such host")},
+		{Code: consent.FatalUnreachable, URL: "https://g01.shop.test/", Detail: "http://127.0.0.1:39102 (--map-host): dial tcp 127.0.0.1:39102: connect: connection refused"},
 		{Code: consent.FatalHTTPStatus, URL: "https://staging.shop.test/", Status: 401},
 		{Code: consent.FatalHTTPStatus, URL: "https://staging.shop.test/", Status: 503},
 		{Code: consent.FatalBotWall, URL: "https://shop.example.com/", Detail: "Cloudflare"},
@@ -512,37 +516,56 @@ func TestLiveLines(t *testing.T) {
 		ptr(withRun(hit(consent.PhaseAfterAccept, true), consent.RunWithdraw)):   "hit  0.84s  Withdraw, after Accept  Meta Pixel  www.facebook.com/tr (held)",
 		ptr(withRun(hit(consent.PhaseAfterWithdraw, true), consent.RunWithdraw)): "hit  0.84s  Withdraw  Meta Pixel  www.facebook.com/tr (held)",
 	} {
-		if got := liveLine(*ev); got != want {
+		if got := liveLine(*ev, ""); got != want {
 			t.Errorf("got  %q\nwant %q", got, want)
 		}
 	}
 	// A masked id_path shows its bullets, not their URL encoding.
 	ads := hit(consent.PhaseBefore, false)
 	ads.Request.URL, ads.Hit.Name = "https://googleads.g.doubleclick.net/pagead/viewthroughconversion/••••0001/?cv=11", "Google Ads"
-	if got, want := liveLine(ads), "hit  0.84s  before the choice  Google Ads  googleads.g.doubleclick.net/pagead/viewthroughconversion/••••0001/"; got != want {
+	if got, want := liveLine(ads, ""), "hit  0.84s  before the choice  Google Ads  googleads.g.doubleclick.net/pagead/viewthroughconversion/••••0001/"; got != want {
 		t.Errorf("masked id_path\n got %q\nwant %q", got, want)
 	}
 	script := hit(consent.PhaseBefore, false)
 	script.Hit.Kind = consent.HitScript
 	for _, ev := range []consent.Event{script, {Kind: consent.EvCookie}, {Kind: consent.EvRequest, Request: &consent.Request{}}} {
-		if got := liveLine(ev); got != "" {
+		if got := liveLine(ev, ""); got != "" {
 			t.Errorf("not a hit: %q", got)
 		}
 	}
 	// Page text is made safe for the terminal.
 	odd := hit(consent.PhaseBefore, true)
 	odd.Hit.Name = "Pixel\x1b[31m\u202e"
-	if got := liveLine(odd); strings.ContainsAny(got, "\x1b\u202e") {
+	if got := liveLine(odd, ""); strings.ContainsAny(got, "\x1b\u202e") {
 		t.Errorf("control characters reached the terminal: %q", got)
 	}
 	var b bytes.Buffer
-	live := liveWriter(&b, true)
+	live := liveWriter(&b, true, nil)
 	live(hit(consent.PhaseBefore, true))
 	live(consent.Event{Kind: consent.EvCookie})
 	if b.String() != "hit  0.84s  before the choice  Meta Pixel  www.facebook.com/tr (held)\n" {
 		t.Errorf("--live wrote %q", b.String())
 	}
-	if liveWriter(&b, false) != nil {
+	// With several pages the line names the page after the run.
+	b.Reset()
+	secret, _ := url.Parse("https://secret-url.shop.test/?token=x")
+	pii, _ := url.Parse("https://pii-beacons.shop.test/")
+	pages := livePages([]*consent.Plan{{Targets: []consent.Target{{URL: secret}, {URL: pii}}}})
+	ev := hit(consent.PhaseBefore, true)
+	ev.Target = secret.String()
+	liveWriter(&b, true, pages)(ev)
+	if b.String() != "hit  0.84s  before the choice, secret-url.shop.test/  Meta Pixel  www.facebook.com/tr (held)\n" {
+		t.Errorf("--live with two hosts wrote %q", b.String())
+	}
+	home, _ := url.Parse("https://shop.test/")
+	about, _ := url.Parse("https://shop.test/about/")
+	if got := livePages([]*consent.Plan{{Targets: []consent.Target{{Site: "a", URL: home}}}, {Targets: []consent.Target{{Site: "b", URL: about}}}}); got[about.String()] != "b /about/" || got[home.String()] != "a /" {
+		t.Errorf("--sites pages %v", got)
+	}
+	if livePages([]*consent.Plan{{Targets: []consent.Target{{URL: home}}}}) != nil {
+		t.Error("one page is named")
+	}
+	if liveWriter(&b, false, nil) != nil {
 		t.Error("--live off still has a writer")
 	}
 	// The plan carries it to the browser only with --live.
@@ -829,6 +852,9 @@ func TestBrowserLineOnlyVerbose(t *testing.T) {
 		// A second plan (--sites) starts Chrome again: the line is
 		// printed once per command.
 		fmt.Fprintln(w, "Browser: Chrome 153.0.8010.52 (/usr/bin/google-chrome)")
+		// A retry note is a message: it starts with the tool's name.
+		fmt.Fprintln(w, "Chrome at /bin/true didn't start (it exited before it opened DevTools); starting it again")
+		want += "rhythm echo: Chrome at /bin/true didn't start (it exited before it opened DevTools); starting it again\n"
 		if buf.String() != want {
 			t.Errorf("verbose %v: %q, want %q", verbose, buf.String(), want)
 		}

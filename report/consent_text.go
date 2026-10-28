@@ -266,7 +266,7 @@ func (t *consentText) siteGroups() []*siteGroup {
 func (t *consentText) page(pg *consent.Page) {
 	t.line("%s", Safe(pg.URL))
 	t.line("  %s", t.bannerLine(pg))
-	if cm := consentModeLine(pg.ConsentMode); cm != "" {
+	if cm := consentModeLine(pg); cm != "" {
 		t.line("  %s", cm)
 	}
 	for i := range pg.Runs {
@@ -349,12 +349,13 @@ var fourSignals = []string{"ad_storage", "analytics_storage", "ad_user_data", "a
 // consentModeLine says what the page's Consent Mode setup was: `Consent
 // Mode: v2 default, all four signals denied at 0.18s, before the first
 // Google hit`. "" when the page has no Consent Mode.
-func consentModeLine(cm *consent.ConsentMode) string {
+func consentModeLine(pg *consent.Page) string {
+	cm := pg.ConsentMode
 	if cm == nil || !cm.Present {
 		return ""
 	}
 	if len(cm.Default) == 0 {
-		return "Consent Mode: no default; Google hits carry consent state"
+		return "Consent Mode: no default; " + googleHitState(pg)
 	}
 	s := "Consent Mode: "
 	if cm.V2 {
@@ -369,6 +370,51 @@ func consentModeLine(cm *consent.ConsentMode) string {
 		}
 	}
 	return s
+}
+
+// googleHitState says what consent state the page's Google hits carried
+// before the choice, when there was no default: "Google hits carry
+// consent state" only when one has a gcs; a gcd alone, every signal
+// unset, is said as such. Hits after a choice carry its update, which
+// says nothing about the missing default.
+func googleHitState(pg *consent.Page) string {
+	gcs, gcd, unset := false, false, true
+	for _, run := range pg.Runs {
+		for i := range run.Hits {
+			h := &run.Hits[i]
+			if h.Google == nil || h.Kind == consent.HitScript || h.Phase != consent.PhaseBefore {
+				continue
+			}
+			gcs = gcs || h.Google.GCS != ""
+			if h.Google.GCD != "" {
+				gcd = true
+				unset = unset && gcdAllUnset(h.Google.GCDDecoded)
+			}
+		}
+	}
+	switch {
+	case gcs:
+		return "Google hits carry consent state"
+	case gcd && unset:
+		return "Google hits carry gcd only, every signal unset"
+	case gcd:
+		return "Google hits carry gcd only, no gcs"
+	}
+	return "Google hits carry no consent state"
+}
+
+// gcdAllUnset reports whether a decoded gcd has all four signals at
+// letter l (not set).
+func gcdAllUnset(d *consent.GCD) bool {
+	if d == nil {
+		return false
+	}
+	for _, s := range []consent.GCDSignal{d.AdStorage, d.AnalyticsStorage, d.AdUserData, d.AdPersonalization} {
+		if s.Letter != "l" {
+			return false
+		}
+	}
+	return true
 }
 
 // stateWords writes a consent state: "all four signals denied",
@@ -778,13 +824,7 @@ func (t *consentText) verdict() {
 			s.Broke, s.New, s.Changed, s.Fixed, plural(s.Runs, "run", "runs"), plural(s.Trackers, "tracker", "trackers"))
 		return
 	}
-	head := "All clear"
-	switch t.r.ExitCode(t.o.FailOn) {
-	case 1:
-		head = "Findings"
-	case 3:
-		head = "Couldn't check"
-	}
+	head := t.r.Head(t.o.FailOn)
 	t.line("%s - %s, %s, %s - %s, %s, policy %s", t.paint(t.headColor(head), head),
 		plural(s.Errors, "error", "errors"), plural(s.Warnings, "warning", "warnings"), plural(s.Notices, "notice", "notices"),
 		plural(s.Runs, "run", "runs"), plural(s.Trackers, "tracker", "trackers"), Safe(string(cmp.Or(t.r.Policy, consent.PolicyAdvanced))))

@@ -297,12 +297,41 @@ func (a *attempt) loadError(start *url.URL, shown, errText string) *consent.Fata
 		code = consent.FatalTLS
 	}
 	detail := consent.MaskURL(errText, false)
+	if me, ok := a.mapErr(start); ok {
+		// --map-host answered: Chrome only saw Echo fail the request, so
+		// its own word for it says nothing.
+		if me.tls {
+			code = consent.FatalTLS
+		}
+		return &consent.FatalError{Code: code, URL: shown, Detail: mapErrorText(me)}
+	}
 	if code == consent.FatalUnreachable {
 		if d := a.dialError(start.String(), start); d != "" {
 			detail = d
 		}
 	}
 	return &consent.FatalError{Code: code, URL: shown, Detail: detail}
+}
+
+// mapErr is why the mapped request for start failed, when --map-host
+// answers its host and it did.
+func (a *attempt) mapErr(start *url.URL) (mapError, bool) {
+	if a.run == nil || a.run.s == nil || a.run.s.rec == nil {
+		return mapError{}, false
+	}
+	return a.run.s.rec.mapErr(start.Hostname())
+}
+
+// mapErrorText says why a mapped request failed, naming the mapped
+// address: "https://127.0.0.1:39102 (--map-host): x509: certificate
+// signed by unknown authority".
+func mapErrorText(me mapError) string {
+	msg := me.err.Error()
+	var ue *url.Error
+	if errors.As(me.err, &ue) {
+		msg = ue.Err.Error()
+	}
+	return consent.SafeText(consent.MaskURL(me.addr, false)+" (--map-host): "+msg, 300)
 }
 
 // dialError is why the target's guard couldn't connect to raw's host,

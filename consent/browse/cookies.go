@@ -4,10 +4,12 @@
 package browse
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"hash/fnv"
 	"net/http"
+	"net/url"
 	"slices"
 	"strings"
 
@@ -279,6 +281,24 @@ func (r *recorder) classifyStorage(k *consent.StorageKey) {
 	}
 }
 
+// noteEchoCookies keeps the cookies Echo added to the context, so the
+// snapshots name them as Echo's rather than the page's scripts'. A
+// cookie the page later changes is the page's again.
+func (r *recorder) noteEchoCookies(cookies []*proto.NetworkCookieParam) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.echoCookies == nil {
+		r.echoCookies = map[string]string{}
+	}
+	for _, c := range cookies {
+		u, err := url.Parse(c.URL)
+		if err != nil {
+			continue
+		}
+		r.echoCookies[noteKey(c.Name, cmp.Or(c.Domain, u.Hostname()))] = c.Value
+	}
+}
+
 // toCookie is a stored cookie without its value.
 func toCookie(c *proto.NetworkCookie) consent.Cookie {
 	out := consent.Cookie{Name: consent.SafeText(c.Name, 256), Domain: c.Domain, Path: c.Path, HTTPOnly: c.HTTPOnly,
@@ -330,6 +350,8 @@ func (r *recorder) diffCookies(cookies []*proto.NetworkCookie, at int64) {
 		ck.SetBy, ck.AtMS = "script", at
 		if n, ok := r.setCookies[noteKey(c.Name, c.Domain)]; ok && n.at >= since {
 			ck.SetBy, ck.AtMS = "response:"+n.host, min(n.at, at)
+		} else if v, ok := r.echoCookies[noteKey(c.Name, c.Domain)]; ok && v == c.Value {
+			ck.SetBy = consent.SetByEcho
 		}
 		events = append(events, consent.Event{Kind: consent.EvCookie, AtMS: ck.AtMS, Cookie: &ck})
 	}

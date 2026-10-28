@@ -25,8 +25,13 @@ func TestMaskURL(t *testing.T) {
 		{"pixel id", "https://www.facebook.com/tr?id=123412345678&ev=PageView", "https://www.facebook.com/tr?id=••••5678&ev=PageView"},
 		{"personal data", "https://www.facebook.com/tr?id=1&ud[em]=" + hash + "&em=a%40b.test&ph=%2B4915112345678&fn=ann",
 			"https://www.facebook.com/tr?id=••••&ud[em]=" + consent.Hashed + "&em=" + consent.Hashed + "&ph=" + consent.Hashed + "&fn=" + consent.Hashed},
-		{"a hash anywhere", "https://px.test/c?h=" + hash, "https://px.test/c?h=" + url.QueryEscape(consent.Hashed)},
-		{"an email anywhere", "https://px.test/c?x=ann%40example.com", "https://px.test/c?x=" + url.QueryEscape("••••@example.com")},
+		{"a hash anywhere", "https://px.test/c?h=" + hash, "https://px.test/c?h=" + consent.Hashed},
+		{"an email anywhere", "https://px.test/c?x=ann%40example.com", "https://px.test/c?x=••••@example.com"},
+		// The testbed's masking URL (secret-url, pii-beacons): the address
+		// and the phone number read as bullets, like the token.
+		{"testbed masking URL", "https://secret-url.shop.test/?token=" + url.QueryEscape(fakeToken) + "&email=buyer%40shop.test&phone=%2B" + "1555" + "7014" + "29",
+			"https://secret-url.shop.test/?token=•••••&email=••••@shop.test&phone=••••(phone)"},
+		{"a masked value keeps its other escapes", "https://px.test/c?x=a%26b+ann%40example.com", "https://px.test/c?x=a%26b+••••@example.com"},
 		{"login in the URL", "https://ann:hunter2@shop.test/", "https://•••••@shop.test/"},
 		{"token in the query", "https://shop.test/?token=" + fakeToken + "&a=1", "https://shop.test/?token=•••••&a=1"},
 		{"short id hidden whole", "https://px.test/?uid=42", "https://px.test/?uid=••••"},

@@ -150,7 +150,7 @@ func (c *cmd) runCheck(ctx context.Context, pos []string) int {
 		dir = abs
 	}
 	st.store.ExcludeFromGit()
-	live := liveWriter(env.Stderr, o.live)
+	live := liveWriter(env.Stderr, o.live, livePages(st.plans))
 	blog := browserLog(env.Stderr, o.verbose)
 	var results []*consent.Result
 	interrupted := false
@@ -380,14 +380,15 @@ func width(w io.Writer) int {
 
 // liveWriter is --live: one line on stderr per tracker hit as the
 // browser records it, or nil. Runs record in parallel, so lines are
-// written whole under a lock.
-func liveWriter(w io.Writer, on bool) func(consent.Event) {
+// written whole under a lock. pages names each target's page, by its
+// URL, when the check has more than one.
+func liveWriter(w io.Writer, on bool, pages map[string]string) func(consent.Event) {
 	if !on {
 		return nil
 	}
 	var mu sync.Mutex
 	return func(ev consent.Event) {
-		line := liveLine(ev)
+		line := liveLine(ev, pages[ev.Target])
 		if line == "" {
 			return
 		}
@@ -397,12 +398,46 @@ func liveWriter(w io.Writer, on bool) func(consent.Event) {
 	}
 }
 
+// livePages names the page of each target of plans, by its URL, as the
+// issue lines do: the path, host and path when the pages of a --sites
+// name span hosts, after the --sites name when there are several. A
+// check of one page names none.
+func livePages(plans []*consent.Plan) map[string]string {
+	r := &consent.Result{}
+	var urls []string
+	sites := map[string]bool{}
+	for _, p := range plans {
+		for _, t := range p.Targets {
+			if t.URL == nil {
+				continue
+			}
+			r.Pages = append(r.Pages, consent.Page{Site: t.Site, URL: t.URL.String()})
+			urls = append(urls, t.URL.String())
+			sites[t.Site] = true
+		}
+	}
+	if len(r.Pages) < 2 {
+		return nil
+	}
+	out := map[string]string{}
+	for i := range r.Pages {
+		pg := &r.Pages[i]
+		name := consent.PageName(r, pg)
+		if len(sites) > 1 && pg.Site != "" {
+			name = pg.Site + " " + name
+		}
+		out[urls[i]] = consent.SafeText(name, 120)
+	}
+	return out
+}
+
 // liveLine is one --live line, 'hit  <s.ss>s  <run>  <tracker>
 // <host><path> (held)', or "" for an event that isn't a hit. The run is
 // named with the part of it the hit fell in when that isn't the run's
 // own choice: "Accept, before the choice". An event without a run (an
-// older runner) shows its phase alone.
-func liveLine(ev consent.Event) string {
+// older runner) shows its phase alone. page, when not "", follows the
+// run: "No choice, secret-url.shop.test/".
+func liveLine(ev consent.Event, page string) string {
 	if ev.Kind != consent.EvRequest || ev.Hit == nil || ev.Request == nil || ev.Hit.Kind == consent.HitScript {
 		return ""
 	}
@@ -414,7 +449,11 @@ func liveLine(ev consent.Event) string {
 	if ev.Request.Held {
 		held = " (held)"
 	}
-	return fmt.Sprintf("hit  %.2fs  %s  %s  %s%s", float64(ev.AtMS)/1000, runLabel(ev),
+	run := runLabel(ev)
+	if page != "" {
+		run += ", " + page
+	}
+	return fmt.Sprintf("hit  %.2fs  %s  %s  %s%s", float64(ev.AtMS)/1000, run,
 		consent.SafeText(ev.Hit.Name, 60), consent.SafeText(where, 200), held)
 }
 
@@ -501,6 +540,14 @@ type browserLines struct {
 }
 
 func (b *browserLines) Write(p []byte) (int, error) {
+	if bytes.HasPrefix(p, []byte("Chrome at ")) {
+		// A retry note is a message like every other: it starts with
+		// the tool's name.
+		if _, err := b.w.Write(append([]byte("rhythm echo: "), p...)); err != nil {
+			return 0, err
+		}
+		return len(p), nil
+	}
 	if bytes.HasPrefix(p, []byte("Browser: ")) {
 		b.mu.Lock()
 		show := b.verbose && !b.shown

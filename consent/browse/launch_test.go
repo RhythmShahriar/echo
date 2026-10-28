@@ -145,8 +145,9 @@ func TestConsentRefusesRootWithoutOptIn(t *testing.T) {
 
 	p.Browser.NoSandbox = true
 	_, err = Launch(t.Context(), p, "127.0.0.1:35061")
-	if err == nil || errors.As(err, &fe) {
-		t.Fatalf("root with --no-sandbox: %v", err)
+	if !errors.As(err, &fe) || fe.Code != consent.FatalBrowserStart || fe.URL != p.Browser.Bin ||
+		fe.Detail != "it exited before it opened DevTools: crashed" {
+		t.Fatalf("root with --no-sandbox, a Chrome that crashes: %v", err)
 	}
 	if !strings.Contains(log.String(), "WARNING: Chrome is running without its sandbox") {
 		t.Errorf("no sandbox warning: %q", log.String())
@@ -208,16 +209,16 @@ func TestLaunchErrorMapping(t *testing.T) {
 	p.Browser.Log = &bytes.Buffer{}
 	_, err := Launch(t.Context(), p, "127.0.0.1:35063")
 	var fe *consent.FatalError
-	if !errors.As(err, &fe) || fe.Code != consent.FatalNoBrowser || !strings.Contains(fe.Detail, "missing-chrome") {
+	if !errors.As(err, &fe) || fe.Code != consent.FatalNoBrowser || fe.URL != p.Browser.Bin || fe.Detail != "there is no such file" {
 		t.Fatalf("missing --browser: %v", err)
 	}
 
 	token := "ghp_" + strings.Repeat("A1b2C3d4", 5) // assembled at runtime
-	err = launchError(errors.New("starting chrome: " + token))
+	err = launchError(errors.New("starting chrome: "+token), "")
 	if errors.As(err, &fe) || strings.Contains(err.Error(), token) {
 		t.Errorf("launchError leaks or misfiles: %v", err)
 	}
-	if err := launchError(context.Canceled); !errors.Is(err, context.Canceled) {
+	if err := launchError(context.Canceled, ""); !errors.Is(err, context.Canceled) {
 		t.Errorf("canceled: %v", err)
 	}
 }

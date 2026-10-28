@@ -298,6 +298,7 @@ func (s *session) harden(o sessionOptions) error {
 		if err := (proto.StorageSetCookies{Cookies: cookies, BrowserContextID: id}).Call(root); err != nil {
 			return fmt.Errorf("consent: setting --cookie: %w", err)
 		}
+		s.rec.noteEchoCookies(cookies)
 	}
 	return nil
 }

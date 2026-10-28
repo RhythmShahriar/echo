@@ -24,7 +24,7 @@ func get(t *testing.T, h http.Handler, path string) (int, string) {
 }
 
 // Both pages have the banner with both buttons, the Consent Mode default
-// before anything else and the update on the choice, and load nothing
+// before anything else and the update on the choice. They load nothing
 // from another host.
 func TestPagesShared(t *testing.T) {
 	var hits atomic.Int64

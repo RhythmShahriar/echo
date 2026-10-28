@@ -483,6 +483,29 @@ func (r *Result) Verdict(failOn string) string {
 	return "ok"
 }
 
+// Head words for a result that isn't a comparison.
+const (
+	HeadFindings     = "Findings"
+	HeadInconclusive = "Couldn't check"
+	HeadClear        = "All clear"
+)
+
+// Head is the verdict word the reports print. It comes from what was
+// found, not from failOn, so --fail-on none never turns errors into
+// "All clear": Findings when there is an error or warning (or anything
+// failOn counts), Couldn't check when a run was inconclusive, else All
+// clear. failOn decides only the exit code.
+func (r *Result) Head(failOn string) string {
+	s := r.Summary()
+	switch {
+	case s.Errors+s.Warnings > 0 || r.failing(failOn):
+		return HeadFindings
+	case r.incomplete():
+		return HeadInconclusive
+	}
+	return HeadClear
+}
+
 // ExitCode applies PRD 10.1 precedence: 1 when an issue (or, comparing,
 // a change) is at or above failOn, else 3 when any run is inconclusive,
 // else 0. Interrupts (130) and usage errors (2) are the CLI's.

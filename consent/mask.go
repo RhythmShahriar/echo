@@ -241,13 +241,25 @@ func maskQuery(q string, showIDs bool, depth int, ids map[string]bool) string {
 			}
 		default:
 			if m := maskValue(val); m != val {
-				pairs[i] = k + "=" + url.QueryEscape(m)
+				pairs[i] = k + "=" + escapeMasked(m)
 			} else if raw, err := url.PathUnescape(v); err == nil && phone.MatchString(raw) {
-				pairs[i] = k + "=" + url.QueryEscape(maskValue(raw))
+				pairs[i] = k + "=" + escapeMasked(maskValue(raw))
 			}
 		}
 	}
 	return strings.Join(pairs, "&")
+}
+
+// maskedReadable undoes the escapes QueryEscape puts on what a mask
+// writes: the bullets, the @ of a masked address and the parentheses of
+// (phone) and (sha256). They are all allowed in a query, so a masked
+// value reads "••••@example.org" or "••••(phone)" like the id and token
+// masks, while '&', '=', '+' and '#' stay escaped.
+var maskedReadable = strings.NewReplacer("%E2%80%A2", "•", "%40", "@", "%28", "(", "%29", ")")
+
+// escapeMasked escapes a masked query value, keeping the mask readable.
+func escapeMasked(m string) string {
+	return maskedReadable.Replace(url.QueryEscape(m))
 }
 
 // unescapeAll decodes a value encoded more than once, as a page URL

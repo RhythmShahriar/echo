@@ -6,6 +6,8 @@ package browse
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"errors"
 	"io"
 	"net/http"
@@ -13,6 +15,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/go-rod/rod/lib/proto"
@@ -33,22 +36,19 @@ const mapTimeout = 15 * time.Second
 type mapper struct {
 	patterns []string            // most specific first: exact hosts, then the longest *.suffix
 	bases    map[string]*url.URL // pattern (lower case) -> base URL
-	client   *http.Client
+	client   *http.Client        // plain http bases
+	insecure bool                // -k: an https base's certificate isn't checked
+
+	mu  sync.Mutex
+	tls map[string]*http.Client // https bases, by the host the certificate must name
 }
 
 // newMapper reads --map-host host=addr pairs: addr is host:port (plain
-// http) or a full http:// URL used as the base.
-func newMapper(m map[string]string) *mapper {
-	mp := &mapper{bases: map[string]*url.URL{}, client: &http.Client{
-		Timeout:       mapTimeout,
-		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
-		Transport: &http.Transport{
-			Proxy:               nil, // a mapped address is local; never send it through a proxy
-			DisableCompression:  true,
-			MaxIdleConnsPerHost: 16,
-			IdleConnTimeout:     30 * time.Second,
-		},
-	}}
+// http) or a full http:// or https:// URL used as the base. An https
+// base is checked against the original host name, not its address,
+// unless insecure (-k).
+func newMapper(m map[string]string, insecure bool) *mapper {
+	mp := &mapper{bases: map[string]*url.URL{}, client: mapClient(nil), insecure: insecure, tls: map[string]*http.Client{}}
 	for pat, addr := range m {
 		base := mapBase(addr)
 		if base == nil {
@@ -72,6 +72,58 @@ func newMapper(m map[string]string) *mapper {
 		return strings.Compare(a, b)
 	})
 	return mp
+}
+
+// mapClient is the client for mapped requests: no proxy, no redirects
+// followed, the body as it came. cfg is the TLS setup of an https base.
+func mapClient(cfg *tls.Config) *http.Client {
+	return &http.Client{
+		Timeout:       mapTimeout,
+		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+		Transport: &http.Transport{
+			Proxy:               nil, // a mapped address is local; never send it through a proxy
+			DisableCompression:  true,
+			MaxIdleConnsPerHost: 16,
+			IdleConnTimeout:     30 * time.Second,
+			TLSClientConfig:     cfg,
+		},
+	}
+}
+
+// clientFor is the client for a request to host answered from base. An
+// https base gets a client of its own per host, whose certificate check
+// (and SNI) uses host: the address alone would never match a real
+// certificate.
+func (m *mapper) clientFor(base *url.URL, host string) *http.Client {
+	if base.Scheme != "https" {
+		return m.client
+	}
+	host = strings.ToLower(host)
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if c, ok := m.tls[host]; ok {
+		return c
+	}
+	//nolint:gosec // InsecureSkipVerify only under -k, which the user asked for
+	c := mapClient(&tls.Config{ServerName: host, InsecureSkipVerify: m.insecure, MinVersion: tls.VersionTLS12})
+	m.tls[host] = c
+	return c
+}
+
+// tlsError reports whether err is a TLS failure: a certificate the
+// machine doesn't trust or that names another host, or a handshake
+// that failed.
+func tlsError(err error) bool {
+	var (
+		verify   *tls.CertificateVerificationError
+		unknown  x509.UnknownAuthorityError
+		hostname x509.HostnameError
+		invalid  x509.CertificateInvalidError
+		record   tls.RecordHeaderError
+		alert    tls.AlertError
+	)
+	return errors.As(err, &verify) || errors.As(err, &unknown) || errors.As(err, &hostname) ||
+		errors.As(err, &invalid) || errors.As(err, &record) || errors.As(err, &alert)
 }
 
 // mapBase reads a --map-host address.
@@ -134,9 +186,14 @@ func (r *recorder) fetchMapped(s cdp, e *proto.FetchRequestPaused, u *url.URL, b
 		req.Header.Set(h.Name, h.Value)
 	}
 	req.Host = u.Host
-	resp, err := r.mapper.client.Do(req)
+	resp, err := r.mapper.clientFor(base, u.Hostname()).Do(req)
 	if err != nil {
-		_ = proto.FetchFailRequest{RequestID: e.RequestID, ErrorReason: proto.NetworkErrorReasonConnectionRefused}.Call(s)
+		reason := proto.NetworkErrorReasonConnectionRefused
+		if tlsError(err) {
+			reason = proto.NetworkErrorReasonFailed
+		}
+		r.noteMapError(u.Hostname(), base, err)
+		_ = proto.FetchFailRequest{RequestID: e.RequestID, ErrorReason: reason}.Call(s)
 		return 0, nil
 	}
 	defer func() { _ = resp.Body.Close() }()
@@ -166,4 +223,31 @@ func (r *recorder) fetchMapped(s cdp, e *proto.FetchRequestPaused, u *url.URL, b
 	_ = proto.FetchFulfillRequest{RequestID: e.RequestID, ResponseCode: resp.StatusCode, ResponseHeaders: headers, Body: data,
 		ResponsePhrase: strings.TrimSpace(strings.TrimPrefix(resp.Status, strconv.Itoa(resp.StatusCode)))}.Call(s)
 	return resp.StatusCode, lines
+}
+
+// mapError is why a mapped request to a host failed.
+type mapError struct {
+	addr string // the mapped address, scheme and host
+	err  error
+	tls  bool
+}
+
+// noteMapError keeps why the last mapped request to host failed, so a
+// start page that didn't load can say so (a certificate rather than
+// "didn't answer").
+func (r *recorder) noteMapError(host string, base *url.URL, err error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.mapErrs == nil {
+		r.mapErrs = map[string]mapError{}
+	}
+	r.mapErrs[strings.ToLower(host)] = mapError{addr: base.Scheme + "://" + base.Host, err: err, tls: tlsError(err)}
+}
+
+// mapErr is why the last mapped request to host failed, if one did.
+func (r *recorder) mapErr(host string) (mapError, bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	me, ok := r.mapErrs[strings.ToLower(host)]
+	return me, ok
 }

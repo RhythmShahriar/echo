@@ -65,6 +65,8 @@ func (Runner) Detect(ctx context.Context, p *consent.Plan) (*consent.DetectResul
 	if cmp := p.CMP; cmp != "" && cmp != "auto" {
 		a.addGeo(cmp, "")
 	}
+	watch := a.watchBanner(ctx)
+	defer watch.stop()
 	l, err := a.load(ctx, a.startURL)
 	if err != nil {
 		return nil, err
@@ -72,7 +74,7 @@ func (Runner) Detect(ctx context.Context, p *consent.Plan) (*consent.DetectResul
 	if f := a.startFatal(ctx, &start, l); f != nil {
 		return nil, f
 	}
-	info, err := a.banner(ctx)
+	info, err := a.banner(ctx, watch)
 	if err != nil {
 		return nil, err
 	}

@@ -157,6 +157,10 @@ def md: tostring | mask | esc;
 def title: tostring | maskq(true) | esc;
 # path keeps the path of a URL: no scheme, host, query or fragment.
 def path: tostring | sub("^[A-Za-z][A-Za-z0-9+.-]*://[^/?#]*"; "") | sub("[?#].*$"; "") | if . == "" then "/" else . end;
+# host is the host (and port) of a URL, lower case, "" when it has none.
+def host: tostring | (capture("^[A-Za-z][A-Za-z0-9+.-]*://(?<h>[^/?#]*)").h // "") | ascii_downcase;
+# where names a page or issue: the --sites name, then the page.
+def where($site; $page): "\(if ($site // "") != "" then "\($site | md) " else "" end)\($page | path | md)";
 def runname: {"none": "No choice", "accept": "Accept", "reject": "Reject", "gpc": "GPC", "withdraw": "Withdraw"}[.] // .;
 def uniq: reduce .[] as $x ([]; if any(.[]; . == $x) then . else . + [$x] end);
 (.summary // {}) as $s
@@ -172,13 +176,15 @@ def uniq: reduce .[] as $x ([]; if any(.[]; . == $x) then . else . + [$x] end);
   "**\($verdict).** \(plural($s.pages // 0; "page"; "pages")), \(plural($s.runs // 0; "run"; "runs")), \(plural($s.trackers // 0; "tracker"; "trackers")), policy \(($d.policy // "advanced") | md). Trackers before the choice: \($s.before_choice // 0). Trackers after Reject: \($s.after_reject // 0).\(if $inc > 0 then " Couldn\u0027t check \(plural($inc; "run"; "runs"))." else "" end)\n",
   (if ($d.pages // []) | length > 0 then
      "| Page | Banner | \($kinds | map(runname) | join(" | ")) |\n|---|---|\($kinds | map("---|") | join(""))",
-     (($d.pages // [])[] as $p
-      | ($p.url | path) as $path
-      | "| \($path | md) | \(if $p.cmp.found then ($p.cmp.name | md) elif $p.cmp.present then "\($p.cmp.name | md) (not shown)" else "none" end) | \(
+     (($d.pages // []) as $pages
+      | $pages[] as $p
+      | ([$pages[] | select((.site // "") == ($p.site // "")) | .url | host | select(. != "")] | unique | length > 1) as $multi
+      | (if $multi then ($p.url | host) + ($p.url | path) else ($p.url | path) end) as $name
+      | "| \(where($p.site; $name)) | \(if $p.cmp.found then ($p.cmp.name | md) elif $p.cmp.present then "\($p.cmp.name | md) (not shown)" else "none" end) | \(
           [$kinds[] as $k | ([$p.runs[]? | select(.run == $k)] | first) as $r
            | if $r == null then "" elif ($r.reason // "") != "" then "? \($r.reason | md)"
              else ([$r.hits[]?.name] | uniq) as $names
-             | ([$issues[] | select((.level == "error" or .level == "warning") and .run == $k and (.page == $path or .page == $p.url))] | length > 0) as $bad
+             | ([$issues[] | select((.level == "error" or .level == "warning") and .run == $k and (.site // "") == ($p.site // "") and (.page == $name or .page == $p.url))] | length > 0) as $bad
              | "\(if $bad then "✗ " else "" end)\(if ($names | length) == 0 then "nothing fired" else ($names | map(md) | join(", ")) end)"
              end] | join(" | ")) |"),
      ""
@@ -186,14 +192,14 @@ def uniq: reduce .[] as $x ([]; if any(.[]; . == $x) then . else . + [$x] end);
   (["error", "warning", "notice"][] as $l
    | [$issues[] | select(.level == $l)] | select(length > 0)
    | "### \({"error": "Errors", "warning": "Warnings", "notice": "Notices"}[$l]) (\(length))\n\n| Check | Page | Run | What |\n|---|---|---|---|",
-     (.[] | "| \(.check | md) | \(.page | path | md) | \(.run | runname | md) | \(.title | title) |"), ""),
+     (.[] | "| \(.check | md) | \(where(.site; .page)) | \(.run | runname | md) | \(.title | title) |"), ""),
   (if ($changes | length) > 0 then
      "### Against the baseline (\($changes | length))\n\n| Change | Page | Run | What |\n|---|---|---|---|",
-     ($changes[] | "| \(.class | ascii_upcase | md) | \(.page | path | md) | \(.run | runname | md) | \(.title | title) |"), ""
+     ($changes[] | "| \(.class | ascii_upcase | md) | \(where(.site; .page)) | \(.run | runname | md) | \(.title | title) |"), ""
    else empty end),
   (if ($d.inconclusive // []) | length > 0 then
      "### Couldn\u0027t check (\($d.inconclusive | length))\n\n| Page | Run | Why |\n|---|---|---|",
-     ($d.inconclusive[] | "| \(if (.site // "") != "" then "\(.site | md) " else "" end)\(.page | path | md) | \(.run | runname | md) | \(.reason | md) |"), ""
+     ($d.inconclusive[] | "| \(where(.site; .page)) | \(.run | runname | md) | \(.reason | md) |"), ""
    else empty end),
   "_Evidence, not legal advice. \(if $d.held == false then "Tracker hits were sent for real (--send-hits)." else "Hits held in the browser." end)\(
      if $d.tls_verified == false then " TLS not verified." else "" end)\(

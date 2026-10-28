@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/go-rod/rod/lib/proto"
@@ -56,6 +57,8 @@ func (a *attempt) steps(ctx context.Context) (*consent.FatalError, error) {
 		a.addGeo(cmp, "")
 	}
 	a.run.AddVisit(0)
+	watch := a.watchBanner(ctx)
+	defer watch.stop()
 	l, err := a.load(ctx, a.startURL)
 	if err != nil {
 		return nil, err
@@ -74,7 +77,7 @@ func (a *attempt) steps(ctx context.Context) (*consent.FatalError, error) {
 	a.snapshot(ctx)
 	out.Visits = append(out.Visits, consent.Visit{URL: a.mask(final), Step: "load", AtMS: 0})
 
-	info, err := a.banner(ctx)
+	info, err := a.banner(ctx, watch)
 	if err != nil {
 		return nil, err
 	}
@@ -158,15 +161,23 @@ func (a *attempt) addGeo(cmpID, name string) bool {
 // banner waits up to --banner-wait for the CMP's banner. When --geo is
 // set and the CMP found has a geolocation override, the start page is
 // loaded again with it and the banner looked for again.
-func (a *attempt) banner(ctx context.Context) (consent.CMPInfo, error) {
+//
+// watch looked while the start page loaded and settled: when it saw the
+// same banner first, its time is the banner's, so the time says when the
+// banner showed rather than when the first settle ended.
+func (a *attempt) banner(ctx context.Context, watch *bannerWatch) (consent.CMPInfo, error) {
 	cmp := a.c.stages.CMP
 	info, err := cmp.Detect(ctx, a.tab, a.plan, a.plan.BannerWait)
+	early := watch.stop()
 	if err != nil {
 		if ctx.Err() != nil {
 			return info, ctx.Err()
 		}
 		a.out.Detail = consent.SafeText("finding the banner failed: "+consent.MaskURL(err.Error(), false), 300)
 		return consent.CMPInfo{}, nil
+	}
+	if info.Found && early.Found && early.ID == info.ID && early.BannerAtMS < info.BannerAtMS {
+		info.BannerAtMS = early.BannerAtMS
 	}
 	if !a.addGeo(info.ID, info.Name) {
 		return info, nil
@@ -194,6 +205,42 @@ func (a *attempt) banner(ctx context.Context) (consent.CMPInfo, error) {
 	}
 	a.out.Visits = append(a.out.Visits, consent.Visit{URL: a.mask(final), Step: "load", AtMS: at, Banner: again.Found})
 	return again, nil
+}
+
+// bannerWatch looks for the banner in the background while the start
+// page loads and settles.
+type bannerWatch struct {
+	cancel context.CancelFunc
+	done   chan struct{}
+	once   sync.Once
+	info   consent.CMPInfo // the first banner seen, written before done closes
+}
+
+// watchBanner starts looking for the banner before the start page
+// loads. It looks for as long as the load, the settle and --banner-wait
+// may take together. It stops at the first banner or at stop.
+func (a *attempt) watchBanner(ctx context.Context) *bannerWatch {
+	wctx, cancel := context.WithCancel(ctx) //nolint:gosec // stop cancels it; steps defers stop
+	w := &bannerWatch{cancel: cancel, done: make(chan struct{})}
+	wait := docWait + max(minSettleCap, 5*a.plan.Settle) + a.plan.BannerWait
+	go func() {
+		defer close(w.done)
+		if info, err := a.c.stages.CMP.Detect(wctx, a.tab, a.plan, wait); err == nil && info.Found {
+			w.info = info
+		}
+	}()
+	return w
+}
+
+// stop ends the watch and returns the banner it saw, if any. It may be
+// called more than once.
+func (w *bannerWatch) stop() consent.CMPInfo {
+	if w == nil {
+		return consent.CMPInfo{}
+	}
+	w.once.Do(w.cancel)
+	<-w.done
+	return w.info
 }
 
 // choose makes the run's choice. Without a banner Accept, Reject and

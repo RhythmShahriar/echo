@@ -512,3 +512,17 @@ func TestCookielessBeforeAndAfterReject(t *testing.T) {
 		t.Errorf("title %q", is.Title)
 	}
 }
+
+// A cookie Echo added with --cookie never counts against the site, even
+// when its name is a tracker's.
+func TestEchoCookieNotJudged(t *testing.T) {
+	r := result(consent.Run{Kind: consent.RunNone,
+		Cookies: []consent.Cookie{{Name: "_hjSessionUser_123", Tracker: "hotjar", Category: consent.CatSessionReplay, Need: consent.NeedNeeded,
+			Phase: consent.PhaseBefore, AtMS: 510, SetBy: consent.SetByEcho}},
+	})
+	consenttest.Use(t, consent.Stages{Classifier: &catalog{}})
+	Evaluator{}.Evaluate(r, consenttest.NewPlan(t))
+	if keys := keysOf(r, v2Checks); len(keys) != 0 {
+		t.Errorf("Echo's own cookie raised %v", keys)
+	}
+}

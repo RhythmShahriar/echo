@@ -254,21 +254,18 @@ func TestDeleteAndHostGuards(t *testing.T) {
 	}
 }
 
-// testServer serves h on a loopback port in 20400-20419.
+// testServer serves h on a loopback port the system picks, so it never
+// meets the fixed ranges other packages' tests use at the same time.
 func testServer(t *testing.T, h http.Handler) string {
 	t.Helper()
-	for port := 20400; port < 20420; port++ {
-		ln, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", port))
-		if err != nil {
-			continue
-		}
-		srv := &http.Server{Handler: h, ReadHeaderTimeout: time.Second}
-		go func() { _ = srv.Serve(ln) }()
-		t.Cleanup(func() { _ = srv.Close() })
-		return "http://" + ln.Addr().String()
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Skip("no free loopback port:", err)
 	}
-	t.Skip("no free port in 20400-20419")
-	return ""
+	srv := &http.Server{Handler: h, ReadHeaderTimeout: time.Second}
+	go func() { _ = srv.Serve(ln) }()
+	t.Cleanup(func() { _ = srv.Close() })
+	return "http://" + ln.Addr().String()
 }
 
 // readEvents returns the events of a stream, one per data line.

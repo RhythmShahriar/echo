@@ -107,6 +107,39 @@ func mark(err, m error) error {
 	return &markedError{err, m}
 }
 
+// StartError is Launch's error when the browser at Bin was found but
+// didn't start: it couldn't be run, or it exited before it opened
+// DevTools.
+type StartError struct {
+	Bin  string
+	Err  error
+	Hint string // what to try, "" when there is nothing specific
+}
+
+func (e *StartError) Error() string {
+	return "starting " + e.Bin + ": " + StartReason(e.Err) + e.Hint
+}
+
+func (e *StartError) Unwrap() error { return e.Err }
+
+// StartReason says why a browser didn't start, without the empty
+// "Failed to get the debug url: " rod writes when Chrome printed
+// nothing before it exited.
+func StartReason(err error) string {
+	if err == nil {
+		return "it didn't start"
+	}
+	msg := strings.TrimSpace(err.Error())
+	if rest, ok := strings.CutPrefix(msg, "[launcher] Failed to get the debug url:"); ok {
+		rest = strings.TrimSpace(rest)
+		if rest == "" {
+			return "it exited before it opened DevTools"
+		}
+		return "it exited before it opened DevTools: " + rest
+	}
+	return strings.TrimSpace(strings.TrimRight(msg, ": "))
+}
+
 // Browser is a running Chrome.
 type Browser struct {
 	*rod.Browser
@@ -226,7 +259,7 @@ func Launch(ctx context.Context, opts Options) (*Browser, error) {
 	var proc *process
 	var control string
 	err = retry.Do(ctx, retry.Policy{Tries: launchTries, Pause: launchPause, Again: launchAgain,
-		Note: func(_ int, err error) { logf(opts, "Chrome didn't start ("+err.Error()+"); starting it again") },
+		Note: func(_ int, err error) { logf(opts, retryNote(bin, err)) },
 	}, func() error {
 		var err error
 		b, proc, control, err = launchOnce(ctx, opts, bin, noSandbox)
@@ -279,7 +312,7 @@ func launchOnce(ctx context.Context, opts Options, bin string, noSandbox bool) (
 	}
 	u, proc, err := start(ctx, l, bin)
 	if err != nil {
-		return nil, nil, "", fmt.Errorf("starting %s: %w%s", bin, err, sandboxHint(err, noSandbox))
+		return nil, nil, "", &StartError{Bin: bin, Err: err, Hint: sandboxHint(err, noSandbox)}
 	}
 	b := rod.New().ControlURL(u).Context(ctx)
 	if err := b.Connect(); err != nil {
@@ -371,6 +404,18 @@ func sandboxHint(err error, noSandbox bool) string {
 		return ""
 	}
 	return "\n(pass --no-sandbox, or set " + NoSandboxEnv + "=1, if this container can't give Chrome its sandbox; only for sites you trust)"
+}
+
+// retryNote is the line Launch writes before it starts Chrome again:
+// "Chrome at /usr/bin/chrome didn't start (it exited before it opened
+// DevTools); starting it again".
+func retryNote(bin string, err error) string {
+	reason := StartReason(err)
+	var se *StartError
+	if errors.As(err, &se) {
+		reason = StartReason(se.Err)
+	}
+	return "Chrome at " + bin + " didn't start (" + reason + "); starting it again"
 }
 
 // logf sends a line to opts.Log, or to stderr when nothing listens, so

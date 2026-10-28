@@ -106,7 +106,7 @@ func (e *Engine) Network() consent.Network {
 
 // Mapped reports whether --map-host maps any host, so every writer can
 // say the result came from mapped hosts rather than the real ones.
-func (e *Engine) Mapped() bool { return newMapper(e.plan.MapHosts).any() }
+func (e *Engine) Mapped() bool { return newMapper(e.plan.MapHosts, e.plan.Insecure).any() }
 
 // PlainMapped reports whether --map-host answers an https target from a
 // plain http address: the page reached Echo unencrypted, so its TLS was
@@ -115,7 +115,7 @@ func (e *Engine) PlainMapped() bool { return plainMapped(e.plan) }
 
 // plainMapped is PlainMapped for a plan.
 func plainMapped(p *consent.Plan) bool {
-	m := newMapper(p.MapHosts)
+	m := newMapper(p.MapHosts, p.Insecure)
 	for _, t := range p.Targets {
 		if t.URL == nil || t.URL.Scheme != "https" {
 			continue
@@ -143,7 +143,7 @@ func (e *Engine) guard(t consent.Target) (*egress.Proxy, error) {
 		return g, nil
 	}
 	host := t.URL.Hostname()
-	if ok, _ := newMapper(e.plan.MapHosts).lookup(host); ok {
+	if ok, _ := newMapper(e.plan.MapHosts, e.plan.Insecure).lookup(host); ok {
 		host = ""
 	}
 	// No Log: a refusal per request would flood the browser log; the

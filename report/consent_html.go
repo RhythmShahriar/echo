@@ -260,12 +260,12 @@ func (h *consentHTML) verdict(d *consentHTMLData) {
 		}
 		d.Chips = []htmlChip{{"broke", "broke", "", s.Broke}, {"new", "new", "", s.New}, {"changed", "changed", "", s.Changed}, {"fixed", "fixed", "", s.Fixed}}
 	} else {
-		d.Head, d.Tone = "All clear", "ok"
-		switch r.ExitCode(h.o.FailOn) {
-		case 1:
-			d.Head, d.Tone = "Findings", "broke"
-		case 3:
-			d.Head, d.Tone = "Couldn't check", "changed"
+		d.Head, d.Tone = r.Head(h.o.FailOn), "ok"
+		switch d.Head {
+		case consent.HeadFindings:
+			d.Tone = "broke"
+		case consent.HeadInconclusive:
+			d.Tone = "changed"
 		}
 		d.Chips = []htmlChip{{"error", "errors", "", s.Errors}, {"warning", "warnings", "", s.Warnings}, {"notice", "notices", "", s.Notices},
 			{"changed", "couldn't check", "", s.InconclusiveRuns}}
@@ -835,7 +835,7 @@ func (h *consentHTML) consentMode() []chConsentMode {
 	var out []chConsentMode
 	for i := range h.r.Pages {
 		pg := &h.r.Pages[i]
-		cm := chConsentMode{Page: Safe(pg.URL), Summary: consentModeLine(pg.ConsentMode)}
+		cm := chConsentMode{Page: Safe(pg.URL), Summary: consentModeLine(pg)}
 		for _, run := range pg.Runs {
 			for _, s := range run.Signals {
 				if s.Source != "gtag" && s.Source != "datalayer" {

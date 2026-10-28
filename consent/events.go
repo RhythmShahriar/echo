@@ -37,6 +37,9 @@ type Event struct {
 	Storage *StorageKey `json:"storage,omitempty"`
 	Signal  *Signal     `json:"signal,omitempty"`
 	Note    string      `json:"note,omitempty"` // page-supplied text already passed through SafeText
+	// Target is the run's target URL as the plan has it, set by the
+	// runner so --live can name the page. It is never written.
+	Target string `json:"-"`
 }
 
 // Request is a request the page or one of its frames or workers made.
@@ -162,9 +165,14 @@ type Cookie struct {
 	Need     ConsentNeed `json:"need,omitempty"`
 	Phase    Phase       `json:"phase"`
 	AtMS     int64       `json:"at_ms"`
-	SetBy    string      `json:"set_by,omitempty"`  // "script", "response:<host>"
+	SetBy    string      `json:"set_by,omitempty"`  // "script", "response:<host>", or SetByEcho
 	Blocked  string      `json:"blocked,omitempty"` // Chrome's blocked reason when it refused to store it
 }
+
+// SetByEcho is the SetBy of a cookie Echo itself added with --cookie
+// (a site's own in --sites too) whose value is still the one Echo set.
+// The page's scripts didn't write it. The verdict never counts it.
+const SetByEcho = "echo"
 
 // StorageKey is a key a page wrote to local or session storage or
 // IndexedDB. Its value is never kept, only its length.

@@ -171,7 +171,9 @@ with the exact texts.
   included) and each new storage key or one whose value length changed.
 - Cookie events: `set_by` is `response:<host>` when a response set it
   since the last snapshot (then `at_ms` is the response's time), else
-  `script` (`at_ms` the snapshot's time). `expires` is 0 for a session
+  `script` (`at_ms` the snapshot's time). A cookie Echo itself added
+  (`--cookie`) is `echo` while its value is the one
+  Echo set. The verdict never counts it. `expires` is 0 for a session
   cookie. Names are safe text, at most 256 characters. Values are never
   kept, only `length`.
 - A cookie Chrome refused to store is recorded at once with `blocked`

@@ -47,7 +47,10 @@ texts, for the release notes and the docs team.
   `#CybotCookiebotDialog and window.Cookiebot`; that rendering is the
   cli lane's.)
 - `tcf` is true when the page defines `__tcfapi`; `banner_at_ms` is the
-  run-clock time of the look that saw the banner.
+  run-clock time of the look that saw the banner. The runner starts
+  looking before the start page loads and keeps looking while it
+  settles, so the time is when the banner showed (within a poll), not
+  when the first settle ended.
 - When every look failed (the page kept navigating), Detect returns the
   last script error instead of "no banner".
 - Before a look returns the generic rule, the named-rule scan runs once

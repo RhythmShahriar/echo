@@ -5,6 +5,7 @@ package browse
 
 import (
 	"encoding/json"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -108,6 +109,27 @@ func TestDiffCookies(t *testing.T) {
 	out, _ := json.Marshal(rec.Events)
 	if strings.Contains(string(out), value) {
 		t.Error("a cookie value is in the events")
+	}
+}
+
+// A cookie Echo added with --cookie is Echo's, not the page's scripts';
+// once the page changes its value it is the page's.
+func TestEchoCookieSetByEcho(t *testing.T) {
+	r := cookieRecorder(t)
+	sid := "s" + strings.Repeat("7", 10) // assembled at runtime
+	target, _ := url.Parse("https://shop.test/")
+	r.noteEchoCookies(cookieParams([]string{"sid=" + sid}, target))
+	ck := &proto.NetworkCookie{Name: "sid", Value: sid, Domain: "shop.test", Path: "/"}
+	r.diffCookies([]*proto.NetworkCookie{ck}, 100)
+	r.mu.Lock()
+	r.lastSnapshot = 100
+	r.mu.Unlock()
+	changed := *ck
+	changed.Value = "other"
+	r.diffCookies([]*proto.NetworkCookie{&changed}, 200)
+	c := kindsOf(r.finish().Events, consent.EvCookie)
+	if len(c) != 2 || c[0].Cookie.SetBy != consent.SetByEcho || c[1].Cookie.SetBy != "script" {
+		t.Errorf("cookies %+v", c)
 	}
 }
 

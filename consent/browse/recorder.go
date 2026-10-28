@@ -115,6 +115,8 @@ type recorder struct {
 	guard  *egress.Proxy // the target's guard, for refusal reasons; may be nil
 	mapper *mapper
 	ctx    context.Context
+	// mapErrs is why the last mapped request to each host failed, under mu.
+	mapErrs map[string]mapError
 
 	ready     chan struct{} // the tab is attached, set up and running
 	readyOnce sync.Once
@@ -146,6 +148,7 @@ type recorder struct {
 	worlds       map[proto.PageFrameID]proto.RuntimeExecutionContextID // Echo's isolated world per frame
 	hosts        map[proto.NetworkRequestID]string                     // request host, for Set-Cookie attribution
 	setCookies   map[string]setCookieNote                              // Set-Cookie lines seen, by name and domain
+	echoCookies  map[string]string                                     // the cookies Echo added (--cookie), name and domain -> value
 	blocked      map[string]bool                                       // blocked cookies already recorded
 	cookies      map[string]uint64                                     // last snapshot's cookies (fingerprints, never values)
 	storage      map[string]int                                        // last snapshot's storage keys and value lengths
@@ -190,7 +193,7 @@ func newRecorder(ctx context.Context, h *hub, p *consent.Plan, site *url.URL, ki
 		ch = consent.DefaultLimits.Channel
 	}
 	r := &recorder{h: h, plan: p, site: site, kind: kind, ctxID: ctxID, stages: consent.Linked(), env: env, guard: guard,
-		mapper: newMapper(p.MapHosts), ctx: ctx,
+		mapper: newMapper(p.MapHosts, p.Insecure), ctx: ctx,
 		ready: make(chan struct{}), inbox: make(chan *rod.Message, 16384), stop: make(chan struct{}), loopD: make(chan struct{}),
 		sem: make(chan struct{}, maxHandlers), targets: map[proto.TargetSessionID]*target{}, frames: map[proto.PageFrameID]string{},
 		reqs: map[proto.NetworkRequestID]*pending{}, limit: make(chan struct{}), clicks: make(chan int64, 16),
@@ -1116,6 +1119,9 @@ func (r *recorder) deliver(e consent.Event) {
 	r.seq++
 	e.Seq = r.seq
 	e.Run = r.kind
+	if r.site != nil {
+		e.Target = r.site.String()
+	}
 	r.mu.Lock()
 	e.Phase = r.phaseLocked(e.AtMS)
 	e.Visit = r.visitLocked(e.AtMS)

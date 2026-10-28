@@ -56,7 +56,7 @@ func TestConsentRules(t *testing.T) {
 		{"  exempt: [\"\"]\n", "line 3: consent: exempt: an empty tracker id", "  exempt: [plausible]\n"},
 		{"  headers:\n    \"Bad Name\": ${env:RHYTHM_ECHO_X}\n", `line 4: consent: headers: "Bad Name" isn't a header name`, "  headers:\n    X-Staging: ${env:RHYTHM_ECHO_X}\n"},
 		{"  headers:\n    Authorization: ${env:HOME}\n", "line 4: consent: headers: Authorization: use ${env:RHYTHM_ECHO_NAME}, not the value itself", "  headers:\n    Authorization: ${env:RHYTHM_ECHO_STAGING_AUTH}\n"},
-		{"  map_hosts:\n    \"*.shop.test\": nowhere\n", `line 4: consent: map_hosts: *.shop.test: "nowhere": want host:port or an http:// URL, e.g. 127.0.0.1:18950`, "  map_hosts:\n    \"*.shop.test\": 127.0.0.1:18950\n    cdn.shop.test: http://10.0.0.5:8080\n"},
+		{"  map_hosts:\n    \"*.shop.test\": nowhere\n", `line 4: consent: map_hosts: *.shop.test: "nowhere": want host:port or an http:// or https:// URL, e.g. 127.0.0.1:18950`, "  map_hosts:\n    \"*.shop.test\": 127.0.0.1:18950\n    cdn.shop.test: http://10.0.0.5:8080\n"},
 		{"  map_hosts:\n    \"https://x/\": 127.0.0.1:1\n", `line 4: consent: map_hosts: "https://x/": want a host name or *.name, e.g. *.shop.test`, "  map_hosts:\n    x.test: 127.0.0.1:1\n"},
 		{"  ignore:\n    - reason: r\n      until: 2026-11-30\n", "line 4: consent: ignore: needs check, a consent check ID like consent/before-choice",
 			"  ignore:\n    - check: consent/no-banner\n      reason: r\n      until: 2026-11-30\n"},

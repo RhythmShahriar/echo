@@ -71,7 +71,10 @@ func WriteConsentJUnit(w io.Writer, r *consent.Result, consentSHA256 string) err
 		r = &consent.Result{}
 	}
 	t := &consentText{w: &strings.Builder{}, r: r, tn: trackerNames(r)}
-	out := consentJUnitSuites{Name: "rhythm-echo consent", Time: seconds(r.DurationMS)}
+	// Every level's time is the sum of its runs' times: runs go in
+	// parallel, so the check's wall time would be less than a suite's.
+	out := consentJUnitSuites{Name: "rhythm-echo consent"}
+	var all int64
 	stamp := ""
 	if !r.Started.IsZero() {
 		stamp = r.Started.UTC().Format("2006-01-02T15:04:05Z")
@@ -111,9 +114,11 @@ func WriteConsentJUnit(w io.Writer, r *consent.Result, consentSHA256 string) err
 			s.Cases = append(s.Cases, c)
 		}
 		s.Tests, s.Time = len(s.Cases), seconds(total)
+		all += total
 		out.Tests, out.Failures, out.Skipped = out.Tests+s.Tests, out.Failures+s.Failures, out.Skipped+s.Skipped
 		out.Suites = append(out.Suites, s)
 	}
+	out.Time = seconds(all)
 	if _, err := io.WriteString(w, xml.Header); err != nil {
 		return err
 	}

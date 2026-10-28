@@ -337,12 +337,12 @@ func ParseMapHost(host, addr string) error {
 	if strings.HasPrefix(a, "http://") || strings.HasPrefix(a, "https://") {
 		u, err := url.Parse(a)
 		if err != nil || u.Host == "" || u.User != nil {
-			return fmt.Errorf("%s: %q: want host:port or an http:// URL, e.g. 127.0.0.1:18950", host, addr)
+			return fmt.Errorf("%s: %q: want host:port or an http:// or https:// URL, e.g. 127.0.0.1:18950", host, addr)
 		}
 		return nil
 	}
 	if _, port, err := net.SplitHostPort(a); err != nil || port == "" {
-		return fmt.Errorf("%s: %q: want host:port or an http:// URL, e.g. 127.0.0.1:18950", host, addr)
+		return fmt.Errorf("%s: %q: want host:port or an http:// or https:// URL, e.g. 127.0.0.1:18950", host, addr)
 	}
 	return nil
 }

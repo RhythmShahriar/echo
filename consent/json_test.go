@@ -7,6 +7,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/RhythmShahriar/echo/consent"
 	"github.com/RhythmShahriar/echo/consent/consenttest"
@@ -103,6 +105,12 @@ func TestChecksCatalog(t *testing.T) {
 		}
 		if c.Doc == "" || c.Fix == "" || strings.Contains(c.Doc, "`") {
 			t.Errorf("%s: Doc %q, Fix %q", c.ID, c.Doc, c.Fix)
+		}
+		// The FINDS column of rhythm echo checks: a sentence that stands
+		// on its own, like every other check's.
+		if first, _ := utf8.DecodeRuneInString(c.Doc); !unicode.IsUpper(first) || !strings.HasSuffix(c.Doc, ".") ||
+			strings.HasPrefix(c.Doc, "The same") {
+			t.Errorf("%s: Doc %q isn't a sentence of its own", c.ID, c.Doc)
 		}
 		levels[c.Level]++
 	}

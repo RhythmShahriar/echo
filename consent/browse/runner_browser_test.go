@@ -10,6 +10,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"log"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -973,5 +975,63 @@ fetch("/api?debug=1", {method: "POST", headers: {"X-Api-Key": "`+token+`"}, body
 			!slices.ContainsFunc(api.Response.Headers, func(h harPair) bool { return strings.EqualFold(h.Name, "set-cookie") && h.Value == "srv" }) {
 			t.Errorf("%s: api entry %+v", r.Kind, api)
 		}
+	}
+}
+
+// mappedTLSPlan maps g01.shop.test to an https address whose
+// certificate no one trusts, the testbed's -tls.
+func mappedTLSPlan(t *testing.T) *consent.Plan {
+	t.Helper()
+	srv := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		_, _ = fmt.Fprint(w, "<title>mapped</title><p>mapped")
+	}))
+	srv.Config.ErrorLog = log.New(io.Discard, "", 0)
+	srv.StartTLS()
+	t.Cleanup(srv.Close)
+	p := consenttest.NewPlan(t, "https://g01.shop.test/")
+	p.MapHosts = map[string]string{"*.shop.test": srv.URL}
+	p.Runs, p.Retries, p.Settle, p.Browser.NoDownload = []consent.RunKind{consent.RunNone}, 0, 200*time.Millisecond, true
+	p.BannerWait = 500 * time.Millisecond
+	return p
+}
+
+// TestMappedTLSInsecure: with -k an https --map-host address is used
+// with the original host's name, so the check runs.
+func TestMappedTLSInsecure(t *testing.T) {
+	p := mappedTLSPlan(t)
+	p.Insecure = true
+	res, err := runCheck(t, p, &pageCMP{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if run := res.Pages[0].Runs[0]; run.Status != consent.StatusOK {
+		t.Errorf("run %+v", run)
+	}
+}
+
+// TestMappedTLSRefused: without -k the mapped address's certificate
+// stops the check as a certificate error, naming the address.
+func TestMappedTLSRefused(t *testing.T) {
+	f := fatalOf(t, mappedTLSPlan(t))
+	if f.Code != consent.FatalTLS || !strings.Contains(f.Detail, "(--map-host)") || !strings.Contains(f.Detail, "certificate") {
+		t.Errorf("fatal %+v", f)
+	}
+}
+
+// TestBannerTimeBeforeSettle: the banner's time is when it showed, not
+// when the first settle ended. The fixture's banner shows at once; the
+// settle is 2s, so a time from the first look after it would be past 2s.
+func TestBannerTimeBeforeSettle(t *testing.T) {
+	st := shopSite(t, "")
+	p := shopPlan(t, st, consent.RunNone)
+	p.Settle = 2 * time.Second
+	res, err := runCheck(t, p, &pageCMP{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	cmp := res.Pages[0].CMP
+	if !cmp.Found || cmp.BannerAtMS <= 0 || cmp.BannerAtMS >= p.Settle.Milliseconds() {
+		t.Errorf("banner found %v at %d ms; want before the %v settle ended", cmp.Found, cmp.BannerAtMS, p.Settle)
 	}
 }

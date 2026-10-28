@@ -152,7 +152,7 @@ func TestMapExactAndWildcard(t *testing.T) {
 		"www.shop.test":   "127.0.0.1:35073",
 		"bad.test":        "ftp://x",
 		"empty.test":      "",
-	})
+	}, false)
 	for host, want := range map[string]string{
 		"www.shop.test": "http://127.0.0.1:35073", "a.shop.test": "http://127.0.0.1:35071",
 		"img.cdn.shop.test": "http://127.0.0.1:35072/base", "WWW.SHOP.TEST": "http://127.0.0.1:35073",
@@ -167,7 +167,7 @@ func TestMapExactAndWildcard(t *testing.T) {
 			t.Errorf("lookup(%s) mapped", host)
 		}
 	}
-	if !m.any() || newMapper(nil).any() {
+	if !m.any() || newMapper(nil, false).any() {
 		t.Error("any")
 	}
 	var nilMapper *mapper

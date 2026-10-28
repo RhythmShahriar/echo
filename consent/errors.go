@@ -24,6 +24,7 @@ const (
 	FatalTLS          FatalCode = "tls"              // message 15 (Detail: the x509 error)
 	FatalImage        FatalCode = "no-browser-image" // message 16 (RHYTHM_ECHO_IMAGE=1 and no browser)
 	FatalRedirectLoop FatalCode = "redirect-loop"
+	FatalBrowserStart FatalCode = "browser-start" // the browser was found but didn't start (URL: its path, Detail: why)
 	FatalWrite        FatalCode = "write"
 	FatalSelector     FatalCode = "selector" // a usage error: Detail names the flag and the CSS the browser refused
 	FatalRefused      FatalCode = "refused"  // a usage error: Echo itself never loads the start page (Detail: RefusedMetadata or RefusedNotMapped)

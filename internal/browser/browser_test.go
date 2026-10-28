@@ -5,6 +5,7 @@ package browser
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -60,5 +61,28 @@ func TestLaunchHintsAtTheSandboxSetting(t *testing.T) {
 	_, err := Launch(t.Context(), Options{Bin: bin})
 	if err == nil || !strings.Contains(err.Error(), "No usable sandbox") || !strings.Contains(err.Error(), "pass --no-sandbox, or set "+NoSandboxEnv+"=1, if this container can't give Chrome its sandbox") {
 		t.Fatalf("err = %v", err)
+	}
+}
+
+// A Chrome that exits before it opens DevTools reads as such, not as
+// rod's "Failed to get the debug url: " with nothing after the colon,
+// in the error and in the retry note.
+func TestStartReason(t *testing.T) {
+	for in, want := range map[string]string{
+		"[launcher] Failed to get the debug url: ":        "it exited before it opened DevTools",
+		"[launcher] Failed to get the debug url: crashed": "it exited before it opened DevTools: crashed",
+		"fork/exec /x: permission denied":                 "fork/exec /x: permission denied",
+		"something: ":                                     "something",
+	} {
+		if got := StartReason(errors.New(in)); got != want {
+			t.Errorf("StartReason(%q) = %q, want %q", in, got, want)
+		}
+	}
+	se := &StartError{Bin: "/bin/true", Err: errors.New("[launcher] Failed to get the debug url: ")}
+	if got := se.Error(); got != "starting /bin/true: it exited before it opened DevTools" {
+		t.Errorf("StartError: %q", got)
+	}
+	if got := retryNote("/bin/true", se); got != "Chrome at /bin/true didn't start (it exited before it opened DevTools); starting it again" {
+		t.Errorf("retry note: %q", got)
 	}
 }

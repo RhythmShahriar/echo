@@ -143,7 +143,8 @@ func TestNoTokenLeavesLoopbackOpen(t *testing.T) {
 }
 
 // freePorts returns n loopback addresses in the range these tests may use
-// (20400-20419) that nothing listens on right now.
+// (20400-20419, which no other package's tests use: web's take a port
+// the system picks) that nothing listens on right now.
 func freePorts(t *testing.T, n int) []string {
 	t.Helper()
 	var out []string

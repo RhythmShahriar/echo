@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuites name="rhythm-echo consent" tests="3" failures="0" skipped="0" time="21.230">
+<testsuites name="rhythm-echo consent" tests="3" failures="0" skipped="0" time="42.300">
   <testsuite name="/" tests="3" failures="0" skipped="0" time="42.300" timestamp="2026-10-26T09:20:41Z">
     <properties>
       <property name="consent.json.sha256" value="e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"></property>
