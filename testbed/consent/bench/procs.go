@@ -72,7 +72,7 @@ func entriesUnder(dir string) int {
 	scaffold := map[string]bool{filepath.Join(dir, "rod"): true, filepath.Join(dir, "rod", "user-data"): true}
 	n := 0
 	_ = filepath.WalkDir(dir, func(p string, d os.DirEntry, err error) error {
-		if err == nil && p != dir && !(d.IsDir() && scaffold[p]) {
+		if err == nil && p != dir && (!d.IsDir() || !scaffold[p]) {
 			n++
 		}
 		return nil
