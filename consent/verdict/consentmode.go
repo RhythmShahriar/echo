@@ -68,23 +68,34 @@ func pageUsesGCD(pg *consent.Page) bool {
 	return false
 }
 
+// hasDefault reports whether run saw a Consent Mode default command.
+func hasDefault(run *consent.Run) bool {
+	return slices.ContainsFunc(run.Signals, func(s consent.Signal) bool { return consentModeCommand(&s, "default") })
+}
+
 // hasGCS reports whether a hit carries a gcs parameter at all.
 func hasGCS(h *consent.HitRef) bool { return h.Google != nil && h.Google.GCS != "" }
 
-// noDefaultOrLate raises consent/no-default when no run saw a Consent
-// Mode default and the first Google hit carries no gcs, else
-// consent/default-late when the none run's default came after its first
-// Google hit. The two never come together.
+// noDefaultOrLate raises consent/no-default when the run of the first
+// Google hit saw no Consent Mode default and that hit carries no gcs,
+// else consent/default-late when the none run's default came after its
+// first Google hit. The two never come together. A default seen only in
+// another run doesn't help: the hit was sent in a run that never had
+// one, and default-late can't fire without a default in that run.
 func (j *judge) noDefaultOrLate(pg *consent.Page, firstRun *consent.Run, first *consent.HitRef) {
-	seen := slices.ContainsFunc(pg.Runs, func(run consent.Run) bool {
-		return slices.ContainsFunc(run.Signals, func(s consent.Signal) bool { return consentModeCommand(&s, "default") })
-	})
-	if !seen {
+	if !hasDefault(firstRun) {
 		if hasGCS(first) {
 			return // the tags say what state they ran with
 		}
-		detail := fmt.Sprintf("%s sent %s at %s with no gcs; no gtag('consent', 'default', ...) was seen in any run",
-			j.name(first.Tracker), shortURL(first.URL), secs(first.AtMS))
+		where := "in any run"
+		for i := range pg.Runs {
+			if other := &pg.Runs[i]; other != firstRun && hasDefault(other) {
+				where = "in this run (the " + other.Kind.Label() + " run saw one)"
+				break
+			}
+		}
+		detail := fmt.Sprintf("%s sent %s at %s with no gcs; no gtag('consent', 'default', ...) was seen %s",
+			j.name(first.Tracker), shortURL(first.URL), secs(first.AtMS), where)
 		j.add(pg, consent.CheckNoDefault, firstRun.Kind, "", "Google tags ran with no Consent Mode default", detail, "", []int64{first.Seq})
 		return
 	}

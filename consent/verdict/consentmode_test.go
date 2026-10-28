@@ -5,6 +5,7 @@ package verdict
 
 import (
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/RhythmShahriar/echo/consent"
@@ -68,12 +69,22 @@ func TestNoDefault(t *testing.T) { // c01
 	if keys := keysOf(r, v3Checks); len(keys) != 0 {
 		t.Errorf("gcs present: %v", keys)
 	}
-	// A default in another run counts as seen.
+	// A default only in another run doesn't cover the none run's hit:
+	// no-default is raised and the detail names the run that had one.
 	r = result(consent.Run{Kind: consent.RunNone, Hits: []consent.HitRef{ga4(5, 620, consent.PhaseBefore, "", nil)}},
 		consent.Run{Kind: consent.RunAccept, Signals: []consent.Signal{defaultCmd(100, true)}})
 	Evaluator{}.Evaluate(r, nil)
-	if keys := keysOf(r, []string{consent.CheckNoDefault}); len(keys) != 0 {
-		t.Errorf("default in the accept run: %v", keys)
+	sameKeys(t, keysOf(r, []string{consent.CheckNoDefault, consent.CheckDefaultLate}), "consent/no-default|/|none|")
+	if is := issue(t, r, "consent/no-default|/|none|"); !strings.HasSuffix(is.Detail,
+		"no gtag('consent', 'default', ...) was seen in this run (the Accept run saw one)") {
+		t.Errorf("detail: %q", is.Detail)
+	}
+	// A default in the hit's own run is seen: nothing from no-default.
+	r = result(consent.Run{Kind: consent.RunNone, Hits: []consent.HitRef{ga4(5, 620, consent.PhaseBefore, "", nil)},
+		Signals: []consent.Signal{defaultCmd(100, true)}})
+	Evaluator{}.Evaluate(r, nil)
+	if keys := keysOf(r, []string{consent.CheckNoDefault, consent.CheckDefaultLate}); len(keys) != 0 {
+		t.Errorf("default in the none run: %v", keys)
 	}
 }
 
