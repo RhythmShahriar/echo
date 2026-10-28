@@ -20,7 +20,7 @@ cookies:
   - "mp_*"
 storage:
   - "mp_*"
-fix: Initialize Mixpanel with opt_out_tracking_by_default and call mixpanel.opt_in_tracking() once the visitor accepts
+fix: Initialize Mixpanel with opt_out_tracking_by_default and call mixpanel.opt_in_tracking() once the visitor accepts.
 docs: https://docs.mixpanel.com/docs/tracking-methods/sdks/javascript
 sources:
   - https://docs.mixpanel.com/docs/tracking-methods/sdks/javascript

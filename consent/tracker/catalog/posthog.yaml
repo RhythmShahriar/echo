@@ -26,7 +26,7 @@ cookies:
   - "ph_*_posthog"
 storage:
   - "ph_*_posthog"
-fix: Initialize PostHog with opt_out_capturing_by_default and call posthog.opt_in_capturing() once the visitor accepts
+fix: Initialize PostHog with opt_out_capturing_by_default and call posthog.opt_in_capturing() once the visitor accepts.
 docs: https://posthog.com/docs/libraries/js
 sources:
   - https://posthog.com/docs/libraries/js

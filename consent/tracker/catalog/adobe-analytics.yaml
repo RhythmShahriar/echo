@@ -35,7 +35,7 @@ cookies:
 params:
   event: [pe, pev2]
   id_path: '^/b/ss/([^/]+)/'
-fix: Set Adobe's defaultConsent to pending (Web SDK) or turn on Opt-In in the Experience Cloud ID service until the visitor accepts
+fix: Set Adobe's defaultConsent to pending (Web SDK) or turn on Opt-In in the Experience Cloud ID service until the visitor accepts.
 docs: https://experienceleague.adobe.com/en/docs/core-services/interface/data-collection/cookies/analytics
 sources:
   - https://experienceleague.adobe.com/en/docs/core-services/interface/data-collection/cookies/analytics

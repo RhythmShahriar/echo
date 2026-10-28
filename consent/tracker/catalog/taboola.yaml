@@ -19,7 +19,7 @@ cookies:
 params:
   event: [en, name]
   id: [id]
-fix: Load the Taboola Pixel only after the banner reports marketing consent
+fix: Load the Taboola Pixel only after the banner reports marketing consent.
 docs: https://developers.taboola.com/pixel/docs/pixel-overview
 sources:
   - https://developers.taboola.com/pixel/docs/pixel-overview

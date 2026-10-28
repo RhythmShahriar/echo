@@ -97,6 +97,7 @@ func WriteConsentMarkdown(w io.Writer, r *consent.Result, o ConsentMarkdownOptio
 		m.runDetails()
 	}
 	m.inconclusive()
+	m.runNotes()
 	m.consentMode()
 	m.comparison()
 	m.footer()
@@ -500,10 +501,7 @@ func (m *consentMD) runDetails() {
 				m.line("")
 				wrote = true
 			}
-			where := consentPagePath(pg.URL)
-			if pg.Site != "" {
-				where = pg.Site + " " + where
-			}
+			where := consentPageLabel(m.r, pg)
 			m.line("<details><summary>%s · %s</summary>", mdHTML(where), run.Kind.Label())
 			m.line("")
 			for _, e := range entries {
@@ -560,6 +558,30 @@ func (m *consentMD) inconclusive() {
 			m.line("")
 		}
 	}
+}
+
+// runNotes lists what pages did that their runs handled: a dialog, a
+// popup or a download, each as `- <page> · <Run>: <note>` (PRD 14.10).
+func (m *consentMD) runNotes() {
+	var lines []string
+	for i := range m.r.Pages {
+		pg := &m.r.Pages[i]
+		for j := range pg.Runs {
+			run := &pg.Runs[j]
+			for _, n := range run.Notes {
+				lines = append(lines, fmt.Sprintf("- %s · %s: %s", m.page(pg.Site, matrixPage(m.r, pg)), md(run.Kind.Label()), md(n.Text)))
+			}
+		}
+	}
+	if len(lines) == 0 {
+		return
+	}
+	m.line("### Notes")
+	m.line("")
+	for _, l := range lines {
+		m.line("%s", l)
+	}
+	m.line("")
 }
 
 // consentMode writes one sentence per page with Consent Mode: the

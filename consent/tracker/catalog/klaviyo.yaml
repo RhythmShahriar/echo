@@ -19,7 +19,7 @@ cookies:
   - __kla_id
 params:
   id: [company_id]
-fix: Load Klaviyo's onsite script only after the banner reports marketing consent
+fix: Load Klaviyo's onsite script only after the banner reports marketing consent.
 docs: https://developers.klaviyo.com/en/docs/introduction_to_the_klaviyo_object
 sources:
   - https://developers.klaviyo.com/en/docs/introduction_to_the_klaviyo_object

@@ -122,6 +122,7 @@ type Tab struct {
 
 	mu    sync.Mutex
 	shots int
+	away  string // the host the last click that navigated away went to
 }
 
 var _ consent.Tab = (*Tab)(nil)
@@ -305,8 +306,11 @@ func (t *Tab) press(ctx context.Context, res consent.ClickResult, x, y float64) 
 		return res, ctx.Err()
 	}
 	for {
-		if t.navigatedAway(before, navsBefore) {
+		if host := t.navigatedAway(before, navsBefore); host != "" {
 			res.NavigatedAway = true
+			t.mu.Lock()
+			t.away = host
+			t.mu.Unlock()
 			break
 		}
 		if time.Since(started) >= navWait {
@@ -332,24 +336,32 @@ func (t *Tab) topHost() string {
 	return hostOfURL(rec.frames[proto.PageFrameID(rec.main.id)])
 }
 
-// navigatedAway reports whether the top frame went to, or started to
-// load, another host since the click.
-func (t *Tab) navigatedAway(before string, navsBefore int) bool {
+// navigatedAway is the other host the top frame went to, or started to
+// load, since the click; "" when it stayed.
+func (t *Tab) navigatedAway(before string, navsBefore int) string {
 	if before == "" {
-		return false
+		return ""
 	}
 	if h := t.topHost(); h != "" && h != before {
-		return true
+		return h
 	}
 	rec := t.s.rec
 	rec.mu.Lock()
 	defer rec.mu.Unlock()
 	for _, n := range rec.topNavs[min(navsBefore, len(rec.topNavs)):] {
 		if n.host != "" && n.host != before {
-			return true
+			return n.host
 		}
 	}
-	return false
+	return ""
+}
+
+// awayHost is the host the last click that navigated away went to, ""
+// when none did.
+func (t *Tab) awayHost() string {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.away
 }
 
 // offset is where frame f's viewport starts in the top frame's: the

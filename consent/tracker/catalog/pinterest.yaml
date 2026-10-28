@@ -23,7 +23,7 @@ cookies:
 params:
   event: [event]
   id: [tid]
-fix: Load the Pinterest Tag only after the banner reports marketing consent
+fix: Load the Pinterest Tag only after the banner reports marketing consent.
 docs: https://help.pinterest.com/en/business/article/track-conversions-with-pinterest-tag
 sources:
   - https://help.pinterest.com/en/business/article/track-conversions-with-pinterest-tag

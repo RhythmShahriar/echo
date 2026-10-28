@@ -21,7 +21,7 @@ cookies:
 params:
   event: [name]
   id: [marketerId]
-fix: Load the Outbrain Pixel only after the banner reports marketing consent
+fix: Load the Outbrain Pixel only after the banner reports marketing consent.
 docs: https://www.outbrain.com/help/advertisers/test-outbrain-pixel/
 sources:
   - https://www.outbrain.com/help/advertisers/test-outbrain-pixel/

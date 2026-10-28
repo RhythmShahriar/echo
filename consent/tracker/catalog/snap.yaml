@@ -23,7 +23,7 @@ cookies:
 params:
   event: [ev, e]
   id: [pid]
-fix: Load the Snap Pixel only after the banner reports marketing consent
+fix: Load the Snap Pixel only after the banner reports marketing consent.
 docs: https://businesshelp.snapchat.com/s/article/pixel-website-install
 sources:
   - https://businesshelp.snapchat.com/s/article/pixel-website-install

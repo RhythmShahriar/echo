@@ -14,7 +14,7 @@ frames:
 scripts:
   - hosts: [maps.googleapis.com]
     paths: [/maps/api/js]
-fix: Show a static image with a click-to-load button and load the map only after consent
+fix: Show a static image with a click-to-load button and load the map only after consent.
 docs: https://developers.google.com/maps/documentation/embed/get-started
 sources:
   - https://developers.google.com/maps/documentation/embed/get-started

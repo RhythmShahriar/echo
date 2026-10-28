@@ -697,6 +697,31 @@ func TestBotWall(t *testing.T) {
 	}
 }
 
+// TestHTTPErrorStatus: a start page that answers 404, 500 or 421 (a
+// host with no site) stops the check with its status, so it can never
+// read as All clear.
+func TestHTTPErrorStatus(t *testing.T) {
+	routes := map[string]http.HandlerFunc{}
+	for _, code := range []int{http.StatusNotFound, http.StatusInternalServerError, http.StatusMisdirectedRequest} {
+		routes[fmt.Sprintf("/%d", code)] = func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "text/html")
+			w.WriteHeader(code)
+			_, _ = fmt.Fprint(w, "<title>error</title><p>no page here")
+		}
+	}
+	addr := redirectSite(t, routes)
+	for _, code := range []int{http.StatusNotFound, http.StatusInternalServerError, http.StatusMisdirectedRequest} {
+		u := fmt.Sprintf("https://shop.test/%d", code)
+		p := consenttest.NewPlan(t, u)
+		p.MapHosts, p.MapOnly, p.Runs, p.Retries = map[string]string{"shop.test": addr}, true, []consent.RunKind{consent.RunNone}, 0
+		p.Settle, p.Browser.NoDownload = 200*time.Millisecond, true
+		f := fatalOf(t, p)
+		if f.Code != consent.FatalHTTPStatus || f.Status != code || f.URL != u {
+			t.Errorf("%d: fatal %+v", code, f)
+		}
+	}
+}
+
 // tlsPlan is a plan for a 127.0.0.1 TLS server with a certificate no one
 // trusts.
 func tlsPlan(t *testing.T) *consent.Plan {
@@ -789,6 +814,9 @@ func TestConsentClickNavigatesAway(t *testing.T) {
 	r := res.Pages[0].Runs[0]
 	if r.Status != consent.StatusNavigatedAway || r.Reason != consent.ReasonNavigation || slices.Contains(steps(r), "reload") {
 		t.Errorf("run %s %q steps %v", r.Status, r.Reason, steps(r))
+	}
+	if r.Detail != "the click took the page to another site (elsewhere.other.test)" {
+		t.Errorf("detail %q", r.Detail)
 	}
 }
 

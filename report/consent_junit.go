@@ -61,11 +61,12 @@ type (
 const consentJUnitClass = "rhythm-echo.consent"
 
 // WriteConsentJUnit writes a consent check as JUnit XML: one test suite
-// per page named by its path (after its --sites name), one test case per
-// run named `<page> · <Run>` with one <failure> per counted error-level
-// issue of that page and run and <skipped message="inconclusive:
-// <reason>"> for a run that couldn't choose. consentSHA256 is the
-// consent.json.sha256 property of every suite.
+// per page named by its path (after its host when the pages span hosts,
+// and after its --sites name), one test case per run named `<page> ·
+// <Run>` with one <failure> per counted error-level issue of that page
+// and run and <skipped message="inconclusive: <reason>"> for a run that
+// couldn't choose. consentSHA256 is the consent.json.sha256 property of
+// every suite.
 func WriteConsentJUnit(w io.Writer, r *consent.Result, consentSHA256 string) error {
 	if r == nil {
 		r = &consent.Result{}
@@ -81,10 +82,7 @@ func WriteConsentJUnit(w io.Writer, r *consent.Result, consentSHA256 string) err
 	}
 	for i := range r.Pages {
 		pg := &r.Pages[i]
-		name := Safe(consentPagePath(pg.URL))
-		if pg.Site != "" {
-			name = Safe(pg.Site) + " " + name
-		}
+		name := Safe(consentPageLabel(r, pg))
 		s := consentJUnitSuite{Name: name, Timestamp: stamp}
 		if consentSHA256 != "" {
 			s.Properties = &junitProperties{[]junitProperty{{Name: "consent.json.sha256", Value: Safe(consentSHA256)}}}

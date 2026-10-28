@@ -94,7 +94,8 @@ type consentText struct {
 // 9.1): the header, each page with its runs, the verdict line, the
 // issues (or, comparing, the changes), the runs that couldn't choose
 // and the closing lines. Quiet keeps the verdict line, the issues and
-// the runs that couldn't choose, which say why a check exits 3;
+// the runs that couldn't choose (without the hints under them), which
+// say why a check exits 3;
 // Verbose adds each run's timeline and the issue and change keys. Every
 // string from the page passes Safe.
 func WriteConsentText(w io.Writer, r *consent.Result, o ConsentTextOptions) error {
@@ -172,21 +173,28 @@ func (t *consentText) paint(c lipgloss.Color, s string) string {
 }
 
 // consentTarget names what a check covered: the page URL, the first
-// one with the count when there are several ("https://shop.test/ (3
-// pages)"), or with --sites the count of sites ("2 sites (5 pages)").
-// It is "" for a result with no page.
+// one with the count when there are several on one host
+// ("https://shop.test/ (3 pages)"), the counts when they span hosts ("2
+// pages on 2 hosts"), or with --sites the count of sites ("2 sites (5
+// pages)"). It is "" for a result with no page.
 func consentTarget(r *consent.Result) string {
 	if len(r.Pages) == 0 {
 		return ""
 	}
-	var sites []string
+	var sites, hosts []string
 	for _, pg := range r.Pages {
 		if pg.Site != "" && !slices.Contains(sites, pg.Site) {
 			sites = append(sites, pg.Site)
 		}
+		if h := consentPageHost(pg.URL); h != "" && !slices.Contains(hosts, h) {
+			hosts = append(hosts, h)
+		}
 	}
 	if len(sites) > 1 {
 		return fmt.Sprintf("%d sites (%d pages)", len(sites), len(r.Pages))
+	}
+	if len(hosts) > 1 {
+		return fmt.Sprintf("%d pages on %d hosts", len(r.Pages), len(hosts))
 	}
 	what := Safe(r.Pages[0].URL)
 	if len(r.Pages) > 1 {
@@ -511,6 +519,27 @@ func (t *consentText) runIssues(pg *consent.Page, run *consent.Run) []consent.Is
 	return out
 }
 
+// consentPageHost is the host (and port) of a page URL in lower case,
+// "" when it has none.
+func consentPageHost(raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return ""
+	}
+	return strings.ToLower(u.Host)
+}
+
+// consentPageLabel names pg where a report titles a page and run: the
+// matrix's name for it (host and path when the pages span hosts, then
+// the query) after its --sites name when it has one ("shop
+// c01.shop.test/"). It is not passed through Safe.
+func consentPageLabel(r *consent.Result, pg *consent.Page) string {
+	if pg.Site != "" {
+		return pg.Site + " " + matrixPage(r, pg)
+	}
+	return matrixPage(r, pg)
+}
+
 // consentPagePath is the path (and query) of a page URL, the way the
 // reports show pages; consent.PageName is the form issues name them by.
 func consentPagePath(raw string) string {
@@ -542,10 +571,15 @@ var reasonWords = map[consent.Reason]string{
 }
 
 // runReasonWords is reasonWords for run: a withdraw run whose banner
-// couldn't be reopened says so rather than "no button found".
+// couldn't be reopened says so rather than "no button found"; a
+// click that took the tab to another site says so rather than "the page
+// didn't load".
 func runReasonWords(run *consent.Run) string {
 	if run.ReopenFailed() {
 		return "the banner couldn't be reopened"
+	}
+	if run.Status == consent.StatusNavigatedAway {
+		return "the click took the page to another site"
 	}
 	return reasonWords[run.Reason]
 }
@@ -1089,7 +1123,7 @@ func (t *consentText) inconclusive() {
 		t.line("  %s %s  %s", mark, at, Safe(in.Detail))
 		hint = hint || in.Reason == consent.ReasonNoBanner || in.Reason == consent.ReasonCMPNotFound
 	}
-	if hint {
+	if hint && !t.o.Quiet {
 		for _, h := range noBannerHints {
 			t.line("  %s", h)
 		}

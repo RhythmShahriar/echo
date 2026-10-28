@@ -17,7 +17,7 @@ scripts:
 cookies:
   - "_lo_*"
   - lo-uid
-fix: Load Lucky Orange only after the visitor accepts analytics or session recording
+fix: Load Lucky Orange only after the visitor accepts analytics or session recording.
 docs: https://developers.luckyorange.com/libraries/browser/cookies-storage
 sources:
   - https://developers.luckyorange.com/libraries/browser/cookies-storage

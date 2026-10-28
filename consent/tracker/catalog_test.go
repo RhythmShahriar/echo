@@ -304,6 +304,19 @@ func TestTrackersInfo(t *testing.T) {
 		if tr.Need == consent.NeedNeeded && tr.Fix == "" {
 			t.Errorf("%s: no fix", tr.ID)
 		}
+		// A fix is a sentence, as every check's fix is: one output
+		// mixes them, so each ends with a period.
+		if tr.Fix != "" && !strings.HasSuffix(tr.Fix, ".") {
+			t.Errorf("%s: fix %q doesn't end with a period", tr.ID, tr.Fix)
+		}
+	}
+	for _, c := range consent.Checks {
+		if !strings.HasSuffix(c.Fix, ".") {
+			t.Errorf("%s: fix %q doesn't end with a period", c.ID, c.Fix)
+		}
+	}
+	if !strings.HasSuffix(defaultCustomFix, ".") {
+		t.Errorf("custom tracker fix %q doesn't end with a period", defaultCustomFix)
 	}
 	list[0].Sources[0] = "changed"
 	if builtin.Trackers()[0].Sources[0] == "changed" {

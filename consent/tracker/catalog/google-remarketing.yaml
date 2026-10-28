@@ -12,7 +12,7 @@ hits:
     paths: ["/pagead/1p-user-list/*"]
 params:
   id_path: '^/pagead/1p-user-list/([0-9]+)'
-fix: Set a Consent Mode default (all four signals denied) before the Google tag, or let the banner block remarketing until consent
+fix: Set a Consent Mode default (all four signals denied) before the Google tag, or let the banner block remarketing until consent.
 docs: https://developers.google.com/tag-platform/security/guides/csp
 sources:
   - https://developers.google.com/tag-platform/security/guides/csp

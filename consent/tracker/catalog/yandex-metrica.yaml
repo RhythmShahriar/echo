@@ -22,7 +22,7 @@ cookies:
   - _ym_visorc
 params:
   id_path: '^/(?:watch|webvisor)/([0-9]+)'
-fix: Load Yandex Metrica only after the visitor accepts analytics
+fix: Load Yandex Metrica only after the visitor accepts analytics.
 docs: https://yandex.com/support/metrica/general/cookie-usage.html
 sources:
   - https://yandex.com/support/metrica/general/cookie-usage.html

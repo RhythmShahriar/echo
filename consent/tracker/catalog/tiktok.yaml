@@ -21,7 +21,7 @@ cookies:
 params:
   event: [event]
   id: [sdkid, pixel_code]
-fix: Load the TikTok Pixel only after the banner reports marketing consent, or call ttq.holdConsent() first and ttq.grantConsent() on consent
+fix: Load the TikTok Pixel only after the banner reports marketing consent, or call ttq.holdConsent() first and ttq.grantConsent() on consent.
 docs: https://ads.tiktok.com/help/article/tiktok-pixel
 sources:
   - https://ads.tiktok.com/help/article/tiktok-pixel

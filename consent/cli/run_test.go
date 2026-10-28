@@ -333,6 +333,8 @@ func TestFatalMessages(t *testing.T) {
 		{Code: consent.FatalUnreachable, URL: "https://g01.shop.test/", Detail: "http://127.0.0.1:39102 (--map-host): dial tcp 127.0.0.1:39102: connect: connection refused"},
 		{Code: consent.FatalHTTPStatus, URL: "https://staging.shop.test/", Status: 401},
 		{Code: consent.FatalHTTPStatus, URL: "https://staging.shop.test/", Status: 503},
+		{Code: consent.FatalHTTPStatus, URL: "https://staging.shop.test/missing", Status: 404},
+		{Code: consent.FatalHTTPStatus, URL: "https://staging.shop.test/", Status: 500},
 		{Code: consent.FatalBotWall, URL: "https://shop.example.com/", Detail: "Cloudflare"},
 		{Code: consent.FatalBotWall, URL: "https://shop.example.com/", Detail: "a bot check"},
 		{Code: consent.FatalRedirectHost, URL: "https://shop.test/", To: "https://shop.example.com/"},

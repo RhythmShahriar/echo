@@ -353,6 +353,8 @@ func fill(out *consent.Run, rec *Recording) {
 	out.Events, out.Truncated, out.Dropped = rec.Events, rec.Truncated, rec.Dropped
 	for _, e := range rec.Events {
 		switch e.Kind {
+		case consent.EvDialog, consent.EvPopup, consent.EvDownload:
+			out.AddNote(e)
 		case consent.EvRequest:
 			if e.Hit == nil || e.Request == nil {
 				continue

@@ -24,7 +24,7 @@ cookies:
   - li_fat_id
 params:
   id: [pid]
-fix: Load the LinkedIn Insight Tag only after the banner reports marketing consent
+fix: Load the LinkedIn Insight Tag only after the banner reports marketing consent.
 docs: https://www.linkedin.com/help/lms/answer/a418880
 sources:
   - https://www.linkedin.com/help/lms/answer/a418880

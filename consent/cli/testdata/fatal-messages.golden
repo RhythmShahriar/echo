@@ -7,6 +7,8 @@ unreachable: rhythm echo: https://staging.shop.test/ didn't answer: dial tcp: lo
 unreachable: rhythm echo: https://g01.shop.test/ didn't answer: http://127.0.0.1:39102 (--map-host): dial tcp 127.0.0.1:39102: connect: connection refused. Is the site at the --map-host address running?
 http-status: rhythm echo: https://staging.shop.test/ answered 401 Unauthorized; pass the login with -H "Authorization: env:RHYTHM_ECHO_STAGING_AUTH" or consent: headers:
 http-status: rhythm echo: https://staging.shop.test/ answered 503 Service Unavailable; check that the site serves its pages, then run the check again
+http-status: rhythm echo: https://staging.shop.test/missing answered 404 Not Found; check that the site serves its pages, then run the check again
+http-status: rhythm echo: https://staging.shop.test/ answered 500 Internal Server Error; check that the site serves its pages, then run the check again
 bot-wall: rhythm echo: https://shop.example.com/ showed a bot check (Cloudflare) instead of the page; allow this machine in the firewall for the check, or check staging
 bot-wall: rhythm echo: https://shop.example.com/ showed a bot check instead of the page; allow this machine in the firewall for the check, or check staging
 redirect-host: rhythm echo: https://shop.test/ redirects to https://shop.example.com/; check that one, or pass --follow-host

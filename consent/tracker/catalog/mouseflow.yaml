@@ -15,7 +15,7 @@ scripts:
   - hosts: [cdn.mouseflow.com]
 cookies:
   - "mf_*"
-fix: Load Mouseflow only after the visitor accepts analytics or session recording
+fix: Load Mouseflow only after the visitor accepts analytics or session recording.
 docs: https://help.mouseflow.com/en/articles/4310818-cookies-used-by-mouseflow
 sources:
   - https://help.mouseflow.com/en/articles/4310818-cookies-used-by-mouseflow

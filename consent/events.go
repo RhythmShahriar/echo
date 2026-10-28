@@ -187,3 +187,57 @@ type StorageKey struct {
 	Phase    Phase       `json:"phase"`
 	AtMS     int64       `json:"at_ms"`
 }
+
+// RunNote is something the page did that the run handled and a reader
+// should hear about: a dialog, a popup or a download (PRD 14.10).
+type RunNote struct {
+	AtMS int64  `json:"at_ms"`
+	Kind string `json:"kind"` // dialog, popup or download
+	Text string `json:"text"` // safe to print
+}
+
+// MaxRunNotes caps the notes one run keeps; a page that opens a dialog
+// on every frame says so once.
+const MaxRunNotes = 20
+
+// EventNote is the run note e makes, or "" for an event that makes
+// none: `the page opened a dialog ("Allow?"); Echo dismissed it`, `the
+// page opened a popup (https://ads.example/); Echo closed it`, `the page
+// started a download (https://shop.test/file.bin); Chrome refused it`.
+// The event's note is already masked and passed through SafeText.
+func EventNote(e Event) string {
+	what := func(s, quoted string) string {
+		if quoted == "" {
+			return s
+		}
+		return s + " (" + quoted + ")"
+	}
+	switch e.Kind {
+	case EvDialog:
+		q := ""
+		if e.Note != "" {
+			q = `"` + SafeText(e.Note, 200) + `"`
+		}
+		return what("the page opened a dialog", q) + "; Echo dismissed it"
+	case EvPopup:
+		return what("the page opened a popup", SafeText(e.Note, 200)) + "; Echo closed it"
+	case EvDownload:
+		return what("the page started a download", SafeText(e.Note, 200)) + "; Chrome refused it"
+	}
+	return ""
+}
+
+// AddNote adds the run note e makes, once per text and at most
+// MaxRunNotes.
+func (r *Run) AddNote(e Event) {
+	text := EventNote(e)
+	if text == "" || len(r.Notes) >= MaxRunNotes {
+		return
+	}
+	for _, n := range r.Notes {
+		if n.Text == text {
+			return
+		}
+	}
+	r.Notes = append(r.Notes, RunNote{AtMS: e.AtMS, Kind: string(e.Kind), Text: text})
+}

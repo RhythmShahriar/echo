@@ -629,10 +629,7 @@ func (h *consentHTML) runs() []chRun {
 		pg := &h.r.Pages[i]
 		for j := range pg.Runs {
 			run := &pg.Runs[j]
-			cr := chRun{ID: runAnchor(i, run.Kind), Title: Safe(consentPagePath(pg.URL)) + " · " + run.Kind.Label()}
-			if pg.Site != "" {
-				cr.Title = Safe(pg.Site) + " " + cr.Title
-			}
+			cr := chRun{ID: runAnchor(i, run.Kind), Title: Safe(consentPageLabel(h.r, pg)) + " · " + run.Kind.Label()}
 			_, cr.Summary = h.t.runSummary(pg, run)
 			cr.SVG = h.timelineSVG(i, run)
 			cr.Events = h.events(i, pg, run)
@@ -819,6 +816,9 @@ func (h *consentHTML) events(page int, pg *consent.Page, run *consent.Run) []chE
 			tr = h.t.name(k.Tracker)
 		}
 		add(k.AtMS, chEvent{Type: "storage", Tracker: tr, What: Safe(k.Area) + " " + Safe(k.Key)})
+	}
+	for _, n := range run.Notes {
+		add(n.AtMS, chEvent{Type: "note", What: Safe(n.Text)})
 	}
 	slices.SortStableFunc(evs, func(a, b ev) int { return cmp.Compare(a.at, b.at) })
 	out := make([]chEvent, len(evs))

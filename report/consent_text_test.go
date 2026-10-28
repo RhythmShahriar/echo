@@ -136,6 +136,14 @@ func TestConsentTextQuiet(t *testing.T) {
 	if out := consentTextOf(t, judgedResult(t, "clean"), ConsentTextOptions{Quiet: true}); out != "All clear - 0 errors, 0 warnings, 0 notices - 3 runs, 3 trackers, policy advanced\n" {
 		t.Errorf("quiet clean: %q", out)
 	}
+	// Runs that couldn't choose say which page, which run and why; the
+	// hints are for a full report.
+	want := "Couldn't check - 0 errors, 0 warnings, 0 notices - 3 runs, 0 trackers, policy advanced\n" +
+		"  INCONCLUSIVE /  Accept: no banner showed within 10s (Cookiebot's script loaded)\n" +
+		"  INCONCLUSIVE /  Reject: no banner showed within 10s (Cookiebot's script loaded)\n"
+	if out := consentTextOf(t, judgedResult(t, "inconclusive"), ConsentTextOptions{Quiet: true, Plain: true}); out != want {
+		t.Errorf("quiet inconclusive:\n%s", out)
+	}
 }
 
 func TestConsentTextPlain(t *testing.T) {
@@ -477,5 +485,43 @@ func TestConsentErrorValidates(t *testing.T) {
 	schema := schemaOf(t, KindConsent)
 	if got := validate(schema, schema, decoded(t, b.Bytes()), "$"); len(got) > 0 {
 		t.Errorf("error envelope: %q", got)
+	}
+}
+
+// A click that took the tab to another site reads as such on the run
+// line, not as a page that didn't load.
+func TestConsentTextNavigatedAway(t *testing.T) {
+	r := judgedResult(t, "meta-ignores")
+	run := &r.Pages[0].Runs[2]
+	run.Status, run.Reason, run.Detail = consent.StatusNavigatedAway, consent.ReasonNavigation, "the click took the page to another site (elsewhere.test)"
+	out := consentTextOf(t, r, ConsentTextOptions{Plain: true})
+	if !strings.Contains(out, "couldn't choose: the click took the page to another site\n") || strings.Contains(out, "didn't load") {
+		t.Errorf("navigated away:\n%s", out)
+	}
+}
+
+// The dialogs, popups and downloads a page made show in the -v
+// timeline, the Markdown and the HTML report (PRD 14.10), escaped.
+func TestConsentRunNotesShown(t *testing.T) {
+	r := judgedResult(t, "meta-ignores")
+	accept := &r.Pages[0].Runs[1]
+	accept.Notes = []consent.RunNote{
+		{AtMS: 2010, Kind: "popup", Text: "the page opened a popup (https://popup.test/); Echo closed it"},
+		{AtMS: 2020, Kind: "dialog", Text: `the page opened a dialog ("<b>hi</b>"); Echo dismissed it`},
+	}
+	out := consentTextOf(t, r, ConsentTextOptions{Plain: true, Verbose: true})
+	if !strings.Contains(out, "     2.01s  note   the page opened a popup (https://popup.test/); Echo closed it\n") {
+		t.Errorf("-v lacks the popup note:\n%s", out)
+	}
+	if out := consentTextOf(t, r, ConsentTextOptions{Plain: true}); strings.Contains(out, "opened a popup") {
+		t.Errorf("notes without -v:\n%s", out)
+	}
+	md := consentMDOf(t, r, ConsentMarkdownOptions{})
+	if !strings.Contains(md, "### Notes\n\n- / · Accept: the page opened a popup \\(https://popup.test/\\); Echo closed it\n") || strings.Contains(md, "<b>") {
+		t.Errorf("Markdown notes:\n%s", md)
+	}
+	html := consentHTMLOf(t, r, ConsentHTMLOptions{})
+	if !strings.Contains(html, "<td>note</td><td></td><td></td><td><code>the page opened a popup (https://popup.test/); Echo closed it</code>") || strings.Contains(html, "<b>hi") {
+		t.Errorf("HTML lacks the escaped notes")
 	}
 }

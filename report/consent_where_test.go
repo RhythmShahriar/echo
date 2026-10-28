@@ -117,3 +117,50 @@ func TestConsentBrowserNoPath(t *testing.T) {
 		t.Errorf("Markdown footer:\n%s", md)
 	}
 }
+
+// Pages of one check on two hosts are told apart everywhere a report
+// titles a page: the JUnit suites and cases, the Markdown and HTML run
+// titles; the header and HTML title name the hosts' count rather
+// than the first page alone.
+func TestConsentPagesOnTwoHosts(t *testing.T) {
+	r := judgedResult(t, "meta-ignores")
+	two := *r
+	two.Pages = []consent.Page{r.Pages[0], r.Pages[0]}
+	two.Pages[0].URL, two.Pages[1].URL = "https://c01.shop.test/", "https://c02.shop.test/"
+	two.Issues = nil
+
+	_, doc := consentJUnitOf(t, &two, testHash)
+	if len(doc.Suites) != 2 || doc.Suites[0].Name != "c01.shop.test/" || doc.Suites[1].Name != "c02.shop.test/" {
+		t.Fatalf("suites %+v", doc.Suites)
+	}
+	if c := doc.Suites[1].Cases[0].Name; c != "c02.shop.test/ · No choice" {
+		t.Errorf("case %q", c)
+	}
+
+	out := consentTextOf(t, &two, ConsentTextOptions{Plain: true})
+	if !strings.Contains(out, " - consent check of 2 pages on 2 hosts\n") || strings.Contains(out, "consent check of https://c01") {
+		t.Errorf("header:\n%s", out)
+	}
+	html := consentHTMLOf(t, &two, ConsentHTMLOptions{})
+	for _, want := range []string{"<title>Echo consent check of 2 pages on 2 hosts</title>", "c02.shop.test/ · Reject"} {
+		if !strings.Contains(html, want) {
+			t.Errorf("HTML lacks %q", want)
+		}
+	}
+	if md := consentMDOf(t, &two, ConsentMarkdownOptions{Details: true}); !strings.Contains(md, "<summary>c02.shop.test/ · Reject</summary>") {
+		t.Errorf("Markdown run titles:\n%s", md)
+	}
+
+	// One host keeps the path alone and the first URL with the count.
+	one := two
+	one.Pages = []consent.Page{r.Pages[0], r.Pages[0]}
+	one.Pages[1].URL = "https://c01.shop.test/shop/"
+	one.Pages[0].URL = "https://c01.shop.test/"
+	_, doc = consentJUnitOf(t, &one, testHash)
+	if doc.Suites[0].Name != "/" || doc.Suites[1].Name != "/shop/" {
+		t.Errorf("one host: suites %q %q", doc.Suites[0].Name, doc.Suites[1].Name)
+	}
+	if out := consentTextOf(t, &one, ConsentTextOptions{Plain: true}); !strings.Contains(out, "consent check of https://c01.shop.test/ (2 pages)\n") {
+		t.Errorf("one host header:\n%s", out)
+	}
+}

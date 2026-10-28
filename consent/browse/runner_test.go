@@ -297,3 +297,50 @@ func TestStartRefusal(t *testing.T) {
 		}
 	}
 }
+
+// TestHTTPFailed: every 4xx and 5xx start page stops the check, 2xx and
+// 3xx don't (PRD 10.2).
+func TestHTTPFailed(t *testing.T) {
+	for status, want := range map[int]bool{0: false, 200: false, 204: false, 304: false, 400: true, 401: true, 403: true,
+		404: true, 421: true, 429: true, 500: true, 502: true, 503: true, 599: true, 600: false} {
+		if got := httpFailed(status); got != want {
+			t.Errorf("httpFailed(%d) = %v; want %v", status, got, want)
+		}
+	}
+}
+
+// TestAwayDetail: a click that took the tab to another site names the
+// host, which a hostile page can't use to break the line.
+func TestAwayDetail(t *testing.T) {
+	for host, want := range map[string]string{
+		"elsewhere.test": "the click took the page to another site (elsewhere.test)",
+		"":               "the click took the page to another site",
+		"x\x1b[2J.test":  `the click took the page to another site (x\x1b[2J.test)`,
+	} {
+		if got := awayDetail(host); got != want {
+			t.Errorf("awayDetail(%q) = %q; want %q", host, got, want)
+		}
+	}
+}
+
+// TestFillRunNotes: the dialogs, popups and downloads a page made become
+// the run's notes (PRD 14.10), each said once.
+func TestFillRunNotes(t *testing.T) {
+	rec := &Recording{Events: []consent.Event{
+		{Seq: 1, Kind: consent.EvDialog, AtMS: 2010, Note: "Thanks for accepting!"},
+		{Seq: 2, Kind: consent.EvPopup, AtMS: 2020, Note: "https://popup.test/"},
+		{Seq: 3, Kind: consent.EvDownload, AtMS: 2030, Note: "https://shop.test/file.bin"},
+		{Seq: 4, Kind: consent.EvDialog, AtMS: 2040, Note: "Thanks for accepting!"},
+		{Seq: 5, Kind: consent.EvNote, AtMS: 2050, Note: "the page opened a file chooser; Echo canceled it"},
+	}}
+	r := newRun(consent.RunAccept)
+	fill(&r, rec)
+	want := []consent.RunNote{
+		{AtMS: 2010, Kind: "dialog", Text: `the page opened a dialog ("Thanks for accepting!"); Echo dismissed it`},
+		{AtMS: 2020, Kind: "popup", Text: "the page opened a popup (https://popup.test/); Echo closed it"},
+		{AtMS: 2030, Kind: "download", Text: "the page started a download (https://shop.test/file.bin); Chrome refused it"},
+	}
+	if !slices.Equal(r.Notes, want) {
+		t.Errorf("notes %+v", r.Notes)
+	}
+}

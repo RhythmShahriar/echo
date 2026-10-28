@@ -128,7 +128,8 @@ type Run struct {
 	HARFile     string            `json:"har_file,omitempty"`
 	Truncated   bool              `json:"truncated"`
 	Dropped     int               `json:"dropped"`
-	Events      []Event           `json:"-"` // in memory for the verdict; on disk as NDJSON
+	Notes       []RunNote         `json:"notes,omitempty"` // dialogs, popups and downloads the page made (PRD 14.10)
+	Events      []Event           `json:"-"`               // in memory for the verdict; on disk as NDJSON
 }
 
 // Inconclusive reports whether the run couldn't show what it was for:

@@ -24,7 +24,7 @@ cookies:
   - VISITOR_PRIVACY_METADATA
   - {name: YSC, domain: youtube.com}
   - {name: __Secure-ROLLOUT_TOKEN, domain: youtube.com}
-fix: Embed the video from www.youtube-nocookie.com or behind a click-to-load placeholder that loads the player only after consent
+fix: Embed the video from www.youtube-nocookie.com or behind a click-to-load placeholder that loads the player only after consent.
 docs: https://support.google.com/youtube/answer/171780
 sources:
   - https://support.google.com/youtube/answer/171780

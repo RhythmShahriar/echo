@@ -236,12 +236,26 @@ func googleCookieBy(run *consent.Run, phase consent.Phase, atMS int64) bool {
 }
 
 // needsNone applies PRD 11.2: no run found a banner, no CMP is on the
-// page and the none run had no consent-required hit, cookie, storage key
-// or tracker script. Without a none run, the before phase of every run
-// is read instead.
+// page and the none run finished (status ok) with no consent-required
+// hit, cookie, storage key or tracker script. Without a none run, the
+// before phase of every run is read instead; each must have
+// finished (ok or no-banner). A run Echo couldn't finish (a request
+// limit, a timeout, a failed load) can't show there is nothing to
+// consent to.
 func (j *judge) needsNone(pg *consent.Page) bool {
 	if pg.CMP.Found || pg.CMP.Present {
 		return false
+	}
+	if none := runOf(pg, consent.RunNone); none != nil {
+		if none.Status != consent.StatusOK || none.Truncated {
+			return false
+		}
+	} else {
+		for _, run := range pg.Runs {
+			if run.Status != consent.StatusOK && run.Status != consent.StatusNoBanner || run.Truncated {
+				return false
+			}
+		}
 	}
 	for _, run := range pg.Runs {
 		if run.Choice != nil {

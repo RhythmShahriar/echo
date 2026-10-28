@@ -15,7 +15,7 @@ import (
 // timelineEntry is one line of a run's -v timeline.
 type timelineEntry struct {
 	at   int64
-	typ  string // load, gtag, script, hit, cookie, banner, click, page, reload
+	typ  string // load, gtag, script, hit, cookie, banner, click, page, reload, note
 	text string // safe to print
 }
 
@@ -30,7 +30,8 @@ func (t *consentText) timeline(pg *consent.Page, run *consent.Run) {
 }
 
 // timelineEntries lists a run's visits, Consent Mode commands, tracker
-// scripts, hits and cookies, the banner and the clicks in time order.
+// scripts, hits and cookies, the banner, the clicks and the run's notes
+// (dialogs, popups, downloads) in time order.
 func (t *consentText) timelineEntries(pg *consent.Page, run *consent.Run) []timelineEntry {
 	var out []timelineEntry
 	pages := 0
@@ -88,6 +89,9 @@ func (t *consentText) timelineEntries(pg *consent.Page, run *consent.Run) []time
 			text += " refused: " + Safe(c.Blocked)
 		}
 		out = append(out, timelineEntry{c.AtMS, "cookie", text})
+	}
+	for _, n := range run.Notes {
+		out = append(out, timelineEntry{n.AtMS, "note", Safe(n.Text)})
 	}
 	slices.SortStableFunc(out, func(a, b timelineEntry) int { return cmp.Compare(a.at, b.at) })
 	return out

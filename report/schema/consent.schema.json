@@ -1340,6 +1340,12 @@
             "null"
           ]
         },
+        "notes": {
+          "items": {
+            "$ref": "#/$defs/runNote"
+          },
+          "type": "array"
+        },
         "reason": {
           "enum": [
             "",
@@ -1454,6 +1460,30 @@
         "events_file",
         "truncated",
         "dropped"
+      ],
+      "type": "object"
+    },
+    "runNote": {
+      "properties": {
+        "at_ms": {
+          "type": "integer"
+        },
+        "kind": {
+          "enum": [
+            "dialog",
+            "popup",
+            "download"
+          ],
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "at_ms",
+        "kind",
+        "text"
       ],
       "type": "object"
     },

@@ -22,7 +22,7 @@ cookies:
 params:
   event: [ea, evt]
   id: [ti]
-fix: "Set uetq.push('consent', 'default', {ad_storage: 'denied'}) before the UET tag, or let the banner block it until consent"
+fix: "Set uetq.push('consent', 'default', {ad_storage: 'denied'}) before the UET tag, or let the banner block it until consent."
 docs: https://help.ads.microsoft.com/#apex/ads/en/56688/1
 sources:
   - https://help.ads.microsoft.com/#apex/ads/en/56688/1

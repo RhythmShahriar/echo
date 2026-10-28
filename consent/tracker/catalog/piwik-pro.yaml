@@ -28,7 +28,7 @@ cookies:
   - "stg_fired_*"
 params:
   id: [idsite]
-fix: Turn on Piwik PRO's consent manager or let your banner block the container until the visitor accepts
+fix: Turn on Piwik PRO's consent manager or let your banner block the container until the visitor accepts.
 docs: https://help.piwik.pro/analytics/piwik-pro-cookies/
 sources:
   - https://help.piwik.pro/analytics/piwik-pro-cookies/

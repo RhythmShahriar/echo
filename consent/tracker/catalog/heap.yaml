@@ -19,7 +19,7 @@ cookies:
   - "_hp2_*"
 params:
   id: [a]
-fix: Load Heap only after the visitor accepts analytics
+fix: Load Heap only after the visitor accepts analytics.
 docs: https://help.heap.io/hc/en-us/articles/37271939081617-What-cookies-does-Heap-set-and-what-are-they-used-for
 sources:
   - https://help.heap.io/hc/en-us/articles/37271939081617-What-cookies-does-Heap-set-and-what-are-they-used-for

@@ -473,6 +473,13 @@ func (j *judge) inconclusiveDetail(pg *consent.Page, run *consent.Run) string {
 		}
 		return fmt.Sprintf("%s: --cmp %s was named but its banner wasn't found", label, name)
 	case consent.ReasonNavigation:
+		if run.Status == consent.StatusNavigatedAway {
+			// The page loaded; the click sent the tab elsewhere.
+			if d := consent.SafeText(run.Detail, 300); d != "" {
+				return label + ": " + d
+			}
+			return label + ": the click took the page to another site"
+		}
 		if d := consent.SafeText(run.Detail, 300); d != "" {
 			return d
 		}

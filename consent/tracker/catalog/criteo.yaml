@@ -18,7 +18,7 @@ cookies:
   - cto_bidid
 params:
   id: [a]
-fix: Load the Criteo OneTag only after the banner reports marketing consent
+fix: Load the Criteo OneTag only after the banner reports marketing consent.
 docs: https://help.criteo.com/kb/guide/en/all-criteo-onetag-events-and-parameters-vZbzbEeY86/
 sources:
   - https://help.criteo.com/kb/guide/en/all-criteo-onetag-events-and-parameters-vZbzbEeY86/

@@ -22,7 +22,7 @@ scripts:
     params_match: {id: '^(G|AW|DC|GT)-'}
 params:
   id: [id]
-fix: Under strict policy load Google Tag Manager only after consent
+fix: Under strict policy load Google Tag Manager only after consent.
 docs: https://developers.google.com/tag-platform/tag-manager/web
 sources:
   - https://developers.google.com/tag-platform/tag-manager/web

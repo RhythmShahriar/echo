@@ -20,7 +20,7 @@ cookies:
   - {name: personalization_id, domain: x.com}
 params:
   id: [txn_id]
-fix: Load the X Pixel only after the banner reports marketing consent
+fix: Load the X Pixel only after the banner reports marketing consent.
 docs: https://business.x.com/en/help/campaign-measurement-and-analytics/conversion-tracking-for-websites
 sources:
   - https://business.x.com/en/help/campaign-measurement-and-analytics/conversion-tracking-for-websites

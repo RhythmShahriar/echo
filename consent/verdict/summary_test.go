@@ -92,6 +92,17 @@ func TestNeedsNoneNegative(t *testing.T) {
 		"tracker script": func(pg *consent.Page) {
 			pg.Runs[0].Scripts = append(pg.Runs[0].Scripts, consent.Script{Tracker: "meta-pixel", Phase: consent.PhaseBefore})
 		},
+		"none run stopped at the request limit": func(pg *consent.Page) {
+			pg.Runs[0].Status, pg.Runs[0].Reason = consent.StatusLimit, consent.ReasonLimit
+		},
+		"none run timed out": func(pg *consent.Page) {
+			pg.Runs[0].Status, pg.Runs[0].Reason = consent.StatusTimeout, consent.ReasonTimeout
+		},
+		"none run cut short": func(pg *consent.Page) { pg.Runs[0].Truncated = true },
+		"no none run and one stopped at the limit": func(pg *consent.Page) {
+			pg.Runs = pg.Runs[1:]
+			pg.Runs[0].Status, pg.Runs[0].Reason = consent.StatusLimit, consent.ReasonLimit
+		},
 		"tracker hit": func(pg *consent.Page) {
 			pg.Runs[0].Hits = append(pg.Runs[0].Hits, consent.HitRef{Phase: consent.PhaseBefore,
 				Hit: consent.Hit{Tracker: "tiktok-pixel", Need: consent.NeedNeeded, Kind: consent.HitBeacon}})

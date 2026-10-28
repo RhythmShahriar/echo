@@ -315,8 +315,22 @@ func (a *attempt) click(ctx context.Context, info consent.CMPInfo, k consent.Run
 	}
 	if reason != consent.ReasonNone && a.out.Reason == consent.ReasonNone {
 		a.out.Status, a.out.Reason = statusFor(reason), reason
+		if reason == consent.ReasonNavigation && a.out.Detail == "" {
+			a.out.Detail = awayDetail(a.tab.awayHost())
+		}
 	}
 	return ch, nil
+}
+
+// awayDetail is a run's Detail when its click took the tab to another
+// site: "the click took the page to another site (elsewhere.test)". The
+// verdict puts the run's label in front.
+func awayDetail(host string) string {
+	s := "the click took the page to another site"
+	if host != "" {
+		s += " (" + consent.SafeText(host, 120) + ")"
+	}
+	return s
 }
 
 // statusFor is the run status a CMP driver's reason gives.

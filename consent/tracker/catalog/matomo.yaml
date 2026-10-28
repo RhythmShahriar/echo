@@ -33,7 +33,7 @@ cookies:
 params:
   event: [e_a, action_name]
   id: [idsite]
-fix: Call _paq.push(['requireCookieConsent']) before tracking and rememberCookieConsentGiven once the visitor accepts, or run Matomo without cookies
+fix: Call _paq.push(['requireCookieConsent']) before tracking and rememberCookieConsentGiven once the visitor accepts, or run Matomo without cookies.
 docs: https://developer.matomo.org/guides/tracking-consent
 sources:
   - https://developer.matomo.org/guides/tracking-javascript-guide

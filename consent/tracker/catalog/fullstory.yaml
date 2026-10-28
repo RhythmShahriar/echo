@@ -17,7 +17,7 @@ cookies:
   - fs_uid
   - fs_lua
   - fs_cid
-fix: Start FullStory with _fs_capture_on_startup set to false and call FS('start') once the visitor accepts
+fix: Start FullStory with _fs_capture_on_startup set to false and call FS('start') once the visitor accepts.
 docs: https://developer.fullstory.com/browser/getting-started/
 sources:
   - https://developer.fullstory.com/browser/getting-started/

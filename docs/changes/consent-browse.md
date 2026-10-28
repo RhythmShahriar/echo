@@ -86,7 +86,11 @@ with the exact texts.
   message (safe text, 200 characters); a popup is recorded as `popup`
   with its masked URL and closed (every request it makes is refused);
   a download as `download` with its masked URL; a file chooser as the
-  note `the page opened a file chooser; Echo canceled it`.
+  note `the page opened a file chooser; Echo canceled it`. Each dialog,
+  popup and download is also a run note (`notes` in the run in
+  consent.json, at most 20, each once), shown in the -v timeline, the
+  Markdown `Notes` and the HTML timeline: `the page opened a popup
+  (https://ads.example/); Echo closed it`.
 - `--cookie name=value` becomes a host-only cookie for the target
   (Secure when the target is https); anything after `;` is ignored.
 - `--geo` knows the 27 EU states, GB, NO, IS, LI, CH, US, CA, BR, AU,
@@ -262,7 +266,8 @@ with the exact texts.
     `Access Denied`, or `/_sec/cp_challenge/`). Headers and script hosts
     count only when the page answered 403, 429 or 503; a title counts
     always.
-  - the document answered 401 or 403: `http-status` with the status.
+  - the document answered any 4xx or 5xx (after redirects, once no
+    bot check explains it): `http-status` with the status.
 - When every run of a page hit one, `Run` returns the first run's error
   with the result. Otherwise each such run is `load-failed`, reason
   `navigation_failed`, with the detail

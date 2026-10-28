@@ -19,7 +19,7 @@ cookies:
   - {name: ad-privacy, domain: amazon-adsystem.com}
 params:
   id: [pid]
-fix: Load Amazon Ads tags only after the banner reports marketing consent
+fix: Load Amazon Ads tags only after the banner reports marketing consent.
 docs: https://advertising.amazon.com/help/GHPJ8KH7MX9TNZ3K
 sources:
   - https://advertising.amazon.com/help/GHPJ8KH7MX9TNZ3K

@@ -30,7 +30,7 @@ cookies:
   - {name: DSID, domain: doubleclick.net}
 params:
   id_path: '^/pagead/(?:viewthroughconversion|conversion|1p-conversion)/([0-9]+)'
-fix: Set a Consent Mode default (all four signals denied) before the Google tag, or let the banner block Google Ads until consent
+fix: Set a Consent Mode default (all four signals denied) before the Google tag, or let the banner block Google Ads until consent.
 docs: https://developers.google.com/tag-platform/devguides/consent
 sources:
   - https://developers.google.com/tag-platform/security/guides/csp

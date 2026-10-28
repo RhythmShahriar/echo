@@ -5,6 +5,8 @@ package consent_test
 
 import (
 	"encoding/json"
+	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/RhythmShahriar/echo/consent"
@@ -180,5 +182,28 @@ func TestBoxKeys(t *testing.T) {
 	var old consent.Box
 	if err := json.Unmarshal([]byte(`{"X":5,"Y":6,"W":7,"H":8}`), &old); err != nil || old != (consent.Box{X: 5, Y: 6, W: 7, H: 8}) {
 		t.Errorf("old keys: %+v %v", old, err)
+	}
+}
+
+// TestRunAddNote: a run keeps each note once, at most MaxRunNotes;
+// an event that isn't a dialog, popup or download makes none.
+func TestRunAddNote(t *testing.T) {
+	var r consent.Run
+	r.AddNote(consent.Event{Kind: consent.EvRequest})
+	r.AddNote(consent.Event{Kind: consent.EvDialog})
+	r.AddNote(consent.Event{Kind: consent.EvDialog})
+	if len(r.Notes) != 1 || r.Notes[0].Text != "the page opened a dialog; Echo dismissed it" {
+		t.Fatalf("notes %+v", r.Notes)
+	}
+	for i := range 2 * consent.MaxRunNotes {
+		r.AddNote(consent.Event{Kind: consent.EvPopup, Note: fmt.Sprintf("https://p%d.test/", i)})
+	}
+	if len(r.Notes) != consent.MaxRunNotes {
+		t.Errorf("%d notes", len(r.Notes))
+	}
+	r = consent.Run{}
+	r.AddNote(consent.Event{Kind: consent.EvDialog, Note: "a\x1b[2Jb"})
+	if strings.Contains(r.Notes[0].Text, "\x1b") {
+		t.Errorf("control character kept: %q", r.Notes[0].Text)
 	}
 }

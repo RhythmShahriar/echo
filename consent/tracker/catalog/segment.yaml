@@ -20,7 +20,7 @@ cookies:
   - ajs_user_id
 storage:
   - "ajs_*"
-fix: Load analytics.js only after consent, or use Segment's Consent Management to hold events until the visitor accepts
+fix: Load analytics.js only after consent, or use Segment's Consent Management to hold events until the visitor accepts.
 docs: https://segment.com/docs/connections/sources/catalog/libraries/website/javascript/
 sources:
   - https://segment.com/docs/connections/sources/catalog/libraries/website/javascript/

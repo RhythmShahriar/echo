@@ -18,7 +18,7 @@ cookies:
 params:
   event: [event]
   id: [id]
-fix: Load the Reddit Pixel only after the banner reports marketing consent
+fix: Load the Reddit Pixel only after the banner reports marketing consent.
 docs: https://business.reddithelp.com/s/article/Install-the-Reddit-Pixel-on-your-website
 sources:
   - https://business.reddithelp.com/s/article/Install-the-Reddit-Pixel-on-your-website

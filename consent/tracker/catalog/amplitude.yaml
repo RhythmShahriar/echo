@@ -19,7 +19,7 @@ cookies:
   - "AMP_*"
 storage:
   - "AMP_*"
-fix: Initialize Amplitude with optOut true and turn it off once the visitor accepts
+fix: Initialize Amplitude with optOut true and turn it off once the visitor accepts.
 docs: https://amplitude.com/docs/sdks/analytics/browser/browser-sdk-2
 sources:
   - https://amplitude.com/docs/sdks/analytics/browser/browser-sdk-2

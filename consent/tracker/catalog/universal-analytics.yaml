@@ -29,7 +29,7 @@ cookies:
 params:
   event: [t]
   id: [tid]
-fix: Remove Universal Analytics (Google no longer processes its data) or let the banner block it until consent
+fix: Remove Universal Analytics (Google no longer processes its data) or let the banner block it until consent.
 docs: https://developers.google.com/analytics/devguides/collection/protocol/v1/reference
 sources:
   - https://developers.google.com/analytics/devguides/collection/protocol/v1/reference

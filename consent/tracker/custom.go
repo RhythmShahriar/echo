@@ -53,7 +53,7 @@ const (
 
 // defaultCustomFix is the fix line of a custom tracker that needs
 // consent and names none.
-const defaultCustomFix = "Load it only after the visitor consents"
+const defaultCustomFix = "Load it only after the visitor consents."
 
 // fixtureReporter is the optional interface the CLI type-asserts on the
 // registered Classifier for `rhythm echo checks --test`.

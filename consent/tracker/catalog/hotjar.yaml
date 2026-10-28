@@ -35,7 +35,7 @@ storage:
   - "_hjSessionStorageTest*"
   - hjViewportId
   - hjActiveViewportIds
-fix: Load Hotjar only after the visitor accepts analytics or session recording
+fix: Load Hotjar only after the visitor accepts analytics or session recording.
 docs: https://help.hotjar.com/hc/en-us/articles/6952777582999-Cookies-Set-by-the-Hotjar-Tracking-Code
 sources:
   - https://help.hotjar.com/hc/en-us/articles/6952777582999-Cookies-Set-by-the-Hotjar-Tracking-Code

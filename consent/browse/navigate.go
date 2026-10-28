@@ -221,7 +221,8 @@ srcs: Array.from(document.querySelectorAll("script[src], iframe[src]"), (e) => S
 // startFatal checks the start page's load as PRD 10.2 sorts the ways a
 // site can't be checked: a loop, an unreachable site, a certificate
 // this machine doesn't trust, a redirect to another host, a bot check
-// and a login wall. nil means the page can be checked.
+// and a page the site answered with an error status (a login wall, a
+// missing page, a server error). nil means the page can be checked.
 func (a *attempt) startFatal(ctx context.Context, start *url.URL, l loaded) *consent.FatalError {
 	show := func(raw string) string { return consent.MaskURL(raw, a.plan.ShowIDs) }
 	startShown := show(start.String())
@@ -254,10 +255,17 @@ func (a *attempt) startFatal(ctx context.Context, start *url.URL, l loaded) *con
 	if wall := botWall(l.doc.status, l.doc.headers, facts.Title, facts.Srcs); wall != "" {
 		return &consent.FatalError{Code: consent.FatalBotWall, URL: startShown, Status: l.doc.status, Detail: wall}
 	}
-	if l.doc.status == 401 || l.doc.status == 403 {
+	if httpFailed(l.doc.status) {
 		return &consent.FatalError{Code: consent.FatalHTTPStatus, URL: startShown, Status: l.doc.status}
 	}
 	return nil
+}
+
+// httpFailed reports whether a start page's status (after redirects)
+// means the site didn't serve it: any 4xx or 5xx. A page that answered
+// 404 or 500 has nothing to check, so it must never read as All clear.
+func httpFailed(status int) bool {
+	return status >= 400 && status <= 599
 }
 
 // refusal says why Echo itself never loads start, or "" when it may:

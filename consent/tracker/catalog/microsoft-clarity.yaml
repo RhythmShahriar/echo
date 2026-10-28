@@ -27,7 +27,7 @@ cookies:
 storage:
   - _clck
   - _clsk
-fix: Load Clarity only after consent, or send it the visitor's choice with window.clarity('consentv2', ...) from the banner
+fix: Load Clarity only after consent, or send it the visitor's choice with window.clarity('consentv2', ...) from the banner.
 docs: https://learn.microsoft.com/en-us/clarity/setup-and-installation/cookie-consent
 sources:
   - https://learn.microsoft.com/en-us/clarity/setup-and-installation/cookie-list

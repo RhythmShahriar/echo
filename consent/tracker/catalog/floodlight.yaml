@@ -15,7 +15,7 @@ hits:
     paths: ["/activity*", "/ddm/activity/*"]
 params:
   id_path: 'src=([0-9]+)'
-fix: Set a Consent Mode default (all four signals denied) before the Floodlight tag, or let the banner block it until consent
+fix: Set a Consent Mode default (all four signals denied) before the Floodlight tag, or let the banner block it until consent.
 docs: https://support.google.com/campaignmanager/answer/7554821
 sources:
   - https://developers.google.com/tag-platform/security/guides/csp
