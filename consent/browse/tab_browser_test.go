@@ -10,6 +10,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -176,8 +177,11 @@ func TestScreenshotCap(t *testing.T) {
 		t.Errorf("paths %q", paths)
 	}
 	info, err := os.Stat(filepath.Join(p.Dir, "evidence", "page-1", "reject-banner.png"))
-	if err != nil || info.Mode().Perm() != 0o600 || info.Size() < 100 {
+	if err != nil || info.Size() < 100 {
 		t.Errorf("banner screenshot: %v %v", info, err)
+	} else if runtime.GOOS != "windows" && info.Mode().Perm() != 0o600 {
+		// Windows has no Unix permission bits: Go reports 0666 there.
+		t.Errorf("banner screenshot mode %v", info.Mode().Perm())
 	}
 	b, _ := os.ReadFile(filepath.Join(p.Dir, filepath.FromSlash(paths[0])))
 	if len(b) < 8 || string(b[1:4]) != "PNG" {
