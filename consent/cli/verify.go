@@ -25,11 +25,19 @@ const msgSigstore = "Sigstore bundle present: check it with cosign verify-blob -
 // and the attachments it lists by hash. The reports and manifest.json
 // are written after it, so only their manifest hashes check them and
 // nothing checks the manifest: whoever rewrites a report can rewrite
-// the manifest too. It names the reports the folder has.
-func signatureScope(folder string) string {
+// the manifest too. It names the reports the manifest lists and the
+// folder has; a report the manifest doesn't list is checked by nothing
+// and verify names it as unverified instead.
+func signatureScope(v *report.ConsentVerify) string {
+	listed := map[string]bool{}
+	for _, f := range v.Files {
+		if f.Got != "" {
+			listed[f.Path] = true
+		}
+	}
 	var reports []string
 	for _, name := range []string{reportHTML, reportMD, reportJUnit} {
-		if _, err := os.Lstat(filepath.Join(folder, name)); err == nil {
+		if listed[name] {
 			reports = append(reports, name)
 		}
 	}
@@ -71,10 +79,10 @@ func (c *cmd) verify(pos []string) int {
 		fmt.Fprintln(env.Stderr, "rhythm echo: printing the result:", err)
 	}
 	for _, rel := range evidence.Unlisted(pos[0], v) {
-		fmt.Fprintln(view, "not in the manifest  "+consent.SafeText(rel, 200))
+		fmt.Fprintln(view, "unverified  "+consent.SafeText(rel, 200)+" (not in the manifest)")
 	}
 	if v.Signature.Key != "" && v.Signature.OK && !c.o.quiet {
-		fmt.Fprintln(view, signatureScope(evidence.Folder(pos[0])))
+		fmt.Fprintln(view, signatureScope(v))
 	}
 	if _, err := os.Lstat(filepath.Join(evidence.Folder(pos[0]), evidence.SigstoreFile)); err == nil && !c.o.quiet {
 		fmt.Fprintln(view, msgSigstore)

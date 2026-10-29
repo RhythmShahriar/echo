@@ -15,6 +15,7 @@ import (
 
 	"github.com/RhythmShahriar/echo/consent/consenttest"
 	"github.com/RhythmShahriar/echo/consent/evidence"
+	"github.com/RhythmShahriar/echo/report"
 )
 
 // writeKeys writes a fresh ed25519 pair as openssl does: team.key
@@ -56,19 +57,25 @@ func signedCheck(t *testing.T) string {
 // report.html.
 const scopeHTML = "The signature covers consent.json and the files it lists; report.html is checked against manifest.json, which is not signed."
 
-// The scope line names the reports the folder has (report.xml too) and
-// says manifest.json itself isn't signed.
+// The scope line names the reports the manifest lists and the folder
+// has (report.xml too) and says manifest.json itself isn't signed. A
+// report the manifest doesn't list, or lists but is gone, isn't named.
 func TestSignatureScopeNamesReports(t *testing.T) {
-	dir := t.TempDir()
-	if got, want := signatureScope(dir), "The signature covers consent.json and the files it lists; manifest.json is not signed."; got != want {
+	v := &report.ConsentVerify{}
+	if got, want := signatureScope(v), "The signature covers consent.json and the files it lists; manifest.json is not signed."; got != want {
 		t.Errorf("no reports:\n got %q\nwant %q", got, want)
 	}
 	for _, n := range []string{"report.html", "report.md", "report.xml"} {
-		putFile(t, filepath.Join(dir, n), "x")
+		v.Files = append(v.Files, report.VerifyFile{Path: n, OK: true, Want: "h", Got: "h"})
 	}
 	want := "The signature covers consent.json and the files it lists; report.html, report.md and report.xml are checked against manifest.json, which is not signed."
-	if got := signatureScope(dir); got != want {
+	if got := signatureScope(v); got != want {
 		t.Errorf("three reports:\n got %q\nwant %q", got, want)
+	}
+	v.Files[2].Got = "" // report.xml is listed but missing
+	v.Files = v.Files[1:]
+	if got, want := signatureScope(v), "The signature covers consent.json and the files it lists; report.md is checked against manifest.json, which is not signed."; got != want {
+		t.Errorf("one listed report:\n got %q\nwant %q", got, want)
 	}
 }
 
@@ -139,17 +146,21 @@ func TestVerifySignatureScope(t *testing.T) {
 		t.Fatal(err)
 	}
 	putFile(t, filepath.Join(dir, "extra.png"), "x")
+	// A report added after the manifest is unverified and the scope
+	// line doesn't claim it is checked.
+	putFile(t, filepath.Join(dir, "report.md"), "# added later")
 	code, out, _ := runMain(t, "verify", dir, "--key", "team.pub")
-	if code != exitOK || !strings.Contains(out, "not in the manifest  extra.png\n") || !strings.HasSuffix(out, scopeHTML+"\n") {
+	if code != exitOK || !strings.Contains(out, "unverified  extra.png (not in the manifest)\n") ||
+		!strings.Contains(out, "unverified  report.md (not in the manifest)\n") || !strings.HasSuffix(out, scopeHTML+"\n") {
 		t.Errorf("exit %d\n%s", code, out)
 	}
-	if strings.Contains(out, "not in the manifest  notes.txt") {
+	if strings.Contains(out, "unverified  notes.txt") {
 		t.Errorf("a listed file named as unlisted:\n%s", out)
 	}
 	if _, out, _ := runMain(t, "verify", dir); strings.Contains(out, "The signature covers") {
 		t.Errorf("no --key:\n%s", out)
 	}
-	if _, out, _ := runMain(t, "verify", "-q", dir, "--key", "team.pub"); strings.Contains(out, "The signature covers") || !strings.Contains(out, "not in the manifest  extra.png") {
+	if _, out, _ := runMain(t, "verify", "-q", dir, "--key", "team.pub"); strings.Contains(out, "The signature covers") || !strings.Contains(out, "unverified  extra.png (not in the manifest)") {
 		t.Errorf("--quiet:\n%s", out)
 	}
 }
