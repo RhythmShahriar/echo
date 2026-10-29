@@ -5,6 +5,7 @@ package main
 
 import (
 	"fmt"
+	"math/rand/v2"
 	"net"
 	"net/url"
 	"os"
@@ -205,25 +206,25 @@ func TestProcessesWith(t *testing.T) {
 	}
 }
 
-// freeBase finds a free loopback port to start the probe ports from.
+// freeBase finds four free loopback ports in a row to start the probe
+// ports from. They come from 24000-31999, below the ephemeral ranges of
+// Linux (32768 up) and of Windows and macOS (49152 up): a port the
+// system may give any outgoing connection can be taken between this
+// check and the probe's listen, as a Windows runner showed.
 func freeBase(t *testing.T) int {
 	t.Helper()
-	for range 20 {
-		l, err := net.Listen("tcp", "127.0.0.1:0")
-		if err != nil {
-			t.Fatal(err)
-		}
-		port := l.Addr().(*net.TCPAddr).Port
-		_ = l.Close()
+	for range 50 {
+		port := 24000 + rand.IntN(8000-4)
 		ok := true
-		for off := 1; off < 4; off++ {
-			if l2, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", port+off)); err != nil {
+		for off := range 4 {
+			l, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", port+off))
+			if err != nil {
 				ok = false
-			} else {
-				_ = l2.Close()
+				break
 			}
+			_ = l.Close()
 		}
-		if ok && port+4 < 65535 {
+		if ok {
 			return port
 		}
 	}

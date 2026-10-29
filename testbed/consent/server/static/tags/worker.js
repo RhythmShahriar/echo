@@ -3,7 +3,8 @@
 
 // The worker side of the Partytown-style stand-in: on the first message
 // it loads the Google tag stand-in from www.googletagmanager.com (as
-// gtm.js) and then replays every dataLayer entry the page copies in.
+// gtm.js) over the page's earlier dataLayer entries, then replays every
+// later entry the page copies in.
 'use strict';
 self.dataLayer = [];
 var started = false;
@@ -15,6 +16,9 @@ self.onmessage = function (e) {
     self.__tb_page = m.init.page;
     self.__tb_gtm = m.init.container;
     self.__tb_src = 'https://www.googletagmanager.com/gtm.js?id=GTM-TESTBED1&tb_worker=1';
+    // The page's earlier entries are in dataLayer before the tag loads,
+    // so it applies the Consent Mode default before its first hit.
+    self.dataLayer = (m.init.dl || []).slice();
     importScripts(self.__tb_src);
     for (var i = 0; i < pending.length; i++) self.dataLayer.push(pending[i]);
     pending = [];

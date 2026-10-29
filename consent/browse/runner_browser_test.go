@@ -18,6 +18,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"slices"
 	"strings"
 	"sync"
@@ -993,8 +994,11 @@ func TestDetectScreenshot(t *testing.T) {
 		t.Fatalf("detect %+v", res)
 	}
 	fi, err := os.Stat(filepath.Join(p.Dir, res.Screenshot))
-	if err != nil || fi.Mode().Perm() != 0o600 {
-		t.Errorf("screenshot %v %v", fi, err)
+	if err != nil {
+		t.Errorf("screenshot: %v", err)
+	} else if runtime.GOOS != "windows" && fi.Mode().Perm() != 0o600 {
+		// Windows has no Unix permission bits: Go reports 0666 there.
+		t.Errorf("screenshot mode %v", fi.Mode().Perm())
 	}
 	if slices.ContainsFunc(cmp.calls, func(c string) bool { return strings.HasPrefix(c, "Choose") }) {
 		t.Errorf("detect clicked: %v", cmp.calls)

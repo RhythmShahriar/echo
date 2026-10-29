@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -33,7 +34,13 @@ func TestConsentSite(t *testing.T) {
 			t.Fatalf("go %s: %v\n%s", strings.Join(args, " "), err, out)
 		}
 	}
-	bin := filepath.Join(t.TempDir(), "consentsite")
+	// Windows runs only a file named .exe; go build -o keeps the name
+	// it is given.
+	name := "consentsite"
+	if runtime.GOOS == "windows" {
+		name += ".exe"
+	}
+	bin := filepath.Join(t.TempDir(), name)
 	if out, err := exec.Command("go", "build", "-o", bin, pkg).CombinedOutput(); err != nil { //nolint:gosec // our own package
 		t.Fatalf("build: %v\n%s", err, out)
 	}

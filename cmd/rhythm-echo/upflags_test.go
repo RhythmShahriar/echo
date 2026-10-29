@@ -64,7 +64,8 @@ func apiCall(t *testing.T, method, url, token, body string) (int, string) {
 	}
 	// A fresh connection each time: tests reuse ports. A POST on a
 	// kept-alive connection to an up that has since stopped fails with EOF
-	// (the client retries only idempotent requests).
+	// (the client retries only idempotent requests). Close keeps this
+	// one out of the pool; freshGet does the same for startUp's polls.
 	req.Close = true
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {

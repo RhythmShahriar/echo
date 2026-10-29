@@ -131,6 +131,8 @@ jobs:
           go-version-file: go.mod
       - run: go test -tags browser -timeout 20m ./consent/... ./internal/browser/... ./testbed/consent/...
 
+  # govulncheck builds SSA with its own golang.org/x/tools: v1.1.4 has
+  # v0.29.0, which panics on Go 1.27 code. v1.8.0 matches ci-go.yml.
   govulncheck:
     runs-on: ubuntu-latest
     steps:
@@ -138,7 +140,7 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
-      - run: go run golang.org/x/vuln/cmd/govulncheck@v1.1.4 ./...
+      - run: go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
 
   # The container image: build it from the Dockerfile, send a mail over
   # SMTP and check the Mailpit API answers in Mailpit's shape.

@@ -76,7 +76,7 @@ func newRunner(t *testing.T) *runner {
 	if err != nil {
 		t.Fatal(err)
 	}
-	r := &runner{t: t, workspace: t.TempDir(), temp: t.TempDir(), env: map[string]string{}}
+	r := &runner{t: t, workspace: realTempDir(t), temp: realTempDir(t), env: map[string]string{}}
 	if err := yaml.Unmarshal(b, &r.action); err != nil {
 		t.Fatal(err)
 	}
@@ -466,4 +466,16 @@ func TestExpressions(t *testing.T) {
 			t.Errorf("%s = %q, want %q", src, got, want)
 		}
 	}
+}
+
+// realTempDir is t.TempDir with symlinks resolved. On macOS the temp
+// folder is under /var, which links to /private/var; the steps' $PWD is
+// the resolved path. A runner's workspace has no links either.
+func realTempDir(t *testing.T) string {
+	t.Helper()
+	dir, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	return dir
 }

@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -60,11 +61,18 @@ func TestNDJSONOneLinePerEvent(t *testing.T) {
 	}
 	path := filepath.Join(dir, filepath.FromSlash(f.rel))
 	fi, err := os.Stat(path)
-	if err != nil || fi.Mode().Perm() != 0o600 {
-		t.Fatalf("file %v %v", fi, err)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if di, _ := os.Stat(filepath.Dir(path)); di.Mode().Perm() != 0o700 {
-		t.Errorf("folder mode %v", di.Mode().Perm())
+	// Windows has no Unix permission bits: Go reports 0666 for any
+	// writable file there, so the modes are checked elsewhere only.
+	if runtime.GOOS != "windows" {
+		if fi.Mode().Perm() != 0o600 {
+			t.Errorf("file mode %v", fi.Mode().Perm())
+		}
+		if di, _ := os.Stat(filepath.Dir(path)); di.Mode().Perm() != 0o700 {
+			t.Errorf("folder mode %v", di.Mode().Perm())
+		}
 	}
 	got := readNDJSON(t, path)
 	if len(got) != 3 || got[1].Note != "line one\nline two" || got[2].Phase != consent.PhaseAfterReject {
