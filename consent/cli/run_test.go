@@ -27,8 +27,12 @@ import (
 )
 
 // TestMain keeps the tests off this machine's Rhythm settings: the
-// once-only notices and tips are recorded in a folder of their own.
+// once-only notices and tips are recorded in a folder of their own. It
+// also clears CI and GITHUB_ACTIONS, which a hosted runner sets: they
+// hide notices and add report.md, so a test that wants them sets them.
 func TestMain(m *testing.M) {
+	_ = os.Unsetenv("CI")
+	_ = os.Unsetenv("GITHUB_ACTIONS")
 	dir, err := os.MkdirTemp("", "consent-cli-config-")
 	if err != nil {
 		panic(err)
@@ -706,6 +710,21 @@ func TestOutputFiles(t *testing.T) {
 	// report.md is in the folder because Markdown was asked for.
 	if _, err := os.Stat(filepath.Join(resultDir(t), "report.md")); err != nil {
 		t.Errorf("report.md: %v", err)
+	}
+}
+
+// On GitHub Actions the folder gets report.md for the job summary even
+// when Markdown wasn't asked for. Elsewhere it doesn't, as the verify
+// tests show.
+func TestGitHubActionsWritesMarkdown(t *testing.T) {
+	inDir(t, "")
+	useRunner(t, consenttest.GoldenResult("clean"), nil)
+	t.Setenv("GITHUB_ACTIONS", "true")
+	if code, _, errOut := runMain(t, "https://shop.test/"); code != exitOK {
+		t.Fatalf("exit %d %s", code, errOut)
+	}
+	if _, err := os.Stat(filepath.Join(resultDir(t), "report.md")); err != nil {
+		t.Errorf("report.md on GitHub Actions: %v", err)
 	}
 }
 
