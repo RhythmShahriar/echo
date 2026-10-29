@@ -253,6 +253,10 @@ func startUp(t *testing.T, args ...string) (out, errOut *syncBuffer, stop func()
 		select {
 		case code := <-done:
 			s.stop()
+			// The shared pool may hold connections to this up from
+			// clients that kept them alive; the next test on its port
+			// must never get one.
+			http.DefaultClient.CloseIdleConnections()
 			return code
 		case <-time.After(10 * time.Second):
 			t.Fatal("up didn't stop")
@@ -260,7 +264,7 @@ func startUp(t *testing.T, args ...string) (out, errOut *syncBuffer, stop func()
 		}
 	}
 	for i := 0; ; i++ {
-		resp, err := http.Get("http://" + p.cfg.Listen + "/v1/health") //nolint:noctx // test
+		resp, err := freshGet("http://" + p.cfg.Listen + "/v1/health")
 		if err == nil {
 			_ = resp.Body.Close()
 			// The API serves before the banner is printed: wait for that too.
@@ -275,6 +279,19 @@ func startUp(t *testing.T, args ...string) (out, errOut *syncBuffer, stop func()
 		time.Sleep(20 * time.Millisecond)
 	}
 	return out, errOut, stop
+}
+
+// freshGet is a GET on a connection of its own, closed after it. Tests
+// reuse ports: a kept-alive connection left in the shared pool would be
+// picked by the next request to that address (Request.Close doesn't
+// stop that) and fail with EOF once this up has stopped.
+func freshGet(url string) (*http.Response, error) {
+	req, err := http.NewRequestWithContext(context.Background(), "GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Close = true
+	return http.DefaultClient.Do(req)
 }
 
 func TestUpStopsEveryListener(t *testing.T) {
@@ -809,7 +826,7 @@ func TestUpMovesAsideWhenAsked(t *testing.T) {
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
-	resp, err := http.Get("http://" + api + "/v1/health") //nolint:noctx // test
+	resp, err := freshGet("http://" + api + "/v1/health")
 	if err != nil {
 		t.Fatalf("Echo isn't on %s: %v", api, err)
 	}
