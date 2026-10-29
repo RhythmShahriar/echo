@@ -20,6 +20,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -234,8 +235,13 @@ func TestSignaturesVerify(t *testing.T) {
 					t.Errorf("%s not masked: %q", k, res.Headers[k])
 				}
 			}
-			if strings.Contains(res.Secret, tc.secret[len(tc.secret)-8:]) || res.Duration <= 0 {
-				t.Errorf("secret %q duration %v", res.Secret, res.Duration)
+			if strings.Contains(res.Secret, tc.secret[len(tc.secret)-8:]) {
+				t.Errorf("secret %q", res.Secret)
+			}
+			// Windows' monotonic clock ticks in steps of about 0.5ms, so
+			// a send to this local server can measure 0 there.
+			if res.Duration < 0 || (res.Duration == 0 && runtime.GOOS != "windows") {
+				t.Errorf("duration %v", res.Duration)
 			}
 		})
 	}
