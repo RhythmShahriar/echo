@@ -85,7 +85,7 @@ func initConsent(path string, force bool) (appended, replaced bool, err error) {
 	default:
 		var root yaml.Node
 		if err := yaml.Unmarshal(old, &root); err != nil {
-			return false, false, fmt.Errorf("%s: %w", path, err)
+			return false, false, fmt.Errorf("%s: %w", filepath.ToSlash(path), err)
 		}
 		if hasKey(&root, "consent") {
 			if !force {
@@ -125,7 +125,7 @@ func initConsent(path string, force bool) (appended, replaced bool, err error) {
 		return false, false, err
 	}
 	if _, err := config.Load(tmp.Name()); err != nil {
-		return false, false, fmt.Errorf("the consent: block would break %s: %w", path, err)
+		return false, false, fmt.Errorf("the consent: block would break %s: %w", filepath.ToSlash(path), err)
 	}
 	if err := os.Chmod(tmp.Name(), 0o644); err != nil { //nolint:gosec // a project file meant to be committed
 		return false, false, err
@@ -207,7 +207,7 @@ func hasKey(root *yaml.Node, key string) bool {
 func cmdInitConsent(force bool, stdout, stderr io.Writer) int {
 	appended, replaced, err := initConsent(config.Path(), force)
 	// Messages name the file with forward slashes on every OS, as the
-	// consent command's messages do.
+	// consent command's messages do; so do initConsent's errors.
 	path := filepath.ToSlash(config.Path())
 	switch {
 	case errors.Is(err, errHasConsent):
