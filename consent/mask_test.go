@@ -90,6 +90,18 @@ func TestMaskURLNested(t *testing.T) {
 	}
 }
 
+// TestMaskURLNestedPlainReadable: a param that may hold a URL but holds
+// an address keeps the mask readable, so a fatal message names the
+// start URL as the run header does and not with escaped bullets.
+func TestMaskURLNestedPlainReadable(t *testing.T) {
+	for _, param := range []string{"u", "url", "ref"} {
+		got := consent.MaskURL("https://err.test/x?"+param+"=john.smith@corp.example", false)
+		if want := "https://err.test/x?" + param + "=••••@corp.example"; got != want {
+			t.Errorf("%s: %s; want %s", param, got, want)
+		}
+	}
+}
+
 // A page URL whose fragment starts with the token (an OAuth callback)
 // is masked when a tag copies it into dl, once or twice encoded.
 func TestMaskURLNestedFragment(t *testing.T) {

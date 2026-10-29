@@ -1,6 +1,6 @@
 ok   shop-pixel  match    https://px.shop.example/collect?e=view
 ok   shop-pixel  no_match https://px.shop.example/pixel.js
-ok   shop-wide   match    POST https://stats.shop.example/e?u=••••%40b.example
+ok   shop-wide   match    POST https://stats.shop.example/e?u=••••@b.example
 FAIL shop-wide   no_match https://stats.shop.example/sw.js  should not match but does
 ok   shop-wide   match    storage sw_id
 ok   shop-wide   no_match storage sw

@@ -237,7 +237,9 @@ func maskQuery(q string, showIDs bool, depth int, ids map[string]bool) string {
 			if isHTTP(inner) {
 				pairs[i] = k + "=" + url.QueryEscape(maskURL(inner, showIDs, depth+1))
 			} else {
-				pairs[i] = k + "=" + url.QueryEscape(maskValue(mask.Text(inner)))
+				// A plain value (u=john@corp.example) keeps its mask
+				// readable, as the default case does.
+				pairs[i] = k + "=" + escapeMasked(maskValue(mask.Text(inner)))
 			}
 		default:
 			if m := maskValue(val); m != val {
