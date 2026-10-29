@@ -255,6 +255,24 @@ func TestSiteDownProbe(t *testing.T) {
 	}
 }
 
+// TestRequestStormProbe runs e14 against a fake Echo as slow as a busy
+// machine: the probe's check still reaches the request limit within
+// its --timeout and the bench's per-command limit, so e14 doesn't turn
+// into "timed out" (missed) under load.
+func TestRequestStormProbe(t *testing.T) {
+	m, err := scenarios.Load("..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	e14, _ := m.FindProbe("e14")
+	p := probeEnv(t, "storm")
+	p.Timeout = 5 * time.Minute
+	out := runProbe(t.Context(), p, e14)
+	if out.Echo.Outcome != judge.Caught {
+		t.Fatalf("e14 = %+v\ngood %+v\nbroken %+v", out.Echo, out.Good, out.Broken)
+	}
+}
+
 // TestInterruptProbe runs e05 against the fake, which starts its Reject
 // run, makes a profile under its TMPDIR and exits 130 on Ctrl-C after
 // removing it: on Windows through a console Ctrl-Break to its group.

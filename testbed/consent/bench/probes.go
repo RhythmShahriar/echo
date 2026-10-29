@@ -623,9 +623,16 @@ func noBannerCMP(ctx context.Context, p *ProbeEnv, broken bool) ([]Step, error) 
 
 // requestStorm (e14): more requests than the per-run limit; Echo stops
 // recording and says the run is cut short (limit-reached, exit 3).
+// One run shows the limit and a limit-reached run isn't tried again
+// (--runs none --retries 0); --timeout 4m (under the bench's 5m per
+// command) lets a busy machine's Chrome reach 20,000 requests, which
+// alone takes about 30 s and under load more than the default 90 s.
 func requestStorm(ctx context.Context, p *ProbeEnv, broken bool) ([]Step, error) {
-	return fixtureProbe("request-storm")(ctx, p, broken)
+	return fixtureProbe("request-storm", stormArgs...)(ctx, p, broken)
 }
+
+// stormArgs are the flags e14 adds to its check.
+var stormArgs = []string{"--runs", "none", "--retries", "0", "--timeout", "4m"}
 
 // hugeDatalayer (e15): a dataLayer flood. Echo's memory stays bounded
 // and the run says it was truncated.

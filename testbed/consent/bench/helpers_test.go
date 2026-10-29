@@ -6,10 +6,12 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -24,7 +26,7 @@ import (
 // answers the benchmark's commands from recorded envelopes instead of
 // running a browser, so the harness is tested end to end without one.
 const (
-	fakeEnv  = "BENCH_FAKE_ECHO" // the fake's mode: bench, site or interrupt
+	fakeEnv  = "BENCH_FAKE_ECHO" // the fake's mode: bench, site, storm or interrupt
 	fakeDir  = "BENCH_FAKE_DIR"  // recorded envelopes: <site>-<state>.json
 	fakeRoot = "BENCH_FAKE_ROOT" // the testbed root whose state/ says the state
 )
@@ -92,6 +94,8 @@ func fakeEcho(mode string, args []string) int {
 		}
 		_ = resp.Body.Close()
 		return writeFake(f.out, fakeEnvelope(true, nil), 0)
+	case "storm":
+		return fakeStorm(f)
 	case "interrupt":
 		// Starts the Reject run, makes a profile under TMPDIR and waits a
 		// little for Ctrl-C; on it, cleans up and exits 130. It listens
@@ -143,6 +147,59 @@ func fakeEcho(mode string, args []string) int {
 		return 3
 	}
 	return 0
+}
+
+// stormRun is how long a run of request-storm's broken state takes to
+// reach 20,000 requests on a busy machine (bench -jobs 2 with other
+// Chrome runs), where it alone takes about 30 s.
+const stormRun = 150 * time.Second
+
+// fakeStorm is Echo on request-storm on a busy machine. The broken
+// state (the page asks for 25,000 requests) needs stormRun per attempt:
+// a run whose --timeout is shorter times out, a longer one reaches the
+// limit. Every inconclusive run is tried --retries more times, --parallel
+// at once; when that adds up to the bench's 5 minutes per command the
+// fake is killed as the bench would kill Echo.
+func fakeStorm(f fakeArgs) int {
+	timeout, retries, parallel, runs := 90*time.Second, 1, 3, 3
+	for i, a := range f.all[:max(0, len(f.all)-1)] {
+		v := f.all[i+1]
+		switch a {
+		case "--timeout":
+			timeout, _ = time.ParseDuration(v)
+		case "--retries":
+			retries, _ = strconv.Atoi(v)
+		case "--parallel":
+			parallel, _ = strconv.Atoi(v)
+		case "--runs":
+			runs = len(strings.Split(v, ","))
+		}
+	}
+	req, _ := http.NewRequest(http.MethodGet, "http://"+f.mapAddr+"/", nil)
+	req.Host = f.siteID() + ".shop.test"
+	resp, err := (&http.Client{Timeout: 5 * time.Second}).Do(req)
+	if err != nil {
+		return 3
+	}
+	page, _ := io.ReadAll(resp.Body)
+	_ = resp.Body.Close()
+	if !strings.Contains(string(page), "25000") {
+		return writeFake(f.out, fakeEnvelope(true, nil), 0)
+	}
+	attempt := min(timeout, stormRun)
+	if time.Duration(retries+1)*time.Duration((runs+parallel-1)/parallel)*attempt >= 5*time.Minute {
+		return -1 // killed by the bench's per-command limit
+	}
+	status, reason := consent.StatusTimeout, consent.ReasonTimeout
+	if timeout > stormRun {
+		status, reason = consent.StatusLimit, consent.ReasonLimit
+	}
+	return writeFake(f.out, fakeEnvelope(false, nil, func(r *consent.Result) {
+		r.Pages[0].Runs = r.Pages[0].Runs[:runs]
+		for i := range r.Pages[0].Runs {
+			r.Pages[0].Runs[i].Status, r.Pages[0].Runs[i].Reason = status, reason
+		}
+	}), 3)
 }
 
 // writeFake writes e to out and returns code.
