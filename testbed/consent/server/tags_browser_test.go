@@ -169,6 +169,23 @@ func TestWorkerStandInSendsFromTheWorker(t *testing.T) {
 	}
 }
 
+// A slow runner: the worker's flush timer runs before the dataLayer
+// entries the page forwards (__tb_worker_delay holds them back). The
+// Consent Mode default the page set before the loader must still reach
+// the tag first: no hit while denied, the hit after the update granted.
+func TestWorkerStandInSlowOrdering(t *testing.T) {
+	l := startLive(t, testRoot(t))
+	p := l.open(tagSite + "/worker-slow/")
+	if got := l.waitHits("tagtest", 1, ga4Hit, 3*time.Second); len(got) != 0 {
+		t.Fatalf("hits from the worker while denied: %+v", got)
+	}
+	l.eval(p, `() => { gtag('consent', 'update', {ad_storage: 'granted', analytics_storage: 'granted', ad_user_data: 'granted', ad_personalization: 'granted'}); return ''; }`)
+	hits := l.waitHits("tagtest", 1, ga4Hit, 10*time.Second)
+	if len(hits) != 1 || param(hits[0], "gcs") != "G111" || param(hits[0], "gcd") != "13r3r3r3r5" {
+		t.Fatalf("worker hits after the update = %+v", hits)
+	}
+}
+
 func TestOtherStandIns(t *testing.T) {
 	l := startLive(t, testRoot(t))
 	p := l.open(tagSite + "/others/")

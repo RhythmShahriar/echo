@@ -61,6 +61,15 @@ fbq('track', 'PageView');
 <script>window.dataLayer = window.dataLayer || [];</script>
 <script src="/~partytown/loader.js"></script>
 {{end}}
+{{if eq .Path "/worker-slow/"}}
+<script>
+window.dataLayer = window.dataLayer || [];
+function gtag(){dataLayer.push(arguments);}
+gtag('consent', 'default', {ad_storage: 'denied', analytics_storage: 'denied', ad_user_data: 'denied', ad_personalization: 'denied'});
+window.__tb_worker_delay = 1500;
+</script>
+<script src="/~partytown/loader.js"></script>
+{{end}}
 {{if eq .Path "/others/"}}
 <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto">
 <script src="https://www.google.com/recaptcha/api.js" async></script>
