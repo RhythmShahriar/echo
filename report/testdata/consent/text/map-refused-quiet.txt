@@ -1,0 +1,4 @@
+Couldn't check - 0 errors, 0 warnings, 0 notices - 3 runs, 0 trackers, policy advanced
+  ? /b.html  No choice: the tracker scripts of google-tag-manager and meta-pixel were refused by --map-only, so they never ran and weren't checked; drop --map-only to let them load
+  ? /b.html  Accept: the tracker scripts of google-tag-manager and meta-pixel were refused by --map-only, so they never ran and weren't checked; drop --map-only to let them load
+  ? /b.html  Reject: the tracker scripts of google-tag-manager and meta-pixel were refused by --map-only, so they never ran and weren't checked; drop --map-only to let them load

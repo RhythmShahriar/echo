@@ -1,0 +1,268 @@
+♪
+rhythm echo consent
+1.2.0
+http://gtm.test/b.html · 2026-10-26 09:20 UTC
+Couldn't check
+1 page, 3 runs, 0 trackers, policy advanced
+0
+errors
+0
+warnings
+0
+notices
+3
+couldn't check
+Hits held in the browser
+Hosts mapped with --map-host
+Evidence, not legal advice
+consent.json sha256 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+Open all
+Close all
+Pages and runs
+Page
+Banner
+No choice
+Accept
+Reject
+http://gtm.test/b.html
+Generic banner
+? tracker scripts were refused
+? tracker scripts were refused
+? tracker scripts were refused
+Issues
+Couldn't check (3)
+?
+/b.html
+· No choice
+No choice: the tracker scripts of google-tag-manager and meta-pixel were refused by --map-only, so they never ran and weren't checked; drop --map-only to let them load ·
+timeline
+?
+/b.html
+· Accept
+Accept: the tracker scripts of google-tag-manager and meta-pixel were refused by --map-only, so they never ran and weren't checked; drop --map-only to let them load ·
+timeline
+?
+/b.html
+· Reject
+Reject: the tracker scripts of google-tag-manager and meta-pixel were refused by --map-only, so they never ran and weren't checked; drop --map-only to let them load ·
+timeline
+Banners and choices
+http://gtm.test/b.html
+Generic banner, found after 0.3s, detected by the generic rule
+No choice
+Couldn't check: tracker scripts were refused
+Banner
+Accept
+Couldn't check: tracker scripts were refused
+Banner
+After the choice
+Reject
+Couldn't check: tracker scripts were refused
+Banner
+After the choice
+Timelines
+/b.html · No choice
+couldn't check: tracker scripts were refused
+hits
+cookies
+signals
+0s
+0.5s
+1s
+1.5s
+2s
+2.5s
+3s
+3.5s
+4s
+hollow: cookie
+diamond: signal
+dashed line: the choice
+Time
+Type
+Tracker
+Visit
+What
+0.00s
+load
+0
+http://gtm.test/b.html
+0.04s
+script
+google-tag-manager
+https://www.googletagmanager.com/gtag/js?id=G-••••2345
+0.04s
+script
+meta-pixel
+https://connect.facebook.net/en_US/fbevents.js
+0.30s
+banner
+Generic banner shown
+2.60s
+reload
+1
+http://gtm.test/b.html
+/b.html · Accept
+couldn't check: tracker scripts were refused
+hits
+cookies
+signals
+0s
+0.5s
+1s
+1.5s
+2s
+2.5s
+3s
+3.5s
+4s
+choice at 1.20s
+1.20s cookie cc
+hollow: cookie
+diamond: signal
+dashed line: the choice
+Time
+Type
+Tracker
+Visit
+What
+0.00s
+load
+0
+http://gtm.test/b.html
+0.04s
+script
+google-tag-manager
+https://www.googletagmanager.com/gtag/js?id=G-••••2345
+0.04s
+script
+meta-pixel
+https://connect.facebook.net/en_US/fbevents.js
+0.30s
+banner
+Generic banner shown
+1.20s
+click
+"Accept all" (#cookie-banner button:nth-of-type(1))
+1.20s
+cookie
+cc on gtm.test
+2.60s
+reload
+1
+http://gtm.test/b.html
+/b.html · Reject
+couldn't check: tracker scripts were refused
+hits
+cookies
+signals
+0s
+0.5s
+1s
+1.5s
+2s
+2.5s
+3s
+3.5s
+4s
+choice at 1.20s
+1.20s cookie cc
+hollow: cookie
+diamond: signal
+dashed line: the choice
+Time
+Type
+Tracker
+Visit
+What
+0.00s
+load
+0
+http://gtm.test/b.html
+0.04s
+script
+google-tag-manager
+https://www.googletagmanager.com/gtag/js?id=G-••••2345
+0.04s
+script
+meta-pixel
+https://connect.facebook.net/en_US/fbevents.js
+0.30s
+banner
+Generic banner shown
+1.20s
+click
+"Reject all" (#cookie-banner button:nth-of-type(2))
+1.20s
+cookie
+cc on gtm.test
+2.60s
+reload
+1
+http://gtm.test/b.html
+Run details
+Echo
+1.2.0
+Browser
+Chrome for Testing 156.0.8078.47
+OS
+linux/amd64
+User agent
+Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36 rhythm-echo-consent/1.2.0
+Geo
+none
+Locale
+en-US
+Time zone
+UTC
+Viewport
+desktop
+Started
+2026-10-26 09:20:41 UTC
+Duration
+21.23s
+Policy
+advanced
+Tracker hits
+held in the browser
+Hosts mapped
+yes (--map-host)
+Sandbox
+on
+TLS
+verified
+Tracker catalog
+1.2.0 (sha256 4be1c0ff..., 47 entries)
+CMP rules
+1.2.0 (sha256 9c1dfeed..., 9 entries)
+Network
+46 requests, 0 held, 43 refused, 3 browser internal
+Result
+2026-10-26T09-50-00-b7c8d9
+Evidence folder
+.echo/consent/2026-10-26T09-50-00-b7c8d9
+What a pass means. In these runs, from this machine, with this browser and these settings, no tracker on Echo's list sent a request or set a cookie before the visitor chose or after Reject. It does not mean the site complies with the GDPR, ePrivacy, CCPA/CPRA or any other law. Evidence, not legal advice.
+One visitor, one place. Banners differ by country, language and device. Geo-targeted banners may not show to a CI runner in the US; Echo can set the browser's language and time zone (
+--geo
+) but not its IP address. Run it from the region that matters, or through a proxy there.
+Blind spots. Trackers that are not on the list; server-side tagging on your own domain when its requests don't look like GA4 or Meta; fingerprinting without network requests; tags that wait longer than the settle time or need more interaction than a scroll and one more page; sites that hide tags from automated browsers.
+Consent Mode advanced. Google says its tags in advanced mode "send measurements without cookies" while consent is denied. Whether that is acceptable before consent is disputed. Echo reports these pings as
+consent/cookieless-ping
+under the default policy
+advanced
+;
+--consent-mode basic
+or
+strict
+counts them as hits.
+gcd is unofficial. Google doesn't document the
+gcd
+parameter. Echo shows the raw value next to a reading based on community documentation and treats letters it doesn't know as unknown.
+Pseudonymised, not anonymised. Masked or hashed identifiers in reports can still be personal data. Treat reports like logs.
+What leaves the machine. Requests to the site and to the scripts it loads (which shows this machine's IP address to those servers). No tracking hits unless
+--send-hits
+. Nothing goes to Rhythm. The update check contacts GitHub (
+RHYTHM_OFFLINE=1
+turns it off).
+Banners Echo can't handle are reported as "couldn't check" (exit 3), never as a pass. Tested CMPs and the dates their fixtures were captured are in the benchmark.
+A signature proves who made the evidence file and that it hasn't changed. It doesn't prove the site behaves the same for every visitor, region or day. Keyless signing in the Action writes the repository and workflow name to the public Rekor log.

@@ -973,7 +973,8 @@
             "navigation_failed",
             "timeout",
             "limit",
-            "canceled"
+            "canceled",
+            "trackers_refused"
           ],
           "type": "string"
         },
@@ -1357,7 +1358,8 @@
             "navigation_failed",
             "timeout",
             "limit",
-            "canceled"
+            "canceled",
+            "trackers_refused"
           ],
           "type": "string"
         },
@@ -1501,6 +1503,9 @@
             "gpc",
             "after-withdraw"
           ],
+          "type": "string"
+        },
+        "refused": {
           "type": "string"
         },
         "seq": {

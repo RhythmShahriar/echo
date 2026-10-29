@@ -582,6 +582,15 @@ var reasonWords = map[consent.Reason]string{
 	consent.ReasonTimeout:        "timed out",
 	consent.ReasonLimit:          "stopped at the request limit",
 	consent.ReasonCanceled:       "interrupted",
+	consent.ReasonRefused:        "tracker scripts were refused",
+}
+
+// choosing reports whether an inconclusive run failed at the choice
+// itself: an Accept, Reject or withdraw run for any reason but refused
+// tracker scripts, which stop the check and not the choice.
+func choosing(run *consent.Run) bool {
+	return run.Reason != consent.ReasonRefused &&
+		(run.Kind == consent.RunAccept || run.Kind == consent.RunReject || run.Kind == consent.RunWithdraw)
 }
 
 // runReasonWords is reasonWords for run: a withdraw run whose banner
@@ -644,7 +653,7 @@ func relevant(k consent.RunKind, ph consent.Phase) bool {
 func (t *consentText) runSummary(pg *consent.Page, run *consent.Run) (int, string) {
 	if run.Inconclusive() {
 		verb := "couldn't check"
-		if run.Kind == consent.RunAccept || run.Kind == consent.RunReject || run.Kind == consent.RunWithdraw {
+		if choosing(run) {
 			verb = "couldn't choose"
 		}
 		return markInconclusive, verb + ": " + cmp.Or(runReasonWords(run), Safe(string(run.Reason)))

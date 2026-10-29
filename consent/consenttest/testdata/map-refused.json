@@ -1,0 +1,302 @@
+{
+  "id": "2026-10-26T09-50-00-b7c8d9",
+  "started": "2026-10-26T09:20:41Z",
+  "duration_ms": 21230,
+  "echo": "1.2.0",
+  "browser": "Chrome for Testing 156.0.8078.47",
+  "user_agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36 rhythm-echo-consent/1.2.0",
+  "os": "linux/amd64",
+  "sandbox": true,
+  "tls_verified": true,
+  "held": true,
+  "mapped": true,
+  "policy": "advanced",
+  "geo": "",
+  "locale": "en-US",
+  "timezone": "UTC",
+  "viewport": "desktop",
+  "catalog": {
+    "version": "1.2.0",
+    "sha256": "4be1c0ffee5a1e7d2b0c9a8f7e6d5c4b3a291807f6e5d4c3b2a19087f6e5d4c3",
+    "count": 47
+  },
+  "cmp_rules": {
+    "version": "1.2.0",
+    "sha256": "9c1dfeed2b3a4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5",
+    "count": 9
+  },
+  "network": {
+    "requests": 46,
+    "held": 0,
+    "refused": 43,
+    "browser_internal": 3
+  },
+  "pages": [
+    {
+      "site": "",
+      "url": "http://gtm.test/b.html",
+      "final_url": "http://gtm.test/b.html",
+      "redirects": [],
+      "cmp": {
+        "id": "generic",
+        "name": "Generic banner",
+        "found": true,
+        "present": true,
+        "detected_by": "generic",
+        "banner_at_ms": 300,
+        "tcf": false,
+        "reject_layer": 1
+      },
+      "consent_mode": {
+        "present": false,
+        "v2": false,
+        "default_at_ms": 0,
+        "first_google_hit_ms": 0,
+        "default_before_first_hit": false
+      },
+      "needs_no_consent": false,
+      "runs": [
+        {
+          "run": "none",
+          "status": "ok",
+          "reason": "trackers_refused",
+          "detail": "No choice: the tracker scripts of google-tag-manager and meta-pixel were refused by --map-only, so they never ran and weren't checked; drop --map-only to let them load",
+          "attempts": 1,
+          "duration_ms": 4200,
+          "choice": null,
+          "visits": [
+            {
+              "url": "http://gtm.test/b.html",
+              "step": "load",
+              "at_ms": 0,
+              "banner": true
+            },
+            {
+              "url": "http://gtm.test/b.html",
+              "step": "reload",
+              "at_ms": 2600,
+              "banner": true
+            }
+          ],
+          "hits": [],
+          "cookies": [],
+          "storage": [],
+          "scripts": [
+            {
+              "tracker": "google-tag-manager",
+              "url": "https://www.googletagmanager.com/gtag/js?id=G-••••2345",
+              "at_ms": 40,
+              "phase": "before",
+              "seq": 1,
+              "refused": "not mapped"
+            },
+            {
+              "tracker": "meta-pixel",
+              "url": "https://connect.facebook.net/en_US/fbevents.js",
+              "at_ms": 41,
+              "phase": "before",
+              "seq": 2,
+              "refused": "not mapped"
+            }
+          ],
+          "signals": [],
+          "screenshots": {
+            "after": "",
+            "banner": "evidence/page-1/none-banner.png"
+          },
+          "events_file": "events/page-1-none.ndjson",
+          "truncated": false,
+          "dropped": 0
+        },
+        {
+          "run": "accept",
+          "status": "ok",
+          "reason": "trackers_refused",
+          "detail": "Accept: the tracker scripts of google-tag-manager and meta-pixel were refused by --map-only, so they never ran and weren't checked; drop --map-only to let them load",
+          "attempts": 1,
+          "duration_ms": 4200,
+          "choice": {
+            "how": "button",
+            "selector": "#cookie-banner button:nth-of-type(1)",
+            "text": "Accept all",
+            "layer": 1,
+            "clicks": 1,
+            "at_ms": 1200,
+            "box": {
+              "x": 20,
+              "y": 700,
+              "w": 110,
+              "h": 36
+            },
+            "verified": true,
+            "verified_by": "banner",
+            "fallback": false
+          },
+          "visits": [
+            {
+              "url": "http://gtm.test/b.html",
+              "step": "load",
+              "at_ms": 0,
+              "banner": true
+            },
+            {
+              "url": "http://gtm.test/b.html",
+              "step": "reload",
+              "at_ms": 2600,
+              "banner": false
+            }
+          ],
+          "hits": [],
+          "cookies": [
+            {
+              "name": "cc",
+              "domain": "gtm.test",
+              "path": "/",
+              "length": 3,
+              "phase": "after-accept",
+              "at_ms": 1202,
+              "set_by": "script"
+            }
+          ],
+          "storage": [],
+          "scripts": [
+            {
+              "tracker": "google-tag-manager",
+              "url": "https://www.googletagmanager.com/gtag/js?id=G-••••2345",
+              "at_ms": 40,
+              "phase": "before",
+              "seq": 21,
+              "refused": "not mapped"
+            },
+            {
+              "tracker": "meta-pixel",
+              "url": "https://connect.facebook.net/en_US/fbevents.js",
+              "at_ms": 41,
+              "phase": "before",
+              "seq": 22,
+              "refused": "not mapped"
+            }
+          ],
+          "signals": [],
+          "screenshots": {
+            "after": "evidence/page-1/accept-after.png",
+            "banner": "evidence/page-1/accept-banner.png"
+          },
+          "events_file": "events/page-1-accept.ndjson",
+          "truncated": false,
+          "dropped": 0
+        },
+        {
+          "run": "reject",
+          "status": "ok",
+          "reason": "trackers_refused",
+          "detail": "Reject: the tracker scripts of google-tag-manager and meta-pixel were refused by --map-only, so they never ran and weren't checked; drop --map-only to let them load",
+          "attempts": 1,
+          "duration_ms": 4200,
+          "choice": {
+            "how": "button",
+            "selector": "#cookie-banner button:nth-of-type(2)",
+            "text": "Reject all",
+            "layer": 1,
+            "clicks": 1,
+            "at_ms": 1200,
+            "box": {
+              "x": 20,
+              "y": 700,
+              "w": 110,
+              "h": 36
+            },
+            "verified": true,
+            "verified_by": "banner",
+            "fallback": false
+          },
+          "visits": [
+            {
+              "url": "http://gtm.test/b.html",
+              "step": "load",
+              "at_ms": 0,
+              "banner": true
+            },
+            {
+              "url": "http://gtm.test/b.html",
+              "step": "reload",
+              "at_ms": 2600,
+              "banner": false
+            }
+          ],
+          "hits": [],
+          "cookies": [
+            {
+              "name": "cc",
+              "domain": "gtm.test",
+              "path": "/",
+              "length": 4,
+              "phase": "after-reject",
+              "at_ms": 1202,
+              "set_by": "script"
+            }
+          ],
+          "storage": [],
+          "scripts": [
+            {
+              "tracker": "google-tag-manager",
+              "url": "https://www.googletagmanager.com/gtag/js?id=G-••••2345",
+              "at_ms": 40,
+              "phase": "before",
+              "seq": 41,
+              "refused": "not mapped"
+            },
+            {
+              "tracker": "meta-pixel",
+              "url": "https://connect.facebook.net/en_US/fbevents.js",
+              "at_ms": 41,
+              "phase": "before",
+              "seq": 42,
+              "refused": "not mapped"
+            }
+          ],
+          "signals": [],
+          "screenshots": {
+            "after": "evidence/page-1/reject-after.png",
+            "banner": "evidence/page-1/reject-banner.png"
+          },
+          "events_file": "events/page-1-reject.ndjson",
+          "truncated": false,
+          "dropped": 0
+        }
+      ]
+    }
+  ],
+  "issues": [],
+  "inconclusive": [
+    {
+      "page": "/b.html",
+      "run": "none",
+      "reason": "trackers_refused",
+      "detail": "No choice: the tracker scripts of google-tag-manager and meta-pixel were refused by --map-only, so they never ran and weren't checked; drop --map-only to let them load"
+    },
+    {
+      "page": "/b.html",
+      "run": "accept",
+      "reason": "trackers_refused",
+      "detail": "Accept: the tracker scripts of google-tag-manager and meta-pixel were refused by --map-only, so they never ran and weren't checked; drop --map-only to let them load"
+    },
+    {
+      "page": "/b.html",
+      "run": "reject",
+      "reason": "trackers_refused",
+      "detail": "Reject: the tracker scripts of google-tag-manager and meta-pixel were refused by --map-only, so they never ran and weren't checked; drop --map-only to let them load"
+    }
+  ],
+  "comparison": null,
+  "evidence": {
+    "folder": ".echo/consent/2026-10-26T09-50-00-b7c8d9",
+    "files": []
+  },
+  "notes": [
+    "Evidence, not legal advice.",
+    "Hits held in the browser.",
+    "Hosts mapped with --map-host."
+  ],
+  "complete": false
+}

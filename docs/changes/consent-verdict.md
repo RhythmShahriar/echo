@@ -66,6 +66,7 @@ Only on pages with Google hits. These issues name no tracker: their key ends in 
   - `navigation_failed`: the load error as browse recorded it, else `<Run>: the page didn't load`; a click that took the tab to another site (`navigated-away`) reads `<Run>: the click took the page to another site (<host>)`
   - `limit`: `<Run>: stopped after 20000 requests` (the plan's request limit)
   - `canceled`: `<Run>: interrupted`
+  - `trackers_refused` (set by the verdict on a run with no other reason when Echo refused the script of a consent-needing tracker that isn't exempt; `scripts[].refused` holds why, `not mapped` under `--map-only`): `<Run>: the tracker scripts of <names> were refused by --map-only, so they never ran and weren't checked; drop --map-only to let them load` (`the tracker script of <name> was`, `it never ran and wasn't`, `let it load` for one). A refusal other than `not mapped` reads `refused by Echo's network guard` with no hint. The script never ran, so "nothing fired" can't pass the run; the run line and matrix say `couldn't check: tracker scripts were refused`.
   - Durations read as the flags take them: `10s`, `90s`, `2m`.
 
 ## V5 Levels, ignores and notes

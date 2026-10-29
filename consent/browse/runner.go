@@ -376,7 +376,8 @@ func fill(out *consent.Run, rec *Recording) {
 				continue
 			}
 			if e.Hit.Kind == consent.HitScript {
-				out.Scripts = append(out.Scripts, consent.Script{Tracker: e.Hit.Tracker, URL: e.Request.URL, AtMS: e.AtMS, Phase: e.Phase, Seq: e.Seq})
+				out.Scripts = append(out.Scripts, consent.Script{Tracker: e.Hit.Tracker, URL: e.Request.URL, AtMS: e.AtMS, Phase: e.Phase, Seq: e.Seq,
+					Refused: e.Request.Refused})
 				continue
 			}
 			out.Hits = append(out.Hits, consent.HitRef{Seq: e.Seq, AtMS: e.AtMS, Phase: e.Phase, Visit: e.Visit, URL: e.Request.URL,

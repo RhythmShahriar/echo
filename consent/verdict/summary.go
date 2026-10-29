@@ -4,8 +4,10 @@
 package verdict
 
 import (
+	"fmt"
 	"maps"
 	"math"
+	"slices"
 	"strings"
 
 	"github.com/RhythmShahriar/echo/consent"
@@ -30,6 +32,9 @@ func (j *judge) summarize(pg *consent.Page) {
 		markCookieless(&pg.Runs[i])
 	}
 	pg.NeedsNone = j.needsNone(pg)
+	for i := range pg.Runs {
+		j.markRefused(&pg.Runs[i])
+	}
 	if !pg.NeedsNone {
 		return
 	}
@@ -42,6 +47,61 @@ func (j *judge) summarize(pg *consent.Page) {
 			}
 		}
 	}
+}
+
+// markRefused makes a run inconclusive when Echo refused a
+// consent-needing tracker's script (--map-only): the script never ran,
+// so nothing it would send could be seen and "nothing fired" would be a
+// false pass. A run already inconclusive for another reason keeps it; a
+// stored run marked before is judged again (--exempt may have changed).
+func (j *judge) markRefused(run *consent.Run) {
+	if run.Reason == consent.ReasonRefused {
+		run.Reason, run.Detail = consent.ReasonNone, ""
+	}
+	if run.Reason != consent.ReasonNone {
+		return
+	}
+	if names := j.refusedTrackers(run); len(names) > 0 {
+		run.Reason, run.Detail = consent.ReasonRefused, refusedDetail(run, names)
+	}
+}
+
+// refusedTrackers names, sorted, the consent-needing trackers whose
+// scripts Echo refused in run: async scripts are refused in any order,
+// so the names don't follow it.
+func (j *judge) refusedTrackers(run *consent.Run) []string {
+	var names []string
+	seen := map[string]bool{}
+	for _, s := range run.Scripts {
+		if s.Refused == "" || seen[s.Tracker] || !j.needed(s.Tracker, "") {
+			continue
+		}
+		seen[s.Tracker] = true
+		names = append(names, j.name(s.Tracker))
+	}
+	slices.Sort(names)
+	return names
+}
+
+// refusedDetail is the message a run with refused tracker scripts is
+// listed with.
+func refusedDetail(run *consent.Run, names []string) string {
+	mapOnly := true
+	for _, s := range run.Scripts {
+		if s.Refused != "" && s.Refused != consent.RefusedNotMapped {
+			mapOnly = false
+			break
+		}
+	}
+	what, verbs, them := "the tracker script of "+names[0]+" was", "it never ran and wasn't", "it"
+	if len(names) > 1 {
+		what, verbs, them = "the tracker scripts of "+joinAnd(names)+" were", "they never ran and weren't", "them"
+	}
+	if !mapOnly {
+		return fmt.Sprintf("%s: %s refused by Echo's network guard, so %s checked", run.Kind.Label(), what, verbs)
+	}
+	return fmt.Sprintf("%s: %s refused by --map-only, so %s checked; drop --map-only to let %s load",
+		run.Kind.Label(), what, verbs, them)
 }
 
 // cmRun is the run the Consent Mode summary is read from: the none run,

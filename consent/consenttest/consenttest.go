@@ -94,7 +94,7 @@ func Fakes() consent.Stages {
 var goldens embed.FS
 
 // Goldens names every golden result GoldenResult loads.
-var Goldens = []string{"clean", "meta-ignores", "advanced", "inconclusive", "no-trackers", "compare-base", "compare-cur"}
+var Goldens = []string{"clean", "meta-ignores", "advanced", "inconclusive", "no-trackers", "compare-base", "compare-cur", "map-refused"}
 
 // GoldenResult loads testdata/<name>.json, a fresh copy on every call:
 //

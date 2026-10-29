@@ -86,6 +86,9 @@ type Script struct {
 	AtMS    int64  `json:"at_ms"`
 	Phase   Phase  `json:"phase"`
 	Seq     int64  `json:"seq"`
+	// Refused is why Echo refused the script ("not mapped" under
+	// --map-only): it never loaded or ran. "" when it was fetched.
+	Refused string `json:"refused,omitempty"`
 }
 
 // HitRef is a hit as listed in a run: the hit with where and when it

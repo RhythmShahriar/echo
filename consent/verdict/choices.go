@@ -492,6 +492,10 @@ func (j *judge) inconclusiveDetail(pg *consent.Page, run *consent.Run) string {
 		return fmt.Sprintf("%s: stopped after %d requests", label, n)
 	case consent.ReasonCanceled:
 		return label + ": interrupted"
+	case consent.ReasonRefused:
+		if names := j.refusedTrackers(run); len(names) > 0 {
+			return refusedDetail(run, names)
+		}
 	}
 	if d := consent.SafeText(run.Detail, 300); d != "" {
 		return d

@@ -290,3 +290,56 @@ func TestEvaluateNil(t *testing.T) {
 		t.Error("Issues and Inconclusive should be empty, not nil")
 	}
 }
+
+// TestRefusedTrackerScriptsAreInconclusive: a banner page whose tracker
+// scripts --map-only refused never ran them, so no run may pass as
+// "nothing fired": every run is inconclusive and names the trackers,
+// and the check ends Couldn't check (exit 3), not All clear.
+func TestRefusedTrackerScriptsAreInconclusive(t *testing.T) {
+	r := judged(t, "map-refused", "", "")
+	// The catalog isn't linked here, so trackers go by their ids.
+	want := "the tracker scripts of google-tag-manager and meta-pixel were refused by --map-only, " +
+		"so they never ran and weren't checked; drop --map-only to let them load"
+	for _, run := range r.Pages[0].Runs {
+		if run.Reason != consent.ReasonRefused || run.Detail != run.Kind.Label()+": "+want {
+			t.Errorf("%s: reason %q detail %q", run.Kind, run.Reason, run.Detail)
+		}
+	}
+	if len(r.Inconclusive) != 3 || r.Inconclusive[1].Detail != "Accept: "+want {
+		t.Errorf("inconclusive %+v", r.Inconclusive)
+	}
+	if h := r.Head(""); h != consent.HeadInconclusive || r.ExitCode("") != 3 {
+		t.Errorf("head %q exit %d; want Couldn't check, 3", h, r.ExitCode(""))
+	}
+
+	// Exempt trackers don't count; with both exempt the runs pass.
+	r = consenttest.GoldenResult("map-refused")
+	p := consenttest.NewPlan(t)
+	p.Exempt = []string{"google-tag-manager", "meta-pixel"}
+	Evaluator{}.Evaluate(r, p)
+	for _, run := range r.Pages[0].Runs {
+		if run.Reason != consent.ReasonNone {
+			t.Errorf("exempt %s: reason %q", run.Kind, run.Reason)
+		}
+	}
+
+	// One refused script names one tracker; a fetched one is checked.
+	r = consenttest.GoldenResult("map-refused")
+	for i := range r.Pages[0].Runs {
+		r.Pages[0].Runs[i].Scripts[1].Refused = ""
+	}
+	Evaluator{}.Evaluate(r, consenttest.NewPlan(t))
+	if d := r.Pages[0].Runs[0].Detail; d != "No choice: the tracker script of google-tag-manager was refused by --map-only, "+
+		"so it never ran and wasn't checked; drop --map-only to let it load" {
+		t.Errorf("one refused: %q", d)
+	}
+	for i := range r.Pages[0].Runs {
+		r.Pages[0].Runs[i].Scripts[0].Refused = ""
+	}
+	Evaluator{}.Evaluate(r, consenttest.NewPlan(t))
+	for _, run := range r.Pages[0].Runs {
+		if run.Reason == consent.ReasonRefused {
+			t.Errorf("nothing refused %s: still %q", run.Kind, run.Reason)
+		}
+	}
+}

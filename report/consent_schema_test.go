@@ -36,7 +36,7 @@ var schemaEnums = map[reflect.Type][]string{
 	reflect.TypeFor[consent.RunStatus](): {"ok", "no-banner", "no-button", "click-failed", "load-failed", "timeout",
 		"navigated-away", "limit-reached", "canceled"},
 	reflect.TypeFor[consent.Reason](): {"", "no_banner", "cmp_not_found", "no_button", "click_missed", "state_unchanged",
-		"navigation_failed", "timeout", "limit", "canceled"},
+		"navigation_failed", "timeout", "limit", "canceled", "trackers_refused"},
 	reflect.TypeFor[consent.Value](): {"granted", "denied", "unset", "unknown"},
 	reflect.TypeFor[model.Level]():   {"error", "warning", "notice"},
 }

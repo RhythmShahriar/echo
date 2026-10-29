@@ -228,6 +228,22 @@ func TestFillSortsEvents(t *testing.T) {
 	}
 }
 
+// TestFillKeepsRefusedScripts: a tracker script --map-only refused
+// stays in Scripts with the refusal, so the verdict knows it never ran.
+func TestFillKeepsRefusedScripts(t *testing.T) {
+	rec := &Recording{Events: []consent.Event{
+		{Seq: 1, Kind: consent.EvRequest, Request: &consent.Request{URL: "https://www.googletagmanager.com/gtag/js", Refused: consent.RefusedNotMapped},
+			Hit: &consent.Hit{Tracker: "google-tag-manager", Kind: consent.HitScript}},
+		{Seq: 2, Kind: consent.EvRequest, Request: &consent.Request{URL: "https://connect.facebook.net/en_US/fbevents.js"},
+			Hit: &consent.Hit{Tracker: "meta-pixel", Kind: consent.HitScript}},
+	}}
+	r := newRun(consent.RunNone)
+	fill(&r, rec)
+	if len(r.Scripts) != 2 || r.Scripts[0].Refused != consent.RefusedNotMapped || r.Scripts[1].Refused != "" {
+		t.Errorf("scripts %+v", r.Scripts)
+	}
+}
+
 // TestPageNumberAfterEarlierPlans: --sites runs one plan per group of
 // sites into one evidence folder, so a later plan's first page numbers
 // on from the earlier ones' and never overwrites their files.

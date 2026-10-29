@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites name="rhythm-echo consent" tests="3" failures="0" skipped="3" time="12.600">
+  <testsuite name="/b.html" tests="3" failures="0" skipped="3" time="12.600" timestamp="2026-10-26T09:20:41Z">
+    <properties>
+      <property name="consent.json.sha256" value="e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"></property>
+    </properties>
+    <testcase name="/b.html · No choice" classname="rhythm-echo.consent" time="4.200">
+      <skipped message="inconclusive: trackers_refused">No choice: the tracker scripts of google-tag-manager and meta-pixel were refused by --map-only, so they never ran and weren&#39;t checked; drop --map-only to let them load</skipped>
+    </testcase>
+    <testcase name="/b.html · Accept" classname="rhythm-echo.consent" time="4.200">
+      <skipped message="inconclusive: trackers_refused">Accept: the tracker scripts of google-tag-manager and meta-pixel were refused by --map-only, so they never ran and weren&#39;t checked; drop --map-only to let them load</skipped>
+    </testcase>
+    <testcase name="/b.html · Reject" classname="rhythm-echo.consent" time="4.200">
+      <skipped message="inconclusive: trackers_refused">Reject: the tracker scripts of google-tag-manager and meta-pixel were refused by --map-only, so they never ran and weren&#39;t checked; drop --map-only to let them load</skipped>
+    </testcase>
+  </testsuite>
+</testsuites>

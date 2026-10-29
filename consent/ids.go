@@ -260,6 +260,9 @@ const (
 	ReasonTimeout        Reason = "timeout"
 	ReasonLimit          Reason = "limit"
 	ReasonCanceled       Reason = "canceled"
+	// ReasonRefused: Echo refused a consent-needing tracker's script
+	// (--map-only), so it never ran and the run can't show what it does.
+	ReasonRefused Reason = "trackers_refused"
 )
 
 // Value is a consent signal's value.

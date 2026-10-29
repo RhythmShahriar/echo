@@ -545,7 +545,8 @@ func (m *consentMD) inconclusive() {
 	hint := false
 	for _, in := range m.r.Inconclusive {
 		why := cmp.Or(m.entryReasonWords(in), md(string(in.Reason)))
-		if m.o.Details && in.Detail != "" {
+		// Refused tracker scripts are named only in the detail.
+		if (m.o.Details || in.Reason == consent.ReasonRefused) && in.Detail != "" {
 			why = md(in.Detail)
 		}
 		m.line("| %s | %s | %s |", m.page(in.Site, in.Page), md(in.Run.Label()), why)

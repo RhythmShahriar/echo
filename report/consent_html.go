@@ -508,6 +508,9 @@ func (h *consentHTML) pages() []chPage {
 // (.cmplz-deny) on the first layer, 1 click at 1.98s, confirmed by
 // cookie:cmplz_marketing`.
 func choiceWords(pg *consent.Page, run *consent.Run) string {
+	if run.Reason == consent.ReasonRefused {
+		return "Couldn't check: " + reasonWords[run.Reason]
+	}
 	if run.Inconclusive() {
 		return "Couldn't choose: " + cmp.Or(runReasonWords(run), Safe(string(run.Reason)))
 	}
