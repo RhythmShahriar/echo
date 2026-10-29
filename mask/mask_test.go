@@ -68,6 +68,10 @@ func TestRules(t *testing.T) {
 		{"api_key", URL, "https://api.shop.test/x?api_key=supersecretvalue123", "supersecretvalue123", "api_key=" + Hidden, false},
 		{"signature in text", Text, "Download: https://b.s3.amazonaws.com/a.pdf?X-Amz-Signature=9c1d" + secret, "9c1d" + secret, "X-Amz-Signature=" + Hidden, false},
 		{"monkey kept", URL, "https://shop.test/zoo?monkey=george&keys=3", "", "", true},
+		// An OAuth implicit-flow callback carries the token in the first key of the fragment.
+		{"access_token first in fragment", URL, "https://shop.test/cb#access_token=" + secret + "&token_type=bearer", secret, "#access_token=" + Hidden, false},
+		{"id_token first in fragment", Text, "Back to https://shop.test/cb#id_token=" + secret, secret, "#id_token=" + Hidden, false},
+		{"fragment anchor kept", URL, "https://shop.test/docs#section=2", "", "", true},
 
 		// Text: the kit's rules, codes and URL on every URL.
 		{"link in text", Text, "Reset: https://shop.test/wp-login.php?action=rp&key=" + secret + "&login=jane.", secret, "login=jane.", false},

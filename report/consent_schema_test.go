@@ -45,7 +45,7 @@ var schemaEnums = map[reflect.Type][]string{
 // of values, by type and field name.
 var schemaFieldEnums = map[string][]string{
 	"Change.Class": {consent.ClassBroke, consent.ClassNew, consent.ClassChanged, consent.ClassFixed},
-	"RunNote.Kind": {string(consent.EvDialog), string(consent.EvPopup), string(consent.EvDownload)},
+	"RunNote.Kind": {string(consent.EvDialog), string(consent.EvPopup), string(consent.EvDownload), consent.NoteVisit},
 }
 
 func strs[T ~string](s []T) []string {

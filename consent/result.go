@@ -17,6 +17,10 @@ type Visit struct {
 	Step   string `json:"step"` // load, page, reload
 	AtMS   int64  `json:"at_ms"`
 	Banner bool   `json:"banner"` // the banner was showing after this visit settled
+	// Error says why a later page or the reload didn't load: "answered
+	// 500" or Chrome's error. Such a visit never counts as a page the
+	// choice was kept on.
+	Error string `json:"error,omitempty"`
 }
 
 // CMPState is a CMP's stored choice, as its cookie, storage or API says.

@@ -375,13 +375,15 @@ func (d *driver) clickSteps(ctx context.Context, t consent.Tab, p *consent.Plan,
 		if err != nil {
 			return consent.ReasonNone, err
 		}
+		if res.Clicked {
+			ch.AtMS = res.AtMS
+		}
 		if res.NavigatedAway {
 			return consent.ReasonNavigation, nil
 		}
 		if !res.Clicked {
 			return consent.ReasonClickMissed, nil
 		}
-		ch.AtMS = res.AtMS
 	}
 	return consent.ReasonNone, nil
 }
@@ -435,6 +437,18 @@ func (d *driver) clickAndVerify(ctx context.Context, t consent.Tab, p *consent.P
 			return ch, consent.ReasonNone, err
 		}
 		ch.Clicks++
+		if res.Clicked {
+			// Kept before a click that left the site returns, so the run
+			// knows when it chose and what came before.
+			ch.AtMS = res.AtMS
+			if res.Text != "" {
+				ch.Text = consent.SafeText(res.Text, textWidth)
+			}
+			if res.Box != (consent.Box{}) {
+				b := res.Box
+				ch.Box = &b
+			}
+		}
 		if res.NavigatedAway {
 			return ch, consent.ReasonNavigation, nil
 		}
@@ -443,14 +457,6 @@ func (d *driver) clickAndVerify(ctx context.Context, t consent.Tab, p *consent.P
 				return ch, consent.ReasonNone, err
 			}
 			continue
-		}
-		ch.AtMS = res.AtMS
-		if res.Text != "" {
-			ch.Text = consent.SafeText(res.Text, textWidth)
-		}
-		if res.Box != (consent.Box{}) {
-			b := res.Box
-			ch.Box = &b
 		}
 		verified, changed, st, err := d.settle(ctx, t, p, r, k, last, before)
 		if err != nil {

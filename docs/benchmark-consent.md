@@ -7,10 +7,10 @@ Echo caught 25 of 25 scenarios. False alarms: 0 in 400 checks of unchanged good 
 Proprietary CMPs are replicas of public markup captured on the listed dates; Google's and Meta's tags are stand-ins written to community-documented behaviour; nothing reached the internet (sink count 0, must be 0); evidence, not legal advice. Machine, OS, Chrome, Echo version and date are listed below.
 
 - Echo: rhythm-echo dev
-- Browser: Chrome 153.0.8010.52 (/usr/bin/google-chrome)
+- Browser: Chrome 153.0.8010.52
 - Machine: linux/amd64, 16 CPUs
 - Mode: go
-- Date: 2026-10-28 13:34 UTC, 92 minutes
+- Date: 2026-10-28 22:54 UTC, 92 minutes
 
 ## Targets
 
@@ -22,12 +22,12 @@ Proprietary CMPs are replicas of public markup captured on the listed dates; Goo
 | Click success per CMP | 880 of 880 (100%) | 100% on fixtures | met |
 | Leaked hits at the sink (held mode) | 0 | 0 | met |
 | e10 completeness (sink vs reported) | caught | exact match | met |
-| Time per page, p50 | 15.0 s | under 25 s | met |
-| Time per page, p95 | 25.6 s | under 45 s | met |
-| consent detect, slowest | 4.5 s | under 15 s | met (c11: banner found, a button not (exit 1)) |
+| Time per page, p50 | 14.9 s | under 25 s | met |
+| Time per page, p95 | 25.7 s | under 45 s | met |
+| consent detect, slowest | 4.9 s | under 15 s | met (c11: banner found, a button not (exit 1)) |
 | Fleet: 50 sites, --parallel 6 | 5.6 min | under 15 minutes on a 4-core runner | met |
-| Echo resident memory (Chrome excluded) | 116.5 MiB | under 200 MB | met |
-| Binary size growth over v1.1.2 | 15.9 MiB (31.6 MiB, v1.1.2 15.8 MiB) | at most 8 MiB | not measured (measured in Docker mode, whose binary is built like a release) |
+| Echo resident memory (Chrome excluded) | 108.6 MiB | under 200 MB | met |
+| Binary size growth over v1.1.2 | 16.0 MiB (31.8 MiB, v1.1.2 15.8 MiB) | at most 8 MiB | not measured (measured in Docker mode, whose binary is built like a release) |
 | make reproduce (two full runs, -diff) | - | no outcome differs | not measured (run make -C testbed/consent reproduce) |
 
 ## Scenarios
@@ -171,10 +171,10 @@ Verified choices over the runs that needed one, on good states.
 
 | Measure | p50 | p95 or max | Samples |
 |---|---|---|---|
-| Time per page (from the reports) | 15.0 s | 25.6 s (p95) | 465 |
-| consent detect (wall time) | 3.5 s | 4.5 s (max) | 39 |
+| Time per page (from the reports) | 14.9 s | 25.7 s (p95) | 465 |
+| consent detect (wall time) | 3.6 s | 4.9 s (max) | 39 |
 
-Peak resident memory of rhythm-echo (Chrome excluded): 116.5 MiB.
+Peak resident memory of rhythm-echo (Chrome excluded): 108.6 MiB.
 
 ## CMP replicas
 

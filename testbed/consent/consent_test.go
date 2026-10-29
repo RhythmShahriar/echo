@@ -237,8 +237,11 @@ func TestConsentMasksEverywhere(t *testing.T) {
 	cookie := fakeSecret("sess")
 	basic := base64.StdEncoding.EncodeToString([]byte("shop:" + password))
 	phone := "1555" + "7014" + "29"
+	// An OAuth implicit-flow callback carries a token as the first key of
+	// the fragment, which the stand-ins copy into dl with the rest.
+	fragToken := fakeSecret("frag")
 	secrets := map[string]string{"URL token": token, "basic-auth password": password, "basic-auth header": basic,
-		"bearer token": bearer, "cookie": cookie, "phone number": phone}
+		"bearer token": bearer, "cookie": cookie, "phone number": phone, "fragment token": fragToken}
 	for _, id := range []string{"secret-url", "pii-beacons"} {
 		for _, c := range []struct {
 			broken bool
@@ -252,7 +255,12 @@ func TestConsentMasksEverywhere(t *testing.T) {
 				dir := t.TempDir()
 				// The phone number comes with a '+' (as %2B): it reaches the
 				// beacons' dl and the HAR with its '+' read as a space.
-				target := "https://" + id + server.SiteSuffix + "/?token=" + url.QueryEscape(token) + "&email=buyer%40shop.test&phone=%2B" + phone
+				fragKey := "access_token"
+				if c.json {
+					fragKey = "id_token"
+				}
+				target := "https://" + id + server.SiteSuffix + "/?token=" + url.QueryEscape(token) + "&email=buyer%40shop.test&phone=%2B" + phone +
+					"#" + fragKey + "=" + fragToken + "&token_type=bearer"
 				// A format flag that an -o of its format uses writes no
 				// stdout of its own, so the --json case has no -o .json.
 				jsonOut := []string{"-o", "result.json"}

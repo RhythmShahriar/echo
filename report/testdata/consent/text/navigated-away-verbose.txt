@@ -1,0 +1,71 @@
+rhythm echo 1.2.0 - consent check of https://meta-ignores.consent.test/
+
+Browser: Chrome for Testing 156.0.8078.47
+Hits held: tracking hits are recorded and stopped in the browser. Nothing reached Google, Meta or any other tracker.
+Hosts mapped with --map-host.
+gcd decoded with an unofficial, community-documented mapping.
+
+https://meta-ignores.consent.test/
+  Banner: Complianz, found after 0.4s, Reject on the banner
+  Consent Mode: v2 default, all four signals denied at 0.12s
+  [1/3] No choice   FAIL Meta Pixel fired before the choice
+     0.00s  load   https://meta-ignores.consent.test/
+     0.12s  gtag   consent default  all four denied
+     0.30s  script googletagmanager.com/gtm.js?id=GTM-••••XK2
+     0.41s  banner Complianz shown
+     0.61s  script connect.facebook.net/en_US/fbevents.js
+     0.84s  hit    Meta Pixel PageView (held)
+     0.86s  cookie _fbp (Meta Pixel)
+     9.40s  page   /shop/ (link 1 of 1)
+     9.80s  hit    Meta Pixel PageView (held)
+    12.90s  reload https://meta-ignores.consent.test/
+    13.30s  hit    Meta Pixel PageView (held)
+  [2/3] Accept      ok Google Analytics 4, Google Ads, Meta Pixel fired; update granted at 2.0s; kept on 1 more page
+     0.00s  load   https://meta-ignores.consent.test/
+     0.12s  gtag   consent default  all four denied
+     0.30s  script googletagmanager.com/gtm.js?id=GTM-••••XK2
+     0.41s  banner Complianz shown
+     2.01s  click  "Accept" (.cmplz-accept)
+     2.03s  gtag   consent update   all four granted
+     2.30s  hit    Google Analytics 4 page_view gcs=G111 gcd=13r3r3r3r5 (held)
+     2.32s  cookie _ga (Google Analytics 4)
+     2.34s  hit    Google Ads gcs=G111 gcd=13r3r3r3r5 (held)
+     2.38s  hit    Meta Pixel PageView (held)
+     2.40s  cookie _fbp (Meta Pixel)
+     9.40s  page   /shop/ (link 1 of 1)
+     9.70s  hit    Google Analytics 4 page_view gcs=G111 gcd=13r3r3r3r5 (held)
+     9.74s  hit    Google Ads gcs=G111 gcd=13r3r3r3r5 (held)
+     9.78s  hit    Meta Pixel PageView (held)
+    12.90s  reload https://meta-ignores.consent.test/
+    13.20s  hit    Google Analytics 4 page_view gcs=G111 gcd=13r3r3r3r5 (held)
+    13.24s  hit    Google Ads gcs=G111 gcd=13r3r3r3r5 (held)
+    13.28s  hit    Meta Pixel PageView (held)
+  [3/3] Reject      INCONCLUSIVE couldn't choose: the click took the page to another site
+     0.00s  load   https://meta-ignores.consent.test/
+     0.12s  gtag   consent default  all four denied
+     0.30s  script googletagmanager.com/gtm.js?id=GTM-••••XK2
+     0.41s  banner Complianz shown
+     2.20s  hit    Meta Pixel PageView (held)
+     2.21s  cookie _fbp (Meta Pixel)
+     3.09s  click  "Deny" (.cmplz-deny)
+
+Findings - 2 errors, 0 warnings, 1 notice - 3 runs, 3 trackers, policy advanced
+
+  error   consent/before-choice   Meta Pixel fired before the visitor chose (No choice)
+          (key: consent/before-choice|/|none|meta-pixel)
+          3 hits (PageView on /, /shop/, /); cookie _fbp written
+          fix: Load the tracker only after the visitor accepts: let the consent banner block its
+          script, or start it with consent denied and grant it on Accept.
+  error   consent/after-reject    Meta Pixel fired after Reject (Reject)
+          (key: consent/after-reject|/|reject|meta-pixel)
+          3 hits (PageView on /, /shop/, /); cookie _fbp written
+          fix: Make Reject stop the tracker: block its script while consent is denied and keep it
+          blocked on every page after the choice.
+  notice  consent/meta-no-consent-api  Meta Pixel never received fbq('consent', ...) (No choice)
+          (key: consent/meta-no-consent-api|/|none|meta-pixel)
+          no fbq('consent', 'revoke') or fbq('consent', 'grant') before the first Meta Pixel hit at
+          0.84s
+          fix: Meta Pixel doesn't read Google Consent Mode. Call fbq('consent', 'revoke') before
+          fbq('init'), then fbq('consent', 'grant') on Accept.
+
+Evidence, not legal advice.

@@ -722,6 +722,67 @@ func TestHTTPErrorStatus(t *testing.T) {
 	}
 }
 
+// TestLaterPageErrorStatus: a later page that answers 404 is recorded
+// with its status and a run note, so it never reads as a page the
+// choice was kept on.
+func TestLaterPageErrorStatus(t *testing.T) {
+	st := newSite(t)
+	st.page("shop.test/", shopPage("")) // /about isn't served: 404
+	p := shopPlan(t, st, consent.RunAccept)
+	res, err := runCheck(t, p, &pageCMP{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := res.Pages[0].Runs[0]
+	if got := steps(r); !slices.Equal(got, []string{"load", "page", "reload"}) {
+		t.Fatalf("steps %v", got)
+	}
+	if r.Visits[0].Error != "" || r.Visits[1].Error != "answered 404" || r.Visits[2].Error != "" {
+		t.Errorf("visits %+v", r.Visits)
+	}
+	want := "the page https://shop.test/about answered 404; the choice wasn't checked there"
+	if !slices.ContainsFunc(r.Notes, func(n consent.RunNote) bool { return n.Kind == consent.NoteVisit && n.Text == want }) {
+		t.Errorf("notes %+v", r.Notes)
+	}
+}
+
+// TestOnePageFailsOthersChecked: with more than one page, a page that
+// answers 500 is that page's inconclusive runs; the healthy page is
+// still checked and the check returns no fatal error.
+func TestOnePageFailsOthersChecked(t *testing.T) {
+	addr := redirectSite(t, map[string]http.HandlerFunc{
+		"/500": func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "text/html")
+			w.WriteHeader(http.StatusInternalServerError)
+			_, _ = fmt.Fprint(w, "<title>error</title><p>broken")
+		},
+	})
+	p := consenttest.NewPlan(t, "https://shop.test/500")
+	ok := consenttest.NewPlan(t, "https://shop.test/").Targets[0]
+	p.Targets = append([]consent.Target{ok}, p.Targets...)
+	p.MapHosts, p.MapOnly, p.Runs, p.Retries = map[string]string{"shop.test": addr}, true, []consent.RunKind{consent.RunNone}, 0
+	p.Settle, p.BannerWait, p.Browser.NoDownload = 200*time.Millisecond, time.Second, true
+	res, err := runCheck(t, p, &pageCMP{})
+	if err != nil {
+		t.Fatalf("Run = %v; want the failed page in the result", err)
+	}
+	if len(res.Pages) != 2 {
+		t.Fatalf("pages %d", len(res.Pages))
+	}
+	if r := res.Pages[0].Runs[0]; r.Status != consent.StatusOK {
+		t.Errorf("healthy page: %s %q", r.Status, r.Detail)
+	}
+	if r := res.Pages[1].Runs[0]; r.Status != consent.StatusLoadFailed || !r.Inconclusive() ||
+		r.Detail != "https://shop.test/500 answered 500 Internal Server Error" {
+		t.Errorf("failed page: %s %q", r.Status, r.Detail)
+	}
+	// One page alone still stops the check with its fatal error.
+	p.Targets = p.Targets[1:]
+	if f := fatalOf(t, p); f.Code != consent.FatalHTTPStatus {
+		t.Errorf("one page: %+v", f)
+	}
+}
+
 // tlsPlan is a plan for a 127.0.0.1 TLS server with a certificate no one
 // trusts.
 func tlsPlan(t *testing.T) *consent.Plan {

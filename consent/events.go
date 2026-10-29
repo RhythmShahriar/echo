@@ -192,7 +192,7 @@ type StorageKey struct {
 // should hear about: a dialog, a popup or a download (PRD 14.10).
 type RunNote struct {
 	AtMS int64  `json:"at_ms"`
-	Kind string `json:"kind"` // dialog, popup or download
+	Kind string `json:"kind"` // dialog, popup, download or visit
 	Text string `json:"text"` // safe to print
 }
 
@@ -230,14 +230,36 @@ func EventNote(e Event) string {
 // AddNote adds the run note e makes, once per text and at most
 // MaxRunNotes.
 func (r *Run) AddNote(e Event) {
-	text := EventNote(e)
-	if text == "" || len(r.Notes) >= MaxRunNotes {
+	r.addNote(RunNote{AtMS: e.AtMS, Kind: string(e.Kind), Text: EventNote(e)})
+}
+
+// NoteVisit is the kind of the run note a later page or a reload that
+// didn't load makes.
+const NoteVisit = "visit"
+
+// AddVisitNote notes that v, a later page or the reload, didn't load:
+// `the reload (https://shop.test/) answered 500; the choice wasn't
+// checked there`. v.URL is masked already.
+func (r *Run) AddVisitNote(v Visit) {
+	if v.Error == "" {
 		return
 	}
-	for _, n := range r.Notes {
-		if n.Text == text {
+	what := "the page " + SafeText(v.URL, 200)
+	if v.Step == "reload" {
+		what = "the reload (" + SafeText(v.URL, 200) + ")"
+	}
+	r.addNote(RunNote{AtMS: v.AtMS, Kind: NoteVisit, Text: what + " " + SafeText(v.Error, 200) + "; the choice wasn't checked there"})
+}
+
+// addNote adds n once per text and at most MaxRunNotes.
+func (r *Run) addNote(n RunNote) {
+	if n.Text == "" || len(r.Notes) >= MaxRunNotes {
+		return
+	}
+	for _, o := range r.Notes {
+		if o.Text == n.Text {
 			return
 		}
 	}
-	r.Notes = append(r.Notes, RunNote{AtMS: e.AtMS, Kind: string(e.Kind), Text: text})
+	r.Notes = append(r.Notes, n)
 }

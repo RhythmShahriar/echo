@@ -30,6 +30,8 @@ import (
 	"time"
 
 	"github.com/RhythmShahriar/echo/consent"
+	// The built-in catalog registers the ID rules hitKey masks with.
+	_ "github.com/RhythmShahriar/echo/consent/tracker"
 	"github.com/RhythmShahriar/echo/testbed/consent/judge"
 )
 
@@ -471,7 +473,7 @@ func sendHitsComplete(ctx context.Context, p *ProbeEnv, broken bool) ([]Step, er
 		time.Sleep(time.Second)
 		sink := map[string]int{}
 		for _, h := range site.srv.Hits(id) {
-			sink[h.Host+h.Path]++
+			sink[hitKey((&url.URL{Scheme: "https", Host: h.Host, Path: h.Path}).String())]++
 		}
 		reported := map[string]int{}
 		if s.env != nil {
@@ -480,9 +482,7 @@ func sendHitsComplete(ctx context.Context, p *ProbeEnv, broken bool) ([]Step, er
 					if h.Kind == consent.HitScript {
 						continue
 					}
-					if u, err := url.Parse(h.URL); err == nil {
-						reported[u.Hostname()+u.EscapedPath()]++
-					}
+					reported[hitKey(h.URL)]++
 				}
 			})
 		}
@@ -490,6 +490,18 @@ func sendHitsComplete(ctx context.Context, p *ProbeEnv, broken bool) ([]Step, er
 		s.note("unmatched: %d%s", unmatched(sink, reported), describeUnmatched(sink, reported))
 		return []Step{s}, nil
 	})
+}
+
+// hitKey is the host and path a hit is matched by. Echo masks the IDs
+// a tracker puts in its path (a Google Ads conversion ID reads
+// ••••0001), so both sides are keyed on the masked form, the same way
+// the built-in catalog masks them.
+func hitKey(raw string) string {
+	u, err := url.Parse(consent.MaskURL(raw, false))
+	if err != nil {
+		return raw
+	}
+	return strings.ToLower(u.Hostname()) + consent.ShownPath(u)
 }
 
 // total sums counts.

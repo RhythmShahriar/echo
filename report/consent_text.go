@@ -348,6 +348,17 @@ func (t *consentText) marked(mark int, text string) string {
 	return text
 }
 
+// pageNotLoaded reports whether no run of pg loaded the page (each
+// ended load-failed), as a page that answered 500 among others does.
+func pageNotLoaded(pg *consent.Page) bool {
+	for _, r := range pg.Runs {
+		if r.Status != consent.StatusLoadFailed {
+			return false
+		}
+	}
+	return len(pg.Runs) > 0
+}
+
 // bannerLine says what the banner was: `Banner: Cookiebot, found after
 // 0.8s, Reject on the banner`, `Banner: none found within 10s
 // (Cookiebot's script loaded)` or the page needs no consent.
@@ -356,6 +367,9 @@ func (t *consentText) bannerLine(pg *consent.Page) string {
 		return nothingToConsent
 	}
 	if !pg.CMP.Found {
+		if pageNotLoaded(pg) {
+			return "Banner: not looked for, the page didn't load"
+		}
 		return "Banner: none found within " + waitText(t.o.BannerWait) + scriptLoaded(pg.CMP)
 	}
 	s := "Banner: " + Safe(cmpLabel(pg.CMP)) + ", found after " + oneDecimal(pg.CMP.BannerAtMS)
@@ -676,7 +690,30 @@ func (t *consentText) runSummary(pg *consent.Page, run *consent.Run) (int, strin
 	if k := keptWords(run); k != "" {
 		parts = append(parts, k)
 	}
+	parts = append(parts, failedVisitWords(run)...)
 	return mark, strings.Join(parts, "; ")
+}
+
+// failedVisitWords says which later pages and reloads didn't load:
+// "/p2 answered 500", "the reload answered 503", "/p2 didn't load
+// (net::ERR_CONNECTION_REFUSED)". The choice wasn't checked there.
+func failedVisitWords(run *consent.Run) []string {
+	var out []string
+	for _, v := range run.Visits {
+		if v.Error == "" || v.Step == "load" {
+			continue
+		}
+		what := Safe(consentPagePath(v.URL))
+		if v.Step == "reload" {
+			what = "the reload"
+		}
+		if strings.HasPrefix(v.Error, "answered ") {
+			out = append(out, what+" "+Safe(v.Error))
+		} else {
+			out = append(out, what+" didn't load ("+Safe(v.Error)+")")
+		}
+	}
+	return out
 }
 
 // pagesOf says on how many of the pages after the choice the named
@@ -851,7 +888,7 @@ func updateWords(run *consent.Run) string {
 }
 
 // keptWords says on how many later pages the choice held: "kept on 2
-// more pages".
+// more pages". A page that didn't load (an error status) doesn't count.
 func keptWords(run *consent.Run) string {
 	c := run.Choice
 	if run.Kind == consent.RunWithdraw {
@@ -862,7 +899,7 @@ func keptWords(run *consent.Run) string {
 	}
 	n := 0
 	for _, v := range run.Visits {
-		if v.Step == "page" && v.AtMS > c.AtMS && !v.Banner {
+		if v.Step == "page" && v.AtMS > c.AtMS && !v.Banner && v.Error == "" {
 			n++
 		}
 	}

@@ -203,6 +203,31 @@ func TestV2Signals(t *testing.T) { // c06
 	if !slices.Contains(r.Notes, GCDNote) {
 		t.Errorf("notes %q lack the gcd note", r.Notes)
 	}
+	// A late default that sets all four (c05): the hits before it show
+	// the v2 signals unset only because no default had run yet, which
+	// default-late reports. The default did set them, so no v2-signals.
+	late := result(consent.Run{Kind: consent.RunNone,
+		Hits:    []consent.HitRef{ga4(5, 620, consent.PhaseBefore, "G100", &g100), ga4(7, 1800, consent.PhaseBefore, "G100", &g100)},
+		Signals: []consent.Signal{defaultCmd(1560, true)},
+	})
+	for i := range late.Pages[0].Runs[0].Hits {
+		lh := &late.Pages[0].Runs[0].Hits[i]
+		lh.Google.GCD = "13p3p3l3l5"
+		lh.Google.GCDDecoded = &consent.GCD{Known: true, AdUserData: consent.GCDSignal{Letter: "l", Known: true}, AdPersonalization: consent.GCDSignal{Letter: "l", Known: true}}
+	}
+	late.Pages[0].Runs[0].Hits[1].Google.GCD = "13p3p3p3p5"
+	late.Pages[0].Runs[0].Hits[1].Google.GCDDecoded = &consent.GCD{Known: true}
+	Evaluator{}.Evaluate(late, nil)
+	sameKeys(t, keysOf(late, v3Checks), "consent/default-late|/|none|")
+	// A hit after that default that still shows them unset is raised.
+	late.Pages[0].Runs[0].Hits[1].Google.GCD = "13p3p3l3l5"
+	late.Pages[0].Runs[0].Hits[1].Google.GCDDecoded = h.Google.GCDDecoded
+	Evaluator{}.Evaluate(late, nil)
+	sameKeys(t, keysOf(late, v3Checks), "consent/default-late|/|none|", "consent/v2-signals|/|none|")
+	if is := issue(t, late, "consent/v2-signals|/|none|"); !strings.HasPrefix(is.Detail, "gcd 13p3p3l3l5 on Google Analytics 4 at 1.80s") ||
+		!slices.Equal(is.Evidence, []int64{7}) {
+		t.Errorf("after the late default: %+v", is)
+	}
 	// Evaluating again doesn't repeat the note.
 	Evaluator{}.Evaluate(r, nil)
 	n := 0

@@ -136,9 +136,23 @@ func gcdUnset(h *consent.HitRef) []string {
 	return out
 }
 
+// beforeV2Default reports whether h was sent before the run's first
+// Consent Mode default and that default sets both v2 signals. Its gcd
+// shows them unset only because no default had run yet: default-late
+// reports that; the default itself is v2.
+func beforeV2Default(run *consent.Run, h *consent.HitRef) bool {
+	var first *consent.Signal
+	for i := range run.Signals {
+		if s := &run.Signals[i]; consentModeCommand(s, "default") && (first == nil || s.AtMS < first.AtMS) {
+			first = s
+		}
+	}
+	return first != nil && h.AtMS <= first.AtMS && set(first.State["ad_user_data"]) && set(first.State["ad_personalization"])
+}
+
 // v2Signals raises consent/v2-signals when the default that applies
 // lacks ad_user_data or ad_personalization, or a Google hit's gcd shows
-// either unset.
+// either unset after the run's first default (or with no default).
 func (j *judge) v2Signals(pg *consent.Page) {
 	var parts []string
 	var ev []int64
@@ -168,7 +182,7 @@ func (j *judge) v2Signals(pg *consent.Page) {
 		for k := range run.Hits {
 			h := &run.Hits[k]
 			unset := gcdUnset(h)
-			if !googleHit(h) || len(unset) == 0 {
+			if !googleHit(h) || len(unset) == 0 || beforeV2Default(run, h) {
 				continue
 			}
 			if hitPart == "" {

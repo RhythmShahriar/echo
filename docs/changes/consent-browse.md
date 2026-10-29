@@ -235,6 +235,10 @@ with the exact texts.
   (`final_state`). Cookies and storage are snapshot after every step.
 - Visits: `load` (the URL the start page ended on, `banner` from the
   banner check), one `page` per link followed, `reload` (the start URL).
+  A `page` or `reload` that answered 4xx or 5xx or didn't load has
+  `error` (`answered 500`, or Chrome's error) and a run note of kind
+  `visit` (`the page <url> answered 500; the choice wasn't checked
+  there`); it never counts toward "kept on N more pages".
   When `--geo` is set and the CMP found offers a geolocation override,
   the start page is loaded again with it (a second `load` visit) and the
   result notes `<CMP name> geolocation override <param>=<value>
@@ -269,7 +273,13 @@ with the exact texts.
   - the document answered any 4xx or 5xx (after redirects, once no
     bot check explains it): `http-status` with the status.
 - When every run of a page hit one, `Run` returns the first run's error
-  with the result. Otherwise each such run is `load-failed`, reason
+  with the result. With more than one page (several URLs or `--sites`)
+  an error about what the site served (`unreachable`, `http-status`,
+  `bot-wall`, `redirect-host`, `tls`, `redirect-loop`) stops the check
+  only when every page hit one: otherwise that page's runs are
+  `load-failed` as below, so it reads as inconclusive and the other
+  pages are still checked. A usage error (`selector`, `refused`) always
+  stops it. Otherwise each such run is `load-failed`, reason
   `navigation_failed`, with the detail
   `<url> didn't answer: <detail>`, `<url> answered 401 Unauthorized`,
   `<url> showed a bot check (Cloudflare) instead of the page`,

@@ -498,6 +498,19 @@ func TestConsentTextNavigatedAway(t *testing.T) {
 	if !strings.Contains(out, "couldn't choose: the click took the page to another site\n") || strings.Contains(out, "didn't load") {
 		t.Errorf("navigated away:\n%s", out)
 	}
+	// The -v timeline keeps the order a visitor saw: the load, the
+	// banner, then the click that left the site, with nothing after it.
+	run.Visits = run.Visits[:1]
+	run.Choice.AtMS, run.Choice.Verified = 3090, false
+	keep := run.Hits[:0]
+	for _, h := range run.Hits {
+		if h.AtMS < run.Choice.AtMS {
+			keep = append(keep, h)
+		}
+	}
+	run.Hits = keep
+	run.Signals = slices.DeleteFunc(run.Signals, func(sg consent.Signal) bool { return sg.Command == "update" })
+	golden(t, "text/navigated-away-verbose.txt", consentTextOf(t, r, ConsentTextOptions{Plain: true, Verbose: true}))
 }
 
 // The dialogs, popups and downloads a page made show in the -v
@@ -523,5 +536,52 @@ func TestConsentRunNotesShown(t *testing.T) {
 	html := consentHTMLOf(t, r, ConsentHTMLOptions{})
 	if !strings.Contains(html, "<td>note</td><td></td><td></td><td><code>the page opened a popup (https://popup.test/); Echo closed it</code>") || strings.Contains(html, "<b>hi") {
 		t.Errorf("HTML lacks the escaped notes")
+	}
+}
+
+// A later page or a reload that answered an error status doesn't count
+// as a page the choice was kept on; the run line says it failed.
+func TestConsentTextFailedVisit(t *testing.T) {
+	r := judgedResult(t, "clean")
+	accept := &r.Pages[0].Runs[1]
+	var page *consent.Visit
+	for i := range accept.Visits {
+		if accept.Visits[i].Step == "page" {
+			page = &accept.Visits[i]
+		}
+	}
+	if page == nil {
+		t.Fatalf("no later page in %+v", accept.Visits)
+	}
+	page.Error = "answered 500"
+	out := consentTextOf(t, r, ConsentTextOptions{Plain: true})
+	line := ""
+	for l := range strings.SplitSeq(out, "\n") {
+		if strings.Contains(l, "[2/3] Accept") {
+			line = l
+		}
+	}
+	if strings.Contains(line, "kept on") || !strings.Contains(line, consentPagePath(page.URL)+" answered 500") {
+		t.Errorf("accept line %q", line)
+	}
+	page.Error = "net::ERR_CONNECTION_REFUSED"
+	accept.Visits = append(accept.Visits, consent.Visit{URL: r.Pages[0].URL, Step: "reload", AtMS: page.AtMS + 1000, Error: "answered 503"})
+	out = consentTextOf(t, r, ConsentTextOptions{Plain: true})
+	if !strings.Contains(out, consentPagePath(page.URL)+" didn't load (net::ERR_CONNECTION_REFUSED); the reload answered 503") {
+		t.Errorf("failed visits:\n%s", out)
+	}
+}
+
+// A page none of whose runs loaded (one of several, answering 500)
+// doesn't claim a banner was looked for.
+func TestConsentTextPageNotLoaded(t *testing.T) {
+	r := judgedResult(t, "inconclusive")
+	for i := range r.Pages[0].Runs {
+		run := &r.Pages[0].Runs[i]
+		run.Status, run.Reason, run.Detail = consent.StatusLoadFailed, consent.ReasonNavigation, "https://x.test/ answered 500 Internal Server Error"
+	}
+	out := consentTextOf(t, r, ConsentTextOptions{Plain: true})
+	if !strings.Contains(out, "  Banner: not looked for, the page didn't load\n") || strings.Contains(out, "none found within") {
+		t.Errorf("page not loaded:\n%s", out)
 	}
 }

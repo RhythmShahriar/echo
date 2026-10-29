@@ -35,6 +35,8 @@ func TestMaskURL(t *testing.T) {
 		{"login in the URL", "https://ann:hunter2@shop.test/", "https://•••••@shop.test/"},
 		{"token in the query", "https://shop.test/?token=" + fakeToken + "&a=1", "https://shop.test/?token=•••••&a=1"},
 		{"short id hidden whole", "https://px.test/?uid=42", "https://px.test/?uid=••••"},
+		{"access_token first in fragment", "https://a.test/cb#access_token=" + fakeToken + "&token_type=bearer", "https://a.test/cb#access_token=•••••&token_type=bearer"},
+		{"id_token first in fragment", "https://a.test/cb#id_token=" + fakeToken, "https://a.test/cb#id_token=•••••"},
 		{"not a URL", "no url here", "no url here"},
 		{"empty", "", ""},
 	} {
@@ -84,6 +86,23 @@ func TestMaskURLNested(t *testing.T) {
 			if !strings.Contains(got, url.QueryEscape("https://shop.test/account?token=")) {
 				t.Errorf("%s: the page URL went missing: %s", param, got)
 			}
+		}
+	}
+}
+
+// A page URL whose fragment starts with the token (an OAuth callback)
+// is masked when a tag copies it into dl, once or twice encoded.
+func TestMaskURLNestedFragment(t *testing.T) {
+	page := "https://shop.test/cb#access_token=" + fakeToken + "&token_type=bearer"
+	for _, enc := range []string{url.QueryEscape(page), url.QueryEscape(url.QueryEscape(page))} {
+		got := consent.MaskURL("https://region1.google-analytics.com/g/collect?v=2&dl="+enc, false)
+		for _, leak := range []string{fakeToken, url.QueryEscape(fakeToken)} {
+			if strings.Contains(got, leak) {
+				t.Errorf("token survived in %s", got)
+			}
+		}
+		if !strings.Contains(got, url.QueryEscape("https://shop.test/cb#access_token=")) {
+			t.Errorf("the page URL went missing: %s", got)
 		}
 	}
 }
@@ -161,6 +180,8 @@ func FuzzMask(f *testing.F) {
 	for _, s := range []string{"https://shop.test/?a=1", "https://u:p@h/?dl=https%253A%252F%252Fx", "%", "https://x/?ud[em]=a&em=", "#a=b", "http://[::1]:80/?id=1"} {
 		f.Add(s, "&x=1")
 	}
+	f.Add("https://shop.test/cb#access_token=x", "&token_type=bearer")
+	f.Add("https://shop.test/cb#id_token=x", "")
 	f.Fuzz(func(t *testing.T, raw, extra string) {
 		_ = consent.MaskURL(raw, false)
 		_ = consent.MaskURL(raw, true)
@@ -168,6 +189,16 @@ func FuzzMask(f *testing.F) {
 		got := consent.MaskURL("https://px.test/c?dl="+url.QueryEscape(page), false)
 		if strings.Contains(got, fakeToken) || strings.Contains(got, url.QueryEscape(fakeToken)) {
 			t.Fatalf("token survived: %s", got)
+		}
+		// The same token as the first key of the page's fragment.
+		for _, key := range []string{"access_token", "id_token"} {
+			page := "https://shop.test/cb#" + key + "=" + fakeToken + extra
+			for _, raw := range []string{page, "https://px.test/c?dl=" + url.QueryEscape(page)} {
+				got := consent.MaskURL(raw, false)
+				if strings.Contains(got, fakeToken) || strings.Contains(got, url.QueryEscape(fakeToken)) {
+					t.Fatalf("fragment token survived: %s", got)
+				}
+			}
 		}
 	})
 }

@@ -231,10 +231,15 @@ func TestChooseNoButton(t *testing.T) {
 func TestChooseNavigatedAway(t *testing.T) {
 	d, pg, _, p := chooseSetup(t, nil)
 	pg.show("#acme-reject", "Reject all")
-	pg.tab.Clicks = map[string]consent.ClickResult{"#acme-reject": {Clicked: true, NavigatedAway: true}}
+	pg.tab.Clicks = map[string]consent.ClickResult{"#acme-reject": {Clicked: true, NavigatedAway: true, AtMS: 3110, Text: "Reject all"}}
 	ch, reason, err := d.Choose(context.Background(), pg.tab, p, acme, consent.RunReject)
 	if err != nil || reason != consent.ReasonNavigation || ch.Verified {
 		t.Fatalf("choice %+v, reason %q, err %v", ch, reason, err)
+	}
+	// The click's time is kept: without it the run would read as chosen
+	// at 0 ms and its whole page load as after the choice.
+	if ch.AtMS != 3110 || ch.Clicks != 1 {
+		t.Errorf("choice at %d ms, %d clicks", ch.AtMS, ch.Clicks)
 	}
 }
 

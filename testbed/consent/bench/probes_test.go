@@ -156,6 +156,25 @@ func TestUnmatched(t *testing.T) {
 	}
 }
 
+// TestHitKey: e10 matches the sink's raw hit to the one Echo reports
+// with its path ID masked, so a complete list reads unmatched 0, while
+// a different conversion or a different path still differs.
+func TestHitKey(t *testing.T) {
+	sinkURL := "https://googleads.g.doubleclick.net/pagead/viewthroughconversion/100000001/"
+	reported := "https://googleads.g.doubleclick.net/pagead/viewthroughconversion/••••0001/?random=1"
+	sink := map[string]int{hitKey(sinkURL): 1, hitKey("https://www.google-analytics.com/g/collect"): 2}
+	rep := map[string]int{hitKey(reported): 1, hitKey("https://www.google-analytics.com/g/collect?v=2&tid=G-X"): 2}
+	if n := unmatched(sink, rep); n != 0 {
+		t.Errorf("unmatched = %d%s", n, describeUnmatched(sink, rep))
+	}
+	if hitKey(sinkURL) == hitKey("https://googleads.g.doubleclick.net/pagead/viewthroughconversion/100000002/") {
+		t.Error("two conversion IDs share a key")
+	}
+	if hitKey(sinkURL) == hitKey("https://googleads.g.doubleclick.net/pagead/conversion/100000001/") {
+		t.Error("two paths share a key")
+	}
+}
+
 func TestProcessesWith(t *testing.T) {
 	exe, err := os.Executable()
 	if err != nil {

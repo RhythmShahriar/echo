@@ -479,8 +479,9 @@ func (a *attempt) reload(ctx context.Context, info consent.CMPInfo) error {
 }
 
 // visit loads raw as a new visit of step, settles and records it with
-// whether the banner showed. A page that fails to load is recorded
-// without a banner; only the context's end stops the run.
+// whether the banner showed. A page that fails to load or answers 4xx
+// or 5xx is recorded with its error and a run note; only the context's
+// end stops the run.
 func (a *attempt) visit(ctx context.Context, raw, step string, info consent.CMPInfo) error {
 	at := a.run.Now()
 	a.run.AddVisit(at)
@@ -496,6 +497,13 @@ func (a *attempt) visit(ctx context.Context, raw, step string, info consent.CMPI
 		shown = l.final
 	}
 	v := consent.Visit{URL: a.mask(shown), Step: step, AtMS: at}
+	switch {
+	case l.err != "":
+		v.Error = consent.SafeText(consent.MaskURL(l.err, a.plan.ShowIDs), 120)
+	case httpFailed(l.doc.status):
+		v.Error = fmt.Sprintf("answered %d", l.doc.status)
+	}
+	a.out.AddVisitNote(v)
 	if l.err == "" && (info.Found || info.Present) {
 		if ok, err := a.c.stages.CMP.BannerShowing(ctx, a.tab, info); err == nil {
 			v.Banner = ok

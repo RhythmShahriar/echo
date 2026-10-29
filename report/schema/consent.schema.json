@@ -1472,7 +1472,8 @@
           "enum": [
             "dialog",
             "popup",
-            "download"
+            "download",
+            "visit"
           ],
           "type": "string"
         },
@@ -1677,6 +1678,9 @@
         },
         "banner": {
           "type": "boolean"
+        },
+        "error": {
+          "type": "string"
         },
         "step": {
           "type": "string"

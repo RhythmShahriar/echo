@@ -43,7 +43,8 @@ var (
 // Run loads every target with every run kind through a pool of
 // --parallel workers and returns the pages with their runs. A page
 // whose every run hit a *consent.FatalError returns that error with the
-// result. When ctx is canceled the runs that finished are kept, the rest
+// result, unless other pages were checked and the error is about what
+// the site served: then the page's runs say why and the check goes on. When ctx is canceled the runs that finished are kept, the rest
 // are marked canceled and the partial result comes back with ctx.Err().
 func (Runner) Run(ctx context.Context, p *consent.Plan) (*consent.Result, error) {
 	started := time.Now()
@@ -62,13 +63,28 @@ func (Runner) Run(ctx context.Context, p *consent.Plan) (*consent.Result, error)
 	c := newCheck(e, p, stages)
 	slots := c.runAll(ctx)
 	res := c.result(started)
-	var pageErr error
+	var siteErr, usageErr *consent.FatalError
+	failed := 0
 	for i, t := range p.Targets {
 		pg, fatal := c.page(t, slots[i])
 		res.Pages = append(res.Pages, pg)
-		if fatal != nil && pageErr == nil {
-			pageErr = fatal
+		switch {
+		case fatal == nil:
+		case siteFatal(fatal.Code):
+			failed++
+			if siteErr == nil {
+				siteErr = fatal
+			}
+		case usageErr == nil:
+			usageErr = fatal
 		}
+	}
+	// With more pages, a page the site couldn't serve is that page's
+	// inconclusive runs (each says why) and the others are still
+	// checked; only when every page failed does the check stop.
+	pageErr := usageErr
+	if pageErr == nil && siteErr != nil && (len(p.Targets) == 1 || failed == len(p.Targets)) {
+		pageErr = siteErr
 	}
 	res.DurationMS = time.Since(started).Milliseconds()
 	if err := ctx.Err(); err != nil {
@@ -433,6 +449,19 @@ func (c *check) page(t consent.Target, slots []slot) (consent.Page, *consent.Fat
 		return pg, first
 	}
 	return pg, nil
+}
+
+// siteFatal reports whether a fatal error is about what the site
+// served (it didn't answer, answered an error, a bot check, a redirect
+// elsewhere or in a loop, a certificate), rather than a usage error or
+// Echo's own guard.
+func siteFatal(code consent.FatalCode) bool {
+	switch code {
+	case consent.FatalUnreachable, consent.FatalHTTPStatus, consent.FatalBotWall, consent.FatalRedirectHost,
+		consent.FatalTLS, consent.FatalRedirectLoop:
+		return true
+	}
+	return false
 }
 
 // fatalText is a fatal error as one line for a run's Detail, in the

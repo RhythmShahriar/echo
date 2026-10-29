@@ -72,9 +72,11 @@ var (
 	telegramBot = regexp.MustCompile(`(bot\d+:)([A-Za-z0-9_-]{30,})`)
 	// IFTTT and similar put the key in a path segment: /with/key/<key>.
 	keySegment = regexp.MustCompile(`(?i)(/key/)([^/?#\s"'<>]+)`)
-	// A query parameter. The separator may be "&amp;" in HTML, hence ";".
-	// secretParam says which ones hold a credential.
-	queryValue = regexp.MustCompile(`([?&;])([\w.-]{1,64})=([^&#\s"'<>]+)`)
+	// A query parameter, or a fragment pair written like one: an OAuth
+	// callback puts access_token first after the '#'. The separator may
+	// be "&amp;" in HTML, hence ";". secretParam says which ones hold a
+	// credential.
+	queryValue = regexp.MustCompile(`([?&;#])([\w.-]{1,64})=([^&#\s"'<>]+)`)
 	// A URL in free text.
 	urlPattern = regexp.MustCompile(`(?i)\b(?:https?|ftp)://[^\s"'<>]+`)
 	// A one-time code named as one: "Your login code is 482913".
