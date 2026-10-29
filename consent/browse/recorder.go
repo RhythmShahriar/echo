@@ -499,7 +499,7 @@ func (r *recorder) handle(msg *rod.Message) {
 	case "Page.javascriptDialogOpening":
 		var e proto.PageJavascriptDialogOpening
 		if msg.Load(&e) {
-			r.emit(consent.Event{Kind: consent.EvDialog, AtMS: r.now(), Note: consent.SafeText(e.Message, 200)})
+			r.emit(consent.Event{Kind: consent.EvDialog, AtMS: r.now(), Note: consent.SafeText(consent.MaskText(e.Message, r.plan.ShowIDs), 200)})
 			go func() { _ = proto.PageHandleJavaScriptDialog{Accept: false}.Call(t.s) }()
 		}
 	case "Runtime.bindingCalled":

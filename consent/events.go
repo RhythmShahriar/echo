@@ -204,7 +204,9 @@ const MaxRunNotes = 20
 // none: `the page opened a dialog ("Allow?"); Echo dismissed it`, `the
 // page opened a popup (https://ads.example/); Echo closed it`, `the page
 // started a download (https://shop.test/file.bin); Chrome refused it`.
-// The event's note is already masked and passed through SafeText.
+// The recorder masks the event's note before it is stored (MaskText
+// for a dialog's text, MaskURL for a popup's or download's URL) and
+// passes it through SafeText.
 func EventNote(e Event) string {
 	what := func(s, quoted string) string {
 		if quoted == "" {

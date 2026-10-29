@@ -351,6 +351,41 @@ func bidiControl(r rune) bool {
 	return (r >= 0x202a && r <= 0x202e) || (r >= 0x2066 && r <= 0x2069) || r == 0x200e || r == 0x200f || r == 0x061c
 }
 
+// maxTextInput is the most of a page's text MaskText reads: a dialog
+// is shown cut to 200 runes, so a longer one is cut here first and
+// SafeText cuts the masked rest.
+const maxTextInput = 8 << 10
+
+var (
+	// textURL is a URL inside free text, up to a space or a quote.
+	textURL = regexp.MustCompile(`(?i)\bhttps?://[^\s"'<>]+`)
+	// textPhone is a phone number inside free text: a '+', then at least
+	// 7 digits with spaces, dots, dashes or parentheses between them.
+	textPhone = regexp.MustCompile(`\+[0-9][0-9 ().-]{5,20}[0-9]`)
+)
+
+// MaskText masks free text a page wrote (an alert or confirm message):
+// every URL in it as MaskURL masks a URL, the kit's secrets, JWTs and
+// one-time codes (echo/mask), 64-hex hashes, email addresses (the
+// domain is kept) and phone numbers. A URL loses the punctuation that
+// ends a sentence before it is masked. Text over 8 KiB is cut first.
+func MaskText(s string, showIDs bool) string {
+	if s == "" {
+		return ""
+	}
+	if len(s) > maxTextInput {
+		s = strings.ToValidUTF8(s[:maxTextInput], "")
+	}
+	s = textURL.ReplaceAllStringFunc(s, func(u string) string {
+		end := strings.TrimRight(u, ".,;:!?)]}")
+		return MaskURL(end, showIDs) + u[len(end):]
+	})
+	s = mask.Text(s)
+	s = hex64.ReplaceAllString(s, Hashed)
+	s = email.ReplaceAllString(s, "••••@$1")
+	return textPhone.ReplaceAllString(s, "••••(phone)")
+}
+
 // escapedMask is the mask bullets as URL encoding writes them.
 var escapedMask = url.PathEscape("•")
 

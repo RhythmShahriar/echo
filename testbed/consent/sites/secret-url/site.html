@@ -9,5 +9,18 @@
 document.addEventListener('DOMContentLoaded', function () {
   document.querySelectorAll('a[href^="/page-2/"]').forEach(function (a) { a.href = '/page-2/' + location.search; });
 });
+// The banner's buttons echo secrets in a dialog, as a careless shop
+// might: Accept alerts the page URL and an email, Reject confirms with a
+// live-style key built from the token. Both are pieced together here, so
+// neither is in the page's source; Echo must mask the dialog text.
+document.addEventListener('click', function (ev) {
+  var tok = new URLSearchParams(location.search).get('token');
+  if (!tok || !ev.target.closest) { return; }
+  if (ev.target.closest('.cmplz-accept')) {
+    alert('Signed in: ' + location.href + ' contact ' + 'bob' + '.jones' + '@corp.test');
+  } else if (ev.target.closest('.cmplz-deny')) {
+    confirm('really? ' + 'sk_' + 'live_' + tok.replace(/[^0-9A-Za-z]/g, ''));
+  }
+}, true);
 </script>
 {{end}}

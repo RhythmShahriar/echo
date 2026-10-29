@@ -248,3 +248,28 @@ func TestMaskCookieNames(t *testing.T) {
 		t.Errorf("--show-ids: %q", got)
 	}
 }
+
+// TestMaskText: a dialog that echoes the page URL, an email, a phone
+// number or a live key shows none of them.
+func TestMaskText(t *testing.T) {
+	tok := "QQ" + strings.Repeat("loc7", 5)
+	live := "sk_" + "live_" + strings.Repeat("Ab3d", 6)
+	in := "Signed in: https://h.test/?token=" + tok + "&sid=" + tok + ". Contact bob.jones@corp.test or +49 170 1234567, key " + live + "!"
+	got := consent.MaskText(in, false)
+	for _, leak := range []string{tok, "bob.jones", "1234567", live} {
+		if strings.Contains(got, leak) {
+			t.Errorf("MaskText kept %q:\n%s", leak, got)
+		}
+	}
+	for _, kept := range []string{"Signed in: https://h.test/?token=", "&sid=••••loc7. Contact", "••••@corp.test", "••••(phone)", "key sk_l"} {
+		if !strings.Contains(got, kept) {
+			t.Errorf("MaskText lost %q:\n%s", kept, got)
+		}
+	}
+	if got := consent.MaskText("Thanks for accepting!", false); got != "Thanks for accepting!" {
+		t.Errorf("plain text changed: %q", got)
+	}
+	if got := consent.MaskText(strings.Repeat("a", 20<<10), false); len(got) != 8<<10 {
+		t.Errorf("long text: %d bytes, want it cut to 8 KiB", len(got))
+	}
+}

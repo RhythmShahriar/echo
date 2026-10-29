@@ -240,8 +240,14 @@ func TestConsentMasksEverywhere(t *testing.T) {
 	// An OAuth implicit-flow callback carries a token as the first key of
 	// the fragment, which the stand-ins copy into dl with the rest.
 	fragToken := fakeSecret("frag")
+	// secret-url's banner echoes the page URL and an email in an alert
+	// on Accept and a live-style key made of the token in a confirm on
+	// Reject: the dialog notes must be masked like everything else.
+	liveKey := "sk_" + "live_" + strings.ReplaceAll(token, "_", "")
+	dialogEmail := "bob" + ".jones" + "@corp.test"
 	secrets := map[string]string{"URL token": token, "basic-auth password": password, "basic-auth header": basic,
-		"bearer token": bearer, "cookie": cookie, "phone number": phone, "fragment token": fragToken}
+		"bearer token": bearer, "cookie": cookie, "phone number": phone, "fragment token": fragToken,
+		"dialog email": dialogEmail, "dialog key": liveKey}
 	for _, id := range []string{"secret-url", "pii-beacons"} {
 		for _, c := range []struct {
 			broken bool
@@ -282,6 +288,23 @@ func TestConsentMasksEverywhere(t *testing.T) {
 				leaks := scanSecrets(t, dir, map[string]string{"stdout": stdout, "stderr": stderr}, secrets, 4)
 				for _, l := range leaks {
 					t.Error(l)
+				}
+				if id == "secret-url" {
+					// The dialogs fired and were kept, masked: a scan that
+					// finds nothing proves nothing when they never opened.
+					all := stdout + stderr
+					_ = filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
+						if err == nil && !d.IsDir() {
+							data, _ := os.ReadFile(path) //nolint:gosec // the test's own result folder
+							all += string(data)
+						}
+						return nil
+					})
+					for _, want := range []string{"contact ••••@corp.test", "really? sk_"} {
+						if !strings.Contains(all, want) {
+							t.Errorf("no dialog note with %q in any output", want)
+						}
+					}
 				}
 			})
 		}

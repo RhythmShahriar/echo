@@ -107,7 +107,7 @@ const hostileBanner = `<!doctype html><title>hostile</title>
 <button id="accept" style="position:fixed;left:10px;top:10px;width:200px;height:50px">Accept</button>
 <script>
 document.getElementById("accept").addEventListener("click", () => {
-  alert("Thanks \u202efor accepting!");
+  alert("Thanks \u202efor accepting! " + "bob.jones" + "@corp.test");
   window.open("https://popup.test/win", "_blank");
   navigator.geolocation.getCurrentPosition(() => fetch("/geo?ok=1"), e => fetch("/geo?code=" + e.code));
   const a = document.createElement("a"); a.href = "/file.bin"; a.download = "file.bin"; document.body.appendChild(a); a.click();
@@ -152,7 +152,7 @@ func TestHostileBanner(t *testing.T) {
 	rec := s.close()
 
 	dialogs, popups := kinds(rec, consent.EvDialog), kinds(rec, consent.EvPopup)
-	if len(dialogs) != 1 || dialogs[0].Note != "Thanks \\u202efor accepting!" {
+	if len(dialogs) != 1 || dialogs[0].Note != "Thanks \\u202efor accepting! ••••@corp.test" {
 		t.Errorf("dialogs %+v", dialogs)
 	}
 	if len(popups) != 1 {
