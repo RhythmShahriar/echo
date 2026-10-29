@@ -205,8 +205,10 @@ func hasKey(root *yaml.Node, key string) bool {
 
 // cmdInitConsent is init --consent.
 func cmdInitConsent(force bool, stdout, stderr io.Writer) int {
-	path := config.Path()
-	appended, replaced, err := initConsent(path, force)
+	appended, replaced, err := initConsent(config.Path(), force)
+	// Messages name the file with forward slashes on every OS, as the
+	// consent command's messages do.
+	path := filepath.ToSlash(config.Path())
 	switch {
 	case errors.Is(err, errHasConsent):
 		fmt.Fprintf(stderr, "rhythm echo: %s already has a consent: block; pass --force to replace only that block\n", path)
