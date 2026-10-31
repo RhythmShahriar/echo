@@ -13,7 +13,7 @@ require (
 	github.com/go-rod/rod v0.116.2
 	github.com/muesli/termenv v0.16.0
 	github.com/ysmood/gson v0.7.3
-	golang.org/x/net v0.61.0
+	golang.org/x/net v0.62.0
 	golang.org/x/sys v0.49.0
 	golang.org/x/text v0.43.0
 	gopkg.in/yaml.v3 v3.0.1
